@@ -1075,6 +1075,8 @@ interface RouteSecurityMarkers {
   declaresAuth: boolean;
   /** Route was produced by {@link mcpRoutes} without opting out of the auth boot guard. */
   isMcp: boolean;
+  /** Route was produced by `a2aRoutes()` without opting out of the auth boot guard. */
+  isA2a: boolean;
   /**
    * Route's effective hook chain runs a `responseCache()` *before* `tenancy()`,
    * so the tenant is not yet in `ctx.state` when the cache key is built and the
@@ -1103,6 +1105,9 @@ interface RouteSecurityMarkers {
  */
 const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
 const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
+/** Same pattern for `a2aRoutes()`; must match the strings in `a2a.ts`. */
+const A2A_ROUTE_MARKER = Symbol.for("daloyjs.a2a.route");
+const A2A_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.a2a.appProduction");
 const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
 
 /**
@@ -2273,7 +2278,9 @@ export class App<
    * 2. **Unauthenticated MCP** — a route from {@link mcpRoutes} must have an
    *    auth hook unless it opted out with `mcpRoutes(path, handler, { public: true })`.
    *    MCP tools are model-controlled and side-effecting, so a public one is a
-   *    high-impact default.
+   *    high-impact default. The same rule covers `a2aRoutes()` (opt-out
+   *    `{ public: true }`), since peer agents drive `onMessage` just as models
+   *    drive MCP tools.
    * 3. **Cache ahead of tenancy** — a `responseCache()` that runs before
    *    `tenancy()` builds its key before the tenant exists in `ctx.state`, so
    *    every tenant collides on one entry and one tenant's response is served to
@@ -2328,6 +2335,25 @@ export class App<
           `effects, so an unauthenticated endpoint is a high-impact default. ` +
           `Install an auth middleware covering the MCP route (e.g. app.use(bearerAuth({ ... }))), ` +
           `wrap a custom auth hook with markAuthHook(...), pass mcpRoutes(path, handler, { public: true }) ` +
+          `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
+      );
+      this.bootGuard.error = err;
+      throw err;
+    }
+
+    // Guard 2b: unauthenticated A2A agent endpoint. Peer agents act on what
+    // SendMessage does, so it is guarded exactly like an MCP tool endpoint.
+    const a2aNoAuth = this.routeSecurityMarkers.find(
+      (r) => r.isA2a && !r.hasAuth,
+    );
+    if (a2aNoAuth) {
+      const err = new Error(
+        `A2A route ${a2aNoAuth.method} ${a2aNoAuth.path} (from a2aRoutes()) has no authentication ` +
+          `hook in its effective hook chain. Peer agents can trigger whatever your onMessage handler ` +
+          `does, so an unauthenticated agent endpoint is a high-impact default. ` +
+          `Install an auth middleware covering the A2A route (e.g. app.use(bearerAuth({ ... }))), ` +
+          `wrap a custom auth hook with markAuthHook(...), pass a2aRoutes(path, handler, { public: true }) ` +
           `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
           `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
@@ -2943,6 +2969,14 @@ export class App<
     if (typeof mcpProductionHook === "function") {
       (mcpProductionHook as (production: boolean) => void)(this.isProduction());
     }
+    // a2aRoutes() gets the same signal; in production it also refuses a card
+    // that advertises a non-HTTPS endpoint (throws here, at registration).
+    const a2aProductionHook = (def as unknown as Record<PropertyKey, unknown>)[
+      A2A_APP_PRODUCTION_HOOK
+    ];
+    if (typeof a2aProductionHook === "function") {
+      (a2aProductionHook as (production: boolean) => void)(this.isProduction());
+    }
     this.routeSecurityMarkers.push({
       method: merged.method,
       path: merged.path,
@@ -2951,6 +2985,10 @@ export class App<
       isMcp:
         (merged as unknown as Record<PropertyKey, unknown>)[
           MCP_ROUTE_MARKER
+        ] === true,
+      isA2a:
+        (merged as unknown as Record<PropertyKey, unknown>)[
+          A2A_ROUTE_MARKER
         ] === true,
     });
     this.resetBootGuardCache();

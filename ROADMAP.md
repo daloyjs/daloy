@@ -298,6 +298,7 @@ Items we want but don't yet have a concrete design for. Fair game to prototype; 
 - [ ] HTTP/2 + HTTP/3 adapters (Node h2; explore Workers AutoHTTP/3).
 - [ ] Pluggable serialization (CBOR, MessagePack) gated by `Accept`.
 - [ ] **SPIFFE / SPIRE workload identity** — zero-trust service-to-service identity (SVID issuance/validation) as a deeper alternative to the planned mTLS + RFC 9421 paths. Heavy; needs a concrete integration design before committing.
+- [ ] **A2A follow-ups** — the A2A 1.0 JSON-RPC endpoint (`@daloyjs/core/a2a`) ships stateless-first with honest `false` capabilities. Next, only when users need work that outlives one request: `SendStreamingMessage` / `SubscribeToTask` over `@daloyjs/core/streaming`, push notifications via `webhook-delivery` + `fetchGuard()`, the HTTP+JSON binding, and JWS-signed / extended Agent Cards.
 - [ ] **Runtime artifact / plugin signature verification (Sigstore / cosign)** — releases are already cosign-signed with provenance; explore optionally verifying third-party plugin artifacts at load time rather than only at install/CI time.
 
 ---
@@ -311,6 +312,8 @@ Avoiding scope creep is part of the design. Explicit non-goals:
 - Project-wide DI containers.
 - Durable-execution / Temporal-style workflows (deterministic replay, worlds,
   park-for-days). Integrate via jobs + HTTP callbacks; do not embed an engine.
+- Agent orchestration, skill routing, agent memory, or LLM calls inside the A2A
+  endpoint. Core speaks the protocol; the developer's `onMessage` owns meaning.
 - Anything that requires patching `globalThis` or monkey-patching `Request` / `Response`.
 
 ---

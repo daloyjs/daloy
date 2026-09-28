@@ -69,6 +69,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
       { title: "llms.txt for agents", href: "/docs/llms-txt" as Route },
       { title: "DaloyJS MCP server", href: "/docs/mcp" as Route },
+      { title: "A2A agent endpoint", href: "/docs/a2a" as Route },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
     ],
   },

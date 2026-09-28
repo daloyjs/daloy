@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/daloy",
-  "version": "1.3.7",
+  "version": "1.4.0",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
@@ -16,6 +16,7 @@
     "./openapi": "./src/openapi.ts",
     "./openapi-diff": "./src/openapi-diff.ts",
     "./mcp": "./src/mcp.ts",
+    "./a2a": "./src/a2a.ts",
     "./asyncapi": "./src/asyncapi.ts",
     "./docs": "./src/docs.ts",
     "./contract": "./src/contract.ts",

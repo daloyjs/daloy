@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Boot guards",
   description:
-    "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, shadow-security auth: routes, unauthenticated mcpRoutes() endpoints, and unconfigured proxy / vendor client-IP headers. Learn each guard, how to opt out, and how to migrate.",
+    "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, shadow-security auth: routes, unauthenticated mcpRoutes() and a2aRoutes() endpoints, and unconfigured proxy / vendor client-IP headers. Learn each guard, how to opt out, and how to migrate.",
   path: "/docs/security/boot-guards",
   keywords: [
     "DaloyJS boot guards",
@@ -17,6 +17,7 @@ export const metadata = buildMetadata({
     "shadow security auth",
     "markAuthHook",
     "mcpRoutes auth",
+    "a2aRoutes auth",
     "cf-connecting-ip",
     "secureDefaults",
   ],
@@ -461,6 +462,41 @@ alsoGood.use(idempotency({ ttlSeconds: 86_400 }));`}
         Ordering the limiter first does mean cache hits and replays spend
         budget. That is the intended reading of a rate limit: the cap is on what
         a caller may ask for, not on what happened to be expensive to produce.
+      </p>
+
+      <h2 id="9-unauthenticated-a2a-endpoint">
+        9. Unauthenticated <code>a2aRoutes()</code> endpoint
+      </h2>
+      <p>
+        An A2A agent endpoint runs your <code>onMessage</code> handler for
+        whichever peer agent calls it, so it gets the same rule as MCP. In
+        production with <code>secureDefaults</code> on, the App refuses to boot
+        when the <code>a2aRoutes()</code> JSON-RPC <code>POST</code> route has no
+        authentication hook in its effective chain. The public Agent Card route
+        is never checked: discovery has to work before a peer has credentials.
+        In production, registration also throws if the card advertises a
+        non-HTTPS endpoint on a non-loopback host.
+      </p>
+      <CodeBlock
+        code={`import { App, a2aRoutes, bearerAuth, createA2aHandler } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+const agent = createA2aHandler({ card, onMessage });
+
+// (a) Auth on the JSON-RPC route only - satisfies the guard, card stays public.
+const auth = bearerAuth({ validate: (t) => t === process.env.A2A_TOKEN });
+for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) {
+  app.route(route);
+}
+
+// (b) ...or an intentionally public, read-only agent.
+for (const route of a2aRoutes("/a2a", agent, { public: true })) {
+  app.route(route);
+}`}
+      />
+      <p>
+        See the <a href="/docs/a2a#security-checklist">A2A docs</a> for the full
+        agent setup.
       </p>
 
       <h2 id="migration-checklist">Migration checklist</h2>

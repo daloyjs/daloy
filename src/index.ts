@@ -145,6 +145,48 @@ export type {
 } from "./mcp.js";
 
 export {
+  A2A_AGENT_CARD_PATH,
+  A2A_DEFAULT_MAX_BODY_BYTES,
+  A2A_ERROR_CODES,
+  A2A_PROTOCOL_VERSION,
+  A2aError,
+  a2aData,
+  a2aRoutes,
+  a2aText,
+  createA2aHandler,
+  memoryTaskStore,
+} from "./a2a.js";
+export type {
+  A2aAgentCapabilities,
+  A2aAgentCard,
+  A2aAgentCardInput,
+  A2aAgentExtension,
+  A2aAgentInterface,
+  A2aAgentProvider,
+  A2aAgentSkill,
+  A2aArtifact,
+  A2aArtifactInput,
+  A2aHandler,
+  A2aHandlerOptions,
+  A2aHostContext,
+  A2aMessage,
+  A2aMessageContext,
+  A2aPart,
+  A2aReply,
+  A2aResultState,
+  A2aRoutesOptions,
+  A2aSecurityRequirement,
+  A2aSecurityScheme,
+  A2aTask,
+  A2aTaskListPage,
+  A2aTaskListQuery,
+  A2aTaskState,
+  A2aTaskStatus,
+  A2aTaskStore,
+  MemoryTaskStoreOptions,
+} from "./a2a.js";
+
+export {
   readBodyLimited,
   safeJsonParse,
   safeJsonParseLimited,

@@ -293,6 +293,14 @@ plaintext transport. Failed refreshes retain only previously trusted keys
 within the configured stale-key grace period. Custom fetch implementations
 must honor the redirect policy.
 
+`jwk()` binds each verification to the key set its own JWKS load returned;
+there is no shared "current key set" that a concurrent request could
+overwrite, so a per-tenant resolver can never verify tenant A's request with
+tenant B's keys. Imported keys are cached by algorithm plus full JWK content
+(bounded LRU), never by `kid`, so a same-`kid` rotation re-imports and every
+WebCrypto usage check still runs for new material. Regression tests:
+`tests/jwk-key-import-cache.test.ts`.
+
 HTTP message signature keys enforce the corresponding family/hash/curve and
 HMAC/RSA floors too. Invalid imported keys produce `invalid_key` during verification.
 Nonce replay callbacks run only after cryptographic verification; applications
@@ -458,6 +466,19 @@ DaloyJS ships first-party middleware for the surface the "API security tools" ma
 - **API8 Misconfiguration** — `secureHeaders()`, CORS opt-in, prod 5xx redaction, default body cap + timeout, hardened `.npmrc`.
 - **API9 Improper Inventory** — OpenAPI 3.1 from the same route contract (`app.get()`/`app.route()`); `pnpm gen` emits Hey API; `app.introspect()` is public.
 - **API10 Unsafe API Consumption** — outbound calls through `fetchGuard()`; JWT verifier applies the prototype-pollution reviver to attacker-controlled claims.
+
+#### Agent-to-agent (A2A) endpoints
+
+`@daloyjs/core/a2a` exposes a service to peer agents, so its Agent Card is a capability grant and its JSON-RPC route is a remote-control surface. Defenses:
+
+- **Unauthenticated agent endpoint**: `a2aRoutes()` stamps the JSON-RPC `POST` route and a production `secureDefaults` App refuses to boot without an auth hook covering it (opt-out `{ public: true }`). A non-public mount also requires the card to declare `securitySchemes`. Only the card route is public, because discovery must work before a peer has credentials.
+- **Task IDOR**: every task-store call is scoped by `taskOwner`. A task belonging to another caller answers `-32001 TaskNotFound` (existence is not revealed), and an unresolved owner is refused with `401` rather than falling into a shared bucket. `memoryTaskStore()` keys entries by a JSON-encoded `(owner, id)` pair so no owner string can forge a delimiter collision, and deep-copies tasks so handlers cannot mutate stored state by reference. Task and message ids are generated with Web Crypto.
+- **Dishonest capabilities**: `streaming`, `pushNotifications`, and `extendedAgentCard` are derived, not user-settable, and their methods return the spec errors, so a card can never invite peers to call something that is not implemented.
+- **Transport downgrade and card leaks**: in production, registration throws if the card URL is not `https:` on a non-loopback host. Card URLs with embedded credentials are refused at construction.
+- **Envelope and part abuse**: the same body cap (256 KiB default), strict UTF-8, `safeJsonParseLimited` (prototype-key stripping, key and depth bounds), batch rejection, and DNS-rebinding `Origin` check as MCP (shared `origin-allowlist.ts`). Parts must carry exactly one of `text` / `raw` / `url` / `data`, `raw` must be base64, and `url` parts must be `http(s)` without credentials. DaloyJS never fetches `url` parts; handlers that do must use `fetchGuard()`.
+- **Error leakage**: unexpected handler throws become `-32603 Internal error` with no detail unless `NODE_ENV` is `development`/`test`, and never on an App resolved to production unless `exposeInternalErrors` is set explicitly.
+
+Tests: `tests/a2a.test.ts` (boot guard, owner scoping, fail-closed owner, envelope and part validation, prototype-pollution stripping, origin checks, production redaction and HTTPS enforcement).
 
 ### In scope: outbound request classes (SSRF)
 

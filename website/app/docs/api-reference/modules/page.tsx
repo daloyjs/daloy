@@ -51,9 +51,9 @@ export default function Page() {
             detail: "createClient(app), runContractTests(app)",
           },
           {
-            eyebrow: "/docs · /mcp",
-            label: "Docs UIs & MCP tools",
-            detail: "scalarHtml(), createMcpHandler()",
+            eyebrow: "/docs · /mcp · /a2a",
+            label: "Docs UIs, MCP tools & A2A agents",
+            detail: "scalarHtml(), createMcpHandler(), createA2aHandler()",
           },
         ]}
         caption="Every module below reads the same route contracts your handlers are typed against, so the spec, client, docs, and MCP surface can never drift from the code."
@@ -282,6 +282,70 @@ interface McpRequestContext {
 // pattern, format, $ref, anyOf, oneOf, and allOf are advertised but not enforced.
 // In production secureDefaults apps, mcpRoutes() must be covered by an auth hook
 // unless mounted with mcpRoutes(path, handler, { public: true }).`}
+      />
+
+      <h2 id="daloyjs-core-a2a">
+        <code>@daloyjs/core/a2a</code>
+      </h2>
+      <CodeBlock
+        code={`const A2A_PROTOCOL_VERSION = "1.0";
+const A2A_AGENT_CARD_PATH = "/.well-known/agent-card.json";
+const A2A_DEFAULT_MAX_BODY_BYTES = 262144;
+const A2A_ERROR_CODES: {
+  parseError: -32700; invalidRequest: -32600; methodNotFound: -32601;
+  invalidParams: -32602; internalError: -32603;
+  taskNotFound: -32001; taskNotCancelable: -32002;
+  pushNotificationNotSupported: -32003; unsupportedOperation: -32004;
+  contentTypeNotSupported: -32005; invalidAgentResponse: -32006;
+  extendedAgentCardNotConfigured: -32007; extensionSupportRequired: -32008;
+  versionNotSupported: -32009;
+};
+
+createA2aHandler(options: A2aHandlerOptions): A2aHandler;
+a2aRoutes(path: PathString, handler: A2aHandler, options?: A2aRoutesOptions):
+  RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[];
+memoryTaskStore(options?: { maxTasks?: number; ttlMs?: number }): A2aTaskStore;
+a2aText(text: string, mediaType?: string): A2aPart;
+a2aData(data: unknown, mediaType?: string): A2aPart;
+class A2aError extends Error { readonly code: number }  // -32602 or -32001..-32099
+
+interface A2aHandler {
+  readonly agentCard: Readonly<A2aAgentCard>;
+  handleCard(request: Request): Promise<Response>;
+  handleRpc(request: Request, host?: { state: Record<string, unknown> }): Promise<Response>;
+}
+
+interface A2aHandlerOptions {
+  card: A2aAgentCardInput;        // name, description, version, url, skills, securitySchemes, ...
+  onMessage(ctx: A2aMessageContext): A2aReply | Promise<A2aReply>;
+  taskStore?: A2aTaskStore;       // enables GetTask / CancelTask / ListTasks / multi-turn
+  taskOwner?(host: { request: Request; state: Record<string, unknown> }): string | undefined | null;
+  allowedOrigins?: readonly string[];
+  maxBodyBytes?: number;          // default 256 KiB
+  maxHistory?: number;            // default 50
+  cardMaxAgeSeconds?: number;     // default 300
+  exposeInternalErrors?: boolean; // fails closed; forced off on a production App
+  headers?: Record<string, string>;
+}
+
+type A2aReply =
+  | string
+  | { reply: string | readonly A2aPart[]; metadata?: Record<string, unknown> }
+  | { status: "completed" | "failed" | "rejected" | "input-required" | "auth-required";
+      message?: string | readonly A2aPart[]; artifacts?: readonly A2aArtifactInput[];
+      metadata?: Record<string, unknown> };
+
+interface A2aRoutesOptions {
+  public?: boolean;               // opt out of the production auth boot guard
+  hooks?: Hooks;                  // applied to the JSON-RPC POST only
+  cardPath?: PathString | false;  // default A2A_AGENT_CARD_PATH
+}
+
+// Capabilities are derived: streaming, pushNotifications, and extendedAgentCard
+// are false and their methods return -32004 / -32003. A task store requires
+// taskOwner; an unresolved owner is refused with 401. In production
+// secureDefaults apps, a2aRoutes() must be covered by an auth hook unless
+// mounted with { public: true }, and the card url must be https: (non-loopback).`}
       />
 
       <h2 id="daloyjs-core-docs">

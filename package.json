@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/core",
-  "version": "1.3.7",
+  "version": "1.4.0",
   "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops \u2014 distributed via pnpm.",
   "type": "module",
   "publishConfig": {
@@ -21,6 +21,8 @@
     "http",
     "openapi",
     "mcp",
+    "a2a",
+    "agent2agent",
     "hey-api",
     "contract-first",
     "typescript",
@@ -93,6 +95,10 @@
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
+    },
+    "./a2a": {
+      "types": "./dist/a2a.d.ts",
+      "import": "./dist/a2a.js"
     },
     "./asyncapi": {
       "types": "./dist/asyncapi.d.ts",

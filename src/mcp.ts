@@ -1,6 +1,7 @@
 import type { PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
 import { mediaTypeEssence, safeJsonParse, safeJsonParseLimited } from "./security.js";
+import { compileOriginAllowlist, isAllowedAgentOrigin } from "./origin-allowlist.js";
 
 /**
  * Latest MCP protocol version DaloyJS negotiates by default.
@@ -1296,38 +1297,6 @@ const DEFAULT_MAX_RESOURCE_URI_LENGTH = 8192;
  */
 const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
 
-const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/**
- * Streamable HTTP DNS-rebinding defense: decide whether a browser `Origin`
- * may talk to this MCP endpoint.
- *
- * Loopback origins (`localhost` / `127.0.0.1` / `[::1]` / `*.localhost`) are
- * allowed for local development. Every non-loopback origin must appear in
- * the configured allowlist. We deliberately do **not** treat
- * `Origin.host === request Host` as sufficient: under DNS rebinding both
- * can be the attacker hostname resolving to the target IP, which would
- * silently bypass an implicit same-origin check.
- */
-function isAllowedOrigin(
-  origin: string,
-  _request: Request,
-  allowlist: ReadonlySet<string>
-): boolean {
-  const normalized = origin.toLowerCase();
-  if (allowlist.has(normalized)) return true;
-  if (normalized === "null") return false;
-  let parsed: URL;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    return false;
-  }
-  const hostname = parsed.hostname;
-  if (LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost")) return true;
-  return false;
-}
-
 const HEADER_BASE64_PREFIX = "=?base64?";
 const HEADER_BASE64_SUFFIX = "?=";
 
@@ -1606,26 +1575,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     throw new TypeError('MCP cache.scope must be "public" or "private".');
   }
 
-  const allowedOrigins = new Set<string>();
-  for (const entry of options.allowedOrigins ?? []) {
-    const normalized = entry.toLowerCase();
-    if (normalized === "null") {
-      allowedOrigins.add(normalized);
-      continue;
-    }
-    let parsed: URL | undefined;
-    try {
-      parsed = new URL(normalized);
-    } catch {
-      parsed = undefined;
-    }
-    if (!parsed || parsed.origin !== normalized) {
-      throw new TypeError(
-        `MCP allowedOrigins entry "${entry}" must be a bare origin such as "https://app.example.com".`
-      );
-    }
-    allowedOrigins.add(normalized);
-  }
+  const allowedOrigins = compileOriginAllowlist(options.allowedOrigins, "MCP");
 
   // Fail closed: expose raw error text only on a positive dev signal.
   const nodeEnv = typeof process === "object" ? process.env?.NODE_ENV : undefined;
@@ -2241,7 +2191,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     // Streamable HTTP requires Origin validation on every request to defeat
     // DNS rebinding; invalid browser origins are refused with 403.
     const origin = request.headers.get("origin");
-    if (origin !== null && !isAllowedOrigin(origin, request, allowedOrigins)) {
+    if (origin !== null && !isAllowedAgentOrigin(origin, allowedOrigins)) {
       return rpcError(
         null,
         INVALID_REQUEST,

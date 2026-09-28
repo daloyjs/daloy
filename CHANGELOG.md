@@ -17,6 +17,46 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-28
+
+### Added
+
+- `@daloyjs/core/a2a`: an Agent2Agent (A2A) 1.0 agent endpoint for existing
+  services. `createA2aHandler()` builds the public Agent Card and the JSON-RPC
+  binding (`SendMessage`, `GetTask`, `CancelTask`, `ListTasks`), and
+  `a2aRoutes(path, handler, { hooks })` mounts `/.well-known/agent-card.json`
+  plus the transport, with auth applied to the JSON-RPC route only. DaloyJS
+  owns the protocol (card, `A2A-Version` / `A2A-Extensions` negotiation,
+  validation with `google.rpc` details, spec error codes) and a single
+  `onMessage` handler owns the meaning, returning a direct message or a task
+  result. Capabilities are derived: streaming, push notifications, and the
+  extended card are `false` and answer `-32004` / `-32003`. An optional
+  `taskStore` (bounded `memoryTaskStore()` included) enables multi-turn
+  `input-required` tasks, scoped by a required `taskOwner` that fails closed.
+  Accepts ProtoJSON enum integers and empty-string defaults. Interop checked
+  against the official `@a2a-js/sdk` 1.2.1 client. No new runtime dependency.
+  See [A2A docs](https://daloyjs.dev/docs/a2a).
+
+### Security
+
+- New production boot guard: an `a2aRoutes()` JSON-RPC endpoint with no auth
+  hook refuses to boot unless mounted with `{ public: true }`, and a card URL
+  that is not `https:` on a non-loopback host is refused at registration.
+  See [boot guards](https://daloyjs.dev/docs/security/boot-guards#9-unauthenticated-a2a-endpoint).
+- The MCP DNS-rebinding `Origin` check now lives in a shared internal module
+  (`src/origin-allowlist.ts`) used by both MCP and A2A. Behavior is unchanged.
+
+### Performance
+
+- `jwk()` imports each JWKS key into WebCrypto once instead of on every
+  request, for every source type (object, URL, resolver). `createJwtVerifier`
+  now caches keys returned by a `key` resolver under their algorithm plus full
+  JWK content (bounded LRU of 64), so a same-`kid` rotation is re-imported
+  immediately and a cached key is only reused for identical material. `jwk()`
+  also loads the JWKS inside the per-verification key lookup, which keeps each
+  request bound to its own key set (safe for per-tenant resolvers) and means
+  malformed tokens are rejected without a JWKS fetch.
+
 ## [1.3.7] - 2026-09-26
 
 ### Security
@@ -3419,7 +3459,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.7...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/daloyjs/daloy/compare/v1.3.7...v1.4.0
 [1.3.7]: https://github.com/daloyjs/daloy/compare/v1.3.6...v1.3.7
 [1.3.6]: https://github.com/daloyjs/daloy/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/daloyjs/daloy/compare/v1.3.4...v1.3.5
