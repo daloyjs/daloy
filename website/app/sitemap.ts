@@ -42,6 +42,11 @@ const STATIC_PATHS: Array<{
     priority: 0.7,
   },
   {
+    path: "/blog/your-api-can-now-be-an-a2a-agent",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/daloyjs-1-0-0-rc-0-first-release-candidate",
     changeFrequency: "monthly",
     priority: 0.7,

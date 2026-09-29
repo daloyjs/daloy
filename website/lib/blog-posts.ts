@@ -8,6 +8,15 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "your-api-can-now-be-an-a2a-agent",
+    title: "Your API Can Now Be an Agent: A2A in DaloyJS 1.4.0",
+    description:
+      "MCP lets an AI tool call your API. A2A lets another company's agent hand your service a job. DaloyJS 1.4.0 speaks A2A 1.0 with one onMessage function, and it deliberately does not guess what your agent should do.",
+    date: "2026-09-28",
+    readingTime: "9 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "background-jobs-after-the-http-response",
     title: "Background Jobs After the HTTP Response",
     description:
