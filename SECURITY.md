@@ -293,6 +293,13 @@ plaintext transport. Failed refreshes retain only previously trusted keys
 within the configured stale-key grace period. Custom fetch implementations
 must honor the redirect policy.
 
+`rateLimit()` and `loginThrottle()` configured without their own trust
+options follow the App's `behindProxy` posture (via `resolveClientIp`), so
+behind a proxy, and on peer-less edge adapters, each client gets its own
+bucket instead of sharing the proxy's. Explicit limiter options win, and
+`trustProxyHeaders: false` opts out. Regression tests:
+`tests/rate-limit-behind-proxy.test.ts`.
+
 `jwk()` binds each verification to the key set its own JWKS load returned;
 there is no shared "current key set" that a concurrent request could
 overwrite, so a per-tenant resolver can never verify tenant A's request with

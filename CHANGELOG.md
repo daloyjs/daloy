@@ -17,6 +17,68 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-29
+
+### Security
+
+- `rateLimit()` and `loginThrottle()` now follow the App's `behindProxy`
+  posture when they are given none of their own trust options
+  (`keyGenerator`, `trustProxyHeaders`, `trustedHops`, `trustedProxies`).
+  Before, they ignored `behindProxy` and keyed on the TCP peer, which behind a
+  proxy is the proxy itself, and on Vercel or Cloudflare Workers (no peer
+  socket) was one shared `"global"` bucket. Any single client could exhaust
+  the limit, or lock every user out of login, for everyone. The client IP comes
+  from `resolveClientIp()`: right-most `X-Forwarded-For` slots for `{ hops }`,
+  peer-verified for `{ cidrs }`. Explicit limiter options always win, and
+  `trustProxyHeaders: false` still opts out.
+- create-daloy templates: the pnpm hardening (`ignoreScripts`,
+  `strictPeerDependencies`, `verifyStoreIntegrity`, `preferFrozenLockfile`,
+  `autoInstallPeers`) now lives in `pnpm-workspace.yaml`, where pnpm 11 reads
+  it. It was only in `.npmrc`, which pnpm 11 ignores, so it was never active.
+  Scaffolding with `--package-manager bun` now writes a `bunfig.toml` with the
+  same 24h `minimumReleaseAge` cooldown, instead of none.
+- create-daloy templates: private keys (`*.pem`, `*.key`, `*.p12`) are ignored
+  by git and Docker in every template, Wrangler's `.dev.vars` is kept out of
+  the Worker image, the Vercel template ships a `.vercelignore` so a local
+  `.env` is not uploaded by `vercel deploy`, and the container-scan pin check
+  now resolves `FROM ${ARG}` lines instead of skipping them.
+
+### Fixed
+
+- create-daloy templates:
+  - deno-basic: `deno.lock` still pinned `@daloyjs/daloy` 1.0.0-rc.5, so the
+    generated CI (`deno install --frozen=true`) failed on the first run. The
+    Docker build and the deploy workflow now also enforce the frozen lockfile,
+    `typecheck` covers `src/`, `tests/`, and `scripts/`, and `dev`/`start` use
+    a scoped `--allow-env` allowlist.
+  - bun-basic: `pnpm typecheck` failed on a fresh scaffold (`types: ["bun"]`
+    now), the README no longer tells pnpm users to `bun install`, the startup
+    banner links no longer render as `//docs`, and the engines floor is
+    `bun >= 1.3`.
+  - vercel: fresh scaffolds could not build on Vercel. pnpm scaffolds now pin
+    `packageManager` (set `ENABLE_EXPERIMENTAL_COREPACK=1` once, see the
+    README), and the template uses TypeScript 5.9, which Vercel's Node builder
+    and CLI support. The Dockerfile runs `node src/dev.ts` instead of
+    `vercel dev` (which needs a login).
+  - cloudflare-worker: `@cloudflare/workers-types` moves to v5, which current
+    `wrangler` requires.
+  - The `node --test` glob is quoted, so adding a test in a subfolder no longer
+    silently stops the root tests (including the contract gate) from running.
+  - `pnpm deploy` in docs is now `pnpm run deploy` (`pnpm deploy` is a pnpm
+    built-in), Dockerfiles pin pnpm to the CI version, and agent skills no
+    longer reference `ctx.log`, `ctx.requestId`, or `tracing()` (the real APIs
+    are `ctx.state.log`, `ctx.state.requestId`, and `otelTracing()`).
+
+### Performance
+
+- The `/openapi.json`, `/openapi.yaml`, `/asyncapi.json`, and `/asyncapi.yaml`
+  routes now build their document once and rebuild it only after a new route
+  (or `ws()` route) is registered, instead of walking every route schema on
+  each request. About 1.6x faster for a 100-route app, and a public docs
+  endpoint can no longer be used to force that work per request. Each
+  response is a deep copy, so a hook that mutates it cannot change what the
+  next caller receives.
+
 ## [1.4.0] - 2026-09-28
 
 ### Added
@@ -3459,7 +3521,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/daloyjs/daloy/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/daloyjs/daloy/compare/v1.3.7...v1.4.0
 [1.3.7]: https://github.com/daloyjs/daloy/compare/v1.3.6...v1.3.7
 [1.3.6]: https://github.com/daloyjs/daloy/compare/v1.3.5...v1.3.6
