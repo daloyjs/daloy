@@ -370,6 +370,18 @@ export default function BlogPostPage() {
             procurement agent is probably polite. Make it authenticate anyway.
           </p>
 
+          <p>
+            <strong>Update:</strong> since 1.5.0, DaloyJS can also be the one
+            asking. <code>createA2aClient()</code> lets your service hand work to
+            other agents, with the same defaults as everything else: no
+            credentials on discovery, and a card that points somewhere
+            unexpected gets refused before your token goes anywhere. See{" "}
+            <Link href={"/docs/a2a#calling-other-agents" as Route}>
+              calling other agents
+            </Link>
+            {"."}
+          </p>
+
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">
             <p className="text-sm leading-7 text-muted-foreground">
               <span className="font-semibold text-foreground">
