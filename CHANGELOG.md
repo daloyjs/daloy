@@ -17,6 +17,26 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `createA2aClient()` in `@daloyjs/core/a2a`: call other A2A 1.0 agents
+  (`sendMessage`, `getTask`, `cancelTask`, `listTasks`, `getAgentCard`). The
+  transport defaults to `fetchGuard()` (SSRF), the public Agent Card is fetched
+  without credentials, and the JSON-RPC URL the card names must share the
+  card's origin (or be listed in `allowedOrigins`), so a hostile card cannot
+  redirect your credentials. `https:` only (loopback excepted), redirects are
+  never followed, responses are size-capped and validated (matching JSON-RPC
+  id, exactly one of task or message), and every call has a timeout. Errors
+  are `A2aClientError` with the remote code, or `0` for a client-side refusal.
+- Opt-in trace propagation for the A2A client (`propagateTrace`): forward a
+  valid W3C `traceparent` / `tracestate` from the incoming request, never
+  `baggage`, or run your own OpenTelemetry propagator.
+- Tutorial and tested example: host an agent loop on DaloyJS
+  (`examples/agent-loop.ts`, `/docs/tutorials/agent-loop`). Your own model
+  loop streams each step over SSE, risky tools pause for a signed, single-use
+  approval bound to the user, session, and tool call, a step budget stops
+  runaway loops, and every tool call is audited. No LLM runs in core.
+
 ## [1.4.1] - 2026-09-29
 
 ### Security

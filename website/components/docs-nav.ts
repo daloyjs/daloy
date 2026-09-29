@@ -33,6 +33,7 @@ export const docsNav: DocsNavSection[] = [
         href: "/docs/tutorials/multi-user-api" as Route,
       },
       { title: "Large fake REST demo", href: "/docs/tutorials/fake-rest-api" },
+      { title: "Host an agent loop", href: "/docs/tutorials/agent-loop" as Route },
     ],
   },
   {

@@ -598,6 +598,11 @@ const STATIC_PATHS: Array<{
     changeFrequency: "monthly",
     priority: 0.7,
   },
+  {
+    path: "/docs/tutorials/agent-loop",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
