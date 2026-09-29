@@ -19,7 +19,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.j
 - `pnpm test` — run test suite
 - `pnpm contract` — run `daloy inspect --check api/index.ts`
 - `pnpm hooks:install` — enable the optional pre-push contract gate
-- `pnpm deploy` — deploy to Vercel
+- `pnpm run deploy` — deploy to Vercel
 - `pnpm audit` — supply-chain audit
 
 ## Project shape

@@ -59,8 +59,17 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Install dependencies (frozen lockfile)
+        # Same integrity gate as ci.yml: fail when any dependency does not
+        # match the committed deno.lock, so a deploy never ships something
+        # the OSV scan did not see.
+        run: deno install --frozen=true
+
       - name: Typecheck
         run: deno task typecheck
+
+      - name: Contract check
+        run: deno task contract
 
       - name: Test
         run: deno task test

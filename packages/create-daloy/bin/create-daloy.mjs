@@ -95,6 +95,9 @@ const RENAME_ON_COPY = new Map([
   ["_github", ".github"],
   ["_Dockerfile", "Dockerfile"],
   ["_dockerignore", ".dockerignore"],
+  // Keeps local secrets out of `vercel deploy` uploads: the Vercel CLI does
+  // not apply .gitignore to what it uploads.
+  ["_vercelignore", ".vercelignore"],
   // Directory: holds skill files for AI coding agents under
   // `.agents/skills/<skill-name>/SKILL.md`. Templates author this as
   // `_agents/` so npm pack does not drop the dotfolder during publish.
@@ -548,6 +551,10 @@ const TOOL_INSTALL_GUIDES = {
 const MIN_NODE_MAJOR = 24;
 const MIN_NPM_MAJOR = 12;
 const MIN_PNPM_MAJOR = 11;
+// Exact pnpm used by the generated CI (pnpm/action-setup) and, for templates
+// whose platform needs it, by package.json#packageManager. One constant so the
+// two can never drift.
+const PINNED_PNPM_VERSION = "11.1.3";
 
 /**
  * Parse the leading major-version integer out of a version string such as
@@ -719,7 +726,7 @@ async function copyTemplate(src, dest) {
   }
 }
 
-async function patchPackageJson(dir, projectName, packageManager) {
+async function patchPackageJson(dir, projectName, packageManager, template) {
   const file = path.join(dir, "package.json");
   if (!existsSync(file)) return;
   const raw = await readFile(file, "utf8");
@@ -742,6 +749,11 @@ async function patchPackageJson(dir, projectName, packageManager) {
   }
   if (packageManager === "pnpm") {
     json.engines = { ...json.engines, pnpm: `>=${MIN_PNPM_MAJOR}.0.0` };
+    // Vercel otherwise picks pnpm from the lockfile format (9.x/10.x), which
+    // fails the engines.pnpm floor above and aborts every deploy. With this
+    // field plus the ENABLE_EXPERIMENTAL_COREPACK=1 project variable (see the
+    // template README), Vercel builds with the same pnpm as CI.
+    if (template === "vercel") json.packageManager = `pnpm@${PINNED_PNPM_VERSION}`;
   }
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
 }
@@ -767,16 +779,27 @@ async function patchTemplateTextFiles(dir, packageManager) {
 }
 
 function rewritePackageManagerText(raw, packageManager) {
-  return raw
+  // The release-day cooldown note names pnpm's settings file. Bun scaffolds
+  // get the same cooldown from bunfig.toml; npm and yarn scaffolds have no
+  // cooldown configured, so the note would be wrong there and is dropped.
+  const cooldownNote =
+    /> \*\*Install refused right after a DaloyJS release\?\*\*[\s\S]*?safeguard off\.\r?\n\r?\n/;
+  const withCooldownNote =
+    packageManager === "bun"
+      ? raw.replace("`pnpm-workspace.yaml`), a supply-chain", "`bunfig.toml`), a supply-chain")
+      : raw.replace(cooldownNote, "");
+  return withCooldownNote
     .replace(
       "Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).",
       `Package manager: ${packageManager}.`
     )
+    .replace("Package manager: pnpm.", `Package manager: ${packageManager}.`)
     .replace(/\bpnpm install\b/g, `${packageManager} install`)
     .replace(/\bpnpm gen:openapi\b/g, `${packageManager} run gen:openapi`)
     .replace(/\bpnpm gen:client\b/g, `${packageManager} run gen:client`)
     .replace(/\bpnpm typecheck\b/g, `${packageManager} run typecheck`)
     .replace(/\bpnpm build\b/g, `${packageManager} run build`)
+    .replace(/\bpnpm run deploy\b/g, `${packageManager} run deploy`)
     .replace(/\bpnpm deploy\b/g, `${packageManager} run deploy`)
     .replace(/\bpnpm dev\b/g, `${packageManager} run dev`)
     .replace(/\bpnpm gen\b/g, `${packageManager} run gen`)
@@ -843,6 +866,20 @@ const NPM_STRICT_NPMRC = `# DaloyJS install-time guardrails for the npm CLI.
 engine-strict=true
 `;
 
+// Bun reads its install settings from bunfig.toml, not from pnpm-workspace.yaml
+// or .npmrc. Without this file a Bun scaffold would have no release-age
+// cooldown at all, silently dropping the 24h supply-chain floor the pnpm path
+// enforces. `minimumReleaseAge` is in seconds and needs Bun >= 1.3; older Bun
+// ignores the key, which is why bun-basic's engines floor is >= 1.3.0.
+const BUN_BUNFIG = `# DaloyJS install-time guardrails for Bun.
+#
+# Wait 24h (86400 seconds) before resolving a freshly published version.
+# Most npm worm campaigns are detected and unpublished within hours. Set to 0
+# only for a real hotfix. Requires Bun >= 1.3.
+[install]
+minimumReleaseAge = 86400
+`;
+
 async function normalizePackageManagerFiles(dir, packageManager) {
   if (packageManager === "pnpm") return;
   // pnpm-workspace.yaml is pnpm-only; drop it for every other manager.
@@ -859,6 +896,9 @@ async function normalizePackageManagerFiles(dir, packageManager) {
     await writeFile(npmrc, NPM_STRICT_NPMRC, "utf8");
   } else if (existsSync(npmrc)) {
     await rm(npmrc, { force: true });
+  }
+  if (packageManager === "bun") {
+    await writeFile(path.join(dir, "bunfig.toml"), BUN_BUNFIG, "utf8");
   }
 }
 
@@ -902,7 +942,7 @@ async function patchDockerfileForPackageManager(dir, packageManager) {
   // an `\n`-only pattern would silently fail to match there, leaving the
   // pnpm-specific COPY/RUN lines in place for npm/yarn/bun scaffolds.
   let next = raw.replace(
-    /COPY package\.json pnpm-lock\.yaml\* \.\/\r?\nRUN corepack enable && corepack prepare pnpm@latest --activate && \\\r?\n\s+pnpm install --frozen-lockfile --ignore-scripts/,
+    /COPY package\.json pnpm-lock\.yaml\* \.\/\r?\nRUN corepack enable && corepack prepare pnpm@[\w.-]+ --activate && \\\r?\n\s+pnpm install --frozen-lockfile --ignore-scripts/,
     `${install.copy}\n${install.run}`
   );
 
@@ -1031,7 +1071,7 @@ function setupPackageManagerStep(packageManager) {
     return `      - name: Set up pnpm
         uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
         with:
-          version: 11.1.3
+          version: ${PINNED_PNPM_VERSION}
           run_install: false`;
   }
   if (packageManager === "yarn") {
@@ -1329,9 +1369,23 @@ async function addDenoSecurityTasks(dir) {
  */
 function nodeVersionStrategy(template) {
   if (template === "bun-basic") {
-    return { strategy: "", version: "24" };
+    return {
+      strategy: "",
+      version: "24",
+      checksNote: [
+        "# The verify job runs once (Bun is the runtime, so there is no Node",
+        "# version matrix). Protect `main` with the single `Verify` check.",
+      ].join("\n"),
+    };
   }
   return {
+    checksNote: [
+      "# The verify job runs as a matrix across both ends of the `engines.node`",
+      "# range declared in package.json, so a change that only works on one of",
+      "# them fails here instead of in production. That means the required status",
+      "# checks to protect `main` with are the per-version jobs (`Verify (24)`,",
+      "# `Verify (26)`), not a single `Verify`.",
+    ].join("\n"),
     strategy: [
       "    strategy:",
       "      fail-fast: false",
@@ -1445,6 +1499,7 @@ function renderCiReplacements({
     ["__BUILD_STEP__", buildStep],
     ["__CONTRACT_STEP__", contractStep],
     ["__CI_NODE_STRATEGY__", nodeVersions.strategy],
+    ["__CI_REQUIRED_CHECKS_NOTE__", nodeVersions.checksNote],
     ["__CI_NODE_VERSION__", nodeVersions.version],
     ["__DAST_LAUNCH_COMMAND__", dast.command],
     ["__DAST_EXTRA_ENV__", dast.extraEnv],
@@ -2339,7 +2394,7 @@ async function main() {
       logStep("Minimal mode applied", `${count} file${count === 1 ? "" : "s"} trimmed`);
     }
     if (!skipPackageManager) {
-      await patchPackageJson(targetDir, packageName, packageManager);
+      await patchPackageJson(targetDir, packageName, packageManager, template);
       logStep("Package metadata written", packageName);
       await patchTemplateTextFiles(targetDir, packageManager);
       await patchDockerignoreForPackageManager(targetDir, packageManager);

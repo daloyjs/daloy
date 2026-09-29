@@ -38,7 +38,7 @@ The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint 
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core`.
 5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled.
-6. Deno permissions are part of the contract — keep `--allow-net --allow-env --allow-read` narrow; never use `--allow-all`.
+6. Deno permissions are part of the contract — keep `--allow-net` and the `--allow-env` allowlist narrow; never use `--allow-all`.
 7. Keep operation IDs stable and examples schema-valid; `deno task contract` must pass after route, metadata, or OpenAPI-facing changes.
 8. Every new route ships with a test that covers a happy path and at least one unhappy path.
 9. After any route change: `deno task gen:openapi && deno task contract && deno task typecheck && deno task test`.

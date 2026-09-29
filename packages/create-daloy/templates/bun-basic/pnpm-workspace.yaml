@@ -1,10 +1,8 @@
 # pnpm workspace-level supply-chain settings.
 #
-# This file is here even though the default package manager for this
-# template is Bun, because users can switch to pnpm with
-# `pnpm create daloy --package-manager pnpm`. When that happens, the
-# scaffolder keeps this file so pnpm 11+ picks up the workspace-level
-# supply-chain controls below. If you keep using Bun, you can delete it.
+# pnpm is this template's default package manager (Bun is the runtime).
+# Scaffolding with `--package-manager bun` removes this file and writes a
+# bunfig.toml with the same 24h release-age cooldown instead.
 #
 # pnpm 11+ reads `pnpm-workspace.yaml` as a settings file even when no
 # `packages:` list is declared. It is the only file format that accepts
@@ -23,3 +21,19 @@ minimumReleaseAge: 1440
 # Transitive deps must resolve from the configured registry, which makes
 # typosquatted-tarball and compromised-fork attacks much harder to land.
 blockExoticSubdeps: true
+
+# pnpm 11+ ignores these keys in `.npmrc`, so they live here. `.npmrc` keeps
+# the same values for older tooling.
+#
+# Never run dependency lifecycle scripts (postinstall / preinstall / prepare):
+# the main execution channel of the chalk/debug, node-ipc and Shai-Hulud
+# malware. If you later need a build step, allowlist that one package with
+# `allowBuilds` instead of turning this off.
+ignoreScripts: true
+# Fail on unmet or incompatible peer dependencies instead of warning.
+strictPeerDependencies: true
+# Re-verify package integrity hashes against the lockfile on install.
+verifyStoreIntegrity: true
+# Use the lockfile as-is whenever it satisfies package.json.
+preferFrozenLockfile: true
+autoInstallPeers: true

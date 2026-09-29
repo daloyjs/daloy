@@ -1,1 +1,9 @@
-# Add Vercel project env vars here.
+# Add Vercel project env vars here (Project -> Settings -> Environment Variables).
+
+# Required once per project so Vercel builds with the pnpm pinned in
+# package.json#packageManager (see README "Deploy").
+# ENABLE_EXPERIMENTAL_COREPACK=1
+
+# Vercel's edge is one trusted proxy hop, which is the default. Only change it
+# if you know your chain differs.
+# TRUST_PROXY_HOPS=1

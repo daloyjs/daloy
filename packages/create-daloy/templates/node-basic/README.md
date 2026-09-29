@@ -18,6 +18,11 @@ curl http://localhost:3000/books/1
 <!-- daloy-minimal:strip-end books -->
 ```
 
+> **Install refused right after a DaloyJS release?** New installs wait 24 hours
+> before using a freshly published version (`minimumReleaseAge` in
+> `pnpm-workspace.yaml`), a supply-chain safeguard. If `@daloyjs/core` was just
+> released, retry a few hours later rather than turning the safeguard off.
+
 <!-- daloy-minimal:strip-start docs -->
 
 ## API documentation

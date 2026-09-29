@@ -74,7 +74,7 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
   `generated/openapi.json`.
 - `deno.json` — tasks, import map, and JSR-first dependency specifiers. **There is no
   `package.json`** in this project — do not add one.
-- `tests/` — Deno test files (`*.test.ts`).
+- `tests/` — Deno test files (`*_test.ts`).
 - `generated/` — **machine-written**. Never edit by hand.
 
 ## Commands cheat-sheet
@@ -199,7 +199,7 @@ app.get(
 - Throw typed errors from `@daloyjs/core` — they serialize to RFC 9457
   problem responses.
 - Add a `responses[code]` entry for every error you throw.
-- Do not swallow errors. Log via `ctx.log.error(...)` and rethrow.
+- Do not swallow errors. Log via `ctx.state.log.error(...)` and rethrow.
 
 ## Middleware
 
@@ -299,7 +299,7 @@ Aim for complete happy- and unhappy-path test coverage of the routes you add.
   them explicitly to the relevant task in `deno.json` and call it out to
   the user — never `--allow-all`.
 - Never log secrets — filter `authorization`, `cookie`, etc.
-- Validate env via Zod at boot (`Deno.env.toObject()`). Fail fast on
+- Validate env via Zod at boot (build the object from explicit `Deno.env.get("NAME")` calls; `Deno.env.toObject()` needs unscoped `--allow-env` and fails under the Dockerfile's allowlist). Fail fast on
   missing config.
 - For auth, verify JWT signatures against an allowlist of keys, never
   trust the `alg` header, always check `exp` / `nbf`.
@@ -331,7 +331,7 @@ Skip that file for ordinary route work.
 
 ## Logging & observability
 
-- Use `ctx.log` — it carries the request id.
+- Use `ctx.state.log` — it carries the request id.
 - Avoid `console.log` in production code paths.
 
 ## Configuration & secrets

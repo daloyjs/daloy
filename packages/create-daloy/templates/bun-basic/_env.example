@@ -1,5 +1,5 @@
-# Copy to .env for local use. Real secrets belong in your platform's secret
-# store, never in git (.env is git-ignored).
+# Copy to .env for local use (Bun loads .env automatically). Real secrets
+# belong in your platform's secret store, never in git (.env is git-ignored).
 PORT=3000
 
 # Number of reverse-proxy hops in front of the app (load balancer, PaaS edge,

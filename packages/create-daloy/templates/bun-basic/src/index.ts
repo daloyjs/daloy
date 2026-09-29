@@ -11,7 +11,9 @@ const handle = serve(app, {
   idleTimeout: 30,
 });
 
-const url = handle.url ? String(handle.url) : `http://localhost:${port}`;
+// `handle.url` is a URL whose string form ends in "/"; use the origin so the
+// links below do not become "//docs" (which 404s).
+const url = handle.url ? handle.url.origin : `http://localhost:${port}`;
 const links: StartupBannerLink[] = [
   // daloy-minimal:strip-start docs
   { label: "API docs", url: `${url}/docs` },

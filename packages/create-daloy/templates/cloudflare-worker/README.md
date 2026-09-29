@@ -9,10 +9,15 @@ pnpm install
 pnpm dev          # http://localhost:8787
 ```
 
+> **Install refused right after a DaloyJS release?** New installs wait 24 hours
+> before using a freshly published version (`minimumReleaseAge` in
+> `pnpm-workspace.yaml`), a supply-chain safeguard. If `@daloyjs/core` was just
+> released, retry a few hours later rather than turning the safeguard off.
+
 ## Deploy
 
 ```bash
-pnpm deploy
+pnpm run deploy
 ```
 
 `@daloyjs/core/cloudflare` exposes `toFetchHandler(app)`, so the same `App` you would use on Node also runs on Workers.

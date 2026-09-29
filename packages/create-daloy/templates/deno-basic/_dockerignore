@@ -8,4 +8,7 @@ coverage
 .env.*
 !.env.example
 generated
-otherdocs
+# Private keys and certificates never belong in an image.
+*.pem
+*.key
+*.p12

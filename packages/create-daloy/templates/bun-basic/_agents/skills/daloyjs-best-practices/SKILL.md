@@ -201,7 +201,7 @@ app.get(
 - Throw typed errors from `@daloyjs/core` — they serialize to RFC 9457
   problem responses.
 - Add a `responses[code]` entry for every error you throw.
-- Do not swallow errors. Log via `ctx.log.error(err, "context")` and
+- Do not swallow errors. Log via `ctx.state.log.error({ err }, "context")` and
   rethrow if recovery is impossible.
 
 ## Middleware
@@ -267,15 +267,15 @@ Tests run with `bun test`. Use **in-process** requests through
 
 ```ts
 import { test, expect } from "bun:test";
-import { buildApp } from "../src/build-app";
+import { buildApp } from "../src/build-app.ts";
 
 test("GET /healthz returns ok", async () => {
   const app = buildApp();
   const res = await app.request("/healthz");
   expect(res.status).toBe(200);
-  const body = await res.json();
+  const body = (await res.json()) as { ok: boolean; runtime: string };
   expect(body.ok).toBe(true);
-  expect(typeof body.uptime).toBe("number");
+  expect(body.runtime).toBe("bun");
 });
 ```
 
@@ -324,7 +324,7 @@ Aim for complete happy- and unhappy-path test coverage of the routes you add.
   of it when URLs can be influenced by users or tenants. SSRF protections
   should fail closed for private ranges and cloud metadata endpoints.
 - Bun ships its own audit story; check `bun pm audit` periodically and
-  pin versions in `bun.lockb`.
+  pin versions in the committed lockfile.
 
 ## CI and workflows (`--with-ci` scaffolds)
 
@@ -334,7 +334,7 @@ reference. Skip that file for ordinary route work.
 
 ## Logging & observability
 
-- Use the framework logger via `ctx.log` — it carries the request id
+- Use the framework logger via `ctx.state.log` — it carries the request id
   automatically.
 - Avoid `console.log` in production code paths; the structured logger
   emits JSON for log aggregators.

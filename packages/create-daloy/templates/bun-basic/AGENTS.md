@@ -2,7 +2,7 @@
 
 A [DaloyJS](https://daloyjs.dev) REST API for the [Bun](https://bun.sh) runtime. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. With `docs: "auto"` in `new App({...})`, three routes are auto-mounted outside production: `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
-- Package manager / runtime: Bun.
+- Runtime: Bun. Package manager: pnpm.
 
 ## Agent guidance
 

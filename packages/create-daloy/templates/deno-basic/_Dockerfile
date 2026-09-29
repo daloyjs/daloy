@@ -30,8 +30,10 @@
 #     builds can pin to an immutable digest:
 #       docker build --build-arg \
 #         DENO_IMAGE=denoland/deno:alpine@sha256:<digest> .
-#     Dependabot's `docker` ecosystem (see `.github/dependabot.yml`)
-#     keeps the digest fresh.
+#     The default is a floating tag, and Dependabot's `docker` ecosystem
+#     cannot update a `FROM ${ARG}` line. For automatic digest updates,
+#     write the digest into the ARG default below (for example
+#     `ARG DENO_IMAGE=denoland/deno:alpine@sha256:<digest>`).
 
 # Override at build time to pin a specific digest.
 ARG DENO_IMAGE=denoland/deno:alpine
@@ -41,10 +43,12 @@ WORKDIR /app
 # Cache deps in a layer that only invalidates when imports change.
 COPY deno.json deno.lock* ./
 COPY src ./src
-# `deno cache` resolves and verifies every import against the lockfile
-# and bakes them into Deno's module cache. The resulting image cannot
-# resolve any module that was not present at build time.
-RUN deno cache --lock=deno.lock src/main.ts || deno cache src/main.ts
+# `deno install --frozen=true` resolves every import from the committed
+# lockfile and bakes it into Deno's module cache. It fails the build when a
+# dependency does not match deno.lock, instead of silently resolving
+# something newer (there is deliberately no unlocked fallback). The resulting
+# image cannot resolve any module that was not present at build time.
+RUN deno install --frozen=true --entrypoint src/main.ts
 
 FROM ${DENO_IMAGE} AS runner
 WORKDIR /app

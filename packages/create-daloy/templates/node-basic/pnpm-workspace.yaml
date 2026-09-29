@@ -22,3 +22,19 @@ minimumReleaseAge: 1440
 # Transitive deps must resolve from the configured registry, which makes
 # typosquatted-tarball and compromised-fork attacks much harder to land.
 blockExoticSubdeps: true
+
+# pnpm 11+ ignores these keys in `.npmrc`, so they live here. `.npmrc` keeps
+# the same values for older tooling.
+#
+# Never run dependency lifecycle scripts (postinstall / preinstall / prepare):
+# the main execution channel of the chalk/debug, node-ipc and Shai-Hulud
+# malware. If you later need a build step, allowlist that one package with
+# `allowBuilds` instead of turning this off.
+ignoreScripts: true
+# Fail on unmet or incompatible peer dependencies instead of warning.
+strictPeerDependencies: true
+# Re-verify package integrity hashes against the lockfile on install.
+verifyStoreIntegrity: true
+# Use the lockfile as-is whenever it satisfies package.json.
+preferFrozenLockfile: true
+autoInstallPeers: true

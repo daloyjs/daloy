@@ -18,6 +18,11 @@ curl http://localhost:3000/books/1
 <!-- daloy-minimal:strip-end books -->
 ```
 
+> **Install refused right after a DaloyJS release?** New installs wait 24 hours
+> before using a freshly published version (`minimumReleaseAge` in
+> `pnpm-workspace.yaml`), a supply-chain safeguard. If `@daloyjs/core` was just
+> released, retry a few hours later rather than turning the safeguard off.
+
 <!-- daloy-minimal:strip-start docs -->
 
 ## API documentation
@@ -48,8 +53,20 @@ pnpm hooks:install   # points core.hooksPath at .githooks
 ## Deploy
 
 ```bash
-pnpm deploy
+pnpm run deploy
 ```
+
+One-time Vercel project setting: add the environment variable
+`ENABLE_EXPERIMENTAL_COREPACK=1` (Project → Settings → Environment Variables).
+With it, Vercel builds with the pnpm pinned in `package.json#packageManager`
+(the same version as CI). Without it, Vercel guesses pnpm 9 from the lockfile,
+which fails this project's `engines.pnpm >= 11` check and aborts the build.
+
+This template uses TypeScript 5.9 on purpose: Vercel's Node builder loads the
+project's `typescript` package through its JavaScript API, which TypeScript 7
+(the native compiler) no longer provides, and the Vercel CLI's own tooling
+declares `typescript ^4 || ^5` as a peer. Move up once Vercel supports newer
+TypeScript.
 
 The API entry lives at `api/index.ts` and uses `@daloyjs/core/vercel`:
 
@@ -81,7 +98,7 @@ export default toWebHandler(app);
 
 So DaloyJS owns all routing and the app's routes are served at the **site root**
 (`/healthz`, `/docs`, `/openapi.json`, …) rather than under `/api/*`. Without
-this rewrite the function only answers `/api/*` and the root domain returns a
+this rewrite the function only answers `/api` and the root domain returns a
 Vercel 404. (The demo defines no `/` route, so the bare root returns the app's
 problem+json 404 — visit `/docs` or `/healthz`.)
 

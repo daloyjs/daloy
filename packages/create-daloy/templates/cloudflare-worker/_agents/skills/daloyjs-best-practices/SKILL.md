@@ -83,7 +83,7 @@ pnpm dev          # wrangler dev on http://localhost:8787
 pnpm typecheck    # tsc --noEmit
 pnpm test         # run test suite
 pnpm contract     # daloy inspect --check src/index.ts
-pnpm deploy       # wrangler deploy
+pnpm run deploy   # wrangler deploy (`pnpm deploy` is pnpm's own command)
 pnpm audit        # supply-chain audit
 ```
 
@@ -138,56 +138,63 @@ when it helps consumers understand or safely automate the route:
 4. **Return `{ status, body, headers? }`** with `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.).
 6. **Add a test** under `tests/`. Use `app.request(...)` for pure logic;
-   use `unstable_dev` (Wrangler) or `@cloudflare/vitest-pool-workers`
-   when you need bindings.
+   use `@cloudflare/vitest-pool-workers` when you need bindings
+   (Wrangler's `unstable_dev` is deprecated).
 7. **Run the contract gate**: `pnpm contract` or `pnpm test`.
 8. **Run the quality gates**: `pnpm typecheck && pnpm test`.
 
 ### Example: a typed route with bindings
 
 ```ts
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { App, NotFoundError, rateLimit, requestId, secureHeaders } from "@daloyjs/core";
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-interface Env {
-  BOOKS: KVNamespace;
-  JWT_SECRET: string;
+// Type your bindings once; `env` from "cloudflare:workers" is typed from this.
+declare global {
+  namespace Cloudflare {
+    interface Env {
+      BOOKS: KVNamespace;
+      JWT_SECRET: string;
+    }
+  }
 }
 
 const Book = z.object({ id: z.string(), title: z.string() }).strict();
 
-function buildApp(env: Env) {
-  const app = new App({ bodyLimitBytes: 1024 * 1024, requestTimeoutMs: 5_000 });
-  app.use(requestId());
-  app.use(secureHeaders());
-  app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// Build the App ONCE at module scope. Creating it per request would give every
+// request a fresh rateLimit() store, so the limit could never trigger.
+const app = new App({
+  bodyLimitBytes: 1024 * 1024,
+  requestTimeoutMs: 5_000,
+  production: true,
+  behindProxy: { hops: 1 },
+});
+app.use(requestId());
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
-  app.get(
-    "/books/:id",
-    {
-      operationId: "getBookById",
-      tags: ["Books"],
-      request: { params: z.object({ id: z.string().min(1) }).strict() },
-      responses: {
-        200: { description: "Found", body: Book },
-        404: { description: "Not found" },
-      },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }).strict() },
+    responses: {
+      200: { description: "Found", body: Book },
+      404: { description: "Not found" },
     },
-    async ({ params }) => {
-      const raw = await env.BOOKS.get(params.id, "json");
-      if (!raw) throw new NotFoundError(`Book ${params.id} not found`);
-      return { status: 200 as const, body: Book.parse(raw) };
-    }
-  );
+  },
+  async ({ params }) => {
+    // Bindings are read per request, inside the handler.
+    const raw = await env.BOOKS.get(params.id, "json");
+    if (!raw) throw new NotFoundError(`Book ${params.id} not found`);
+    return { status: 200 as const, body: Book.parse(raw) };
+  }
+);
 
-  return app;
-}
-
-export default {
-  fetch: (req: Request, env: Env, ctx: ExecutionContext) =>
-    toFetchHandler<Env>(buildApp(env)).fetch(req, env, ctx),
-};
+export default toFetchHandler(app);
 ```
 
 ## Validation & schema conventions
@@ -222,9 +229,11 @@ Add CORS only when needed, with an explicit `origin` allowlist.
 
 1. Add the binding (`[[kv_namespaces]]`, `[[d1_databases]]`, `[vars]`,
    etc.) to `wrangler.toml`.
-2. Type the binding in the `Env` interface inside `src/index.ts`.
-3. Pass `env` into `buildApp(env)` so handlers receive bindings via
-   closure or factory argument. **Never read bindings via globals.**
+2. Type the binding on the `Cloudflare.Env` interface (see the example
+   above).
+3. Read bindings inside handlers with `import { env } from "cloudflare:workers"`.
+   Build the `App` once at module scope; **never create it per request**
+   (that resets the rateLimit store and re-compiles every route).
 4. Store secrets via `wrangler secret put` — they appear on `env` but
    are not committed to `wrangler.toml`.
 
@@ -277,13 +286,15 @@ Two patterns:
 
 - **In-process** with `app.request(...)` for pure logic that does not
   need bindings.
-- **Workers-aware** runners (`@cloudflare/vitest-pool-workers` or
-  Wrangler `unstable_dev`) when KV/D1/etc. are involved.
+- **Workers-aware** runner (`@cloudflare/vitest-pool-workers`) when
+  KV/D1/etc. are involved.
 
 Cover **happy paths and unhappy paths** for every route: valid input,
 validation failures (400), auth failures (401/403), not-found (404),
-conflict (409), rate limiting (429). For external services, inject an
-in-memory fake into `buildApp(env)` during tests.
+conflict (409), rate limiting (429). For external services, run under
+`@cloudflare/vitest-pool-workers` with test bindings, or keep the call behind
+a small module that tests replace. Do not rebuild the App per request to
+inject fakes.
 For user-owned or tenant-owned resources, use at least two principals and
 prove that Alice's valid token cannot list, read, update, or delete Bob's
 record.
@@ -339,10 +350,10 @@ reference. Skip that file for ordinary route work.
 
 ## Logging & observability
 
-- Use `ctx.log` — it carries the request id.
+- Use `ctx.state.log` — it carries the request id.
 - `console.log` in Workers shows up in `wrangler tail`. Prefer
   structured logs through the framework logger.
-- For tracing, the `tracing()` middleware emits OpenTelemetry-compatible
+- For tracing, the `otelTracing(opts)` middleware emits OpenTelemetry-compatible
   spans; wire up a Workers-friendly exporter when needed.
 
 ## Configuration & secrets

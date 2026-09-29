@@ -116,6 +116,16 @@ jobs:
             ref="${ref%% as *}"
             ref="${ref## }"
             ref="${ref%% }"
+            # Resolve `${NAME}` against this Dockerfile's `ARG NAME=default`
+            # line, so ARG-driven base images are checked instead of skipped.
+            case "$ref" in
+              '${'*'}')
+                name="${ref#??}"
+                name="${name%?}"
+                def="$(grep -E "^ARG ${name}=" Dockerfile | head -n 1 | cut -d= -f2-)"
+                [ -n "$def" ] && ref="$def"
+                ;;
+            esac
             case "$ref" in
               scratch|"\${"*|*"@sha256:"*) ;;
               *)

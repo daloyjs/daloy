@@ -1,9 +1,9 @@
 {
   "name": "my-daloy-deno-app",
   "tasks": {
-    "dev": "deno run --allow-net --allow-env --allow-read --watch src/main.ts",
-    "start": "deno run --allow-net --allow-env --allow-read src/main.ts",
-    "typecheck": "deno check src/main.ts",
+    "dev": "deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL --watch src/main.ts",
+    "start": "deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL src/main.ts",
+    "typecheck": "deno check src/ tests/ scripts/",
     "test": "deno test --allow-net --allow-env tests/",
     "contract": "deno test --allow-net --allow-env tests/contract_test.ts",
     "gen:openapi": "deno run --allow-net --allow-env --allow-read --allow-write scripts/dump-openapi.ts",

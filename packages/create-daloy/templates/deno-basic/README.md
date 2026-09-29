@@ -72,7 +72,7 @@ deno task hooks:install   # points core.hooksPath at .githooks
 
 <!-- daloy-minimal:strip-end books -->
 
-- Minimal permissions: `--allow-net --allow-env --allow-read` for `dev`.
+- Minimal permissions: `--allow-net` plus an `--allow-env` allowlist (`PORT`, `DENO_ENV`, `TRUST_PROXY_HOPS`, `PUBLIC_URL`) for `dev` and `start`; add a variable there when you read a new one.
 
 ## Authentication (OAuth2 / OpenID Connect)
 

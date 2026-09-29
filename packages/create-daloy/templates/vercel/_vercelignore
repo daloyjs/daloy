@@ -1,0 +1,10 @@
+# Files `vercel deploy` must never upload. The Vercel CLI does not apply
+# .gitignore to CLI uploads, so local secrets need their own entry here.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.githooks/
+tests/
+coverage/

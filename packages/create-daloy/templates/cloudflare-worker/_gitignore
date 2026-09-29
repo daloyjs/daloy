@@ -14,3 +14,8 @@ dist/
 # consumer's lockfile and can pin transitives to unsigned tarballs.
 # See https://socket.dev/blog/understanding-the-security-concerns-of-npm-shrinkwrap
 npm-shrinkwrap.json
+
+# Private keys and certificates (keep them in a secret manager, not git).
+*.pem
+*.key
+*.p12

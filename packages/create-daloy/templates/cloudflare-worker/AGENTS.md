@@ -19,7 +19,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **
 - `pnpm test` — run test suite
 - `pnpm contract` — run `daloy inspect --check src/index.ts`
 - `pnpm hooks:install` — enable the optional pre-push contract gate
-- `pnpm deploy` — `wrangler deploy`
+- `pnpm run deploy` — `wrangler deploy`
 - `pnpm audit` — supply-chain audit
 
 ## Project shape

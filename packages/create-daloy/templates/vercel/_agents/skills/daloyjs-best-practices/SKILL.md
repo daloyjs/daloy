@@ -90,7 +90,7 @@ pnpm dev          # local Node dev server (src/dev.ts) on http://localhost:3000
 pnpm typecheck    # tsc --noEmit
 pnpm test         # run test suite
 pnpm contract     # daloy inspect --check api/index.ts
-pnpm deploy       # deploy to Vercel
+pnpm run deploy   # deploy to Vercel (`pnpm deploy` is pnpm's own command)
 pnpm audit        # supply-chain audit
 ```
 
@@ -321,7 +321,7 @@ reference. Skip that file for ordinary route work.
 
 ## Logging & observability
 
-- Use `ctx.log` — it carries the request id.
+- Use `ctx.state.log` — it carries the request id.
 - `console.log` shows up in Vercel's runtime logs; the framework logger
   emits structured JSON for log aggregators.
 

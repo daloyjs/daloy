@@ -34,7 +34,7 @@ ARG NODE_IMAGE=node:24-alpine
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && corepack prepare pnpm@latest --activate && \
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate && \
     pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 

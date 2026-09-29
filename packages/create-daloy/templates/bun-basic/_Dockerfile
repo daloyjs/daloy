@@ -22,8 +22,11 @@
 #       docker build --build-arg \
 #         NODE_IMAGE=node:24-alpine@sha256:<digest> \
 #         BUN_IMAGE=oven/bun:1-alpine@sha256:<digest> .
-#     Dependabot's `docker` ecosystem (see `.github/dependabot.yml`)
-#     keeps the digest fresh. The companion `container-scan.yml`
+#     The default is a floating tag, and Dependabot's `docker` ecosystem
+#     cannot update a `FROM ${ARG}` line. For automatic digest updates,
+#     write the digest into the ARG default below (for example
+#     `ARG NODE_IMAGE=node:24-alpine@sha256:<digest>`).
+#     The companion `container-scan.yml`
 #     workflow lints this file with hadolint and scans the built image
 #     with Trivy on every PR.
 
@@ -35,7 +38,7 @@ FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 # Install deps in a layer that only invalidates when manifests change.
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && corepack prepare pnpm@latest --activate && \
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate && \
   pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 

@@ -231,7 +231,7 @@ app.get(
 - Add a `responses[code]` entry for every error you throw, so the OpenAPI
   spec and the typed client know it can happen.
 - Do not swallow errors in handlers. If you need to log and rethrow, use
-  `ctx.log.error(err, "context")` and rethrow.
+  `ctx.state.log.error({ err }, "context")` and rethrow.
 - For unexpected errors, let them bubble. The framework's error middleware
   will convert them into a generic 500 problem response and log them with
   the request ID for correlation.
@@ -315,7 +315,7 @@ test("GET /healthz returns ok", async () => {
   const app = buildApp();
   const res = await app.request("/healthz");
   assert.equal(res.status, 200);
-  const body = await res.json();
+  const body = (await res.json()) as { ok: boolean; uptime: number };
   assert.equal(body.ok, true);
   assert.ok(typeof body.uptime === "number");
 });
@@ -392,14 +392,14 @@ reference. Skip that file for ordinary route work.
 
 ## Logging & observability
 
-- The default logger emits structured JSON in production and pretty logs
-  in development. Use it via the handler context: `await handler(ctx)` →
-  `ctx.log.info({ userId }, "message")`.
+- The default logger emits structured JSON (it is silent under
+  `NODE_ENV=test`). Use it via the handler context:
+  `ctx.state.log.info({ userId }, "message")`.
 - Always include the request id in log lines automatically emitted by
   the framework. When you add your own logs, the request id is on
-  `ctx.requestId` and on the bound child logger.
-- For tracing, the `tracing()` middleware (from `@daloyjs/core`) emits
-  OpenTelemetry-compatible spans. Enable it once the user wires up an
+  `ctx.state.requestId` and on the bound child logger (`ctx.state.log`).
+- For tracing, the `otelTracing(opts)` middleware (from `@daloyjs/core`)
+  emits OpenTelemetry-compatible spans. Enable it once the user wires up an
   exporter.
 
 ## Configuration & secrets

@@ -6,11 +6,12 @@ const app = new App({
   bodyLimitBytes: 256 * 1024,
   requestTimeoutMs: 5_000,
   production: true,
-  // Cloudflare Workers always run behind Cloudflare's edge, which sets
-  // X-Forwarded-For. Declare that single trusted hop so DaloyJS reads the real
-  // client IP instead of refusing the (otherwise spoofable) header and
-  // returning 500 in production. Increase the hop count if you put an
-  // additional proxy in front of the Worker.
+  // Cloudflare Workers always run behind Cloudflare's edge, which appends the
+  // real client IP as the right-most X-Forwarded-For entry. Declaring that
+  // single trusted hop stops production from refusing the header with a 500,
+  // and rateLimit() below follows it, so each client gets its own bucket
+  // instead of every caller sharing one. Increase the hop count only if you
+  // put an additional proxy in front of the Worker.
   behindProxy: { hops: 1 },
   // daloy-minimal:strip-start docs
   // `docs: "auto"` mounts GET /openapi.json, /openapi.yaml and /docs (Scalar
@@ -28,8 +29,8 @@ const app = new App({
 
 app.use(requestId());
 app.use(secureHeaders());
-// The in-memory limiter resets per Worker isolate, so treat it as a
-// per-isolate abuse brake, not a global quota. For high-traffic routes, attach
+// Keyed per client (via behindProxy above). The in-memory store resets per
+// Worker isolate, so treat it as a per-isolate abuse brake, not a global quota. For high-traffic routes, attach
 // Cloudflare's native rate-limit binding in addition to — not instead of —
 // this baseline. Do not remove it to make a test pass; raise `max` per route.
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));

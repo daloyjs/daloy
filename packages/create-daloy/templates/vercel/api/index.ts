@@ -26,9 +26,10 @@ export const app = new App({
   // Reverse-proxy posture. On Vercel, every request reaches the function
   // through Vercel's edge, which sets `x-forwarded-for`. The app must declare
   // that trusted hop, otherwise DaloyJS refuses the spoofable header and
-  // returns 500 in production. Vercel is exactly one edge hop, so the default
-  // is 1; override TRUST_PROXY_HOPS only if you put another proxy in front
-  // (e.g. set it to 2 behind Cloudflare -> Vercel).
+  // returns 500 in production. Vercel overwrites `x-forwarded-for` with the
+  // real client IP (it does not append), so the chain is one hop even with a
+  // CDN such as Cloudflare in front: keep the default of 1. rateLimit() below
+  // follows this setting, so each client gets its own bucket.
   behindProxy: { hops: Number(process.env.TRUST_PROXY_HOPS ?? "1") },
   // daloy-minimal:strip-start docs
   // Auto-mounted docs, outside production only (`docs: "auto"`):

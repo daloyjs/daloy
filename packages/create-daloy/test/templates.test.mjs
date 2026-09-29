@@ -1902,18 +1902,40 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   // rc.6 cycle both the template and these assertions sat on rc.5, so the test
   // kept the drift in sync instead of catching it. Deriving the expectation
   // means a missed release bump fails here instead of shipping.
-  const coreVersion = JSON.parse(
-    await readFile(path.join(pkgRoot, "../../package.json"), "utf8")
-  ).version;
+  //
+  // One exception, by design: deno.lock can only lock a version that JSR
+  // already serves, and JSR, npm, and create-daloy publish in the same tag run.
+  // So the template may trail by exactly ONE release (it moves up in a
+  // follow-up commit after JSR publishes). Anything older still fails.
+  const allowed = await denoTemplateAllowedVersions();
+  const pinned = /^jsr:@daloyjs\/daloy@\^([^/]+)$/.exec(denoJson.imports["@daloyjs/core"] ?? "")?.[1];
+  assert.ok(
+    pinned && allowed.includes(pinned),
+    `deno-basic must pin the current core version or the one before it (${allowed.join(" or ")}); got ${pinned}`
+  );
   for (const suffix of ["", "/banner", "/contract", "/deno", "/openapi"]) {
     const specifier = `@daloyjs/core${suffix}`;
     assert.equal(
       denoJson.imports[specifier],
-      `jsr:@daloyjs/daloy@^${coreVersion}${suffix}`,
-      `deno-basic deno.json must pin ${specifier} to the current core version (${coreVersion})`
+      `jsr:@daloyjs/daloy@^${pinned}${suffix}`,
+      `deno-basic deno.json must pin every @daloyjs/core subpath to the same version (${pinned})`
     );
   }
 });
+
+/**
+ * Versions the deno-basic template may pin: the current core version and the
+ * previous release (the first two `## [X.Y.Z]` headings in CHANGELOG.md).
+ */
+async function denoTemplateAllowedVersions() {
+  const coreVersion = JSON.parse(
+    await readFile(path.join(pkgRoot, "../../package.json"), "utf8")
+  ).version;
+  const changelog = await readFile(path.join(pkgRoot, "../../CHANGELOG.md"), "utf8");
+  const released = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - /gm)].map((m) => m[1]);
+  const previous = released.find((v) => v !== coreVersion);
+  return previous ? [coreVersion, previous] : [coreVersion];
+}
 
 test("npm templates pin @daloyjs/core to the current release version", async () => {
   // The companion guard to the deno-basic check above: nothing asserted these
@@ -3045,4 +3067,193 @@ test("every scheduled security workflow declares a concurrency group", async () 
       );
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Regression guards from the 2026-09-28 template review. Each one pins a bug
+// that shipped: a stale Deno lock, a Bun typecheck that failed on a fresh
+// scaffold, an unquoted test glob that silently dropped the contract gate,
+// .npmrc hardening pnpm 11 ignores, a Vercel deploy that could not build, and
+// a Bun scaffold with no install cooldown.
+// ---------------------------------------------------------------------------
+
+const TEMPLATE_DIR = (t) => path.join(pkgRoot, "templates", t);
+
+async function scaffold(template, extraArgs = []) {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-review-"));
+  const { exitCode, output } = await runCreateDaloy(
+    ["app", "--template", template, "--no-install", "--no-git", "--yes", ...extraArgs],
+    { cwd: tmpDir }
+  );
+  assert.equal(exitCode, 0, output);
+  return { tmpDir, dir: path.join(tmpDir, "app") };
+}
+
+test("deno-basic deno.lock pins the same @daloyjs/daloy version deno.json requires", async () => {
+  const denoJson = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.json"), "utf8"));
+  const lock = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.lock"), "utf8"));
+  const spec = denoJson.imports["@daloyjs/core"];
+  const pinned = /^jsr:@daloyjs\/daloy@\^(.+)$/.exec(spec ?? "")?.[1];
+  assert.ok(pinned && (await denoTemplateAllowedVersions()).includes(pinned), `unexpected pin ${spec}`);
+  // `deno install --frozen=true` (generated CI) fails unless the lock carries
+  // exactly this specifier. Refresh deno.lock whenever deno.json is bumped.
+  assert.equal(lock.specifiers[spec], pinned, "deno.lock is stale: refresh it with the deno.json bump");
+  assert.ok(`@daloyjs/daloy@${pinned}` in lock.jsr, "deno.lock is missing the locked core package");
+});
+
+test("deno-basic Docker build and deploy verify both enforce the frozen lockfile", async () => {
+  const dockerfile = await readFile(path.join(TEMPLATE_DIR("deno-basic"), "_Dockerfile"), "utf8");
+  assert.match(dockerfile, /^RUN deno install --frozen=true --entrypoint src\/main\.ts$/m);
+  assert.doesNotMatch(dockerfile, /\|\|\s*deno cache/, "no unlocked fallback");
+  const deploy = await readFile(path.join(pkgRoot, "templates/_ci/deno/_github/workflows/deploy.yml"), "utf8");
+  assert.match(deploy, /run: deno install --frozen=true/);
+  assert.match(deploy, /run: deno task contract/);
+  const denoJson = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.json"), "utf8"));
+  assert.equal(denoJson.tasks.typecheck, "deno check src/ tests/ scripts/");
+  for (const task of ["dev", "start"]) {
+    assert.doesNotMatch(denoJson.tasks[task], /--allow-read|--allow-env(?!=)/, `${task} keeps env scoped`);
+  }
+});
+
+test("bun-basic typechecks under pnpm: tsconfig types names the @types/bun package", async () => {
+  const tsconfig = JSON.parse(await readFile(path.join(TEMPLATE_DIR("bun-basic"), "tsconfig.json"), "utf8"));
+  // "bun-types" is a transitive dependency pnpm does not hoist, so tsc cannot
+  // resolve it and `pnpm typecheck` fails on every fresh scaffold.
+  assert.deepEqual(tsconfig.compilerOptions.types, ["bun"]);
+  const pkg = JSON.parse(await readFile(path.join(TEMPLATE_DIR("bun-basic"), "package.json"), "utf8"));
+  assert.equal(pkg.engines.bun, ">=1.3.0", "bunfig minimumReleaseAge needs Bun >= 1.3");
+});
+
+test("node --test globs are quoted so sh cannot drop root-level tests", async () => {
+  for (const t of ["node-basic", "vercel", "cloudflare-worker"]) {
+    const pkg = JSON.parse(await readFile(path.join(TEMPLATE_DIR(t), "package.json"), "utf8"));
+    assert.equal(pkg.scripts.test, 'node --test "tests/**/*.test.ts"', t);
+  }
+});
+
+test("pnpm hardening lives in pnpm-workspace.yaml, where pnpm 11 reads it", async () => {
+  for (const t of ["node-basic", "bun-basic", "vercel", "cloudflare-worker"]) {
+    const yaml = await readFile(path.join(TEMPLATE_DIR(t), "pnpm-workspace.yaml"), "utf8");
+    for (const key of [
+      "minimumReleaseAge: 1440",
+      "ignoreScripts: true",
+      "strictPeerDependencies: true",
+      "verifyStoreIntegrity: true",
+      "blockExoticSubdeps: true",
+    ]) {
+      assert.match(yaml, new RegExp(`^${key}$`, "m"), `${t} ${key}`);
+    }
+  }
+});
+
+test("--package-manager bun writes bunfig.toml with the 24h release-age cooldown", async () => {
+  const { tmpDir, dir } = await scaffold("node-basic", ["--package-manager", "bun"]);
+  try {
+    const bunfig = await readFile(path.join(dir, "bunfig.toml"), "utf8");
+    assert.match(bunfig, /^\[install\]$/m);
+    assert.match(bunfig, /^minimumReleaseAge = 86400$/m);
+    const readme = await readFile(path.join(dir, "README.md"), "utf8");
+    assert.match(readme, /`bunfig\.toml`\), a supply-chain safeguard/);
+    assert.doesNotMatch(readme, /pnpm-workspace\.yaml/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("bun-basic docs use the default package manager, rewritten per scaffold", async () => {
+  const pnpmScaffold = await scaffold("bun-basic");
+  const bunScaffold = await scaffold("bun-basic", ["--package-manager", "bun"]);
+  try {
+    const pnpmReadme = await readFile(path.join(pnpmScaffold.dir, "README.md"), "utf8");
+    assert.match(pnpmReadme, /^pnpm install$/m);
+    assert.doesNotMatch(pnpmReadme, /^bun install$/m, "a pnpm scaffold must not tell users to bun install");
+    const pnpmAgents = await readFile(path.join(pnpmScaffold.dir, "AGENTS.md"), "utf8");
+    assert.match(pnpmAgents, /Package manager: pnpm\./);
+    const bunAgents = await readFile(path.join(bunScaffold.dir, "AGENTS.md"), "utf8");
+    assert.match(bunAgents, /Package manager: bun\./);
+    const ci = await readFile(path.join(pnpmScaffold.dir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /single `Verify` check/);
+    assert.doesNotMatch(ci, /Verify \(24\)/);
+  } finally {
+    await rm(pnpmScaffold.tmpDir, { recursive: true, force: true });
+    await rm(bunScaffold.tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("vercel pnpm scaffolds pin packageManager (Vercel build) and ship .vercelignore", async () => {
+  const bin = await readFile(path.join(pkgRoot, "bin/create-daloy.mjs"), "utf8");
+  const pinned = /const PINNED_PNPM_VERSION = "([^"]+)"/.exec(bin)?.[1];
+  assert.ok(pinned, "PINNED_PNPM_VERSION constant");
+  const vercel = await scaffold("vercel");
+  const node = await scaffold("node-basic");
+  const vercelNpm = await scaffold("vercel", ["--package-manager", "npm"]);
+  try {
+    const pkg = JSON.parse(await readFile(path.join(vercel.dir, "package.json"), "utf8"));
+    assert.equal(pkg.packageManager, `pnpm@${pinned}`);
+    // TypeScript 7 drops the JS API @vercel/node loads; see the template README.
+    assert.match(pkg.devDependencies.typescript, /^\^5\./);
+    const nodePkg = JSON.parse(await readFile(path.join(node.dir, "package.json"), "utf8"));
+    assert.equal(nodePkg.packageManager, undefined, "only the Vercel template needs the pin");
+    const npmPkg = JSON.parse(await readFile(path.join(vercelNpm.dir, "package.json"), "utf8"));
+    assert.equal(npmPkg.packageManager, undefined, "never pin pnpm in an npm scaffold");
+    const ignore = await readFile(path.join(vercel.dir, ".vercelignore"), "utf8");
+    assert.match(ignore, /^\.env$/m);
+    const dockerfile = await readFile(path.join(vercel.dir, "Dockerfile"), "utf8");
+    assert.match(dockerfile, /^CMD \["node", "src\/dev\.ts"\]$/m, "vercel dev needs a login; not runnable in a container");
+    const ci = await readFile(path.join(vercel.dir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, new RegExp(`version: ${pinned.replaceAll(".", "\\.")}`));
+  } finally {
+    for (const s of [vercel, node, vercelNpm]) await rm(s.tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Dockerfiles pin pnpm to the CI version and npm scaffolds still rewrite the install", async () => {
+  const bin = await readFile(path.join(pkgRoot, "bin/create-daloy.mjs"), "utf8");
+  const pinned = /const PINNED_PNPM_VERSION = "([^"]+)"/.exec(bin)?.[1];
+  for (const t of ["node-basic", "bun-basic", "vercel", "cloudflare-worker"]) {
+    const dockerfile = await readFile(path.join(TEMPLATE_DIR(t), "_Dockerfile"), "utf8");
+    assert.match(dockerfile, new RegExp(`corepack prepare pnpm@${pinned.replaceAll(".", "\\.")} --activate`), t);
+    assert.doesNotMatch(dockerfile, /pnpm@latest/, t);
+  }
+  const npm = await scaffold("node-basic", ["--package-manager", "npm"]);
+  try {
+    const dockerfile = await readFile(path.join(npm.dir, "Dockerfile"), "utf8");
+    assert.match(dockerfile, /RUN npm ci --ignore-scripts/);
+    assert.doesNotMatch(dockerfile, /corepack prepare pnpm/);
+  } finally {
+    await rm(npm.tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("secret files stay out of git, images, and uploads", async () => {
+  for (const t of ["node-basic", "bun-basic", "vercel", "cloudflare-worker", "deno-basic"]) {
+    const gitignore = await readFile(path.join(TEMPLATE_DIR(t), "_gitignore"), "utf8");
+    const dockerignore = await readFile(path.join(TEMPLATE_DIR(t), "_dockerignore"), "utf8");
+    for (const [name, file] of [["_gitignore", gitignore], ["_dockerignore", dockerignore]]) {
+      assert.match(file, /^\*\.pem$/m, `${t} ${name} *.pem`);
+      assert.match(file, /^\*\.key$/m, `${t} ${name} *.key`);
+    }
+    assert.doesNotMatch(dockerignore, /^otherdocs$/m, `${t}: framework-repo entry leaked into the template`);
+  }
+  const cf = await readFile(path.join(TEMPLATE_DIR("cloudflare-worker"), "_dockerignore"), "utf8");
+  assert.match(cf, /^\.dev\.vars$/m, "wrangler local secrets must not be baked into the image");
+});
+
+test("container-scan resolves ARG-driven FROM lines instead of skipping them", async () => {
+  for (const bundle of ["node", "deno"]) {
+    const yml = await readFile(path.join(pkgRoot, `templates/_ci/${bundle}/_github/workflows/container-scan.yml`), "utf8");
+    assert.match(yml, /def="\$\(grep -E "\^ARG \$\{name\}=" Dockerfile/, bundle);
+  }
+});
+
+test("agent skills only reference APIs that exist", async () => {
+  for (const t of ["node-basic", "bun-basic", "vercel", "cloudflare-worker", "deno-basic"]) {
+    const skill = await readFile(path.join(TEMPLATE_DIR(t), "_agents/skills/daloyjs-best-practices/SKILL.md"), "utf8");
+    assert.doesNotMatch(skill, /`ctx\.log[.`]/, `${t}: the logger is ctx.state.log`);
+    assert.doesNotMatch(skill, /ctx\.requestId/, `${t}: the request id is ctx.state.requestId`);
+    assert.doesNotMatch(skill, /`tracing\(\)`/, `${t}: the export is otelTracing(opts)`);
+  }
+  const cf = await readFile(path.join(TEMPLATE_DIR("cloudflare-worker"), "_agents/skills/daloyjs-best-practices/SKILL.md"), "utf8");
+  assert.doesNotMatch(cf, /buildApp\(env\)/, "never build the App per request (resets the rateLimit store)");
+  assert.doesNotMatch(cf, /export default \{\s*fetch:/, "export toFetchHandler(app) directly");
 });

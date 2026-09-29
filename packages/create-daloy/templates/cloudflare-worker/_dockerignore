@@ -10,5 +10,10 @@ coverage
 .env
 .env.*
 !.env.example
+# Wrangler's local secrets file.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
 generated
-otherdocs
