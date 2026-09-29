@@ -309,6 +309,29 @@ a2aText(text: string, mediaType?: string): A2aPart;
 a2aData(data: unknown, mediaType?: string): A2aPart;
 class A2aError extends Error { readonly code: number }  // -32602 or -32001..-32099
 
+// Calling other agents (since 1.5.0)
+createA2aClient(options: A2aClientOptions): A2aClient;
+interface A2aClientOptions {
+  url: string;                      // agent base URL or full card URL; https: unless loopback
+  fetch?: typeof fetch;             // default fetchGuard() (SSRF-guarded)
+  headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
+  allowedOrigins?: readonly string[]; // extra origins the card's endpoint may use (default: card origin)
+  allowInsecureHttp?: boolean;      // default false
+  timeoutMs?: number;               // default 10_000
+  maxResponseBytes?: number;        // default 1 MiB
+  cardMaxAgeMs?: number;            // default 300_000
+  extensions?: readonly string[];   // A2A-Extensions
+  propagateTrace?: boolean | ((headers: Headers, request?: Request) => void); // default off
+}
+interface A2aClient {
+  getAgentCard(opts?): Promise<A2aAgentCard>;
+  sendMessage(message: string | A2aPart[] | { parts, taskId?, contextId?, ... }, opts?): Promise<{ message } | { task }>;
+  getTask(id, opts?): Promise<A2aTask>;
+  cancelTask(id, opts?): Promise<A2aTask>;
+  listTasks(query?, opts?): Promise<A2aListTasksResult>;
+}
+class A2aClientError extends Error { code: number; data?: unknown; status?: number }  // code 0 = client-side refusal
+
 interface A2aHandler {
   readonly agentCard: Readonly<A2aAgentCard>;
   handleCard(request: Request): Promise<Response>;

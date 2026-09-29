@@ -1706,6 +1706,21 @@ function etagMatches(header: string, etag: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Client (calling other agents) lives in a2a-client.ts; re-exported here so
+// `@daloyjs/core/a2a` covers both sides.
+// ---------------------------------------------------------------------------
+
+export { A2aClientError, createA2aClient } from "./a2a-client.js";
+export type {
+  A2aCallOptions,
+  A2aClient,
+  A2aClientOptions,
+  A2aListTasksResult,
+  A2aOutgoingMessage,
+  A2aSendResult,
+} from "./a2a-client.js";
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 

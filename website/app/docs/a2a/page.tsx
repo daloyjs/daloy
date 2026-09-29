@@ -189,6 +189,37 @@ const result = await client.sendMessage({
   },
 });`;
 
+const DELEGATE = `import { a2aData, createA2aClient } from "@daloyjs/core";
+
+// One client per remote agent, created once at startup.
+const inventory = createA2aClient({
+  url: "https://inventory.partner.example", // card at /.well-known/agent-card.json
+  headers: async () => ({ authorization: \`Bearer \${await tokenFor("inventory")}\` }),
+  propagateTrace: true, // forward the caller's traceparent (opt-in)
+});
+
+// Inside your own onMessage (or any route handler):
+onMessage: async ({ message, request }) => {
+  const result = await inventory.sendMessage([a2aData({ sku: "ABC-1" })], { request });
+  if (result.task?.status.state === "TASK_STATE_COMPLETED") {
+    return { status: "completed", artifacts: result.task.artifacts ?? [] };
+  }
+  return { status: "failed", message: "Inventory agent could not answer." };
+},`;
+
+const CLIENT_ERRORS = `import { A2aClientError, A2A_ERROR_CODES } from "@daloyjs/core";
+
+try {
+  await inventory.getTask(taskId);
+} catch (error) {
+  if (error instanceof A2aClientError && error.code === A2A_ERROR_CODES.taskNotFound) {
+    // The remote agent answered: that task does not exist (or is not yours).
+  }
+  // error.code === 0 means the client refused: unsafe card, timeout,
+  // oversized or malformed response. error.cause holds the underlying error.
+  throw error;
+}`;
+
 const ERRORS = `import { A2aError, A2A_ERROR_CODES } from "@daloyjs/core";
 
 onMessage: ({ message }) => {
@@ -517,6 +548,77 @@ export default function Page() {
         <code>exposeInternalErrors</code> explicitly.
       </p>
       <CodeBlock code={ERRORS} />
+
+      <h2 id="calling-other-agents">Calling other agents</h2>
+      <p>
+        <code>createA2aClient()</code> is the other side: your service delegates
+        work to a remote A2A agent, for example a coordinator handing a task to
+        a specialist. It speaks the same 1.0 JSON-RPC binding and is tested
+        against the official A2A SDK&apos;s reference server.
+      </p>
+      <CodeBlock code={DELEGATE} />
+      <p>
+        The defaults assume the remote agent is not fully trusted, because an
+        Agent Card is written by the other party:
+      </p>
+      <ul>
+        <li>
+          <strong>SSRF-guarded transport.</strong> The default{" "}
+          <code>fetch</code> is <code>fetchGuard()</code>, which refuses
+          loopback, private, link-local, and cloud-metadata addresses. On
+          runtimes without a DNS resolver (Cloudflare Workers), pass{" "}
+          <code>fetchGuard({"{ resolve }"})</code>.
+        </li>
+        <li>
+          <strong>The card cannot redirect your credentials.</strong> The card
+          is fetched without your headers, and the JSON-RPC URL it names must
+          share the card&apos;s origin. Anything else is refused before a single
+          credential is sent, unless you list it in{" "}
+          <code>allowedOrigins</code>.
+        </li>
+        <li>
+          <strong>No surprises on the wire.</strong> <code>https:</code> only
+          (loopback excepted), redirects are never followed, responses are
+          size-capped (<code>maxResponseBytes</code>, 1 MiB) and parsed with
+          prototype-pollution-safe JSON, and the JSON-RPC id must match.
+        </li>
+        <li>
+          <strong>Timeouts on every call</strong> (<code>timeoutMs</code>, 10
+          seconds), combined with any <code>signal</code> you pass.
+        </li>
+        <li>
+          <strong>Fresh credentials.</strong> Pass <code>headers</code> as a
+          function and it runs per request, so short-lived tokens do not go
+          stale in a long-lived client.
+        </li>
+      </ul>
+      <p>
+        <code>sendMessage</code> accepts a string, an array of parts, or a full
+        message with <code>taskId</code> / <code>contextId</code> to continue a
+        task. <code>getTask</code>, <code>cancelTask</code>, and{" "}
+        <code>listTasks</code> map to the methods of the same name.
+      </p>
+      <CodeBlock code={CLIENT_ERRORS} />
+
+      <h3 id="trace-propagation">Trace propagation</h3>
+      <p>
+        When one request passes through several agents, you want one trace.
+        Propagation is <strong>off by default</strong>, because trace ids are
+        not always meant to cross into another organization&apos;s systems.
+        With <code>propagateTrace: true</code>, the client copies a valid W3C{" "}
+        <code>traceparent</code> (and <code>tracestate</code>) from the{" "}
+        <code>request</code> you pass to each call. <code>baggage</code> is
+        never forwarded, since it often carries user data, and malformed or
+        all-zero trace ids are dropped. If you use OpenTelemetry, pass a
+        function instead and run your own propagator, so the remote span
+        becomes a child of your current span:
+      </p>
+      <CodeBlock
+        code={`propagateTrace: (headers) =>
+  propagation.inject(context.active(), headers, {
+    set: (carrier, key, value) => carrier.set(key, value),
+  }),`}
+      />
 
       <h2 id="what-stays-out-of-core">What stays out of core</h2>
       <ul>
