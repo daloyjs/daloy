@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-30
+
 ### Added
 
 - `createA2aClient()` in `@daloyjs/core/a2a`: call other A2A 1.0 agents
@@ -3541,7 +3543,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/daloyjs/daloy/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/daloyjs/daloy/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/daloyjs/daloy/compare/v1.3.7...v1.4.0
 [1.3.7]: https://github.com/daloyjs/daloy/compare/v1.3.6...v1.3.7
