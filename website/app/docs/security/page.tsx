@@ -566,6 +566,25 @@ app.use(basicAuth({
         ).
       </p>
       <p>
+        If you already declared your topology on the App with{" "}
+        <code>behindProxy</code>, you do not have to repeat it. A{" "}
+        <code>rateLimit()</code> or <code>loginThrottle()</code> that sets none
+        of <code>keyGenerator</code>, <code>trustProxyHeaders</code>,{" "}
+        <code>trustedHops</code>, or <code>trustedProxies</code> follows the
+        App&apos;s <code>behindProxy</code>, so each client behind your proxy (or
+        on Vercel and Cloudflare Workers, where there is no peer socket) gets its
+        own bucket instead of everyone sharing one. Explicit limiter options
+        always win, and <code>trustProxyHeaders: false</code> opts out. Make{" "}
+        <code>behindProxy</code> match reality: prefer{" "}
+        <code>{"{ cidrs }"}</code> when you know the proxy addresses, because{" "}
+        <code>{"{ hops }"}</code> trusts the right-most forwarded entries from
+        anyone who can reach the app directly.
+      </p>
+      <CodeBlock
+        code={`const app = new App({ behindProxy: { hops: 1 } }); // one trusted proxy in front
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // keys on the real client IP`}
+      />
+      <p>
         For credential-entry routes, use{" "}
         <a href="/docs/security/websocket-login-throttle">
           <code>loginThrottle()</code>

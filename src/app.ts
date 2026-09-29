@@ -1109,6 +1109,8 @@ const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
 const A2A_ROUTE_MARKER = Symbol.for("daloyjs.a2a.route");
 const A2A_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.a2a.appProduction");
 const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
+/** Must match the string used by rateLimit() / loginThrottle() in middleware.ts. */
+const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
 
 /**
  * Global-registry symbols stamped by `responseCache()` and `tenancy()` on the
@@ -2099,6 +2101,14 @@ export class App<
     if (typeof bodyLimitHook === "function") {
       (bodyLimitHook as (limit: number) => void)(this.options.bodyLimitBytes);
     }
+    // Client-identity guards (rateLimit, loginThrottle) given no trust options
+    // of their own learn the App's behindProxy posture here, so behind a proxy
+    // they key on the real client instead of collapsing every caller onto the
+    // proxy's address (one shared bucket that any client can drain).
+    const behindProxyHook = (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK];
+    if (typeof behindProxyHook === "function") {
+      (behindProxyHook as (cfg: unknown) => void)(this.options.behindProxy);
+    }
     // Always-on correctness guard (independent of secureDefaults / environment).
     // A hook bundle must be a single Hooks object. Passing an ARRAY — or any
     // object carrying none of the recognized hook keys — is a silent no-op: the
@@ -2554,7 +2564,27 @@ export class App<
       return description ? { title, version, description } : { title, version };
     };
 
+    // The document depends only on the (append-only) route table and on
+    // options fixed at mount time, so cache it and rebuild only when a route
+    // has been registered since. Regenerating on every GET let any caller of
+    // the public `/openapi.json` / `/openapi.yaml` routes force a full walk of
+    // every route schema per request. Callers get a fresh deep copy so a
+    // mutating hook can never alter the cached document.
+    let cachedDoc: { routeCount: number; doc: Record<string, unknown>; yaml?: string } | undefined;
+    const cachedDocument = (): { routeCount: number; doc: Record<string, unknown>; yaml?: string } => {
+      const routeCount = this.routes.length;
+      if (cachedDoc === undefined || cachedDoc.routeCount !== routeCount) {
+        cachedDoc = { routeCount, doc: generateUncached() };
+      }
+      return cachedDoc;
+    };
     const generate = async (): Promise<Record<string, unknown>> =>
+      structuredClone(cachedDocument().doc);
+    const generateYaml = (): string => {
+      const entry = cachedDocument();
+      return (entry.yaml ??= openapiToYAML(entry.doc));
+    };
+    const generateUncached = (): Record<string, unknown> =>
       generateOpenAPI(this, {
         info: resolveInfo(),
         ...(this.options.openapi?.servers
@@ -2601,7 +2631,7 @@ export class App<
         },
         handler: async () => ({
           status: 200 as const,
-          body: openapiToYAML(await generate()),
+          body: generateYaml(),
           headers: {
             // text/yaml + inline disposition so browsers render it in the
             // viewport instead of triggering a file download (the behaviour
@@ -2733,11 +2763,25 @@ export class App<
 
     const servers = opts.servers ?? this.asyncapiServersFromOpenAPI();
 
+    // Same caching contract as mountDocs(): the document depends only on the
+    // add-only WebSocket registry and mount-time options, so rebuild it only
+    // after a new ws() route, and hand each caller a deep copy.
+    let cachedDoc: { wsCount: number; doc: Record<string, unknown>; yaml?: string } | undefined;
+    const cachedDocument = (): { wsCount: number; doc: Record<string, unknown>; yaml?: string } => {
+      const wsCount = this.webSocketRoutes.size;
+      if (cachedDoc === undefined || cachedDoc.wsCount !== wsCount) {
+        cachedDoc = {
+          wsCount,
+          doc: generateAsyncAPI(this, {
+            info: resolveInfo(),
+            ...(servers ? { servers } : {}),
+          }),
+        };
+      }
+      return cachedDoc;
+    };
     const generate = async (): Promise<Record<string, unknown>> =>
-      generateAsyncAPI(this, {
-        info: resolveInfo(),
-        ...(servers ? { servers } : {}),
-      });
+      structuredClone(cachedDocument().doc);
 
     this.route({
       method: "GET",
@@ -2771,7 +2815,10 @@ export class App<
         },
         handler: async () => ({
           status: 200 as const,
-          body: asyncapiToYAML(await generate()),
+          body: (() => {
+            const entry = cachedDocument();
+            return (entry.yaml ??= asyncapiToYAML(entry.doc));
+          })(),
           headers: {
             "content-type": "text/yaml; charset=utf-8",
             "content-disposition": "inline",

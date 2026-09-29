@@ -103,6 +103,8 @@ interface RateLimitOptions {
   windowMs: number;
   max: number;
   keyGenerator?: (ctx: RateLimitContext) => string; // may run on an early auth rejection
+  // With none of keyGenerator / trustProxyHeaders / trustedHops / trustedProxies set,
+  // the default key follows the App's behindProxy posture (resolveClientIp).
   ipv6Subnet?: number;             // default: 64 (1-128); IPv6 prefix for the default IP key (since 1.3.7)
   store?: RateLimitStore;          // default in-memory; use redisRateLimitStore for clusters
   trustProxyHeaders?: boolean;     // rightmost XFF; spoofable if origin is reachable

@@ -11,9 +11,11 @@ import { TooManyRequestsError, ForbiddenError } from "./errors.js";
 import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
 import {
   getConnInfo,
+  resolveClientIp,
   resolveForwardedClientIp,
   resolveForwardedTrust,
   resolveTrustedProxyMatchers,
+  type BehindProxyConfig,
 } from "./conn-info.js";
 import { ipRateLimitIdentity, type IpMatcher } from "./ip-match.js";
 
@@ -969,6 +971,14 @@ export interface RateLimitOptions {
    * limiter precedes `preBody` authentication, it also receives failed
    * attempts before body I/O; rely only on the raw request and state populated
    * by earlier `preBody` hooks.
+   *
+   * When none of `keyGenerator`, `trustProxyHeaders`, `trustedHops`, or
+   * `trustedProxies` is set, the default key follows the App's `behindProxy`
+   * posture (via `resolveClientIp`), so behind a proxy each client gets its
+   * own bucket instead of sharing the proxy's. `behindProxy` must describe
+   * your real topology: prefer `{ cidrs }` when you know the proxy addresses,
+   * because `{ hops }` trusts the right-most forwarded entries from anyone who
+   * can reach the app directly.
    */
   keyGenerator?: (ctx: RateLimitContext) => string;
   /**
@@ -1135,9 +1145,12 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
   const hops = resolveForwardedTrust("rateLimit()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("rateLimit()", opts);
+  const ipv6Subnet = resolveIpv6Subnet("rateLimit()", opts.ipv6Subnet);
+  const inherited = declaresNoClientTrust(opts) ? appProxyAwareKey(ipv6Subnet) : undefined;
   const keyOf =
     opts.keyGenerator ??
-    defaultForwardedRateLimitKey(hops, proxyMatchers, true, resolveIpv6Subnet("rateLimit()", opts.ipv6Subnet));
+    inherited?.keyOf ??
+    defaultForwardedRateLimitKey(hops, proxyMatchers, true, ipv6Subnet);
 
   const enforce = async (ctx: RateLimitContext) => {
     const key = `${groupPrefix}${keyOf(ctx)}`;
@@ -1154,7 +1167,75 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   };
   const hooks: Hooks = { beforeHandle: enforce };
   (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
+  if (inherited) (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK] = inherited.receive;
   return hooks;
+}
+
+/**
+ * Registration-time hook key. When a guard stores a function under it, the
+ * App calls that function once, as the hooks are registered, with its
+ * resolved `behindProxy` posture. Guards use it to key on the real client
+ * instead of on the proxy. Must match the string read in `app.ts`.
+ * @internal
+ */
+const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
+
+/** True when a guard was given none of its own client-identity trust options. */
+function declaresNoClientTrust(opts: {
+  keyGenerator?: unknown;
+  trustProxyHeaders?: boolean;
+  trustedHops?: number;
+  trustedProxies?: readonly string[];
+}): boolean {
+  // An explicit `trustProxyHeaders: false` is a deliberate "never trust
+  // forwarded headers", so it must not inherit the App's proxy posture.
+  return (
+    opts.keyGenerator === undefined &&
+    opts.trustProxyHeaders === undefined &&
+    opts.trustedHops === undefined &&
+    opts.trustedProxies === undefined
+  );
+}
+
+/**
+ * Default key that follows the App's `behindProxy` posture once the App
+ * reports it at registration (see {@link APP_BEHIND_PROXY_HOOK}). The client
+ * IP comes from {@link resolveClientIp}, which reads `X-Forwarded-For` from
+ * the right (the slot the trusted proxy appended) and, for `{ cidrs }`, only
+ * when the TCP peer is one of those proxies. With no posture, `"none"`, or two
+ * Apps reporting different postures for the same guard instance, it keys on
+ * the TCP peer exactly as before. A request with no resolvable client IP
+ * shares `"global"`, as it did before.
+ */
+function appProxyAwareKey(ipv6Subnet: number): {
+  keyOf: (ctx: RateLimitContext) => string;
+  receive: (cfg: unknown) => void;
+} {
+  let posture: BehindProxyConfig | undefined;
+  let received = false;
+  let conflicted = false;
+  const receive = (cfg: unknown): void => {
+    if (conflicted) return;
+    if (!received) {
+      received = true;
+      posture = cfg as BehindProxyConfig | undefined;
+      return;
+    }
+    if (JSON.stringify(cfg) !== JSON.stringify(posture)) {
+      conflicted = true;
+      posture = undefined;
+    }
+  };
+  const keyOf = (ctx: RateLimitContext): string => {
+    const cfg = posture;
+    if (cfg === undefined || cfg === "none") return peerRateLimitKey(ctx, ipv6Subnet);
+    const ip = resolveClientIp(ctx.request, cfg);
+    if (ip === undefined) return "global";
+    return ip === getConnInfo(ctx.request)?.remoteAddress
+      ? peerRateLimitKey(ctx, ipv6Subnet)
+      : ipRateLimitIdentity(ip, ipv6Subnet);
+  };
+  return { keyOf, receive };
 }
 
 // ---------- Login throttle ----------
@@ -1319,16 +1400,15 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   const groupId = opts.groupId ?? "login";
   const hops = resolveForwardedTrust("loginThrottle()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("loginThrottle()", opts);
-  // Without proxy trust, key on the TCP peer rather than one shared "global"
-  // bucket, so a single client cannot lock every user out of the login flow.
+  const ipv6Subnet = resolveIpv6Subnet("loginThrottle()", opts.ipv6Subnet);
+  // Without proxy trust of its own, follow the App's behindProxy posture, and
+  // otherwise key on the TCP peer rather than one shared "global" bucket, so a
+  // single client cannot lock every user out of the login flow.
+  const inherited = declaresNoClientTrust(opts) ? appProxyAwareKey(ipv6Subnet) : undefined;
   const keyGenerator =
     opts.keyGenerator ??
-    defaultForwardedRateLimitKey(
-      hops,
-      proxyMatchers,
-      true,
-      resolveIpv6Subnet("loginThrottle()", opts.ipv6Subnet),
-    );
+    inherited?.keyOf ??
+    defaultForwardedRateLimitKey(hops, proxyMatchers, true, ipv6Subnet);
   const limiter = rateLimit({
     windowMs,
     max,
@@ -1366,6 +1446,7 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   };
   const hooks: Hooks = { beforeHandle: enforce };
   (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
+  if (inherited) (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK] = inherited.receive;
   return hooks;
 }
 
