@@ -1,3 +1,4 @@
+import { AutoTypeTable } from "@/components/auto-type-table";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -98,36 +99,28 @@ ipRestriction(opts: IpRestrictionOptions): Hooks    // CIDR allow/deny
 loadShedding(opts?: LoadSheddingOptions): Hooks
 etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache-Control skip
   // SSE, NDJSON, unknown-length, and over-maxBytes bodies are sent untagged
-
-interface RateLimitOptions {
-  windowMs: number;
-  max: number;
-  keyGenerator?: (ctx: RateLimitContext) => string; // may run on an early auth rejection
-  // With none of keyGenerator / trustProxyHeaders / trustedHops / trustedProxies set,
-  // the default key follows the App's behindProxy posture (resolveClientIp).
-  ipv6Subnet?: number;             // default: 64 (1-128); IPv6 prefix for the default IP key (since 1.3.7)
-  store?: RateLimitStore;          // default in-memory; use redisRateLimitStore for clusters
-  trustProxyHeaders?: boolean;     // rightmost XFF; spoofable if origin is reachable
-  trustedHops?: number;            // multi-hop chain length (implies trust)
-  trustedProxies?: readonly string[]; // CIDR allowlist of proxy peers (peer-verified trust)
-  retryAfter?: boolean;
-  groupId?: string;
-}
-// A limiter placed before preBody auth also counts requests that auth
-// rejects by throwing, so failed credential guesses consume the budget.
-
-interface ETagOptions {
-  weak?: boolean;
-  generator?: (body: Uint8Array) => string | Promise<string>;
-  maxBytes?: number;               // default: 1_048_576 (1 MiB); larger Content-Length goes untagged (since 1.3.7)
-}
-
-interface BearerAuthOptions {
-  validate: (token: string) => boolean | Promise<boolean>;  // static check; token only
-  verify?: BearerAuthVerifyHook;    // (token, ctx) => boolean | void; per-request revalidation
-  realm?: string;
-}`}
+`}
       />
+
+      <h3 id="rate-limit-options">
+        <code>RateLimitOptions</code>
+      </h3>
+      <p>
+        A limiter placed before <code>preBody</code> auth also counts requests
+        that auth rejects by throwing, so failed credential guesses consume
+        the budget.
+      </p>
+      <AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />
+
+      <h3 id="etag-options">
+        <code>ETagOptions</code>
+      </h3>
+      <AutoTypeTable path="src/etag.ts" name="ETagOptions" />
+
+      <h3 id="bearer-auth-options">
+        <code>BearerAuthOptions</code>
+      </h3>
+      <AutoTypeTable path="src/middleware.ts" name="BearerAuthOptions" />
 
       <h2 id="composition-primitives">Composition primitives</h2>
       <CodeBlock

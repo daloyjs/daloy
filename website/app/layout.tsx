@@ -49,6 +49,7 @@ export const metadata: Metadata = {
   category: "technology",
   alternates: {
     canonical: "/",
+    types: { "application/rss+xml": [{ url: "/blog/rss.xml", title: "DaloyJS blog" }] },
   },
   openGraph: {
     type: "website",

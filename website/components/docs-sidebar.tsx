@@ -124,6 +124,11 @@ export function DocsSidebar() {
                       )}
                     >
                       {item.title}
+                      {item.badge ? (
+                        <span className="ms-2 inline-block rounded-full bg-emerald-500/12 px-1.5 py-px align-middle text-[10px] font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-300">
+                          {item.badge}
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 );

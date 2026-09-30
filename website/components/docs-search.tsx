@@ -15,7 +15,10 @@ import {
   CommandList,
   CommandShortcut,
 } from "./ui/command";
-import type { DocsSearchItem, DocsSearchSection } from "@/lib/docs-search";
+import type { DocsSearchItem } from "@/lib/docs-search";
+import { useDocsSearchIndex } from "@/lib/docs-search-client";
+import { rankDocPages } from "@/lib/docs-ranking";
+import { cn } from "@/lib/utils";
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
@@ -33,123 +36,95 @@ function isTypingTarget(target: EventTarget | null) {
 }
 
 /**
- * Highlight matching substring(s) in `text` for the given `query`.
- * Returns plain text when there is no query or no match.
+ * Highlight the query's terms in `text` (case-insensitive, whole query first,
+ * then individual tokens of 2+ characters). Plain text when nothing matches.
  */
 function HighlightText({ text, query }: { text: string; query: string }) {
-  const needle = query.trim();
+  const tokens = [query.trim(), ...query.trim().split(/\s+/)]
+    .filter((token) => token.length >= 2)
+    .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
-  if (!needle) {
+  if (tokens.length === 0) {
     return <>{text}</>;
   }
 
-  const lowerText = text.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
-  const index = lowerText.indexOf(lowerNeedle);
-
-  if (index === -1) {
-    return <>{text}</>;
-  }
+  const parts = text.split(new RegExp(`(${tokens.join("|")})`, "gi"));
 
   return (
     <>
-      {text.slice(0, index)}
-      <span className="font-bold text-foreground">
-        {text.slice(index, index + needle.length)}
-      </span>
-      {text.slice(index + needle.length)}
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <span key={index} className="font-bold text-foreground">
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
     </>
   );
 }
 
 /** Maximum number of results shown while a query is active. */
 const MAX_RESULTS = 12;
+/** Maximum "Jump to" page-title shortcuts shown above the results. */
+const MAX_JUMPS = 3;
 
 /**
- * Lowercase and strip punctuation so "rate limit" matches "Rate-limit"
- * and "problem+json" matches "problem json".
+ * Rank the index for a query, optionally within one section, and split out
+ * "Jump to" shortcuts: pages whose title starts with the query, like
+ * Fumadocs' page-tree quick action.
+ *
+ * @param items - Flat search index.
+ * @param query - The raw query.
+ * @param section - Section filter, or `null` for all sections.
+ * @returns Jump shortcuts and ranked results (disjoint).
  */
-function normalize(text: string) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
+export function searchDocs(
+  items: readonly DocsSearchItem[],
+  query: string,
+  section: string | null
+): { jumps: DocsSearchItem[]; results: DocsSearchItem[] } {
+  const pool = section ? items.filter((item) => item.section === section) : items;
+  const needle = query.trim().toLowerCase();
+  if (!needle) return { jumps: [], results: [] };
 
-type ScoredResult = {
-  item: DocsSearchItem;
-  section: string;
-  score: number;
-};
+  const jumps = pool
+    .filter((item) => item.title.toLowerCase().startsWith(needle))
+    .slice(0, MAX_JUMPS);
+  const jumped = new Set(jumps.map((item) => item.href));
+  const results = rankDocPages(pool, query, MAX_RESULTS + jumps.length)
+    .map(({ page }) => page)
+    .filter((item) => !jumped.has(item.href))
+    .slice(0, MAX_RESULTS);
+
+  return { jumps, results };
+}
 
 /**
- * Score one docs page against a normalized query.
+ * Docs search: a Cmd/Ctrl+K command dialog over every docs page.
  *
- * Title matches always outrank description matches, which outrank matches
- * that only occur in the keywords/body blob, so the page *about* a topic
- * surfaces above the many pages that merely mention it.
- *
- * @param item - The searchable docs page.
- * @param needle - The normalized query string.
- * @param tokens - The query split into normalized tokens.
- * @returns A relevance score in (0, 1], or 0 for no match.
+ * The index is fetched from `/docs/search-index.json` the first time the
+ * dialog is opened (or the trigger is hovered or focused), instead of being
+ * serialized into every page. Results come from the same ranker as the MCP
+ * `search_docs` tool, can be filtered to one sidebar section, and open with
+ * "Jump to" shortcuts for pages whose title starts with the query.
  */
-function scoreDocsItem(
-  item: DocsSearchItem,
-  needle: string,
-  tokens: string[]
-): number {
-  const title = normalize(item.title);
-
-  if (title === needle) return 1;
-  if (title.startsWith(needle)) return 0.95;
-  if (title.includes(needle)) return 0.85;
-  if (tokens.length > 1 && tokens.every((t) => title.includes(t))) return 0.75;
-
-  const description = normalize(item.description);
-
-  if (description.includes(needle)) return 0.6;
-  if (tokens.length > 1 && tokens.every((t) => description.includes(t)))
-    return 0.5;
-
-  const keywords = normalize(item.keywords);
-
-  if (keywords.includes(needle)) return 0.4;
-  if (tokens.length > 1 && tokens.every((t) => keywords.includes(t)))
-    return 0.3;
-
-  return 0;
-}
-
-export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
+export function DocsSearch() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
+  const [wanted, setWanted] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [section, setSection] = React.useState<string | null>(null);
+  const { sections, items, status } = useDocsSearchIndex(open || wanted);
 
-  // With a query active we do the filtering, ranking, and capping ourselves
-  // (cmdk's built-in sort proved unreliable across groups); `null` means
-  // browse mode, which renders the full grouped navigation.
-  const results = React.useMemo<ScoredResult[] | null>(() => {
-    const needle = normalize(search);
-
-    if (!needle) {
-      return null;
-    }
-
-    const tokens = needle.split(" ").filter(Boolean);
-    const scored: ScoredResult[] = [];
-
-    for (const section of sections) {
-      for (const item of section.items) {
-        const score = scoreDocsItem(item, needle, tokens);
-
-        if (score > 0) {
-          scored.push({ item, section: section.heading, score });
-        }
-      }
-    }
-
-    // Stable sort: ties keep sidebar (reading) order.
-    return scored.sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
-  }, [sections, search]);
+  const { jumps, results } = React.useMemo(
+    () => searchDocs(items, search, section),
+    [items, search, section]
+  );
+  const browsing = search.trim() === "";
+  const browseSections = section ? sections.filter((entry) => entry.heading === section) : sections;
 
   const handleKeyDown = React.useEffectEvent((event: KeyboardEvent) => {
     if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") {
@@ -178,6 +153,8 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
     router.push(href);
   }
 
+  const prefetch = () => setWanted(true);
+
   return (
     <>
       <Button
@@ -186,6 +163,8 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
         size="sm"
         className="h-11 w-full justify-between rounded-xl border border-mist-200/80 bg-mist-50/75 px-4 text-[11px] tracking-[0.22em] text-mist-950 shadow-sm hover:bg-mist-100/70 sm:text-xs dark:border-mist-900/70 dark:bg-mist-950/20 dark:text-mist-100 dark:hover:bg-mist-950/35 dim:border-mist-900/60 dim:bg-mist-950/18 dim:text-mist-100"
         onClick={() => setOpen(true)}
+        onPointerEnter={prefetch}
+        onFocus={prefetch}
       >
         <span className="flex min-w-0 items-center gap-2">
           <MagnifyingGlassIcon className="size-4" />
@@ -205,7 +184,10 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next) setSearch("");
+          if (!next) {
+            setSearch("");
+            setSection(null);
+          }
         }}
         title="Search docs"
         description="Jump between documentation pages."
@@ -217,14 +199,42 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
             value={search}
             onValueChange={setSearch}
           />
+          {sections.length > 0 ? (
+            <div
+              role="group"
+              aria-label="Filter by section"
+              className="flex gap-1.5 overflow-x-auto border-b px-3 py-2 scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent"
+            >
+              {[null, ...sections.map((entry) => entry.heading)].map((heading) => (
+                <button
+                  key={heading ?? "all"}
+                  type="button"
+                  aria-pressed={section === heading}
+                  onClick={() => setSection(heading)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                    section === heading
+                      ? "border-foreground/30 bg-muted font-semibold text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {heading ?? "All"}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <CommandList className="max-h-104">
             <CommandEmpty>
-              No documentation page matched your search.
+              {status === "error"
+                ? "Search is unavailable right now. Try again in a moment."
+                : status === "ready"
+                  ? "No documentation page matched your search."
+                  : "Loading the docs index…"}
             </CommandEmpty>
-            {results === null ? (
-              sections.map((section) => (
-                <CommandGroup key={section.heading} heading={section.heading}>
-                  {section.items.map((item) => (
+            {browsing ? (
+              browseSections.map((entry) => (
+                <CommandGroup key={entry.heading} heading={entry.heading}>
+                  {entry.items.map((item) => (
                     <DocsSearchResult
                       key={item.href}
                       item={item}
@@ -236,18 +246,37 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
                 </CommandGroup>
               ))
             ) : (
-              <CommandGroup heading="Results">
-                {results.map(({ item, section }) => (
-                  <DocsSearchResult
-                    key={item.href}
-                    item={item}
-                    section={section}
-                    search={search}
-                    active={pathname === item.href}
-                    onSelect={handleSelect}
-                  />
-                ))}
-              </CommandGroup>
+              <>
+                {jumps.length > 0 ? (
+                  <CommandGroup heading="Jump to">
+                    {jumps.map((item) => (
+                      <DocsSearchResult
+                        key={item.href}
+                        item={item}
+                        section={item.section}
+                        search={search}
+                        active={pathname === item.href}
+                        onSelect={handleSelect}
+                        compact
+                      />
+                    ))}
+                  </CommandGroup>
+                ) : null}
+                {results.length > 0 ? (
+                  <CommandGroup heading="Results">
+                    {results.map((item) => (
+                      <DocsSearchResult
+                        key={item.href}
+                        item={item}
+                        section={item.section}
+                        search={search}
+                        active={pathname === item.href}
+                        onSelect={handleSelect}
+                      />
+                    ))}
+                  </CommandGroup>
+                ) : null}
+              </>
             )}
           </CommandList>
         </Command>
@@ -264,6 +293,7 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
  * @param search - The current query, used to highlight matches.
  * @param active - Whether this row is the page currently being read.
  * @param onSelect - Called with the page href when the row is chosen.
+ * @param compact - Title-only row (used for "Jump to" shortcuts).
  */
 function DocsSearchResult({
   item,
@@ -271,12 +301,14 @@ function DocsSearchResult({
   search,
   active,
   onSelect,
+  compact = false,
 }: {
   item: DocsSearchItem;
   section?: string;
   search: string;
   active: boolean;
   onSelect: (href: Route) => void;
+  compact?: boolean;
 }) {
   return (
     <CommandItem
@@ -295,9 +327,11 @@ function DocsSearchResult({
             </span>
           ) : null}
         </div>
-        <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-          <HighlightText text={item.description} query={search} />
-        </div>
+        {compact ? null : (
+          <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+            <HighlightText text={item.description} query={search} />
+          </div>
+        )}
       </div>
       <CommandShortcut>{active ? "Current" : "Open"}</CommandShortcut>
     </CommandItem>

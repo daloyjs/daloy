@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { lastModifiedForRoute } from "@/lib/git-dates";
 import { SITE_URL } from "@/lib/seo";
 
 /**
@@ -603,14 +604,31 @@ const STATIC_PATHS: Array<{
     changeFrequency: "monthly",
     priority: 0.7,
   },
+  {
+    path: "/docs/openapi/site-api",
+    changeFrequency: "monthly",
+    priority: 0.6,
+  },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
-  return STATIC_PATHS.map(({ path, changeFrequency, priority }) => ({
-    url: `${SITE_URL}${path}`,
-    lastModified,
-    changeFrequency,
-    priority,
-  }));
+/**
+ * `lastModified` comes from the last git commit touching each page's source
+ * ({@link lastModifiedForRoute}). When history is unavailable (shallow clone,
+ * no git) the field is omitted rather than stamped with the build time, which
+ * would tell crawlers every page changed on every deploy.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  return Promise.all(
+    STATIC_PATHS.map(async ({ path, changeFrequency, priority }) => {
+      const lastModified = path.startsWith("/docs") || path.startsWith("/blog/")
+        ? await lastModifiedForRoute(path)
+        : undefined;
+      return {
+        url: `${SITE_URL}${path}`,
+        ...(lastModified ? { lastModified } : {}),
+        changeFrequency,
+        priority,
+      };
+    }),
+  );
 }

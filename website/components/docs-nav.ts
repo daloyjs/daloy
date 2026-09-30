@@ -1,6 +1,10 @@
 import type { Route } from "next";
 
-export type DocsNavItem = { title: string; href: Route };
+/**
+ * A sidebar entry. `badge` flags a page in the sidebar (e.g. a feature that
+ * shipped in the latest release); remove it once the release is no longer new.
+ */
+export type DocsNavItem = { title: string; href: Route; badge?: "new" | "beta" };
 export type DocsNavSection = { title: string; items: DocsNavItem[] };
 
 /**
@@ -27,13 +31,13 @@ export const docsNav: DocsNavSection[] = [
   {
     title: "Tutorials",
     items: [
-      { title: "Build a bookstore API", href: "/docs/tutorials/bookstore" },
+      { title: "Build a bookstore API", href: "/docs/tutorials/bookstore" as Route },
       {
         title: "Build a multi-user API",
         href: "/docs/tutorials/multi-user-api" as Route,
       },
-      { title: "Large fake REST demo", href: "/docs/tutorials/fake-rest-api" },
-      { title: "Host an agent loop", href: "/docs/tutorials/agent-loop" as Route },
+      { title: "Large fake REST demo", href: "/docs/tutorials/fake-rest-api" as Route },
+      { title: "Host an agent loop", href: "/docs/tutorials/agent-loop" as Route, badge: "new" },
     ],
   },
   {
@@ -60,6 +64,7 @@ export const docsNav: DocsNavSection[] = [
     title: "OpenAPI & typed clients",
     items: [
       { title: "DaloyJS OpenAPI spec", href: "/docs/openapi" },
+      { title: "daloyjs.dev API reference", href: "/docs/openapi/site-api" as Route, badge: "new" },
       { title: "API versioning", href: "/docs/api-versioning" as Route },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
       {
@@ -70,7 +75,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
       { title: "llms.txt for agents", href: "/docs/llms-txt" as Route },
       { title: "DaloyJS MCP server", href: "/docs/mcp" as Route },
-      { title: "A2A agent endpoint", href: "/docs/a2a" as Route },
+      { title: "A2A agent endpoint", href: "/docs/a2a" as Route, badge: "new" },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
     ],
   },

@@ -1,0 +1,65 @@
+---
+title: "Demo: large fake REST API"
+description: Explore a large DaloyJS-style demo API with hundreds of endpoints. Use it to test OpenAPI tooling, typed client generation, docs UX, and navigation at real-world scale.
+keywords:
+  - DaloyJS demo API
+  - large OpenAPI demo
+  - fake REST API
+  - typed client demo
+---
+
+# Demo: large fake REST API
+
+This is the right home for the big public demo API: a dedicated tutorial-style landing page in the docs, with the actual interactive explorer hosted separately. That keeps the DaloyJS docs focused while still giving users a realistic large-spec environment to test against.
+
+## Live demo
+
+Explore the public demo at [fakerestapi.vercel.app](https://fakerestapi.vercel.app/index.html).
+
+## Why this lives here
+
+- It is a product demo, not part of the framework API surface.
+- A catalog with roughly 600 endpoints is too large for the core docs sidebar structure.
+- Users looking at OpenAPI, client generation, and docs rendering need a realistic large example.
+
+<BranchDiagram
+  title="One large spec, many things to test"
+  source={{
+    eyebrow: "~600 endpoints",
+    label: "Large OpenAPI contract",
+    detail: "realistic, non-trivial API size",
+  }}
+  branches={[
+    {
+      eyebrow: "humans",
+      label: "Docs UI & navigation",
+      detail: "pressure-test endpoint browsing",
+    },
+    {
+      eyebrow: "codegen",
+      label: "Typed client generation",
+      detail: "Hey API SDK at scale",
+    },
+    {
+      eyebrow: "integration",
+      label: "Sample integrations",
+      detail: "exercise before exposing your own API",
+    },
+  ]}
+  caption="The demo exists so you can validate OpenAPI tooling, typed client codegen, and docs UX against a realistic large contract instead of a toy example."
+/>
+
+## What to use it for
+
+- Pressure-test docs UIs and endpoint navigation with a non-trivial API size.
+- Verify OpenAPI generation and downstream codegen workflows on a large contract.
+- Exercise typed SDK generation and sample integrations before exposing your own API.
+- Exercise a catalog large enough that docs UI and codegen show their real limits.
+
+## Recommended information architecture
+
+Keep this page in the docs as the entry point, and host the actual explorer as a separate live surface such as `demo.daloyjs.dev` or `api-demo.daloyjs.dev`. The docs page should explain the purpose of the demo, link to the live explorer, and link back into the relevant DaloyJS guides.
+
+## Where to continue
+
+Pair this demo with [OpenAPI generation](/docs/openapi), [typed clients](/docs/typed-client), and the [Bookstore tutorial](/docs/tutorials/bookstore) for a smaller end-to-end build.

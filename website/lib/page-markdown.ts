@@ -105,7 +105,11 @@ function isSkippedNode(node: Node): boolean {
 
   const tagName = node.tagName.toLowerCase();
   return (
-    SKIPPED_TAGS.has(tagName) || node.getAttribute("aria-hidden") === "true"
+    SKIPPED_TAGS.has(tagName) ||
+    node.getAttribute("aria-hidden") === "true" ||
+    // Alternate representations (e.g. the npm/yarn/bun panels of a package
+    // manager tab set) that would only repeat the visible one.
+    node.hasAttribute("data-md-skip")
   );
 }
 
@@ -242,11 +246,60 @@ function inlinePartToMarkdown(element: Element | null): string {
   return element ? inlineNodesToMarkdown(Array.from(element.childNodes)) : "";
 }
 
+/**
+ * Convert a `<Callout>` into a GitHub-style alert blockquote
+ * (`> [!WARNING]`), which most markdown renderers and LLMs understand.
+ */
+function calloutToMarkdown(element: Element): string {
+  const type = element.getAttribute("data-callout") ?? "note";
+  const alert = { note: "NOTE", tip: "TIP", warning: "WARNING", danger: "CAUTION", security: "IMPORTANT" }[type] ?? "NOTE";
+  const titleElement = element.querySelector("[data-callout-title]");
+  const title = titleElement ? inlineNodesToMarkdown(Array.from(titleElement.childNodes)).trim() : "";
+  const body = titleElement?.nextElementSibling ? childrenToMarkdown(titleElement.nextElementSibling) : "";
+  const defaultTitle = alert.charAt(0) + alert.slice(1).toLowerCase();
+  const lines = [`[!${alert}]`];
+  if (title && title.toLowerCase() !== type && title !== defaultTitle) lines.push(`**${title}**`);
+  if (body) lines.push(...body.split("\n"));
+
+  return lines.map((line) => (line ? `> ${line}` : ">")).join("\n");
+}
+
+/**
+ * Convert a `<TypeTable>` / `<AutoTypeTable>` (a `<dl>` of property rows)
+ * into a GFM table: Property | Type | Default | Description.
+ */
+function typeTableToMarkdown(element: Element): string {
+  const cell = (text: string) => text.replace(/\s+/g, " ").trim().replace(/\|/g, "\\|");
+  const rows = Array.from(element.querySelectorAll("dl > div")).map((row) => {
+    const name = row.querySelector("dt");
+    const [type, fallback, description] = Array.from(row.querySelectorAll("dd"));
+    const required = name?.textContent?.includes("required") ?? false;
+    const label = (name?.firstElementChild?.textContent ?? name?.textContent ?? "").trim();
+    const defaultValue = (fallback?.textContent ?? "").replace(/^\s*Default:/, "").trim();
+    return [
+      `\`${label}\`${required ? " (required)" : ""}`,
+      `\`${cell(type?.textContent ?? "")}\``,
+      defaultValue && defaultValue !== "-" ? `\`${cell(defaultValue)}\`` : "",
+      description ? cell(inlineNodesToMarkdown(Array.from(description.childNodes))) : "",
+    ];
+  });
+  if (rows.length === 0) return "";
+  return [
+    "| Property | Type | Default | Description |",
+    "| --- | --- | --- | --- |",
+    ...rows.map((cells) => `| ${cells.join(" | ")} |`),
+  ].join("\n");
+}
+
 function codeBlockToMarkdown(element: Element) {
   const language = element.getAttribute("data-language") ?? "text";
   const pre = element.querySelector("pre");
   const code = trimBlankLines(pre?.textContent ?? "");
-  const fence = language === "text" ? "```" : `\`\`\`${language}`;
+  const title = element.querySelector("[data-code-title]")?.textContent?.trim();
+  const info = [language === "text" ? "" : language, title ? `title="${title.replace(/"/g, "'")}"` : ""]
+    .filter(Boolean)
+    .join(" ");
+  const fence = `\`\`\`${info}`;
 
   return code ? `${fence}\n${code}\n\`\`\`` : "";
 }
@@ -431,6 +484,14 @@ function blockElementToMarkdown(element: Element): string {
 
   if (element.hasAttribute("data-diagram")) {
     return diagramToMarkdown(element);
+  }
+
+  if (element.hasAttribute("data-callout")) {
+    return calloutToMarkdown(element);
+  }
+
+  if (element.hasAttribute("data-type-table")) {
+    return typeTableToMarkdown(element);
   }
 
   if (/^h[1-6]$/.test(tagName)) {

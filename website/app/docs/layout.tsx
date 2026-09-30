@@ -1,9 +1,11 @@
-import { getDocsSearchSections } from "@/lib/docs-search";
 import { DocsBreadcrumb } from "@/components/docs-breadcrumb";
 import { DocsNavDisclosure } from "@/components/docs-nav-disclosure";
 import { DocsPageCopyButton } from "@/components/docs-page-copy-button";
 import { DocsPager } from "@/components/docs-pager";
-import { DocsToc } from "@/components/docs-toc";
+import { DocsLinkPreview } from "@/components/docs-link-preview";
+import { DocsPageFooter } from "@/components/docs-page-footer";
+import { DocsToc, DocsTocMobile } from "@/components/docs-toc";
+import { getDocsPageMeta } from "@/lib/docs-page-meta";
 import { DocsSearch } from "../../components/docs-search";
 import { DocsSidebar } from "../../components/docs-sidebar";
 
@@ -12,16 +14,16 @@ export default async function DocsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const searchSections = await getDocsSearchSections();
+  const pageMeta = await getDocsPageMeta();
 
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8">
       <div className="pt-6 lg:pt-8">
         <div className="flex items-start justify-between gap-3">
           <div className="w-full max-w-xl">
-            <DocsSearch sections={searchSections} />
+            <DocsSearch />
           </div>
-          <DocsPageCopyButton />
+          <DocsPageCopyButton meta={pageMeta} />
         </div>
       </div>
 
@@ -41,6 +43,7 @@ export default async function DocsLayout({
           </div>
         </aside>
         <main className="min-w-0 flex-1">
+          <DocsTocMobile />
           <DocsBreadcrumb />
           <article
             data-docs-content
@@ -48,7 +51,9 @@ export default async function DocsLayout({
           >
             {children}
           </article>
+          <DocsLinkPreview />
           <div className="max-w-full lg:max-w-[72ch]">
+            <DocsPageFooter meta={pageMeta} />
             <DocsPager />
           </div>
         </main>

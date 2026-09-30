@@ -1,19 +1,23 @@
 import type { Route } from "next";
 import { cacheLife } from "next/cache";
-import { readFile } from "node:fs/promises";
 import { docsNav } from "@/components/docs-nav";
-import {
-  docsDir,
-  extractBodyText,
-  parseDocFrontmatter,
-  walkDocsPages,
-} from "@/lib/docs-content";
+import { getAllDocPages } from "./docs-content";
 
+/**
+ * One page in the client search index. Carries the same fields the shared
+ * ranker (`rankDocPages` in `docs-ranking.ts`) reads, so the search dialog
+ * ranks exactly like the MCP `search_docs` tool.
+ */
 export type DocsSearchItem = {
   title: string;
   href: Route;
   description: string;
-  keywords: string;
+  /** Page keywords plus the section heading and sidebar title. */
+  keywords: string[];
+  /** Plain-text body, capped at {@link BODY_INDEX_LIMIT} characters. */
+  body: string;
+  /** Sidebar section the page belongs to. */
+  section: string;
 };
 
 export type DocsSearchSection = {
@@ -21,25 +25,8 @@ export type DocsSearchSection = {
   items: DocsSearchItem[];
 };
 
-type DiscoveredDoc = {
-  title: string;
-  href: Route;
-  description: string;
-  keywords: string[];
-  body: string;
-};
-
 /** Per-page cap on extracted body text (chars) sent to the client. */
 const BODY_INDEX_LIMIT = 2_400;
-
-function extractMetadata(source: string, filePath: string): DiscoveredDoc {
-  const frontmatter = parseDocFrontmatter(source, filePath);
-
-  return {
-    ...frontmatter,
-    body: extractBodyText(source, BODY_INDEX_LIMIT),
-  };
-}
 
 function getSectionForRoute(href: Route, navSectionLookup: Map<Route, string>) {
   if (navSectionLookup.has(href)) {
@@ -60,10 +47,11 @@ function getSectionForRoute(href: Route, navSectionLookup: Map<Route, string>) {
 }
 
 async function computeDocsSearchSections(): Promise<DocsSearchSection[]> {
-  const pageFiles = await walkDocsPages(docsDir);
-  const discoveredDocs = await Promise.all(
-    pageFiles.map(async (filePath) => extractMetadata(await readFile(filePath, "utf8"), filePath)),
-  );
+  // Same corpus as MCP, OG images and llms.txt (TSX and MDX pages alike).
+  const discoveredDocs = (await getAllDocPages()).map((doc) => ({
+    ...doc,
+    body: doc.body.slice(0, BODY_INDEX_LIMIT),
+  }));
 
   const navOrder = new Map(docsNav.flatMap((section) => section.items.map((item, index) => [item.href, index] as const)));
   const navTitles = new Map(docsNav.flatMap((section) => section.items.map((item) => [item.href, item.title] as const)));
@@ -80,17 +68,9 @@ async function computeDocsSearchSections(): Promise<DocsSearchSection[]> {
       title: doc.title,
       href: doc.href,
       description: doc.description,
-      keywords: [
-        heading,
-        doc.title,
-        navTitle,
-        doc.href.replaceAll("/", " "),
-        doc.description,
-        ...doc.keywords,
-        doc.body,
-      ]
-        .filter(Boolean)
-        .join(" "),
+      keywords: [heading, navTitle, ...doc.keywords].filter((value): value is string => Boolean(value)),
+      body: doc.body,
+      section: heading,
     });
 
     grouped.set(heading, sectionItems);
@@ -132,6 +112,8 @@ async function computeDocsSearchSections(): Promise<DocsSearchSection[]> {
  */
 export async function getDocsSearchSections(): Promise<DocsSearchSection[]> {
   "use cache";
-  cacheLife("max");
+  // Short-lived in dev so new or edited content shows up without a restart.
+  if (process.env.NODE_ENV === "development") cacheLife("seconds");
+  else cacheLife("max");
   return computeDocsSearchSections();
 }

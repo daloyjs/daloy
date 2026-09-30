@@ -1,0 +1,45 @@
+---
+title: "daloyjs.dev API reference"
+description: "Interactive reference for the daloyjs.dev agent API: discovery catalogs, the OAuth client_credentials token endpoint, the docs MCP server, and markdown pages, rendered live from /openapi.json."
+keywords:
+  - daloyjs.dev API
+  - OpenAPI reference
+  - API catalog
+  - client_credentials token
+  - docs MCP endpoint
+  - OpenAPI 3.1 viewer
+---
+
+# daloyjs.dev API reference
+
+This site runs a small public API for coding agents and tools: discovery catalogs, an OAuth token endpoint, the [docs MCP server](/docs/mcp), and a markdown copy of every page. This page is generated from the same OpenAPI 3.1 document the site serves at [`/openapi.json`](/openapi.json), so the reference and the spec cannot drift apart.
+
+<FlowDiagram
+  title="How an agent uses the site API"
+  numbered
+  steps={[
+    { label: "Discover", detail: "GET /.well-known/api-catalog" },
+    { label: "Get a token", detail: "POST /oauth/token (client_credentials)", tone: "accent" },
+    { label: "Call", detail: "GET /api/v1 or POST /mcp with Bearer token" },
+    { label: "Read pages", detail: "GET /md/{path} as markdown" },
+  ]}
+  caption="Discovery and markdown pages are public. The versioned API and MCP accept a short-lived docs:read token from the public client_credentials grant; every response carries IETF RateLimit headers."
+/>
+
+<Callout type="note" title="Try it runs in your browser">
+  The **Try it** buttons send a same-origin `GET` from this page to this site, only for public operations with no parameters. Nothing you type is sent anywhere, and there is no proxy involved.
+</Callout>
+
+## Authentication
+
+Operations marked **Requires a token** need a bearer token, and **Token optional** ones accept one but also answer anonymously. Tokens come from the public `client_credentials` grant: there is no client secret, and the token only grants the read-only `docs:read` scope.
+
+```bash title="Get a token"
+curl -X POST https://daloyjs.dev/oauth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'grant_type=client_credentials&scope=docs:read'
+```
+
+Versioning, deprecation headers and the sunset policy are covered in [API lifecycle](/docs/api-lifecycle) and [API versioning](/docs/api-versioning).
+
+<SiteApiReference />

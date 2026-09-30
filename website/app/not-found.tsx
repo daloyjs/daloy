@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Route } from "next";
 
+import { NotFoundSuggestions } from "@/components/not-found-suggestions";
+
 /**
  * HTML 404 for browsers. Agents that send `Accept: text/markdown` are rewritten
  * to `/md/...` in proxy.ts and receive a Markdown recovery body instead, still
@@ -22,6 +24,7 @@ export default function NotFound() {
             recovery paths.
           </p>
         </div>
+        <NotFoundSuggestions />
         <ul className="list-disc space-y-2 ps-5 text-muted-foreground">
           <li>
             <Link className="underline underline-offset-4" href={"/" as Route}>

@@ -183,7 +183,12 @@ export function shouldNegotiatePage(pathname: string): boolean {
     pathname === "/openapi.json" ||
     pathname.endsWith("/llms.txt") ||
     pathname.endsWith("/opengraph-image") ||
-    pathname.endsWith(".webmanifest")
+    pathname.endsWith(".webmanifest") ||
+    // Feeds and the sitemap: XML clients (RSS readers, crawlers) often send an
+    // Accept list with no text/html, which must not turn into a 406.
+    pathname.endsWith(".xml") ||
+    // Static JSON (the docs search index): machine data, never a page.
+    pathname.endsWith(".json")
   ) {
     return false;
   }

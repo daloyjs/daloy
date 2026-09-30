@@ -75,6 +75,14 @@ test("API and markdown handler paths skip page negotiation", () => {
   assert.equal(shouldNegotiatePage("/about"), true);
 });
 
+test("XML feeds and the sitemap skip page negotiation", () => {
+  assert.equal(shouldNegotiatePage("/blog/rss.xml"), false);
+  assert.equal(shouldNegotiatePage("/sitemap.xml"), false);
+  assert.equal(shouldNegotiatePage("/docs/search-index.json"), false);
+  // A page whose slug merely contains "xml" still negotiates.
+  assert.equal(shouldNegotiatePage("/blog/xml-parsing"), true);
+});
+
 test("PAGE_PRODUCES is html then markdown", () => {
   assert.deepEqual([...PAGE_PRODUCES], ["text/html", "text/markdown"]);
 });

@@ -26,7 +26,21 @@ Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant
 
 ## Repo notes
 
-- Docs navigation, sitemap entries, and search discovery are manually maintained. When changing docs routes, check [components/docs-sidebar.tsx](components/docs-sidebar.tsx), [components/docs-nav.ts](components/docs-nav.ts), [app/sitemap.ts](app/sitemap.ts), and [lib/docs-search.ts](lib/docs-search.ts). Run `pnpm verify:docs-links` from the repo root afterwards — it fails on broken internal `/docs` links, dangling nav/sitemap entries, pages missing from the sitemap, nav↔sitemap drift, and broken `#anchor` targets.
+- Docs navigation and sitemap entries are manually maintained. When changing docs routes, check [components/docs-nav.ts](components/docs-nav.ts) (sidebar, breadcrumb, pager; an item may carry `badge: "new" | "beta"`) and [app/sitemap.ts](app/sitemap.ts). Search, MCP, OG images and llms.txt discover pages automatically from both `app/docs/**/page.tsx` and `content/docs/**/*.mdx` via [lib/docs-content.ts](lib/docs-content.ts). Run `pnpm verify:docs-links` from the repo root afterwards — it fails on broken internal `/docs` links, dangling nav/sitemap entries, pages missing from the sitemap, nav↔sitemap drift, and broken `#anchor` targets, for TSX and MDX pages alike.
+- "Last updated" dates and sitemap `lastModified` come from git history ([lib/git-dates.ts](lib/git-dates.ts)). A shallow clone yields no dates rather than fake ones, so the Vercel project needs `VERCEL_DEEP_CLONE=true` for them to appear in production.
+
+## Authoring docs pages
+
+New docs pages should be MDX: `content/docs/<section>/<page>.mdx` renders at `/docs/<section>/<page>` through [app/docs/[slug]/[child]/page.tsx](app/docs/[slug]/[child]/page.tsx). Existing `page.tsx` pages keep working; a static `page.tsx` wins over an MDX file for the same route.
+
+- **Frontmatter** is validated strictly ([lib/mdx/content.ts](lib/mdx/content.ts)): `title`, `description` (140–160 chars), optional `keywords`. It replaces the `buildMetadata` call.
+- **Headings** get GitHub-style ids automatically. To keep an existing anchor stable, append a marker: `## Install it [#install]`.
+- **Code fences** render through `CodeBlock`: ` ```ts title="src/app.ts" {2,4-6} lineNumbers `. Shiki notation comments work in any block: `// [!code ++]`, `// [!code --]`, `// [!code highlight]`, `// [!code focus]`, `// [!code word:foo]`; the copy button strips them.
+- **Install commands** use ` ```package-install ` (add `dev` for `-D`): the body is the package list, rendered as pnpm / npm / yarn / bun tabs that remember the reader's choice.
+- **Components** are available without imports (see `mdxComponents` in [lib/mdx/render.tsx](lib/mdx/render.tsx)): `Callout` (`note | tip | warning | danger | security`), `Steps`/`Step`, `Cards`/`Card`, `Files`/`Folder`/`File`, `TypeTable`, `AutoTypeTable` (generated from `src/` TSDoc, e.g. `<AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />`), the diagram components, `AuthRole`/`IdpBoundary`, `UseCaseGuide`, and `SiteApiReference`. MDX is compiled server-side as trusted repository content only; never feed it request data.
+- In TSX pages, import the same components from `components/`; prefer `<Callout>` over hand-rolled bordered `<div>`s and `<AutoTypeTable>` over copying an options interface into a code block.
+- **Migrating a TSX page:** `node --import tsx scripts/tsx-to-mdx.ts app/docs/<route>/page.tsx` (add `--check` to print instead of write). It refuses pages it cannot convert faithfully. Verify by diffing `/docs/<route>.md` before and after; the four tutorials migrated with a zero-byte diff.
+- The diagram and OG image rules above apply to MDX pages too; OG images are generated for them automatically.
 - Every new documentation page under `app/docs/` must include a diagram that matches the current documentation style. Use the existing docs pages as the visual baseline so new pages keep the same diagram-led explanation pattern.
 - Every new documentation page under `app/docs/` must have its own Open Graph image. Create or wire the page-specific `opengraph-image` route so shared links resolve to `/docs/<slug>/opengraph-image` instead of the homepage image.
 - Database docs split SQL ORMs (`/docs/orm`) from ODMs (`/docs/odm`); Supabase is treated as a platform client, not an ORM.

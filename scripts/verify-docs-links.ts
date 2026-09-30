@@ -53,6 +53,7 @@ const REPO_ROOT = new URL("../", import.meta.url);
 const REPO_ROOT_PATH = fileURLToPath(REPO_ROOT);
 const WEBSITE_APP = new URL("website/app/", REPO_ROOT);
 const DOCS_DIR = new URL("docs/", WEBSITE_APP);
+const CONTENT_DOCS_DIR = new URL("website/content/docs/", REPO_ROOT);
 const NAV_FILE = new URL("website/components/docs-nav.ts", REPO_ROOT);
 const SITEMAP_FILE = new URL("website/app/sitemap.ts", REPO_ROOT);
 
@@ -114,6 +115,92 @@ function pageUrlToRoute(page: URL): string {
   return `/${noPage}`;
 }
 
+/**
+ * Recursively collect every `.mdx` file under a directory URL (the MDX docs
+ * tree). Missing directory yields an empty list.
+ */
+async function collectMdxFiles(dir: URL): Promise<URL[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const out: URL[] = [];
+  for (const name of entries) {
+    const child = new URL(name, dir);
+    const info = await stat(child);
+    if (info.isDirectory()) out.push(...(await collectMdxFiles(new URL(`${name}/`, dir))));
+    else if (name.endsWith(".mdx")) out.push(child);
+  }
+  return out;
+}
+
+/**
+ * Map a `website/content/docs/.../x.mdx` URL to its route:
+ * `tutorials/bookstore.mdx` -> `/docs/tutorials/bookstore`,
+ * `tutorials/index.mdx` -> `/docs/tutorials`.
+ */
+function mdxUrlToRoute(file: URL): string {
+  const rel = relative(fileURLToPath(CONTENT_DOCS_DIR), fileURLToPath(file))
+    .replace(/\\/g, "/")
+    .replace(/\.mdx$/, "")
+    .replace(/(?:^|\/)index$/, "");
+  return rel ? `/docs/${rel}` : "/docs";
+}
+
+/**
+ * GitHub-compatible heading slug for ASCII headings, matching what
+ * `github-slugger` (used by the MDX renderer) produces: lowercase, drop
+ * punctuation other than `-` and `_`, spaces to hyphens.
+ */
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}\s_-]/gu, "")
+    .replace(/ /g, "-");
+}
+
+/**
+ * Anchor ids an MDX page renders: explicit `id="..."` attributes, `[#id]`
+ * heading markers, and slugs of the remaining `##`-`####` headings
+ * (de-duplicated with `-1`, `-2` suffixes like the renderer's slugger).
+ */
+function extractMdxIds(source: string): Set<string> {
+  const ids = extractElementIds(source);
+  const seen = new Map<string, number>();
+  const reserve = (slug: string) => {
+    const count = seen.get(slug) ?? 0;
+    seen.set(slug, count + 1);
+    return count === 0 ? slug : `${slug}-${count}`;
+  };
+  const withoutFences = source.replace(/^(`{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm, "");
+  for (const match of withoutFences.matchAll(/^#{2,4}\s+(.+?)\s*$/gm)) {
+    const heading = match[1]!;
+    const custom = /\s*\[#([A-Za-z0-9][\w-]*)\]$/.exec(heading);
+    if (custom) {
+      ids.add(custom[1]!);
+      reserve(custom[1]!);
+      continue;
+    }
+    const text = heading
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\\(.)/g, "$1")
+      .replace(/[`*]/g, "");
+    ids.add(reserve(slugifyHeading(text)));
+  }
+  return ids;
+}
+
+/** Pull every markdown link target (`[text](/docs/...)`) out of an MDX file. */
+function extractMarkdownLinks(source: string): string[] {
+  const out: string[] = [];
+  const re = /\]\((\/[^)\s]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source))) out.push(m[1]!);
+  return out;
+}
+
 /** Normalize a route by trimming a trailing slash (except the bare root). */
 function normalizeRoute(route: string): string {
   if (route.length > 1 && route.endsWith("/")) return route.slice(0, -1);
@@ -172,10 +259,23 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
   const sourceByPage = new Map<string, string>();
   for (const page of pages) {
     const route = normalizeRoute(pageUrlToRoute(page));
+    // Dynamic segments (`[slug]/[child]`, the MDX renderer) are not pages of
+    // their own; the MDX files they render are collected below.
+    if (route.includes("[")) continue;
     routeSet.add(route);
     const source = await readFile(page, "utf8");
     idsByRoute.set(route, extractElementIds(source));
     sourceByPage.set(fileURLToPath(page), source);
+  }
+
+  // 1b. MDX docs pages under website/content/docs (rendered by the dynamic
+  // app/docs/[slug]/[child] route). Same checks, markdown link syntax too.
+  for (const file of await collectMdxFiles(CONTENT_DOCS_DIR)) {
+    const route = normalizeRoute(mdxUrlToRoute(file));
+    routeSet.add(route);
+    const source = await readFile(file, "utf8");
+    idsByRoute.set(route, extractMdxIds(source));
+    sourceByPage.set(fileURLToPath(file), source);
   }
 
   // Route handlers under `app/docs` (currently the `/docs/llms.txt` subpath
@@ -191,7 +291,7 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
 
   // 2. Internal docs links inside docs pages (+ anchor checks).
   for (const [pagePath, source] of sourceByPage) {
-    for (const href of extractHrefStrings(source)) {
+    for (const href of [...extractHrefStrings(source), ...extractMarkdownLinks(source)]) {
       if (!href.startsWith("/docs")) continue; // external / non-docs handled elsewhere
       const [pathPart, fragment] = href.split("#", 2);
       const target = normalizeRoute(pathPart!);
@@ -203,7 +303,7 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
           kind: "broken-link",
           source: rel(pagePath),
           target: href,
-          detail: `links to "${target}" but no website/app${resolved}/page.tsx or route.ts exists`,
+          detail: `links to "${target}" but no website/app${resolved}/page.tsx, route.ts, or website/content${resolved}.mdx exists`,
         });
         continue;
       }

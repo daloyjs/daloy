@@ -1,80 +1,61 @@
-import type { Route } from "next";
-import Link from "next/link";
+---
+title: "Tutorial: build a multi-user API without BOLA"
+description: Build a DaloyJS projects API that prevents cross-user access. Connect a provider-neutral principal to owner-scoped repository operations and prove isolation with adversarial tests.
+keywords:
+  - DaloyJS authorization tutorial
+  - TypeScript BOLA tutorial
+  - IDOR prevention tutorial
+  - multi user REST API
+  - resource ownership API
+  - cross user authorization tests
+---
 
-import { CodeBlock } from "@/components/code-block";
-import { FlowDiagram } from "@/components/diagram";
-import { buildMetadata } from "@/lib/seo";
+# Tutorial: build a multi-user API without BOLA
 
-export const metadata = buildMetadata({
-  title: "Tutorial: build a multi-user API without BOLA",
-  description:
-    "Build a DaloyJS projects API that prevents cross-user access. Connect a provider-neutral principal to owner-scoped repository operations and prove isolation with adversarial tests.",
-  path: "/docs/tutorials/multi-user-api",
-  keywords: [
-    "DaloyJS authorization tutorial",
-    "TypeScript BOLA tutorial",
-    "IDOR prevention tutorial",
-    "multi user REST API",
-    "resource ownership API",
-    "cross user authorization tests",
-  ],
-  type: "article",
-});
+We will build a small projects API where Alice and Bob use the same endpoints but can access only their own records. The authentication adapter and repository are deliberately replaceable. Swap the demo token verifier for any identity provider and swap the in-memory repository for any database without changing the authorization policy.
 
-export default function Page() {
-  return (
-    <>
-      <h1>Tutorial: build a multi-user API without BOLA</h1>
-      <p>
-        We will build a small projects API where Alice and Bob use the same
-        endpoints but can access only their own records. The authentication
-        adapter and repository are deliberately replaceable. Swap the demo token
-        verifier for any identity provider and swap the in-memory repository for
-        any database without changing the authorization policy.
-      </p>
+<FlowDiagram
+  title="What this tutorial proves"
+  numbered
+  steps={[
+    {
+      label: "Verify identity",
+      detail: "token to Principal",
+    },
+    {
+      label: "Check function",
+      detail: "projects:read/write",
+    },
+    {
+      label: "Scope repository",
+      detail: "id + principal.userId",
+      tone: "accent",
+    },
+    {
+      label: "Attack it",
+      detail: "Alice requests Bob's id",
+      tone: "danger",
+    },
+    {
+      label: "Fail closed",
+      detail: "404 + no data leak",
+      tone: "success",
+    },
+  ]}
+  caption="The test that matters is whether Alice can read Bob's project while holding a completely valid token."
+/>
 
-      <FlowDiagram
-        title="What this tutorial proves"
-        numbered
-        steps={[
-          {
-            label: "Verify identity",
-            detail: "token to Principal",
-          },
-          {
-            label: "Check function",
-            detail: "projects:read/write",
-          },
-          {
-            label: "Scope repository",
-            detail: "id + principal.userId",
-            tone: "accent",
-          },
-          {
-            label: "Attack it",
-            detail: "Alice requests Bob's id",
-            tone: "danger",
-          },
-          {
-            label: "Fail closed",
-            detail: "404 + no data leak",
-            tone: "success",
-          },
-        ]}
-        caption="The test that matters is whether Alice can read Bob's project while holding a completely valid token."
-      />
+## 1. Scaffold the project [#1-scaffold]
 
-      <h2 id="1-scaffold">1. Scaffold the project</h2>
-      <CodeBlock
-        language="bash"
-        code={`mkdir multi-user-projects && cd multi-user-projects
+```bash
+mkdir multi-user-projects && cd multi-user-projects
 pnpm init
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node`}
-      />
-      <CodeBlock
-        language="json"
-        code={`// package.json
+pnpm add -D typescript tsx @types/node
+```
+
+```json
+// package.json
 {
   "name": "multi-user-projects",
   "type": "module",
@@ -83,21 +64,15 @@ pnpm add -D typescript tsx @types/node`}
     "test": "node --import tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   }
-}`}
-      />
+}
+```
 
-      <h2 id="2-normalize-identity">
-        2. Normalize identity into an application principal
-      </h2>
-      <p>
-        Your identity provider verifies login and issues a token or session. The
-        backend adapter converts that provider-specific identity into one
-        application principal. Authorization code below this boundary should not
-        care which provider produced it.
-      </p>
-      <CodeBlock
-        language="ts"
-        code={`// src/auth.ts
+## 2. Normalize identity into an application principal [#2-normalize-identity]
+
+Your identity provider verifies login and issues a token or session. The backend adapter converts that provider-specific identity into one application principal. Authorization code below this boundary should not care which provider produced it.
+
+```ts
+// src/auth.ts
 import {
   App,
   ForbiddenError,
@@ -160,21 +135,15 @@ declare module "@daloyjs/core" {
     verifier: TokenVerifier;
     principal?: Principal;
   }
-}`}
-      />
-      <p>
-        In production, the verifier validates a JWT or session and maps the
-        external <code>(issuer, subject)</code> pair to an immutable internal{" "}
-        <code>userId</code>
-        {". "}Do not use email as the ownership key.
-      </p>
-      <p>
-        For this tutorial, use deterministic test identities. These tokens are
-        fixtures, not an authentication design:
-      </p>
-      <CodeBlock
-        language="ts"
-        code={`// src/test-identities.ts
+}
+```
+
+In production, the verifier validates a JWT or session and maps the external `(issuer, subject)` pair to an immutable internal `userId`. Do not use email as the ownership key.
+
+For this tutorial, use deterministic test identities. These tokens are fixtures, not an authentication design:
+
+```ts
+// src/test-identities.ts
 import type { Principal, TokenVerifier } from "./auth.ts";
 
 const principals = new Map<string, Principal>([
@@ -213,21 +182,15 @@ export const demoVerifier: TokenVerifier = {
     if (!principal) throw new Error("invalid token");
     return principal;
   },
-};`}
-      />
+};
+```
 
-      <h2 id="3-owner-scoped-repository">
-        3. Make the repository owner-scoped
-      </h2>
-      <p>
-        This interface has no ordinary request-path <code>findById()</code>
-        {". "}
-        Every operation that touches an existing project requires the trusted
-        owner ID:
-      </p>
-      <CodeBlock
-        language="ts"
-        code={`// src/projects.ts
+## 3. Make the repository owner-scoped [#3-owner-scoped-repository]
+
+This interface has no ordinary request-path `findById()`. Every operation that touches an existing project requires the trusted owner ID:
+
+```ts
+// src/projects.ts
 export interface Project {
   id: string;
   ownerId: string;
@@ -292,7 +255,7 @@ export function createMemoryProjectRepository(): ProjectRepository {
 
     async createForOwner(ownerId, input) {
       const project: Project = {
-        id: \`project-\${nextId++}\`,
+        id: `project-${nextId++}`,
         ownerId,
         name: input.name,
         description: input.description ?? null,
@@ -315,23 +278,17 @@ export function createMemoryProjectRepository(): ProjectRepository {
       return rows.delete(id);
     },
   };
-}`}
-      />
-      <p>
-        A real repository should put <code>id</code> and <code>ownerId</code> in
-        the same database query or write condition. Do not load the row by ID
-        and hope every caller remembers a separate ownership check.
-      </p>
+}
+```
 
-      <h2 id="4-build-routes">4. Bind ownership from the principal</h2>
-      <p>
-        Request schemas expose only ordinary editable properties. Ownership
-        comes from <code>state.principal</code>
-        {", "}and response schemas omit the internal ownership key:
-      </p>
-      <CodeBlock
-        language="ts"
-        code={`// src/build-app.ts
+A real repository should put `id` and `ownerId` in the same database query or write condition. Do not load the row by ID and hope every caller remembers a separate ownership check.
+
+## 4. Bind ownership from the principal [#4-build-routes]
+
+Request schemas expose only ordinary editable properties. Ownership comes from `state.principal`, and response schemas omit the internal ownership key:
+
+```ts
+// src/build-app.ts
 import { z } from "zod";
 import {
   App,
@@ -521,47 +478,42 @@ declare module "@daloyjs/core" {
   interface AppState {
     projects: ProjectRepository;
   }
-}`}
-      />
+}
+```
 
-      <h2 id="5-serve">5. Serve the application</h2>
-      <CodeBlock
-        language="ts"
-        code={`// src/server.ts
+## 5. Serve the application [#5-serve]
+
+```ts
+// src/server.ts
 import { serve } from "@daloyjs/core/node";
 import { buildApp } from "./build-app.ts";
 
 const app = buildApp();
 await app.ready();
 const { port } = serve(app, { port: 3000 });
-console.log(\`listening on http://localhost:\${port}\`);`}
-      />
-      <p>
-        Alice can read <code>alice-1</code>
-        {". "}Changing only the path to <code>bob-1</code> must not turn a valid
-        Alice token into access to Bob&apos;s project:
-      </p>
-      <CodeBlock
-        language="bash"
-        code={`curl http://localhost:3000/projects/alice-1 \
-  -H "authorization: Bearer alice-token"
+console.log(`listening on http://localhost:${port}`);
+```
+
+Alice can read `alice-1`. Changing only the path to `bob-1` must not turn a valid Alice token into access to Bob's project:
+
+```bash
+curl http://localhost:3000/projects/alice-1   -H "authorization: Bearer alice-token"
 # 200
 
-curl http://localhost:3000/projects/bob-1 \
-  -H "authorization: Bearer alice-token"
-# 404`}
-      />
+curl http://localhost:3000/projects/bob-1   -H "authorization: Bearer alice-token"
+# 404
+```
 
-      <h2 id="6-adversarial-tests">6. Add adversarial tests</h2>
-      <CodeBlock
-        language="ts"
-        code={`// tests/projects.test.ts
+## 6. Add adversarial tests [#6-adversarial-tests]
+
+```ts
+// tests/projects.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildApp } from "../src/build-app.ts";
 
 function auth(token: string) {
-  return { authorization: \`Bearer \${token}\` };
+  return { authorization: `Bearer ${token}` };
 }
 
 test("rejects a request without credentials", async () => {
@@ -642,57 +594,26 @@ test("Alice cannot delete Bob's project", async () => {
     headers: auth("alice-token"),
   });
   assert.equal(response.status, 404);
-});`}
-      />
-      <CodeBlock
-        language="bash"
-        code={`pnpm typecheck
-pnpm test`}
-      />
+});
+```
 
-      <h2 id="7-swap-adapters">7. Swap adapters without changing policy</h2>
-      <p>
-        Replace <code>demoVerifier</code> with your OIDC, JWT, session, or API
-        gateway verifier. Replace <code>ProjectRepository</code> with your ORM
-        or database adapter. Keep these invariants:
-      </p>
-      <ul>
-        <li>
-          The authentication adapter produces a trusted internal{" "}
-          <code>userId</code>.
-        </li>
-        <li>
-          Route permissions decide whether the operation may be attempted.
-        </li>
-        <li>
-          Repository operations constrain rows using the principal&apos;s owner
-          or tenant identity.
-        </li>
-        <li>
-          Request schemas never accept privileged ownership fields from an
-          ordinary caller.
-        </li>
-        <li>Two-principal tests prove that isolation survives refactors.</li>
-      </ul>
-      <p>
-        For tenant-owned data, add the trusted <code>tenantId</code> to the
-        principal and to every repository method. For administrative access,
-        create a separate permissioned and audited repository path rather than
-        silently removing the owner constraint.
-      </p>
+```bash
+pnpm typecheck
+pnpm test
+```
 
-      <h2 id="next-steps">Next steps</h2>
-      <p>
-        Read the complete{" "}
-        <Link href={"/docs/security/resource-authorization" as Route}>
-          resource authorization guide
-        </Link>
-        {", "}then connect the same boundary to{" "}
-        <Link href="/docs/auth">your authentication provider</Link>
-        {", "}
-        <Link href="/docs/orm">your ORM</Link>
-        {", "}and <Link href="/docs/multitenancy">your tenancy model</Link>.
-      </p>
-    </>
-  );
-}
+## 7. Swap adapters without changing policy [#7-swap-adapters]
+
+Replace `demoVerifier` with your OIDC, JWT, session, or API gateway verifier. Replace `ProjectRepository` with your ORM or database adapter. Keep these invariants:
+
+- The authentication adapter produces a trusted internal `userId`.
+- Route permissions decide whether the operation may be attempted.
+- Repository operations constrain rows using the principal's owner or tenant identity.
+- Request schemas never accept privileged ownership fields from an ordinary caller.
+- Two-principal tests prove that isolation survives refactors.
+
+For tenant-owned data, add the trusted `tenantId` to the principal and to every repository method. For administrative access, create a separate permissioned and audited repository path rather than silently removing the owner constraint.
+
+## Next steps
+
+Read the complete [resource authorization guide](/docs/security/resource-authorization), then connect the same boundary to [your authentication provider](/docs/auth), [your ORM](/docs/orm), and [your tenancy model](/docs/multitenancy).

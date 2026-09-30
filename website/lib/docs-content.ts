@@ -3,9 +3,12 @@ import { cacheLife } from "next/cache";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { extractMdxBodyText, getMdxDocs } from "./mdx/content";
+
 /**
- * A single documentation page discovered from the `app/docs` tree, with its
- * metadata and full extracted plain-text body.
+ * A single documentation page discovered from the `app/docs` tree (TSX) or
+ * the `content/docs` tree (MDX), with its metadata and full extracted
+ * plain-text body.
  *
  * This is the shared shape read from disk by both the cmdk docs search index
  * ([docs-search.ts](./docs-search.ts)) and the public MCP documentation
@@ -149,7 +152,9 @@ export function parseDocFrontmatter(
  */
 export async function getAllDocPages(): Promise<DocPage[]> {
   "use cache";
-  cacheLife("max");
+  // Short-lived in dev so new or edited content shows up without a restart.
+  if (process.env.NODE_ENV === "development") cacheLife("seconds");
+  else cacheLife("max");
 
   const pageFiles = await walkDocsPages(docsDir);
   const pages = await Promise.all(
@@ -159,6 +164,20 @@ export async function getAllDocPages(): Promise<DocPage[]> {
       return { ...frontmatter, body: extractBodyText(source) } satisfies DocPage;
     }),
   );
+
+  // MDX pages (content/docs/**). A static page.tsx for the same route wins in
+  // Next routing, so it wins here too.
+  const tsxRoutes = new Set(pages.map((page) => page.href));
+  for (const doc of await getMdxDocs()) {
+    if (tsxRoutes.has(doc.route as Route)) continue;
+    pages.push({
+      title: doc.frontmatter.title,
+      href: doc.route as Route,
+      description: doc.frontmatter.description,
+      keywords: doc.frontmatter.keywords,
+      body: extractMdxBodyText(doc.body),
+    });
+  }
 
   return pages.sort((left, right) => left.href.localeCompare(right.href));
 }

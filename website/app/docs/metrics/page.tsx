@@ -1,3 +1,4 @@
+import { Callout } from "@/components/callout";
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
 
@@ -46,11 +47,8 @@ export default function Page() {
         registry runs on Node, Bun, Deno, and Cloudflare Workers. Pull
         scraping is a different question, see below.
       </p>
-      <div className="my-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-        <p className="font-semibold">
-          Pull scrape is not a service-wide signal on ephemeral compute
-        </p>
-        <p className="mt-2">
+      <Callout type="warning" title="Pull scrape is not a service-wide signal on ephemeral compute">
+        <p>
           A <code>GET /metrics</code> on Cloudflare Workers, Vercel, or AWS
           Lambda returns whatever one isolate happened to accumulate. Isolates
           are many and short-lived, so that number is not a measurement of
@@ -61,7 +59,7 @@ export default function Page() {
           on those runtimes. Long-lived Node, Bun, and Deno processes are
           the ones <code>app.metrics()</code> is for.
         </p>
-      </div>
+      </Callout>
 
       <FlowDiagram
         title="From request to scrape"

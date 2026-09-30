@@ -1,6 +1,13 @@
 import type { DocPage } from "./docs-content";
 
 /**
+ * The fields the ranker reads. Both the server corpus (`DocPage`, used by the
+ * MCP `search_docs` tool) and the client search index satisfy it, so the docs
+ * search dialog and MCP rank with the same algorithm.
+ */
+export type RankablePage = Pick<DocPage, "title" | "href" | "description" | "keywords" | "body">;
+
+/**
  * Zero-dependency relevance ranking for docs search (used by the MCP
  * `search_docs` tool in `app/mcp/route.ts`).
  *
@@ -86,6 +93,15 @@ export function stem(word: string): string {
  * do word-boundary stem lookups with `includes(" term ")` (exact) or
  * `includes(" term")` (shared-prefix, e.g. "valid" matching "validat...").
  */
+/**
+ * Lowercased field with every non-alphanumeric run collapsed to one space and
+ * a leading space, so `field.includes(" " + term)` is a word-prefix match:
+ * "rout" finds "Routing", but "rate" no longer finds "Integrate".
+ */
+function wordText(text: string): string {
+  return ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+}
+
 function stemText(text: string): string {
   const tokens = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
   return ` ${tokens.map(stem).join(" ")} `;
@@ -105,8 +121,8 @@ function stemMatch(stemmedField: string, queryStem: string): boolean {
 }
 
 /** Precomputed per-page search fields (lowercased raw + stemmed variants). */
-type IndexedPage = {
-  page: DocPage;
+type IndexedPage<T extends RankablePage = RankablePage> = {
+  page: T;
   title: string;
   href: string;
   keywords: string;
@@ -123,19 +139,19 @@ type IndexedPage = {
  * and returns the same array for the process lifetime, so the index builds
  * once per deployment.
  */
-const indexCache = new WeakMap<readonly DocPage[], IndexedPage[]>();
+const indexCache = new WeakMap<readonly RankablePage[], IndexedPage[]>();
 
-function getIndex(pages: DocPage[]): IndexedPage[] {
-  const cached = indexCache.get(pages);
+function getIndex<T extends RankablePage>(pages: readonly T[]): IndexedPage<T>[] {
+  const cached = indexCache.get(pages) as IndexedPage<T>[] | undefined;
   if (cached) return cached;
   const index = pages.map((page) => {
     const keywords = page.keywords.join(" ");
     return {
       page,
-      title: page.title.toLowerCase(),
-      href: page.href.toLowerCase(),
-      keywords: keywords.toLowerCase(),
-      description: page.description.toLowerCase(),
+      title: wordText(page.title),
+      href: wordText(page.href),
+      keywords: wordText(keywords),
+      description: wordText(page.description),
       stemmedTitle: stemText(page.title),
       stemmedHref: stemText(page.href),
       stemmedKeywords: stemText(keywords),
@@ -174,7 +190,7 @@ const BONUS_COVERAGE_STEP = 6;
 const MAX_BODY_IDF = 4;
 
 /** One ranked search hit. */
-export type RankedDocPage = { page: DocPage; score: number };
+export type RankedDocPage<T extends RankablePage = DocPage> = { page: T; score: number };
 
 /**
  * Rank docs pages against a free-text query.
@@ -186,13 +202,13 @@ export type RankedDocPage = { page: DocPage; score: number };
  * @returns Pages with a positive relevance score, best first; ties break
  *   alphabetically by title for deterministic output.
  */
-export function rankDocPages(
-  pages: DocPage[],
+export function rankDocPages<T extends RankablePage>(
+  pages: readonly T[],
   query: string,
   limit: number
-): RankedDocPage[] {
+): RankedDocPage<T>[] {
   const index = getIndex(pages);
-  const phrase = query.toLowerCase().trim();
+  const phrase = wordText(query).trim();
   const terms = tokenize(query).map((raw) => ({ raw, stem: stem(raw) }));
   if (terms.length === 0) return [];
 
@@ -208,30 +224,30 @@ export function rankDocPages(
 
   const scored = index.map((entry, pageIdx) => {
     let score = 0;
-    if (phrase.length > 0 && entry.title.includes(phrase))
+    if (phrase.length > 0 && entry.title.includes(` ${phrase}`))
       score += BONUS_TITLE_PHRASE;
 
     let highFieldTerms = 0;
     for (let t = 0; t < terms.length; t++) {
       const { raw, stem: qstem } = terms[t];
       let inHighField = false;
-      if (entry.title.includes(raw) || stemMatch(entry.stemmedTitle, qstem)) {
+      if (entry.title.includes(` ${raw}`) || stemMatch(entry.stemmedTitle, qstem)) {
         score += WEIGHT_TITLE;
         inHighField = true;
       }
-      if (entry.href.includes(raw) || stemMatch(entry.stemmedHref, qstem)) {
+      if (entry.href.includes(` ${raw}`) || stemMatch(entry.stemmedHref, qstem)) {
         score += WEIGHT_HREF;
         inHighField = true;
       }
       if (
-        entry.keywords.includes(raw) ||
+        entry.keywords.includes(` ${raw}`) ||
         stemMatch(entry.stemmedKeywords, qstem)
       ) {
         score += WEIGHT_KEYWORDS;
         inHighField = true;
       }
       if (
-        entry.description.includes(raw) ||
+        entry.description.includes(` ${raw}`) ||
         stemMatch(entry.stemmedDescription, qstem)
       ) {
         score += WEIGHT_DESCRIPTION;

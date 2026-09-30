@@ -19,7 +19,7 @@ const primaryNav: Array<{ href: Route; label: string }> = [
   { href: "/docs", label: "Docs" },
   { href: "/blog", label: "Blog" },
   { href: "/docs/getting-started", label: "Getting started" },
-  { href: "/docs/tutorials/bookstore", label: "Tutorials" },
+  { href: "/docs/tutorials/bookstore" as Route, label: "Tutorials" },
   { href: "/docs/api-reference", label: "API" },
 ];
 

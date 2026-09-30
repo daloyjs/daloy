@@ -44,14 +44,17 @@ const serviceWorkerHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   typedRoutes: true,
-  // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
-  // at runtime (via lib/docs-content). Trace those files into its serverless
-  // bundle so they are present in production, not just during the build. The
-  // markdown docs endpoint (/docs/*.md) validates routes the same way.
+  // The /mcp documentation endpoint reads the docs sources from disk at
+  // runtime (via lib/docs-content): `page.tsx` files and the MDX pages under
+  // `content/`. Trace those files into its serverless bundle so they are
+  // present in production, not just during the build. The markdown docs
+  // endpoint (/docs/*.md) validates routes the same way, and the MDX docs
+  // route may render on demand if its prerendered output is evicted.
   outputFileTracingIncludes: {
-    "/mcp": ["./app/docs/**/*.tsx"],
-    "/docs-md/[[...slug]]": ["./app/docs/**/*.tsx"],
-    "/md/[[...slug]]": ["./app/docs/**/*.tsx"],
+    "/mcp": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
+    "/docs-md/[[...slug]]": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
+    "/md/[[...slug]]": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
+    "/docs/[slug]/[child]": ["./content/**/*.mdx"],
   },
   turbopack: {
     root,

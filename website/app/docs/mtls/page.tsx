@@ -1,3 +1,4 @@
+import { Callout } from "@/components/callout";
 import { CodeBlock } from "../../../components/code-block";
 import { SequenceDiagram } from "../../../components/diagram";
 
@@ -220,11 +221,8 @@ app.post(
   }),
 );`}
       />
-      <div className="my-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-        <p className="font-semibold">
-          Structured headers need a verification header
-        </p>
-        <p className="mt-2">
+      <Callout type="warning" title="Structured headers need a verification header">
+        <p>
           When you use <code>format: &quot;structured&quot;</code> without a{" "}
           <code>verify</code> header, the middleware has no proof the terminator
           actually validated the certificate chain. The subject / issuer / SAN
@@ -240,7 +238,7 @@ app.post(
           identity-only headers. Keep a strict <code>behindProxy</code> posture
           if you do.
         </p>
-      </div>
+      </Callout>
 
       <h2 id="allow-lists-and-checks">Allow-lists &amp; checks</h2>
       <ul>

@@ -112,6 +112,26 @@ export const ALLOWED_DEP_NAMES: ReadonlySet<string> = new Set([
   "tailwind-merge",
   "tailwindcss",
   "tw-animate-css",
+  // Docs content pipeline (MDX pages, code-block notation, generated type
+  // tables), borrowed from Fumadocs' approach.
+  // Scoped names sit in orgs only their owners can publish to:
+  //   @mdx-js/mdx, @shikijs/transformers, @babel/parser,
+  //   @types/mdast, @types/mdx.
+  // Unscoped names checked against the registry (repository + maintainers):
+  //   remark-gfm — github.com/remarkjs/remark-gfm, wooorm / johno.
+  //   mdast-util-to-string, mdast-util-mdx-jsx — github.com/syntax-tree, wooorm.
+  //   github-slugger — github.com/Flet/github-slugger, wooorm.
+  //   yaml — github.com/eemeli/yaml, eemeli (sole maintainer, long-standing).
+  "@mdx-js/mdx",
+  "@shikijs/transformers",
+  "@babel/parser",
+  "@types/mdast",
+  "@types/mdx",
+  "remark-gfm",
+  "mdast-util-to-string",
+  "mdast-util-mdx-jsx",
+  "github-slugger",
+  "yaml",
   // ----- scaffolded templates (packages/create-daloy/templates/*) -----
   "@daloyjs/core",
   "@cloudflare/workers-types",

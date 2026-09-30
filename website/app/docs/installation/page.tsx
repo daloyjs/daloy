@@ -1,3 +1,5 @@
+import { Card, Cards } from "@/components/cards";
+import { PackageInstall } from "@/components/package-install";
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
@@ -154,19 +156,11 @@ pnpm --version`}
       />
 
       <h3 id="install-daloyjs">Install DaloyJS</h3>
-      <CodeBlock
-        language="bash"
-        code={`# choose one package manager
-pnpm add @daloyjs/core zod
-npm  install @daloyjs/core zod
-yarn add     @daloyjs/core zod
-bun  add     @daloyjs/core zod
-# optional - only if you want to generate a typed SDK
-pnpm add -D typescript @hey-api/openapi-ts prettier
-npm  install -D typescript @hey-api/openapi-ts prettier
-yarn add -D     typescript @hey-api/openapi-ts prettier
-bun  add -d     typescript @hey-api/openapi-ts prettier`}
-      />
+      <PackageInstall packages="@daloyjs/core zod" />
+      <p>
+        Optional, only if you want to generate a typed SDK:
+      </p>
+      <PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
       <p>
         The framework package published to npm is{" "}
         <a
@@ -188,6 +182,7 @@ bun  add -d     typescript @hey-api/openapi-ts prettier`}
       </p>
       <CodeBlock
         language="ini"
+        title=".npmrc"
         code={`auto-install-peers=true
 strict-peer-dependencies=true
 prefer-frozen-lockfile=true
@@ -217,10 +212,14 @@ ignore-scripts=true`}
       />
 
       <h2 id="next">Next</h2>
-      <p>
-        Continue with <Link href="/docs/getting-started">Getting started</Link>{" "}
-        to write your first route.
-      </p>
+      <Cards>
+        <Card title="Getting started" href="/docs/getting-started">
+          Write your first route, validate it, and serve the OpenAPI docs.
+        </Card>
+        <Card title="Scaffold a project" href="/docs/scaffolder">
+          Let <code>create-daloy</code> set up a hardened project for you.
+        </Card>
+      </Cards>
     </>
   );
 }
