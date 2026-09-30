@@ -23,6 +23,7 @@ import {
 } from "@/lib/site-api";
 import { apiLifecycleSummary } from "@/lib/site-deprecation";
 import { SITE_URL } from "@/lib/seo";
+import { SERVER_CARD_PATH } from "@/lib/site-mcp";
 
 const PROBLEM_SCHEMA = {
   type: "object",
@@ -293,6 +294,78 @@ export function buildSiteOpenApiDocument(): Record<string, unknown> {
                 "application/linkset+json": { schema: { type: "object" } },
               },
             },
+          },
+        },
+      },
+      [SERVER_CARD_PATH]: {
+        get: {
+          tags: ["Docs MCP"],
+          operationId: "getMcpServerCard",
+          summary: "MCP Server Card for the docs MCP server (draft)",
+          description:
+            "Discovery metadata for POST /mcp: transport, protocol version, capabilities, authentication, and the full tool list with input schemas. Follows the draft MCP Server Cards proposal (SEP-1649), which may change before it reaches a released MCP specification.",
+          responses: {
+            "200": {
+              description: "The Server Card.",
+              headers: RATE_LIMIT_HEADERS,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["$schema", "version", "protocolVersion", "serverInfo", "transport", "capabilities"],
+                    properties: {
+                      $schema: { type: "string", format: "uri" },
+                      version: { type: "string" },
+                      protocolVersion: { type: "string" },
+                      serverInfo: {
+                        type: "object",
+                        required: ["name", "version"],
+                        properties: {
+                          name: { type: "string" },
+                          title: { type: "string" },
+                          version: { type: "string" },
+                        },
+                      },
+                      description: { type: "string" },
+                      iconUrl: { type: "string", format: "uri" },
+                      documentationUrl: { type: "string", format: "uri" },
+                      transport: {
+                        type: "object",
+                        required: ["type", "endpoint"],
+                        properties: {
+                          type: { type: "string", const: "streamable-http" },
+                          endpoint: { type: "string", format: "uri" },
+                        },
+                      },
+                      capabilities: { type: "object" },
+                      authentication: {
+                        type: "object",
+                        required: ["required", "schemes"],
+                        properties: {
+                          required: { type: "boolean" },
+                          schemes: { type: "array", items: { type: "string" } },
+                        },
+                      },
+                      instructions: { type: "string" },
+                      tools: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: ["name", "inputSchema"],
+                          properties: {
+                            name: { type: "string" },
+                            title: { type: "string" },
+                            description: { type: "string" },
+                            inputSchema: { type: "object" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "429": RATE_LIMITED_RESPONSE,
           },
         },
       },

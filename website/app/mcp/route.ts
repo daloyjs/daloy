@@ -1,8 +1,16 @@
 import { createMcpHandler } from "mcp-handler";
-import { z } from "zod";
 import { getAllDocPages, getDocPage } from "@/lib/docs-content";
 import { rankDocPages, tokenize } from "@/lib/docs-ranking";
 import { SITE_URL } from "@/lib/seo";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  MAX_QUERY_LENGTH,
+  SITE_MCP_INPUT_SCHEMAS,
+  SITE_MCP_INSTRUCTIONS,
+  SITE_MCP_SERVER_INFO,
+  SITE_MCP_TOOLS,
+  type SiteMcpToolName,
+} from "@/lib/site-mcp";
 import {
   SITE_API_RATE_LIMIT,
   SITE_API_RATE_WINDOW_SEC,
@@ -27,28 +35,8 @@ import {
  * @see https://modelcontextprotocol.io/specification/2026-07-28
  */
 
-/** Identity reported to clients (handshake `serverInfo` / modern `_meta`). */
-const SERVER_INFO = {
-  name: "daloyjs-docs",
-  version: "1.0.0",
-} as const;
-
-/** Free-text guidance returned to clients. */
-const INSTRUCTIONS =
-  "Read-only access to the DaloyJS documentation at https://daloyjs.dev/docs. " +
-  "Use `search_docs` to find relevant pages by keyword, `get_doc` to read the " +
-  'full text of a page by its route or slug (for example "routing" or ' +
-  '"/docs/security"), and `list_docs` to browse every available page. When you ' +
-  "answer from these docs, cite the page URL you used.";
-
 /** Hard cap on the accepted request body (256 KiB). */
 const MAX_BODY_BYTES = 1 << 18;
-/** Hard cap on a search query string. */
-const MAX_QUERY_LENGTH = 256;
-/** Default number of search hits returned when the caller does not specify. */
-const DEFAULT_SEARCH_LIMIT = 8;
-/** Upper bound on search hits a caller may request. */
-const MAX_SEARCH_LIMIT = 25;
 /**
  * Cap on the body text returned by `get_doc`. Sized to serve the longest docs
  * pages in full, including the deliberately exhaustive Express migration guide
@@ -190,69 +178,34 @@ async function runListDocs(): Promise<ToolResult> {
  */
 const handler = createMcpHandler(
   (server) => {
+    // Tool metadata and input schemas come from lib/site-mcp.ts, the same
+    // source the MCP Server Card is built from, so the two cannot disagree.
+    const meta = Object.fromEntries(SITE_MCP_TOOLS.map((tool) => [tool.name, tool])) as Record<
+      SiteMcpToolName,
+      (typeof SITE_MCP_TOOLS)[number]
+    >;
+
     server.registerTool(
       "search_docs",
-      {
-        title: "Search DaloyJS docs",
-        description:
-          "Search the DaloyJS documentation by keyword and return the best-matching " +
-          "pages with their title, route, description, and absolute URL.",
-        inputSchema: z.strictObject({
-          query: z
-            .string()
-            .min(1)
-            .max(MAX_QUERY_LENGTH)
-            .describe(
-              "Keywords to search for, e.g. 'rate limit' or 'openapi client'."
-            ),
-          limit: z
-            .number()
-            .int()
-            .min(1)
-            .max(MAX_SEARCH_LIMIT)
-            .optional()
-            .describe(
-              `Maximum number of results (1-${MAX_SEARCH_LIMIT}, default ${DEFAULT_SEARCH_LIMIT}).`
-            ),
-        }),
-      },
-      async ({ query, limit }) =>
-        runSearchDocs(query, limit ?? DEFAULT_SEARCH_LIMIT)
+      { ...meta.search_docs, inputSchema: SITE_MCP_INPUT_SCHEMAS.search_docs },
+      async ({ query, limit }) => runSearchDocs(query, limit ?? DEFAULT_SEARCH_LIMIT)
     );
 
     server.registerTool(
       "get_doc",
-      {
-        title: "Read a DaloyJS doc page",
-        description:
-          "Return the full plain-text content of a single documentation page, " +
-          'identified by its route or slug (for example "routing", "security", or ' +
-          '"/docs/typed-client").',
-        inputSchema: z.strictObject({
-          path: z
-            .string()
-            .min(1)
-            .describe('Page route or slug, e.g. "routing" or "/docs/security".'),
-        }),
-      },
+      { ...meta.get_doc, inputSchema: SITE_MCP_INPUT_SCHEMAS.get_doc },
       async ({ path }) => runGetDoc(path)
     );
 
     server.registerTool(
       "list_docs",
-      {
-        title: "List DaloyJS doc pages",
-        description:
-          "List every available DaloyJS documentation page with its title, route, " +
-          "and description so you can pick one to read with get_doc.",
-        inputSchema: z.strictObject({}),
-      },
+      { ...meta.list_docs, inputSchema: SITE_MCP_INPUT_SCHEMAS.list_docs },
       async () => runListDocs()
     );
   },
   {
-    serverInfo: { ...SERVER_INFO },
-    instructions: INSTRUCTIONS,
+    serverInfo: { ...SITE_MCP_SERVER_INFO },
+    instructions: SITE_MCP_INSTRUCTIONS,
   }
 );
 

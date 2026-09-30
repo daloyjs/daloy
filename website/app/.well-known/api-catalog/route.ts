@@ -7,6 +7,7 @@ import {
 } from "@/lib/site-api";
 import { consumeSiteApiQuota } from "@/lib/site-api-response";
 import { PROTECTED_RESOURCE_PATHS } from "@/lib/site-oauth";
+import { SERVER_CARD_PATH } from "@/lib/site-mcp";
 import { siteApiHeaders } from "@/lib/site-rate-limit";
 import { SITE_URL } from "@/lib/seo";
 
@@ -66,6 +67,11 @@ export function GET(request: Request): Response {
             href: `${SITE_URL}/llms.txt`,
             type: "text/plain",
             title: "llms.txt index",
+          },
+          {
+            href: `${SITE_URL}${SERVER_CARD_PATH}`,
+            type: "application/json",
+            title: "MCP Server Card for /mcp (draft SEP-1649)",
           },
         ],
         item: [
