@@ -33,16 +33,17 @@ export interface AutoTypeTableProps {
 }
 
 /**
- * A {@link TypeTable} generated from the framework source at build time:
- * property names, types, optionality and TSDoc (including `@default`,
- * `@deprecated` and `@since`) come straight from `src/`, so the docs table
- * cannot drift from the code. Links to the declaration on GitHub.
+ * A {@link TypeTable} generated from the framework source: property names,
+ * types, optionality and TSDoc (including `@default`, `@deprecated` and
+ * `@since`) come from `src/` via the `lib/api-types.snapshot.json` snapshot
+ * (`pnpm gen:api-types`), and a drift test keeps the two in sync. Links to the
+ * declaration on GitHub.
  *
  * @example
  * <AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />
  */
-export async function AutoTypeTable({ path, name }: AutoTypeTableProps) {
-  const properties = await getApiProperties(path, name);
+export function AutoTypeTable({ path, name }: AutoTypeTableProps) {
+  const properties = getApiProperties(path, name);
   const rows = Object.fromEntries(
     properties.map((property) => [
       property.name,

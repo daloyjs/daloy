@@ -18,6 +18,11 @@ const STATIC_PATHS: Array<{
   { path: "/privacy", changeFrequency: "yearly", priority: 0.6 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/build-your-own-mcp-server-with-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/background-jobs-after-the-http-response",
     changeFrequency: "monthly",
     priority: 0.7,

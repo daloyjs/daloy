@@ -1,0 +1,108 @@
+{
+  "src/etag.ts#ETagOptions": [
+    {
+      "name": "weak",
+      "type": "boolean",
+      "required": false,
+      "description": "Emit a weak ETag (`W/\"...\"`). Default `false` — strong ETags allow range-request resumption and prevent byte-level cache poisoning by intermediaries."
+    },
+    {
+      "name": "generator",
+      "type": "(body: Uint8Array) => string | Promise<string>",
+      "required": false,
+      "description": "Override the digest function. Default: SHA-1 via WebCrypto. SHA-1 is appropriate here because the ETag is a cache identifier, not a security boundary; collisions only cause a stale `304`, never a confidentiality break."
+    },
+    {
+      "name": "maxBytes",
+      "type": "number",
+      "required": false,
+      "description": "Largest body, in bytes, that is buffered to compute a tag. Bodies whose `Content-Length` exceeds this are sent untagged instead of buffered. Default `1_048_576` (1 MiB). Must be a non-negative finite number.",
+      "since": "1.3.7"
+    }
+  ],
+  "src/middleware.ts#BearerAuthOptions": [
+    {
+      "name": "validate",
+      "type": "(token: string) => boolean | Promise<boolean>",
+      "required": true,
+      "description": "Cheap, stateless token check (signature / format)."
+    },
+    {
+      "name": "realm",
+      "type": "string",
+      "required": false,
+      "description": "WWW-Authenticate realm. Default: `\"api\"`."
+    },
+    {
+      "name": "verify",
+      "type": "BearerAuthVerifyHook<string>",
+      "required": false,
+      "description": "Optional per-request revalidation hook. Called after `validate` accepts the token. Returning `false` rejects the request with `403`; returning `true` or `undefined` accepts. Use for revocation lists, token-version counters, etc.",
+      "since": "0.22.0"
+    }
+  ],
+  "src/middleware.ts#RateLimitOptions": [
+    {
+      "name": "windowMs",
+      "type": "number",
+      "required": true,
+      "description": "Fixed-window width in milliseconds (e.g. `60_000` for one minute)."
+    },
+    {
+      "name": "max",
+      "type": "number",
+      "required": true,
+      "description": "Maximum allowed requests per `windowMs` per key."
+    },
+    {
+      "name": "keyGenerator",
+      "type": "(ctx: RateLimitContext) => string",
+      "required": false,
+      "description": "Derive the bucket key from `ctx`. Default: the trusted forwarded client IP when proxy trust is configured, otherwise the unspoofable TCP peer (`peer:<ip>`), and one shared `\"global\"` bucket only when the runtime exposes no peer. Never key on a raw client-supplied header. When the limiter precedes `preBody` authentication, it also receives failed attempts before body I/O; rely only on the raw request and state populated by earlier `preBody` hooks.\n\nWhen none of `keyGenerator`, `trustProxyHeaders`, `trustedHops`, or `trustedProxies` is set, the default key follows the App's `behindProxy` posture (via `resolveClientIp`), so behind a proxy each client gets its own bucket instead of sharing the proxy's. `behindProxy` must describe your real topology: prefer `{ cidrs }` when you know the proxy addresses, because `{ hops }` trusts the right-most forwarded entries from anyone who can reach the app directly."
+    },
+    {
+      "name": "ipv6Subnet",
+      "type": "number",
+      "required": false,
+      "description": "IPv6 prefix length the default IP-based key groups on (`1`-`128`). Default `64`: one subscriber normally holds a whole /64, so keying on the full address would give an attacker a fresh bucket per address. IPv4 and IPv4-mapped addresses are always keyed on the canonical dotted address. Ignored when `keyGenerator` is set.",
+      "since": "1.3.7"
+    },
+    {
+      "name": "store",
+      "type": "RateLimitStore",
+      "required": false,
+      "description": "Custom backend (default: shared in-memory store)."
+    },
+    {
+      "name": "trustProxyHeaders",
+      "type": "boolean",
+      "required": false,
+      "description": "Trust x-forwarded-for / x-real-ip when deriving the default key. Off by default because those headers are client-spoofable unless your reverse proxy strips and rewrites them.\n\nWhen enabled, the key is the **rightmost** `X-Forwarded-For` entry — the one your immediate proxy appended — never the attacker-influenceable leftmost one, so rotating spoofed left entries cannot evade the limit. Behind more than one proxy hop, set `trustedHops` instead; to also verify the peer is one of YOUR proxies (required when the origin itself can be reached), set `trustedProxies`."
+    },
+    {
+      "name": "trustedHops",
+      "type": "number",
+      "required": false,
+      "description": "Declare exactly how many proxy hops sit between Daloy and the public internet. Implies proxy-header trust and derives the default key that many entries from the right of `X-Forwarded-For` via `resolveForwardedClientIp`. Must be an integer in [1, 64]; validated at construction. Ignored when a custom `keyGenerator` is supplied."
+    },
+    {
+      "name": "trustedProxies",
+      "type": "readonly string[]",
+      "required": false,
+      "description": "Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate peer's address. Forwarded headers feed the bucket key only when the TCP socket actually talking to the adapter matches the list — the one property a remote client cannot spoof — so a direct-to-origin attacker can neither evade the limit with rotating spoofed XFF nor burn another identity's bucket. Implies proxy-header trust at one hop unless `trustedHops` says otherwise; validated and compiled at construction. On peer-less edge platforms verification fails closed. Ignored when a custom `keyGenerator` is supplied."
+    },
+    {
+      "name": "retryAfter",
+      "type": "boolean",
+      "required": false,
+      "description": "When true, set Retry-After header on 429. Default: true."
+    },
+    {
+      "name": "groupId",
+      "type": "string",
+      "required": false,
+      "description": "Share a single bucket across every `rateLimit()` call that declares the same `groupId`. Use this to enforce one combined limit across related routes (e.g. `/login`, `/login/otp`, and `/password-reset` all spend from the same per-IP \"auth\" bucket). Without `groupId`, each `rateLimit()` call gets its own independent in-memory store.\n\nCooperation is only meaningful for the default in-memory store; when an explicit `store` is supplied the developer is responsible for keying it. The framework prepends the `groupId` to the derived key so two groups never collide in a shared store either.",
+      "since": "0.19.0"
+    }
+  ]
+}

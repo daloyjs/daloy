@@ -8,6 +8,15 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "build-your-own-mcp-server-with-daloyjs",
+    title: "Build Your Own MCP Server on DaloyJS, and Why It Refuses to Run Without Auth",
+    description:
+      "Turn your API into tools an AI assistant can call, with createMcpHandler() and mcpRoutes(). No MCP SDK, no extra dependency, and a production app that fails closed if you forget the auth.",
+    date: "2026-09-30",
+    readingTime: "8 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "your-api-can-now-be-an-a2a-agent",
     title: "Your API Can Now Be an Agent: A2A in DaloyJS 1.4.0",
     description:

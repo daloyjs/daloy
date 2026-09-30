@@ -11,10 +11,10 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --experimental-test-module-mocks \"tests/**/*.test.ts\"",
-    "assets:render": "node scripts/render-assets.mjs"
+    "assets:render": "node scripts/render-assets.mjs",
+    "gen:api-types": "node --import tsx scripts/gen-api-types.ts"
   },
   "dependencies": {
-    "@babel/parser": "^7.29.9",
     "@base-ui/react": "^1.7.0",
     "@mdx-js/mdx": "^3.1.1",
     "@modelcontextprotocol/server": "^2.0.0",
@@ -44,6 +44,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.9",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdast": "^4.0.4",
     "@types/mdx": "^2.0.14",
