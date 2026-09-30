@@ -79,7 +79,7 @@ export default function Page() {
       />
 
       <CodeBlock
-        code={`import { App, every, requestId, bearerAuth, rateLimit } from "@daloyjs/core";
+        code={`import { App, every, requestId, bearerAuth, rateLimit, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App();
 
@@ -87,7 +87,7 @@ const adminStack = every(
   requestId(),
   bearerAuth({
     realm: "admin",
-    validate: (token) => token === process.env.ADMIN_TOKEN,
+    validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
   }),
   rateLimit({ windowMs: 60_000, max: 30, groupId: "admin" }),
 );
@@ -139,7 +139,7 @@ app.use(adminStack);`}
 
       <CodeBlock
         language="ts"
-        code={`import { App, every, some, bearerAuth, session } from "@daloyjs/core";
+        code={`import { App, every, some, bearerAuth, session, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App();
 
@@ -162,7 +162,7 @@ app.use(
   some(
     bearerAuth({
       realm: "api",
-      validate: (token) => token === process.env.PUBLIC_API_TOKEN,
+      validate: (token) => timingSafeEqual(token, process.env.PUBLIC_API_TOKEN!),
     }),
     sessionAuth,
   ),
@@ -210,14 +210,14 @@ app.use(
       </p>
       <CodeBlock
         language="ts"
-        code={`import { App, except, bearerAuth } from "@daloyjs/core";
+        code={`import { App, except, bearerAuth, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App();
 
 app.use(
   except(
     ["/health", "/openapi.json", "/docs/**"],
-    bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
+    bearerAuth({ validate: (token) => timingSafeEqual(token, process.env.API_TOKEN!) }),
   ),
 );`}
       />
@@ -282,6 +282,7 @@ app.use(
   requestId,
   secureHeaders,
   bearerAuth,
+  timingSafeEqual,
 } from "@daloyjs/core";
 
 const app = new App();
@@ -291,7 +292,7 @@ const protectedStack = every(
   secureHeaders(),
   except(
     ["/health", "/openapi.json", "/docs/**"],
-    bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
+    bearerAuth({ validate: (token) => timingSafeEqual(token, process.env.API_TOKEN!) }),
   ),
 );
 

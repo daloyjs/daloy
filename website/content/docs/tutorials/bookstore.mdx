@@ -90,7 +90,7 @@ Share the App between the server, codegen, and tests so the spec, the client, an
 ```ts
 // src/build-app.ts
 import { z } from "zod";
-import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError } from "@daloyjs/core";
+import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError, timingSafeEqual } from "@daloyjs/core";
 
 export const BookSchema = z.object({
   id:    z.string(),
@@ -138,7 +138,7 @@ export function buildApp() {
     {
       operationId: "createBook",
       tags: ["Books"],
-      hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
+      hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, "demo-token") }),
       request: { body: BookSchema.omit({ id: true }) },
       responses: {
         201: { description: "Created", body: BookSchema },

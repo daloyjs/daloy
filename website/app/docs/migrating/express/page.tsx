@@ -1523,7 +1523,7 @@ app.listen(3000, () => console.log("up on 3000"));`}
         language="typescript"
         code={`// DaloyJS: src/index.ts
 import { z } from "zod";
-import { App, bearerAuth, secureHeaders, requestId, NotFoundError } from "@daloyjs/core";
+import { App, bearerAuth, secureHeaders, requestId, NotFoundError, timingSafeEqual } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const Book = z.object({ id: z.string(), title: z.string().min(1) });
@@ -1573,7 +1573,7 @@ const app = new App({
       operationId: "createBook",
       tags: ["Books"],
       auth: { scheme: "bearer" },
-      hooks: bearerAuth({ validate: (t) => t === "secret" }),
+      hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, "secret") }),
       request: { body: Book }, // validation replaces the manual if-check
       responses: {
         201: { description: "Created", body: Book },

@@ -289,12 +289,12 @@ const app = new App({ env: "production", secureDefaults: false });`}
         <code>markAuthHook()</code> so the guard can see it.
       </p>
       <CodeBlock
-        code={`import { App, bearerAuth, markAuthHook } from "@daloyjs/core";
+        code={`import { App, bearerAuth, markAuthHook, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App({ env: "production" });
 
 // Built-in middleware satisfies the guard automatically.
-app.use(bearerAuth({ validate: (t) => t === process.env.API_TOKEN }));
+app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }));
 
 // A custom auth hook must be marked so the guard recognises it.
 app.use(
@@ -342,13 +342,13 @@ app.get(
         option (typed as <code>McpRoutesOptions</code>).
       </p>
       <CodeBlock
-        code={`import { App, bearerAuth, createMcpHandler, mcpRoutes } from "@daloyjs/core";
+        code={`import { App, bearerAuth, createMcpHandler, mcpRoutes, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App({ env: "production" });
 const mcp = createMcpHandler({ serverInfo, tools });
 
 // (a) Authenticated MCP server - satisfies the guard.
-app.use(bearerAuth({ validate: (t) => t === process.env.MCP_TOKEN }));
+app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.MCP_TOKEN!) }));
 for (const route of mcpRoutes("/mcp", mcp)) {
   app.route(route);
 }
@@ -478,13 +478,13 @@ alsoGood.use(idempotency({ ttlSeconds: 86_400 }));`}
         non-HTTPS endpoint on a non-loopback host.
       </p>
       <CodeBlock
-        code={`import { App, a2aRoutes, bearerAuth, createA2aHandler } from "@daloyjs/core";
+        code={`import { App, a2aRoutes, bearerAuth, createA2aHandler, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App({ env: "production" });
 const agent = createA2aHandler({ card, onMessage });
 
 // (a) Auth on the JSON-RPC route only - satisfies the guard, card stays public.
-const auth = bearerAuth({ validate: (t) => t === process.env.A2A_TOKEN });
+const auth = bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.A2A_TOKEN!) });
 for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) {
   app.route(route);
 }

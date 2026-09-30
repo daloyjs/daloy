@@ -104,7 +104,7 @@ export const usersPlugin = {
         route auth metadata for every route the plugin adds.
       </p>
       <CodeBlock
-        code={`import { App, bearerAuth } from "@daloyjs/core";
+        code={`import { App, bearerAuth, timingSafeEqual } from "@daloyjs/core";
 
 const app = new App();
 
@@ -112,7 +112,7 @@ app.register(usersPlugin, {
   prefix: "/users",
   tags: ["Users"],
   hooks: bearerAuth({
-    validate: (token) => token === process.env.USERS_TOKEN,
+    validate: (token) => timingSafeEqual(token, process.env.USERS_TOKEN!),
   }),
   auth: { scheme: "bearer" },
 });

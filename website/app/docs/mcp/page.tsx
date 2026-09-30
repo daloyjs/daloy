@@ -234,6 +234,7 @@ const SERVER = `import {
   createMcpHandler,
   mcpRoutes,
   rateLimit,
+  timingSafeEqual,
 } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
@@ -317,7 +318,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 app.use(
   bearerAuth({
     realm: "inventory-mcp",
-    validate: (token) => token === process.env.MCP_TOKEN,
+    validate: (token) => timingSafeEqual(token, process.env.MCP_TOKEN!),
   })
 );
 

@@ -455,7 +455,7 @@ export const app = new App().registerRoutes([
   method: "POST",
   path: "/admin/purge",
   operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => t === process.env.ADMIN_TOKEN }),
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
   responses: {
     200: { description: "ok", body: z.object({ purged: z.boolean() }) },
     401: { description: "denied" },

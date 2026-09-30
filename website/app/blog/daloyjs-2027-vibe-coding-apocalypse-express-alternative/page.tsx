@@ -146,7 +146,7 @@ const DOCS_ONE_LINER = `const app = new App({
 });`;
 
 const FULLER_ROUTE = `import { z } from "zod";
-import { App, NotFoundError, bearerAuth, secureHeaders, requestId } from "@daloyjs/core";
+import { App, NotFoundError, bearerAuth, secureHeaders, requestId, timingSafeEqual } from "@daloyjs/core";
 
 const BookSchema = z.object({ id: z.string(), title: z.string() });
 
@@ -159,7 +159,7 @@ const app = new App({ docs: true, bodyLimitBytes: 64 * 1024 })
     operationId: "createBook",
     tags: ["Books"],
     auth: { scheme: "bearer" },
-    hooks: bearerAuth({ validate: (t) => t === process.env.API_TOKEN }),
+    hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }),
     request: { body: BookSchema },
     responses: {
       201: { description: "Created", body: BookSchema },
@@ -228,7 +228,7 @@ app.use((err, req, res, next) => {
 
 const DALOY_ROUTE = `// DaloyJS
 import { z } from "zod";
-import { App, bearerAuth, NotFoundError } from "@daloyjs/core";
+import { App, bearerAuth, NotFoundError, timingSafeEqual } from "@daloyjs/core";
 
 const Book = z.object({ id: z.string(), title: z.string().min(1) });
 
@@ -237,7 +237,7 @@ app.route({
   path: "/books",
   operationId: "createBook",
   auth: { scheme: "bearer" },
-  hooks: bearerAuth({ validate: (t) => t === process.env.API_TOKEN }),
+  hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }),
   request: { body: Book }, // validation replaces the manual if-check
   responses: {
     201: { description: "Created", body: Book },

@@ -108,12 +108,12 @@ app.post("/password-reset", { hooks: authLimit(), ... });
         code={`import {
   App,
   every, some, except,
-  requestId, bearerAuth, rateLimit,
+  requestId, bearerAuth, rateLimit, timingSafeEqual,
 } from "@daloyjs/core";
 
 const adminStack = every(
   requestId(),
-  bearerAuth({ validate: (t) => t === process.env.ADMIN_TOKEN }),
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
   rateLimit({ windowMs: 60_000, max: 30, groupId: "admin" }),
 );
 
@@ -125,12 +125,12 @@ app.use(adminStack);
 // "Auth except the public endpoints":
 app.use(except(
   ["/health", "/openapi.json", "/docs/**"],
-  bearerAuth({ validate: (t) => t === process.env.API_TOKEN }),
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }),
 ));
 
 // "Any one of these proofs of identity is enough":
 app.use(some(
-  bearerAuth({ validate: (t) => t === process.env.PUBLIC_API_TOKEN }),
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.PUBLIC_API_TOKEN!) }),
   // session-cookie middleware, API-key middleware, ...
 ));`}
         language="ts"
