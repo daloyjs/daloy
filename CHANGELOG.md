@@ -17,6 +17,18 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- `except()` now ignores trailing slashes exactly as the router does, and `*`
+  matches one non-empty segment. Previously `except("/docs/*")` matched
+  `/docs/` (and `/docs/.`, `/docs/x/..`), which the router dispatched to the
+  protected `/docs` handler, so auth was skipped on that route.
+- Router captures (`:param` / `*wildcard`) now refuse decoded values with a
+  `.`/`..` component behind an encoded separator (`..%2F..%2Fsecret`,
+  `..%5C`) or a control character (`%00`, `%0A`, ...). A capture that decodes
+  `%2F` / `%5C` is a `404` unless the route sets the new
+  `allowEncodedSlash: true` option.
+
 ## [1.5.0] - 2026-09-30
 
 ### Added

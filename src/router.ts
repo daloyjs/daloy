@@ -9,7 +9,11 @@
  *
  * Safety:
  *   - Raw `/../`, trailing `/..`, and empty segments are rejected at lookup time.
- *   - Decoded parameters are untrusted data, not sanitized filesystem paths.
+ *   - A capture never binds a value whose decoded form holds a `.`/`..` path
+ *     component (e.g. `..%2F..`, `..%5C`) or a control character (`%00`,
+ *     `%0A`, ...). Decoded `/` or `\` is flagged on the match
+ *     ({@link RouteMatch.encodedSeparator}) so the caller can refuse it.
+ *   - Decoded parameters are still untrusted data, not sanitized filesystem paths.
  *   - Duplicate routes and duplicate operationIds throw at registration.
  *   - Wildcard segments must be terminal.
  */
@@ -23,9 +27,23 @@ export interface RouteMatch<T> {
   handler: T;
   /** Decoded path parameter values keyed by the segment name (`:id`, `*rest`, ...). */
   params: Record<string, string>;
+  /**
+   * `true` when a capture decoded a percent-encoded `/` or `\` (`%2F`, `%5C`),
+   * so one captured value spans what a downstream path consumer would treat as
+   * several segments. Absent otherwise. Callers should reject such matches
+   * unless the route explicitly opted in.
+   */
+  encodedSeparator?: true;
 }
 
 const handlerPrototype = Object.freeze(Object.create(null));
+
+/**
+ * Set while decoding a capture that held `%2F`/`%5C`; reset per dynamic
+ * lookup. Module-level (lookups are synchronous) so the Router instance shape,
+ * and with it the static fast path, is unchanged.
+ */
+let sawEncodedSeparator = false;
 
 interface Node<T> {
   children: Map<string, Node<T>>;
@@ -195,12 +213,15 @@ export class Router<T> {
 
     const segments = splitPath(path);
     const params: Record<string, string> = {};
+    sawEncodedSeparator = false;
     const found = this.walk(this.root, segments, 0, params);
     if (!found) return undefined;
     const handler = found.handlers![method];
     if (handler === undefined && !Object.hasOwn(found.handlers!, method))
       return undefined;
-    return { handler: handler as T, params };
+    return sawEncodedSeparator
+      ? { handler: handler as T, params, encodedSeparator: true }
+      : { handler: handler as T, params };
   }
 
   /**
@@ -278,18 +299,51 @@ export class Router<T> {
  * Decode a single path segment, returning `undefined` instead of throwing when
  * the segment contains a malformed percent-escape (e.g. `%zz` or a lone `%`).
  * A malformed segment therefore fails to match and yields a clean 404 rather
- * than letting a `URIError` bubble up as a generic 500.
+ * than letting a `URIError` bubble up as a generic 500. Also returns
+ * `undefined` when the decoded value holds a `.`/`..` component (split on `/`
+ * and `\`) or a control character, so `..%2F`, `..%5C`, `%00` and `%0A` can
+ * never bind as a capture.
  */
 function safeDecodeURIComponent(segment: string): string | undefined {
   if (!segment.includes("%")) return isDotSegment(segment) ? undefined : segment;
+  let decoded: string;
   try {
-    const decoded = decodeURIComponent(segment);
-    // `%2e%2e` decodes to `..`: a URL parser resolves it as a parent-directory
-    // step, so never let it bind as a param or wildcard segment.
-    return isDotSegment(decoded) ? undefined : decoded;
+    decoded = decodeURIComponent(segment);
   } catch {
     return undefined;
   }
+  // `%2e%2e` decodes to `..`: a URL parser resolves it as a parent-directory
+  // step, so never let it bind as a param or wildcard segment.
+  return isDotSegment(decoded) || hasUnsafeDecodedContent(decoded)
+    ? undefined
+    : decoded;
+}
+
+/**
+ * `true` when a decoded segment carries a control character (C0 or DEL) or a
+ * `.`/`..` component hidden behind a decoded `/` or `\` separator. Records a
+ * decoded separator in `sawEncodedSeparator` as a side effect. A capture that
+ * is later backtracked can over-report, which only ever fails closed.
+ */
+function hasUnsafeDecodedContent(decoded: string): boolean {
+  let start = 0;
+  const n = decoded.length;
+  for (let i = 0; i <= n; i++) {
+    const c = i < n ? decoded.charCodeAt(i) : 47;
+    if (c < 32 || c === 127) return true;
+    if (c === 47 /* / */ || c === 92 /* \ */) {
+      if (i < n) sawEncodedSeparator = true;
+      const len = i - start;
+      if (
+        (len === 1 || len === 2) &&
+        decoded.charCodeAt(start) === 46 &&
+        (len === 1 || decoded.charCodeAt(start + 1) === 46)
+      )
+        return true;
+      start = i + 1;
+    }
+  }
+  return false;
 }
 
 /** `true` for the `.` / `..` path segments that URL parsers resolve away. */
@@ -299,8 +353,8 @@ function isDotSegment(segment: string): boolean {
 
 /**
  * Decode and join the wildcard tail starting at `index`. Returns `undefined`
- * if any captured segment carries a malformed percent-escape, so the lookup
- * misses cleanly instead of throwing.
+ * if any captured segment is rejected by {@link safeDecodeURIComponent}, so
+ * the lookup misses cleanly instead of throwing.
  */
 function decodeSegments(segs: string[], index: number): string | undefined {
   const parts: string[] = [];

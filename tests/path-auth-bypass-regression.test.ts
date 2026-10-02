@@ -21,10 +21,10 @@
  *   - There is no implicit URL rewrite layer — handlers are reached via the
  *     same `url.pathname` the application code sees.
  *   - The `except()` matcher uses the same `url.pathname` view as the
- *     router and is also case-sensitive, so a case-mutated or
- *     trailing-slash-mutated request that the router would have routed to a
- *     protected handler does NOT match an exempt pattern; auth still runs.
- *     The matcher fails CLOSED.
+ *     router (trailing slashes ignored, as the router ignores them) and is
+ *     also case-sensitive, so a case-mutated or trailing-slash-mutated
+ *     request that the router would have routed to a protected handler does
+ *     NOT match an exempt pattern; auth still runs. The matcher fails CLOSED.
  *
  * These tests lock those properties in so a future refactor of either the
  * router or `except()` cannot reintroduce the Qinglong class of bug.
@@ -140,14 +140,34 @@ test("trailing-slash variants do not bypass auth via except()", async () => {
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
-  // The router strips the trailing slash and matches `/admin`. The
-  // except pattern is `/admin/` (exact), which does NOT match the raw
-  // pathname `/admin`. Auth runs → 401. Fail-closed.
-  assert.equal((await app.fetch(new Request("http://x/admin"))).status, 401);
-  // The opposite direction: a request to `/admin/` reaches the same
-  // handler AND matches the exempt pattern → 200. This is the
-  // developer's stated intent; we just verify the behavior is stable.
+  // except() ignores trailing slashes exactly as the router does, so the
+  // exemption is decided per dispatched route, not per spelling: `/admin`
+  // and `/admin/` reach the same handler and get the same answer.
+  assert.equal((await app.fetch(new Request("http://x/admin"))).status, 200);
   assert.equal((await app.fetch(new Request("http://x/admin/"))).status, 200);
+});
+
+test("trailing slash cannot stretch a wildcard exemption onto the parent route", async () => {
+  // Regression: `except("/admin/*")` used to match `/admin/` (empty `*`)
+  // while the router dispatched `/admin/` to the protected `/admin` handler.
+  const app = new App({ env: "development" });
+  app.use(except("/admin/*", bearerAuth({ validate: () => false })));
+  app.route({
+    method: "GET",
+    path: "/admin",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  app.route({
+    method: "GET",
+    path: "/admin/:page",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  for (const p of ["/admin", "/admin/", "/admin/.", "/admin/x/.."]) {
+    assert.equal((await app.fetch(new Request(`http://x${p}`))).status, 401, p);
+  }
+  assert.equal((await app.fetch(new Request("http://x/admin/help"))).status, 200);
 });
 
 test("path traversal attempts are rejected before any hook runs", async () => {

@@ -4569,8 +4569,12 @@ export class App<
       // Hide internal routes from the public adapter surface. The router
       // still finds them so app.inject() can dispatch normally, but
       // app.fetch() responds 404 to avoid leaking existence.
+      // A capture that decoded `%2F`/`%5C` is refused unless the route opted
+      // in, and answered like a hidden route (404, no 405/Allow probing).
       const internalHidden =
-        match?.handler.def.internal === true && opts.allowInternal !== true;
+        (match?.handler.def.internal === true && opts.allowInternal !== true) ||
+        (match?.encodedSeparator === true &&
+          match.handler.def.allowEncodedSlash !== true);
 
       if (match && !internalHidden) {
         this.assertCrossOriginAllowed(

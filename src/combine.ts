@@ -140,8 +140,11 @@ export function some(...layers: Hooks[]): Hooks {
 
 /**
  * Pattern accepted by {@link except}. Strings starting with `/` are matched
- * against the request `pathname`. `*` matches one path segment (no `/`);
- * `**` matches any suffix (zero or more segments). Functions receive the
+ * against the request `pathname`. `*` matches one non-empty path segment
+ * (no `/`); `**` matches any suffix (zero or more segments). Trailing slashes
+ * are ignored on both the pattern and the request, exactly as the router
+ * ignores them, so a pattern can never exempt a path that the router
+ * dispatches to a different (protected) route. Functions receive the
  * request context and return `true` to skip the gated bundle.
  *
  * @since 0.19.0
@@ -219,9 +222,18 @@ function compileExceptMatcher(
   const patterns = Array.isArray(when) ? when : [when];
   const matchers = patterns.map(compilePathPattern);
   return async (ctx) => {
-    const path = new URL(ctx.request.url).pathname;
+    // Match the path the router dispatches on: it ignores trailing slashes,
+    // so `/docs/` must be judged as `/docs`, never as a child of `/docs/*`.
+    const path = trimTrailingSlashes(new URL(ctx.request.url).pathname);
     return matchers.some((m) => m(path));
   };
+}
+
+/** Strip trailing `/` the way the router does (`/` itself is kept). */
+function trimTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 1 && path.charCodeAt(end - 1) === 47) end--;
+  return end === path.length ? path : path.slice(0, end);
 }
 
 function compilePathPattern(pattern: string): (path: string) => boolean {
@@ -231,13 +243,15 @@ function compilePathPattern(pattern: string): (path: string) => boolean {
     );
   }
   if (!pattern.includes("*")) {
-    return (path) => path === pattern;
+    const exact = trimTrailingSlashes(pattern);
+    return (path) => path === exact;
   }
   const escaped = pattern
     .split(/(\*\*|\*)/)
     .map((part) => {
       if (part === "**") return ".*";
-      if (part === "*") return "[^/]*";
+      // `*` is one non-empty segment, so `/docs/*` never matches `/docs`.
+      if (part === "*") return "[^/]+";
       return part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
     })
     .join("");

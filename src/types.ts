@@ -603,6 +603,18 @@ export interface RouteDefinition<
   internal?: boolean;
 
   /**
+   * Allow path captures (`:param` / `*wildcard`) to contain a percent-encoded
+   * `/` or `\` (`%2F`, `%5C`), e.g. an id like `book%2F1` binding as
+   * `"book/1"`. Defaults to `false`: such requests get a `404`, because a
+   * decoded separator turns one captured value into several path segments for
+   * any downstream filesystem, URL, or proxy consumer.
+   *
+   * Opting in never re-admits `.`/`..` components or control characters in a
+   * capture; those are always rejected.
+   */
+  allowEncodedSlash?: boolean;
+
+  /**
    * Optional OpenAPI 3.1 callbacks (out-of-band requests this operation may
    * trigger on the consumer). Each callback name maps to one or more runtime
    * expressions (e.g. `"{$request.body#/callbackUrl}"`); each expression maps

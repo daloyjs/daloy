@@ -240,11 +240,15 @@ test("typed client refuses dot-segment and empty path params instead of retarget
 test("typed client keeps legit dotted values and encodes them as data", async () => {
   const { app, hits } = dotSegmentApp();
   const client: any = createInProcessClient(app);
-  for (const member of ["...", ".bob", "bob.", "a..b", "a/.."]) {
+  for (const member of ["...", ".bob", "bob.", "a..b"]) {
     const res = await client.removeMember({ params: { org: "acme", member } });
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, { removed: member });
   }
+  // `a/..` is encoded as `a%2F..`: a `..` component behind an encoded
+  // separator. The server router refuses it (404) rather than binding it.
+  const traversal = await client.removeMember({ params: { org: "acme", member: "a/.." } });
+  assert.equal(traversal.status, 404);
   assert.ok(!hits.some((h) => h.startsWith("deleteOrg")));
   const asset = await client.getAsset({ params: { path: "css/app v2.css" } });
   assert.deepEqual(asset.body, { path: "css/app v2.css" });
