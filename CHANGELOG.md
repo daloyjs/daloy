@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-02
+
 ### Security
 
 - JWT verification now rejects non-canonical base64url segments (a trailing
@@ -33,6 +35,15 @@ For the forward-looking plan and the full thematic release log, see
   `..%5C`) or a control character (`%00`, `%0A`, ...). A capture that decodes
   `%2F` / `%5C` is a `404` unless the route sets the new
   `allowEncodedSlash: true` option.
+- WebSocket upgrade routes apply the same capture rules, and never accept a
+  capture that decodes `%2F` / `%5C` (there is no `allowEncodedSlash` opt-in
+  for `app.ws()`).
+
+### Added
+
+- `allowEncodedSlash` route option: opt a route in to captures containing a
+  percent-encoded `/` or `\` (for ids like `book%2F1`). It never re-admits
+  `..` components or control characters.
 
 ## [1.5.0] - 2026-09-30
 
@@ -3560,7 +3571,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/daloyjs/daloy/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/daloyjs/daloy/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/daloyjs/daloy/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/daloyjs/daloy/compare/v1.3.7...v1.4.0

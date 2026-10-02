@@ -611,6 +611,8 @@ export interface RouteDefinition<
    *
    * Opting in never re-admits `.`/`..` components or control characters in a
    * capture; those are always rejected.
+   *
+   * @since 1.5.1
    */
   allowEncodedSlash?: boolean;
 
