@@ -1,7 +1,6 @@
 import type { Route } from "next";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 
+import { BLOG_POSTS, getBlogPost } from "@/lib/blog-posts";
 import { getAllDocPages, getDocPage } from "@/lib/docs-content";
 
 export type OgPageContent = {
@@ -9,102 +8,26 @@ export type OgPageContent = {
   path: string;
 };
 
-const blogDir = path.join(process.cwd(), "app", "blog");
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function isSafeSlug(value: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-}
-
-function parseStringProperty(source: string, key: string): string | null {
-  const match = new RegExp(`${key}:\\s*`).exec(source);
-  if (!match) return null;
-
-  let index = match.index + match[0].length;
-  while (/\s/.test(source[index] ?? "")) index += 1;
-
-  const quote = source[index];
-  if (quote !== '"' && quote !== "'" && quote !== "`") return null;
-
-  let escaped = false;
-  let value = "";
-
-  for (let cursor = index + 1; cursor < source.length; cursor += 1) {
-    const char = source[cursor] ?? "";
-
-    if (escaped) {
-      value += `\\${char}`;
-      escaped = false;
-      continue;
-    }
-
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-
-    if (char === quote) {
-      return normalizeText(decodeStringEscapes(value));
-    }
-
-    value += char;
-  }
-
-  return null;
-}
-
-function decodeStringEscapes(value: string): string {
-  return value
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) =>
-      String.fromCharCode(Number.parseInt(hex, 16)),
-    )
-    .replace(/\\n/g, " ")
-    .replace(/\\r/g, " ")
-    .replace(/\\t/g, " ")
-    .replace(/\\"/g, '"')
-    .replace(/\\'/g, "'")
-    .replace(/\\\\/g, "\\");
-}
-
-function titleFromSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-async function readBlogPostPage(slug: string): Promise<string | null> {
-  if (!isSafeSlug(slug)) return null;
-
-  try {
-    return await readFile(path.join(blogDir, slug, "page.tsx"), "utf8");
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * OG content for every blog post, from the posts' frontmatter
+ * (`content/blog/*.mdx` via `BLOG_POSTS`).
+ *
+ * @returns One entry per post.
+ */
 export async function getAllBlogPostOgContent(): Promise<OgPageContent[]> {
-  const entries = await readdir(blogDir, { withFileTypes: true });
-  const posts = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory() && isSafeSlug(entry.name))
-      .map((entry) => getBlogPostOgContent(entry.name)),
-  );
-
-  return posts.filter((post): post is OgPageContent => post !== null);
+  return BLOG_POSTS.map((post) => ({ title: post.title, path: `/blog/${post.slug}` }));
 }
 
+/**
+ * OG content for one blog post.
+ *
+ * @param slug - The post slug. Unknown or unsafe slugs return `null` (the
+ *   lookup is an exact match against known posts, never a file path).
+ * @returns The post's OG title and path, or `null`.
+ */
 export async function getBlogPostOgContent(slug: string): Promise<OgPageContent | null> {
-  const source = await readBlogPostPage(slug);
-  if (!source) return null;
-
-  return {
-    title: parseStringProperty(source, "title") ?? titleFromSlug(slug),
-    path: `/blog/${slug}`,
-  };
+  const post = getBlogPost(slug);
+  return post ? { title: post.title, path: `/blog/${post.slug}` } : null;
 }
 
 export async function getAllDocOgContent(): Promise<OgPageContent[]> {

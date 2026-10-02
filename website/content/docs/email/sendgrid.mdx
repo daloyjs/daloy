@@ -1,0 +1,176 @@
+---
+title: Send email from DaloyJS with SendGrid
+description: Send transactional email from a DaloyJS API using Twilio SendGrid's @sendgrid/mail SDK. Includes API key setup, the Mail Send v3 interface, sender verification, and DaloyJS plugin pattern.
+keywords:
+  - DaloyJS SendGrid
+  - "@sendgrid/mail"
+  - Twilio SendGrid Node.js
+  - SendGrid Mail Send v3
+  - transactional email DaloyJS
+---
+
+# Send email from DaloyJS with SendGrid
+
+[Twilio SendGrid](https://sendgrid.com/) is a long-standing email delivery service that combines transactional and marketing sending. This guide uses the official [`@sendgrid/mail`](https://github.com/sendgrid/sendgrid-nodejs/tree/main/packages/mail) SDK, which wraps the v3 Mail Send REST API.
+
+<SequenceDiagram title="Send through @sendgrid/mail" participants={[
+          "Route handler",
+          "sgMail",
+          "SendGrid v3 API",
+          "Event Webhook",
+        ]} steps={[
+          {
+            from: "Route handler",
+            to: "sgMail",
+            label: "sgMail.send({ from, to, subject, text })",
+            detail: "API key set once via sgMail.setApiKey()",
+            kind: "request",
+          },
+          {
+            from: "sgMail",
+            to: "SendGrid v3 API",
+            label: "POST /v3/mail/send",
+            detail: "Bearer token, JSON body",
+            kind: "request",
+          },
+          {
+            from: "SendGrid v3 API",
+            to: "Route handler",
+            label: "202 Accepted",
+            detail: "X-Message-Id header returned as { id }",
+            kind: "response",
+          },
+          {
+            from: "SendGrid v3 API",
+            to: "Event Webhook",
+            label: "delivered, bounce, open events",
+            detail: "verify the signature before trusting payloads",
+            kind: "async",
+          },
+        ]} caption="The plugin sets the API key once, then sgMail.send() POSTs to the v3 Mail Send API. SendGrid replies 202 with an X-Message-Id, and later posts delivery events to your Event Webhook." />
+
+## 1. Provision
+
+1. Create a SendGrid account, enable 2FA, then go to **Settings -\> API Keys** and generate a *Restricted Access* key with only **Mail Send -\> Full Access** enabled.
+2. Complete [Domain Authentication](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/how-to-set-up-domain-authentication) (SPF/DKIM CNAMEs) for your sending domain, or use Single Sender Verification for quick tests only.
+
+## 2. Install
+
+```ts
+pnpm add @sendgrid/mail
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxx
+SENDGRID_FROM="Acme <no-reply@acme.example.com>"
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/sendgrid.ts
+import sgMail from "@sendgrid/mail";
+import type { App } from "@daloyjs/core";
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+
+export const sendgridPlugin = {
+  name: "sendgrid",
+  register(app: App) {
+    app.decorate("email", {
+      async send({ to, subject, text, html }) {
+        const [res] = await sgMail.send({
+          from: process.env.SENDGRID_FROM!,
+          to,
+          subject,
+          text,
+          html,
+        });
+        // SendGrid returns 202 with an X-Message-Id header on success
+        const id = res.headers["x-message-id"] ?? "";
+        return { id: String(id) };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    email: {
+      send(msg: {
+        to: string;
+        subject: string;
+        text?: string;
+        html?: string;
+      }): Promise<{ id: string }>;
+    };
+  }
+}
+```
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { sendgridPlugin } from "./plugins/sendgrid.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 10 }));
+app.register(sendgridPlugin);
+
+app.post(
+  "/contact",
+  {
+    operationId: "submitContact",
+    request: {
+      body: z.object({
+        to: z.email(),
+        subject: z.string().min(1).max(200),
+        message: z.string().min(1).max(5000),
+      }),
+    },
+    responses: {
+      202: { description: "Queued", body: z.object({ id: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const { id } = await state.email.send({
+      to: body.to,
+      subject: body.subject,
+      text: body.message,
+    });
+    return { status: 202, body: { id } };
+  },
+);
+```
+
+## Dynamic templates
+
+For server-side templating, create a [Dynamic Transactional Template](https://www.twilio.com/docs/sendgrid/ui/sending-email/how-to-send-an-email-with-dynamic-templates) in the SendGrid UI and pass its ID with substitution values:
+
+```ts
+await sgMail.send({
+  from: process.env.SENDGRID_FROM!,
+  to,
+  templateId: "d-1234567890abcdef1234567890abcdef",
+  dynamicTemplateData: {
+    firstName: "Devlin",
+    cartUrl: "https://acme.example.com/cart/abc",
+  },
+});
+```
+
+## Error handling
+
+On non-2xx responses the SDK throws an error with `response.body.errors` describing each failure. Surface those to your client through the standard [problem+json](/docs/errors) helper rather than echoing raw text.
+
+## Runtimes
+
+The `@sendgrid/mail` package is Node-oriented (it uses `@sendgrid/client` with Node's HTTPS module). For [Cloudflare Workers](/docs/adapters), call the v3 REST API directly with `fetch` against `https://api.sendgrid.com/v3/mail/send` using the same JSON body and a `Bearer` token.
+
+See also [Resend](/docs/email/resend), [Postmark](/docs/email/postmark), and the [email integrations overview](/docs/email).

@@ -1,0 +1,329 @@
+---
+title: Security
+description: DaloyJS ships core-enforced security guardrails plus first-party middleware for secure headers, rate limits, CORS, CSRF, sessions, and supply-chain hardening.
+keywords:
+  - DaloyJS security
+  - secure HTTP defaults
+  - rate limiting
+  - secure headers
+  - OWASP TypeScript
+sitemap:
+  priority: 0.8
+---
+
+# Security
+
+Bad defaults are bugs. DaloyJS separates core-enforced guardrails from first-party security middleware so the dangerous things are blocked by default and the deployment-specific things stay explicit.
+
+<blockquote>Core guardrails protect every app by default. First-party middleware adds the policy that depends on your routes, users, and deployment.</blockquote>
+
+<LayerStack title="Two layers of defense" flow="down" layers={[
+          {
+            title: "Core-enforced guardrails",
+            detail: "armed by default, no middleware call required",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "path-traversal reject",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "prod 5xx redaction",
+            ],
+          },
+          {
+            title: "First-party security middleware",
+            detail: "explicit, because policy is a deployment decision",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]} caption="The dangerous things are blocked in the core without any setup. The deployment-specific things (CSP, CORS origins, session secrets, CSRF rollout) stay explicit middleware you opt into." />
+
+## What the core enforces
+
+These checks happen in `App` or the runtime adapter itself. Applications get them without calling any middleware.
+
+<FlowDiagram title="Every request runs the gauntlet" numbered steps={[
+          {
+            eyebrow: "ingress",
+            label: "Incoming request",
+            detail: "method, path, headers, body",
+          },
+          {
+            eyebrow: "size cap",
+            label: "Body-size limit",
+            detail: "Content-Length over cap to 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "parse",
+            label: "Hardened JSON parse",
+            detail: "strips __proto__ / constructor",
+          },
+          {
+            eyebrow: "route",
+            label: "Router + method check",
+            detail: ".. resolved to canonical path. Bad method 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "handler",
+            label: "Your typed handler",
+            detail: "runs under requestTimeoutMs",
+            tone: "success",
+          },
+        ]} caption="A request only reaches your handler after clearing the body cap, the prototype-pollution-safe parser, and the path/method guards. Anything that fails a guard is rejected by the core before your code runs." />
+
+| Threat | Built-in behavior |
+| --- | --- |
+| Body-size DoS | Streamed read, hard cap (default 1 MiB), Content-Length checked first -\> 413. |
+| Prototype pollution | `safeJsonParse` strips `__proto__`, `constructor`, `prototype` via reviver. |
+| Header / response splitting | `sanitizeHeaderName` / `sanitizeHeaderValue` reject CRLF + NUL. |
+| Path traversal | Dot-segments (`.` / `..`) are resolved to a canonical path before route matching, and empty `//` segments are refused. Routes match exact strings, so there is no directory to escape into. |
+| Slow-loris / hung handlers | `requestTimeoutMs` (default 30s) returns `408` and fires `ctx.request.signal` for cooperative teardown. The Node adapter also sets socket timeouts. |
+| Unsupported content types | Routes with body schemas reject non-allowed content-types -\> 415. |
+| Method confusion | Real **405** with `Allow` header, never a misleading 404. |
+| Information disclosure (5xx) | Production mode strips `detail` from 5xx problem+json automatically. |
+
+## First-party security middleware
+
+These are part of DaloyJS and documented together, but they stay explicit because CSP, CORS, rate-limit keys, session secrets, and CSRF rollout are deployment decisions.
+
+```ts
+import {
+  requestId,
+  secureHeaders,
+  cors,
+  rateLimit,
+  bearerAuth,
+  timing,
+} from "@daloyjs/core";
+
+app.use(requestId());           // x-request-id propagation
+app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
+app.use(cors({                  // explicit allowlist; never * with credentials
+  origin: ["https://app.example.com"],
+  credentials: true,
+  methods: ["GET", "POST"],
+}));
+app.use(rateLimit({             // per TCP peer by default; configure trustedProxies behind a proxy
+  windowMs: 60_000,
+  max: 120,
+}));
+app.use(timing());              // Server-Timing header for observability
+```
+
+Put `rateLimit()` or `loginThrottle()` before bearer/basic/JWK/mTLS auth when it must count failed credentials. The limiter will still spend the attempt and return `429` after the cap even though auth rejects in `preBody`. DaloyJS does not read a declared request body to do it. A custom key generator on that path should use raw request data or state populated by an earlier `preBody` hook.
+
+The official starters wire these in for you: Node, Bun, and Deno enable `secureHeaders()`, `requestId()`, and `rateLimit()`. Cloudflare Worker and Vercel enable `secureHeaders()` and `requestId()` plus tighter edge-friendly body and timeout limits.
+
+## Recommended by deployment target
+
+Start with the middleware below unless you have a concrete reason to change it. This keeps risky choices explicit and consistent.
+
+| Target | Recommended baseline |
+| --- | --- |
+| Node / Bun / Deno API | `requestId()`, `secureHeaders()`, `rateLimit()`, and `cors()` when the API is cross-origin. |
+| Cloudflare Workers | `requestId()` and `secureHeaders()` by default. Use `cors()` only when needed, and prefer an external/shared limiter over the in-memory default when traffic spans many isolates. |
+| Vercel | `requestId()` and `secureHeaders()` by default. Add `cors()` only when needed, and use a shared limiter if you need durable counters across regions. |
+| Cookie-authenticated app | Add `session()` plus `csrf()` on top of the baseline so mutating routes are protected against cross-site form and fetch attacks. |
+| Behind a trusted reverse proxy | Keep the baseline, then configure `rateLimit()` with an explicit `keyGenerator` or set `trustProxyHeaders: true` only after the proxy strips and rewrites forwarding headers. |
+
+## `csrf()` for state-changing routes
+
+Use [`csrf()`](/docs/security/csrf) to protect mutating endpoints. Two strategies are supported:
+
+- Double-submit cookie (default): sets a token cookie on safe requests, requires the same value on the `x-csrf-token` header for unsafe methods, and rejects mismatches with a timing-safe **403**.
+- Fetch Metadata (`strategy: "fetch-metadata"`) - tokenless protection that relies on the modern `Sec-Fetch-Site` header. No cookie round-trip. No HTML rendering coupling. Recommended for new browser-facing apps.
+
+```ts
+import { csrf } from "@daloyjs/core";
+
+// Classic double-submit cookie (default).
+app.use(csrf());
+
+// Tokenless Fetch-Metadata protection (recommended for browser-facing apps).
+app.use(csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+## `secureHeaders()` defaults
+
+```text
+content-security-policy: default-src 'self'; frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+permissions-policy: camera=(), microphone=(), geolocation=(), clipboard-write=()
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+```
+
+If you need a different CSP, want to disable HSTS in local development, or need a looser permissions policy, pass options to `secureHeaders()` explicitly. The legacy `X-XSS-Protection: 0` header is opt-in via `xssProtection: true` for deployments that want to explicitly disable old browser XSS filters.
+
+### CSP with per-request nonces & Trusted Types [#csp-with-per-request-nonces-and-trusted-types]
+
+`secureHeaders()` can build the CSP from a directive map and inject a fresh **per-request nonce** into `script-src`, `script-src-elem`, `style-src`, and `style-src-elem`, plus emit `require-trusted-types-for 'script'` for runtime DOM XSS hardening. The nonce is exposed at `ctx.state.cspNonce` so handlers can render it into `<script nonce="...">` tags.
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'self'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+}));
+
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
+  // Return the HTML yourself so the secureHeaders nonce CSP is the one that ships.
+  async ({ state }) => ({
+    status: 200,
+    body: `<!doctype html>
+<script nonce="${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
+);
+```
+
+Do **not** render this page with `htmlResponse()` from `@daloyjs/core/docs`: that helper ships its own Content-Security-Policy (tuned for the Swagger / Scalar docs UIs, with `'unsafe-inline'`) and would override the strict nonce CSP above, so the nonce would no longer be the thing gating inline scripts. Keep `htmlResponse()` for your API-docs route, and return your own `Response` body for nonce-protected pages.
+
+## Auth
+
+```ts
+import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Bearer (opaque tokens, JWT verified via your own `validate`).
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+
+// Basic auth (RFC 7617).
+app.use(basicAuth({
+  realm: "books-api",
+  verify: (user, pass) =>
+    timingSafeEqual(user, "admin") &&
+    timingSafeEqual(pass, process.env.ADMIN_PASSWORD ?? ""),
+}));
+```
+
+## SQL injection
+
+Daloy doesn't ship a database driver, but the HTTP boundary it *does* own (strict Zod schemas, hardened JSON parser, body-size caps) shrinks the surface that reaches your repository layer. See [SQL injection](/docs/security/sql-injection) for the safe vs. unsafe patterns per ORM (Prisma, Drizzle, Kysely, raw drivers), an allowlisting recipe for dynamic `ORDER BY`, and the grep rules the maintainers use to catch regressions.
+
+## Command injection
+
+DaloyJS's runtime is `child_process`-free by CI gate, so the framework itself cannot shell out. See [Command injection](/docs/security/command-injection) for the safe shape of a handler that does need to invoke an external program (`execFile` + argv array, never `` exec(`cmd $${input}`) ``), the Windows *BatBadBut* footgun, and the grep rules to keep new bugs out at PR time.
+
+## Admin panels
+
+Building an admin or customer-success surface on top of DaloyJS? See [Secure admin panels](/docs/security/admin-panels) for the recommended pattern: `internal: true` routes, `ipRestriction()`, strict CSP with per-request nonces, per-admin authentication, login-throttle `rateLimit()` groups, and structured audit logging, mapped one-to-one to Aikido's public "secure admin panel" checklist.
+
+## Supply-chain
+
+DaloyJS is distributed via [pnpm](https://pnpm.io/motivation) for a stricter install model. Scaffolded pnpm apps inherit the install-time controls, while DaloyJS's own repository and the optional GitHub Actions bundle add CI/CD controls against the cache-poisoning, maintainer-phishing, and OIDC token-abuse patterns seen in recent npm incidents.
+
+- Strict isolation: packages cannot reach phantom dependencies.
+- Content-addressable store: every byte is hashed and verified.
+- Frozen lockfile in CI with `--ignore-scripts`: reproducible installs without transitive lifecycle execution.
+- `verify-store-integrity`, corruption-detecting reads.
+- `strict-peer-dependencies`, no silent peer mismatches.
+- `minimum-release-age=1440`, wait 24h before installing fresh releases.
+- `ignore-scripts=true` with explicit `pnpm.onlyBuiltDependencies`: reviewed allowlist for native install scripts.
+- SHA-pinned GitHub Actions: the optional generated GitHub workflows pin third-party actions to immutable commits, not mutable tags.
+- Protected DaloyJS npm publishing: the framework's own packages use a tag-only release workflow, protected environment approval, OIDC trusted publishing, and `--provenance`.
+
+If your generated app lives outside GitHub, carry over the portable parts directly and translate the GitHub workflow rules to your CI host. The framework cannot enforce branch protection or runner egress in a private GitLab, Bitbucket, Azure DevOps, or on-prem installation.
+
+## Trusted proxies and rate limiting
+
+DaloyJS no longer trusts `X-Forwarded-For` or `X-Real-IP` by default when deriving a rate-limit key. Those headers are client-spoofable unless your reverse proxy strips and rewrites them. The default limiter therefore keys on the unspoofable TCP peer (since 1.3.7; one shared bucket only on runtimes that expose no peer) until you provide an explicit `keyGenerator` or opt in to `trustProxyHeaders: true` / `trustedProxies` behind a trusted proxy. When proxy headers are trusted, the key is the **rightmost** `X-Forwarded-For` entry (the one your proxy appended), never an attacker-prepended left entry. Multi-hop chains declare their hop count with `trustedHops`. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is believed (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
+
+If you already declared your topology on the App with `behindProxy`, you do not have to repeat it. A `rateLimit()` or `loginThrottle()` that sets none of `keyGenerator`, `trustProxyHeaders`, `trustedHops`, or `trustedProxies` follows the App's `behindProxy`, so each client behind your proxy (or on Vercel and Cloudflare Workers, where there is no peer socket) gets its own bucket instead of everyone sharing one. Explicit limiter options always win, and `trustProxyHeaders: false` opts out. Make `behindProxy` match reality: prefer `{ cidrs }` when you know the proxy addresses, because `{ hops }` trusts the right-most forwarded entries from anyone who can reach the app directly.
+
+```ts
+const app = new App({ behindProxy: { hops: 1 } }); // one trusted proxy in front
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // keys on the real client IP
+```
+
+For credential-entry routes, use [`loginThrottle()`](/docs/security/websocket-login-throttle) across `/login`, OTP, and password-reset routes, and `wsRateLimit()` on related WebSocket upgrades. Both helpers can spend from the same `groupId` bucket.
+
+## Self-hosted docs assets
+
+The built-in docs helpers no longer force a jsDelivr-shaped CSP. You can self-host the Swagger UI or Scalar assets, add a nonce to the bootstrap script, and emit a same-origin CSP for your docs route.
+
+```ts
+import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});
+```
+
+```ini
+# .npmrc
+ignore-scripts=true
+minimum-release-age=1440
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+provenance=true
+```
+
+For the full CI/CD and maintainer playbook, read [Supply-chain security](/docs/security/supply-chain). Run `pnpm audit --prod` in CI and before release.
+
+## OWASP API Security Top 10 mapping
+
+For a per-item walkthrough of how Daloy addresses every entry in the [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) plus the cross-cutting best practices (encryption, validation, rate limiting, logging, inventory, third-party API safety), read [OWASP API Top 10 mapping](/docs/security/owasp-api-top-10).
+
+## Reporting a vulnerability
+
+Use GitHub's private vulnerability reporting at [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) with reproduction steps. Do not open a public issue with exploit details.

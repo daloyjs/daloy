@@ -1,0 +1,350 @@
+---
+title: Metrics & the /metrics endpoint
+description: "Expose Prometheus / OpenMetrics from your DaloyJS app: a dependency-free metrics registry (counters, gauges, histograms), RED instrumentation for every route, and an opt-in, auth-guarded /metrics scrape route that inherits the same hardened posture as app.healthcheck()."
+keywords:
+  - Prometheus
+  - OpenMetrics
+  - /metrics endpoint
+  - RED metrics
+  - DaloyJS metrics
+  - MetricsRegistry
+  - httpMetrics
+  - histogram
+  - request duration
+  - observability
+sitemap:
+  priority: 0.8
+---
+
+# Metrics & the `/metrics` endpoint
+
+Metrics are the third observability pillar alongside the structured **logger** and the OpenTelemetry-compatible **tracer**. DaloyJS ships a **dependency-free** Prometheus / OpenMetrics stack: a metrics registry (counters, gauges, histograms), RED (Rate / Errors / Duration) instrumentation for every route, and an opt-in, **auth-guarded** `/metrics` scrape route that inherits the same hardened posture as `app.healthcheck()`.
+
+Everything is built on Web-standard primitives (plus optional `process.*` gauges guarded for non-Node runtimes). The registry runs on Node, Bun, Deno, and Cloudflare Workers. Pull scraping is a different question, see below.
+
+<Callout type="warning" title="Pull scrape is not a service-wide signal on ephemeral compute">
+<p>A <code>GET /metrics</code> on Cloudflare Workers, Vercel, or AWS Lambda returns whatever one isolate happened to accumulate. Isolates are many and short-lived, so that number is not a measurement of your service. Use{" "}<a href="/docs/otlp"><code>telemetry: true</code> (OTLP push)</a>{" "}on those runtimes. Long-lived Node, Bun, and Deno processes are the ones <code>app.metrics()</code> is for.</p>
+</Callout>
+
+<FlowDiagram title="From request to scrape" numbered caption="RED instrumentation records counters and the latency histogram for routes registered after app.metrics(), the registry accumulates the series, then a Prometheus scrape hits the auth-guarded, rate-limited /metrics route and gets the rendered exposition text." steps={[
+          {
+            label: "Request handled",
+            detail: "RED hook installed by app.metrics()",
+          },
+          {
+            label: "Record series",
+            detail: "requests_total, request_duration_seconds, in_flight",
+            tone: "accent",
+          },
+          {
+            label: "Registry accumulates",
+            detail: "low-cardinality {method, route, status} labels",
+          },
+          {
+            label: "Prometheus scrapes",
+            detail: "GET /metrics, Bearer token + per-IP rate limit",
+          },
+          {
+            label: "Exposition rendered",
+            eyebrow: "text/plain",
+            detail: "registry.render() to OpenMetrics",
+            tone: "success",
+          },
+        ]} />
+
+## Quick start
+
+Call `app.metrics()` **before** registering the routes you want measured. It installs RED instrumentation for later routes and registers the scrape route in one step.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App();
+
+// Install instrumentation + the scrape route BEFORE your routes.
+app.metrics({ token: process.env.METRICS_TOKEN! });
+
+const BooksResponse = z.object({
+  items: z.array(z.object({ id: z.string(), title: z.string() })),
+});
+
+app.get(
+  "/books",
+  {
+    operationId: "listBooks",
+    responses: { 200: { description: "ok", body: BooksResponse } },
+  },
+  () => ({ status: 200 as const, body: { items: [] } }),
+);
+
+// GET /metrics  (Authorization: Bearer <METRICS_TOKEN>)
+// # TYPE http_requests_total counter
+// http_requests_total{method="GET",route="/books",status="200"} 1
+// # TYPE http_request_duration_seconds histogram
+// http_request_duration_seconds_bucket{method="GET",route="/books",le="0.005"} 1
+// ...
+```
+
+Because the instrumentation is installed as a group hook, it only wraps matched routes registered *after* the `app.metrics()` call, the same ordering rule as any `app.use(...)` middleware. Calling it after routes already exist logs a `metrics.late_install` warning listing the uninstrumented paths (auto-mounted docs and health routes are ignored). Unmatched `404` paths and synthetic `OPTIONS` preflights are not counted.
+
+## What gets exported
+
+Out of the box, the scrape route exposes:
+
+- `http_requests_total{method,route,status}`: a request counter (rate). The error rate is the subset with a `4xx`/`5xx` status).
+- `http_request_duration_seconds{method,route}`: a latency histogram with conventional Prometheus buckets.
+- `http_requests_in_flight`: a gauge of concurrently-handled requests.
+- process gauges (`process_resident_memory_bytes`, `process_heap_used_bytes`, `process_uptime_seconds`) collected at scrape time on Node-like runtimes. These use the unprefixed names stock Grafana memory panels already query.
+- `daloy_metrics_series_dropped_total`: the only `daloy_`-prefixed series by default, because it is framework-specific (cardinality-cap overflow).
+
+## Options reference
+
+All fields are optional. The table below covers the full `MetricsRouteOptions` surface:
+
+<div className="overflow-x-auto">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>path</code></td>
+<td><code>string</code></td>
+<td><code>"/metrics"</code></td>
+<td>Override the scrape endpoint path.</td>
+</tr>
+<tr>
+<td><code>token</code></td>
+<td><code>string</code></td>
+<td>-</td>
+<td>Require <code>Authorization: Bearer \<token\></code>{", "}compared via <code>timingSafeEqual</code>{". "}Required in production unless{" "}<code>acknowledgeUnauthenticated</code> is set.</td>
+</tr>
+<tr>
+<td><code>rateLimit</code></td>
+<td><code>{`{ limit?, windowMs? }`} | false\`</code></td>
+<td><code>{`{ limit: 60, windowMs: 60_000 }`}</code></td>
+<td>Per-IP fixed-window rate limit. Pass <code>false</code> to disable entirely (useful inside private VPC networks).</td>
+</tr>
+<tr>
+<td><code>registry</code></td>
+<td><code>MetricsRegistry</code></td>
+<td>fresh registry</td>
+<td>Bring your own registry to co-render business metrics alongside the built-in HTTP series.</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td><code>(ctx) =\> string | undefined</code></td>
+<td>matched template (<code>ctx.routePath</code>)</td>
+<td>Resolve the low-cardinality <code>route</code> label. The default is the route template (e.g.{" "}<code>/books/:id</code>), bounded by your route table, so a hostile client cannot mint series from raw paths. Override only when you need a different grouping.</td>
+</tr>
+<tr>
+<td><code>maxRouteCardinality</code></td>
+<td><code>number</code></td>
+<td><code>100</code></td>
+<td>Hard cap on the pathname fallback (used only when no route template is on the context). Overflow collapses to{" "}<code>\<other\></code>. Ignored when you pass{" "}<code>route</code>.</td>
+</tr>
+<tr>
+<td><code>buckets</code></td>
+<td><code>number\[\]</code></td>
+<td>conventional Prometheus defaults</td>
+<td>Custom latency histogram bucket boundaries in seconds.</td>
+</tr>
+<tr>
+<td><code>exclude</code></td>
+<td><code>(path: string) =\> boolean</code></td>
+<td>-</td>
+<td>Skip RED instrumentation for matching paths (e.g. health probes). The scrape path itself is always excluded automatically.</td>
+</tr>
+<tr>
+<td><code>acknowledgeUnauthenticated</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Opt-in bypass for the production refuse-to-boot guard when you intentionally run without a token (e.g. behind a private load balancer).</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+```ts
+app.metrics({
+  path: "/internal/metrics",
+  token: process.env.METRICS_TOKEN!,
+  rateLimit: false,            // safe inside a private VPC
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1],
+  exclude: (p) => p === "/healthz" || p === "/readyz",
+  maxRouteCardinality: 50,
+});
+```
+
+## The route label
+
+High-cardinality labels are the classic way to melt a Prometheus server. The default `route` label is the matched route **template** from `ctx.routePath`: `/books/1` and `/books/2` both record as `/books/:id`. That space is bounded by the route table at boot, so an attacker hitting `/aaa`, `/aab`, `/aac` cannot burn the cardinality budget. Unmatched `404`s mint nothing.
+
+Override `route` only when you want a different grouping (for example `operationId`). If your resolver returns a raw pathname, keep it bounded yourself; `maxRouteCardinality` only caps the no-template fallback.
+
+## Custom application metrics
+
+Pass your own `MetricsRegistry` to register business metrics that render alongside the built-in HTTP series. Names are unprefixed by default. Pass `new MetricsRegistry({ prefix: "demo_" })` if you want a namespace. The cardinality-drop counter stays `daloy_metrics_series_dropped_total` when the prefix is empty.
+
+```ts
+import { App, MetricsRegistry } from "@daloyjs/core";
+
+const registry = new MetricsRegistry();
+const ordersPlaced = registry.counter("orders_placed_total", "Orders placed.");
+const queueDepth = registry.gauge("job_queue_depth", "Pending jobs.");
+const renderTime = registry.histogram(
+  "render_seconds",
+  "Template render time.",
+  [0.001, 0.01, 0.1, 1],
+);
+
+const app = new App();
+app.metrics({ registry, token: process.env.METRICS_TOKEN! });
+
+// Later, from your handlers / workers:
+ordersPlaced.inc({ channel: "web" });
+queueDepth.set(undefined, 12);
+renderTime.observe({ template: "invoice" }, 0.042);
+```
+
+Use `registry.collect(fn)` to refresh point-in-time gauges (queue depth, connection-pool size) only when the endpoint is actually scraped, instead of on a timer.
+
+## Manual instrumentation
+
+Prefer to wire the pieces yourself? `httpMetrics()` returns a `Hooks` bundle you can `app.use(...)` without the built-in scrape route, then render the registry from your own handler.
+
+```ts
+import {
+  App,
+  MetricsRegistry,
+  PROMETHEUS_CONTENT_TYPE,
+  httpMetrics,
+} from "@daloyjs/core";
+import { z } from "zod";
+
+const registry = new MetricsRegistry();
+const app = new App();
+app.use(httpMetrics({
+  registry,
+  maxRouteCardinality: 50,
+  exclude: (path) => path === "/metrics",
+}));
+
+app.get(
+  "/metrics",
+  {
+    responses: { 200: { description: "ok", body: z.string() } },
+  },
+  () => ({
+    status: 200 as const,
+    body: registry.render(),
+    headers: {
+      "content-type": PROMETHEUS_CONTENT_TYPE,
+      "cache-control": "no-store",
+    },
+  }),
+);
+```
+
+## Grafana + Prometheus integration [#grafana-prometheus-integration]
+
+The repository ships a ready-to-use Docker Compose stack under `examples/observability/` that spins up Prometheus and Grafana with a pre-built dashboard, zero extra configuration needed.
+
+### 1. Start the app
+
+Run any DaloyJS server that calls `app.metrics()`. The example in the repo uses port 3001:
+
+```sh
+node --import tsx examples/metrics-demo.ts
+# DaloyJS metrics demo running at http://localhost:3001
+# Prometheus scrape target: http://localhost:3001/metrics
+```
+
+### 2. Start the observability stack
+
+```sh
+docker compose -f examples/observability/docker-compose.yml up
+```
+
+This brings up:
+
+- Prometheus at `http://localhost:9090`, pre-configured to scrape `host.docker.internal:3001/metrics` every 10 seconds.
+- Grafana at `http://localhost:3000` (admin / admin). Prometheus datasource and the DaloyJS dashboard are auto-provisioned on first start, no manual import required.
+
+### 3. Open the dashboard
+
+Navigate to `http://localhost:3000/d/daloy-http-metrics`. The dashboard ships nine panels out of the box:
+
+- Request rate by route
+- Error rate (4xx / 5xx)
+- Latency percentiles (p50 / p95 / p99)
+- In-flight requests
+- Request rate by method
+- Business metric panel (orders created, from the demo)
+- Memory usage (RSS + heap)
+- Process uptime
+- Request duration heatmap
+
+### Pointing at your own app
+
+Edit `examples/observability/prometheus.yml` and replace the target:
+
+```yaml
+scrape_configs:
+  - job_name: my_app
+    static_configs:
+      - targets:
+          - "host.docker.internal:3000"   # your app port
+    metrics_path: /metrics                # or /internal/metrics etc.
+    scrape_interval: 15s
+```
+
+If your app requires a bearer token, add it as a HTTP header:
+
+```yaml
+scrape_configs:
+  - job_name: my_app
+    static_configs:
+      - targets: ["host.docker.internal:3000"]
+    authorization:
+      credentials: ${METRICS_TOKEN}
+```
+
+On Linux you may need to replace `host.docker.internal` with your host IP address, or add `extra_hosts: - "host.docker.internal:host-gateway"` to the Prometheus service in `examples/observability/docker-compose.yml`.
+
+### Useful PromQL queries
+
+```promql
+# Request rate (req/s) by route over the last 5 minutes
+sum by (route) (rate(http_requests_total[5m]))
+
+# 5xx error rate as a fraction
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
+
+# p99 latency per route
+histogram_quantile(0.99,
+  sum by (le, route) (rate(http_request_duration_seconds_bucket[5m]))
+)
+
+# Currently in-flight requests
+http_requests_in_flight
+```
+
+## Security posture
+
+A `/metrics` endpoint leaks internal route names, latency distributions, request volume, and process memory, so it ships with the same hardened defaults as `app.healthcheck()`:
+
+- Bearer token (`opts.token`) compared with DaloyJS's portable `timingSafeEqual` (a constant-time string compare that does not use `node:crypto`, so it does not need `nodejs_compat` on Workers). Missing token is a `401` with `WWW-Authenticate`. A wrong token is a `403`.
+- Per-IP rate limit (default `{ limit: 60, windowMs: 60_000 }`) returning `429` with `Retry-After` on overflow. A Prometheus scrape every 15s is 4/min. An HA pair at 10s is 12/min. 60/min leaves headroom for a Collector plus Prometheus. Stacking Alloy + Collector + Prometheus can surprise you: a 429 looks like an outage in Grafana. Pass `rateLimit: false` behind a private scrape network, or raise `limit`.
+- Refuse-to-boot: an unauthenticated scrape endpoint in production throws at registration unless you set a token or explicitly pass `acknowledgeUnauthenticated: true`.
+- Cardinality cap: every metric is bounded by `maxSeries` (default 5000). Overflowing label combinations are dropped and counted in `daloy_metrics_series_dropped_total`, a memory-exhaustion defense.
+- Exposition-injection defense: metric and label names are validated against the Prometheus grammar at definition time, and label values escape `\\`, `"`, and newlines so a hostile value cannot forge extra samples.
+
+In most deployments you should also scope the scrape endpoint to your monitoring network at the ingress/firewall layer in addition to the bearer token.

@@ -1,0 +1,161 @@
+---
+title: Use AWS Aurora DSQL with DaloyJS
+description: Connect a DaloyJS API on AWS Lambda or Node.js to Aurora DSQL, AWS's distributed serverless PostgreSQL. Uses IAM-based auth tokens with the standard pg driver.
+keywords:
+  - Aurora DSQL DaloyJS
+  - AWS distributed Postgres
+  - DSQL Lambda
+  - IAM auth Postgres
+  - Aurora DSQL Drizzle
+---
+
+# Use AWS Aurora DSQL with DaloyJS
+
+[Aurora DSQL](https://docs.aws.amazon.com/aurora-dsql/) is AWS's serverless, distributed PostgreSQL service. It speaks the Postgres wire protocol, so you use the standard `pg` driver, but auth is short-lived IAM tokens instead of a static password. Pair it with the [Lambda adapter](/docs/adapters) for a fully managed AWS-native stack.
+
+## 1. Provision a cluster
+
+Create a cluster in the AWS console or via the CLI. Note the endpoint hostname and the AWS region.
+
+```ts
+aws dsql create-cluster --region us-east-1
+```
+
+## 2. Install
+
+```ts
+pnpm add pg @aws-sdk/dsql-signer
+```
+
+## 3. Generate a token and connect
+
+DSQL tokens expire (default \~15 minutes), so build a connection helper that refreshes the password before opening a connection. For Lambda, create one client per invocation. For long-lived Node processes, refresh on a timer or on auth errors.
+
+<FlowDiagram title="IAM token auth flow" numbered steps={[
+          {
+            label: "DsqlSigner",
+            detail: "new DsqlSigner({ hostname, region })",
+            tone: "accent",
+          },
+          {
+            label: "Sign a token",
+            detail: "signer.getDbConnectAdminAuthToken()",
+          },
+          {
+            label: "Short-lived token",
+            detail: "expires in ~15 minutes",
+          },
+          {
+            label: "pg Client",
+            detail: "password: token · ssl rejectUnauthorized: true",
+          },
+          {
+            label: "client.connect()",
+            detail: "Postgres wire protocol over TCP",
+            tone: "success",
+          },
+        ]} caption="DSQL replaces a static password with a short-lived IAM token (~15 min). Sign a fresh token per Lambda invocation, or refresh it on a timer for long-lived Node processes." />
+
+```ts
+// src/db/dsql.ts
+import { Client } from "pg";
+import { DsqlSigner } from "@aws-sdk/dsql-signer";
+
+const signer = new DsqlSigner({
+  hostname: process.env.DSQL_ENDPOINT!,
+  region: process.env.AWS_REGION ?? "us-east-1",
+});
+
+export async function createDsqlClient() {
+  const token = await signer.getDbConnectAdminAuthToken();
+  const client = new Client({
+    host: process.env.DSQL_ENDPOINT!,
+    port: 5432,
+    user: "admin",
+    password: token,
+    database: "postgres",
+    ssl: { rejectUnauthorized: true },
+  });
+  await client.connect();
+  return client;
+}
+```
+
+## 4. Plugin pattern (long-lived Node)
+
+```ts
+// src/db/plugin.ts
+import type { App } from "@daloyjs/core";
+import { createDsqlClient } from "./dsql.ts";
+
+export const dsqlPlugin = {
+  name: "dsql",
+  async register(app: App) {
+    const client = await createDsqlClient();
+    app.decorate("db", client);
+    app.onClose(async () => {
+      await client.end();
+    });
+  },
+};
+```
+
+## 5. Lambda pattern (per-invocation)
+
+On the [Lambda adapter](/docs/adapters), create the client inside the handler and close it at the end so the IAM token doesn't expire between cold starts:
+
+```ts
+import { toLambdaHandler } from "@daloyjs/core/lambda";
+import { createDsqlClient } from "./db/dsql.ts";
+
+const daloyHandler = toLambdaHandler(app);
+
+export const handler = async (event) => {
+  const db = await createDsqlClient();
+  app.decorate("db", db);
+  try {
+    return await daloyHandler(event);
+  } finally {
+    await db.end();
+  }
+};
+```
+
+## 6. Augment app state
+
+Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/dsql.ts (same module as createDsqlClient above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Client;
+  }
+}
+```
+
+## With Drizzle ORM
+
+```ts
+pnpm add drizzle-orm
+// src/db/drizzle.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import { createDsqlClient } from "./dsql.ts";
+
+export async function createDb() {
+  const client = await createDsqlClient();
+  return drizzle({ client });
+}
+```
+
+## With Prisma
+
+Use the [pg Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/postgresql) and inject a Postgres connection that uses the IAM token. The same caveats as above apply: tokens expire, so refresh per Lambda invocation.
+
+## Things to remember
+
+- DSQL is **TCP**-only, so it does *not* work on Cloudflare Workers. Use [Neon](/docs/databases/neon) or [PlanetScale](/docs/databases/planetscale) there.
+- IAM tokens expire, refresh on every Lambda invocation, or wrap re-connection logic around long-lived Node processes.
+- DSQL has Postgres-compatible semantics but not 100% feature parity. Check the [known issues](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/known-issues.html) before relying on niche extensions.
+
+See also the [database hosting overview](/docs/databases) or jump back to [Prisma](/docs/orm/prisma) / [Drizzle](/docs/orm/drizzle).

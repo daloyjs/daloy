@@ -1,0 +1,236 @@
+---
+title: Plugins & encapsulation
+description: Compose DaloyJS apps with encapsulated plugins, scoped middleware, decorators, lifecycle hooks, and route prefixes, for large-scale, maintainable TypeScript services.
+keywords:
+  - DaloyJS plugins
+  - plugin encapsulation
+  - middleware composition
+  - plugin lifecycle
+  - scalable TypeScript framework
+---
+
+# Plugins & encapsulation
+
+Plugins package routes, hooks, decorators, and lifecycle callbacks into reusable units. Like Fastify, DaloyJS gives each plugin a local scope: app-level hooks and decorators flow inward, while plugin-level hooks and decorators do not leak sideways to sibling plugins.
+
+<BranchDiagram title="Plugin encapsulation" source={{
+          eyebrow: "app.register(...)",
+          label: "App",
+          detail: "global hooks + decorators flow inward",
+        }} branches={[
+          {
+            eyebrow: "prefix /users",
+            label: "users plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+          {
+            eyebrow: "prefix /billing",
+            label: "billing plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+          {
+            eyebrow: "prefix /admin",
+            label: "admin plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+        ]} caption="Each plugin gets its own child App. Routes inherit the prefix, tags, hooks, auth, and app-level decorators, but hooks and decorators added inside one plugin apply only to that plugin's routes." />
+
+## Defining a plugin
+
+A plugin can be a descriptor object with optional metadata and a `register(app)` function, or a plain function that receives the child app. Name plugins that manage shared state so DaloyJS can deduplicate them and validate dependencies.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CurrentUser = z.object({
+  user: z.string(),
+});
+
+export const usersPlugin = {
+  name: "users",
+  register(app: App) {
+    app.use({
+      beforeHandle(ctx) {
+        ctx.set.headers.set("x-plugin", "users");
+      },
+    });
+
+    app.get(
+      "/me",
+      {
+        operationId: "me",
+        responses: {
+          200: { description: "Current user", body: CurrentUser },
+        },
+      },
+      async () => ({
+        status: 200,
+        body: { user: "alice" },
+      }),
+    );
+  },
+};
+```
+
+## Registering a plugin
+
+`app.register()` mounts the plugin in a scoped group. The registration config supplies the inherited prefix, tags, hooks, and route auth metadata for every route the plugin adds.
+
+```ts
+import { App, bearerAuth, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App();
+
+app.register(usersPlugin, {
+  prefix: "/users",
+  tags: ["Users"],
+  hooks: bearerAuth({
+    validate: (token) => timingSafeEqual(token, process.env.USERS_TOKEN!),
+  }),
+  auth: { scheme: "bearer" },
+});
+
+await app.ready();
+```
+
+Await `app.ready()` before starting the server whenever a plugin does async work. Sync plugins also use the same queue for async install observers, so it is safe to call every time.
+
+## Dependencies, seeds, and state
+
+Plugin descriptors can declare operational metadata that DaloyJS checks at registration time:
+
+- `dependencies`: prerequisite plugin names that must already be registered.
+- `seed`: a differentiator for mounting the same named plugin more than once with different configuration.
+- `stateful`: production guard for plugins that mutate shared state. Anonymous stateful plugins are refused unless you give them a name.
+
+```ts
+app.register({
+  name: "redis-connection",
+  stateful: true,
+  register(app) {
+    app.decorate("redis", redis);
+  },
+});
+
+app.register({
+  name: "rate-limit-cluster",
+  dependencies: ["redis-connection"],
+  register(app) {
+    app.use(rateLimitWithRedis());
+  },
+});
+
+app.register({ name: "metrics", seed: "public", register: publicMetrics });
+app.register({ name: "metrics", seed: "admin", register: adminMetrics });
+
+// This fails because "metrics#public" is already installed.
+app.register({ name: "metrics", seed: "public", register: publicMetrics });
+```
+
+## Decorators
+
+Decorate the app to inject shared resources into every handler's `state`. Decorations added at the root are visible inside plugins. Decorations added inside a plugin stay scoped to that plugin and never leak sideways to sibling plugins or back up to the root. Reusing a key throws unless you pass `{ override: true }` deliberately.
+
+Each route binds to its scope's decorations when it is registered, so **decorate before registering the routes that read it** (the same ordering Fastify requires). Declare root-level decorations before the plugins and groups that depend on them, and a plugin's own decorations before that plugin's routes.
+
+```ts
+import { z } from "zod";
+
+const Item = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+app.decorate("db", await openDatabase());
+app.decorate("logger", createLogger({ level: "info" }));
+
+app.get(
+  "/items/:id",
+  {
+    operationId: "getItem",
+    request: {
+      params: z.object({ id: z.string() }),
+    },
+    responses: {
+      200: { description: "Item", body: Item },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const row = await state.db.findOne("items", { id: params.id });
+    state.logger.info({ id: params.id }, "item fetched");
+    return { status: 200, body: row };
+  },
+);
+```
+
+## Extension ordering
+
+Plugins that contribute lifecycle hooks can declare ordered extensions. DaloyJS topologically sorts `before` and `after` relationships, rejects duplicate extension names, and refuses two extensions that mutate the same response header without an explicit order.
+
+```ts
+import type { PluginExtension } from "@daloyjs/core";
+
+const extensions: PluginExtension[] = [
+  {
+    name: "trace-id",
+    event: "onSend",
+    responseHeaders: ["x-trace-id"],
+    handler(res) {
+      res.headers.set("x-trace-id", crypto.randomUUID());
+    },
+    before: ["security-headers"],
+  },
+  {
+    name: "security-headers",
+    event: "onSend",
+    responseHeaders: ["x-content-type-options"],
+    handler(res) {
+      res.headers.set("x-content-type-options", "nosniff");
+    },
+  },
+];
+
+app.register({ name: "observability", extensions });
+```
+
+## Why encapsulation matters
+
+- You can mount the same plugin twice under different prefixes without hook bleed-through.
+- Third-party plugins cannot accidentally rewrite sibling hooks or error handlers.
+- Prefixes, tags, hooks, auth, and decorators stay predictable as a service grows.
+- Named stateful plugins are deduplicated, and dependencies fail fast when the registration order is wrong.
+
+## Lifecycle events
+
+Observability plugins often need to know when other plugins finish installing or when the process starts shutting down. DaloyJS exposes two event hooks for this without polluting the route registry:
+
+- `app.onPluginInstalled(listener)`: fires once per `register()` call, after sync plugins return and after async plugins resolve. The listener receives `{ name?: string, prefix: string }`, where `prefix` is the effective mounted prefix after nesting. Awaiting `app.ready()` drains async plugins and async listeners.
+- `app.onShutdown(listener)`: fires at the start of `app.shutdown(timeoutMs, reason)`, before in-flight requests drain. Use this to flush metrics, publish a draining signal to a load balancer, or close background pollers. For post-drain cleanup such as database pools and file handles, keep using `onClose()`.
+
+```ts
+app.onPluginInstalled((info) => {
+  metrics.counter("plugin.installed", {
+    name: info.name ?? "anonymous",
+    prefix: info.prefix,
+  });
+});
+
+app.onShutdown(async ({ reason, timeoutMs }) => {
+  await loadBalancer.drain({ timeoutMs });
+  metrics.counter("app.shutdown", { reason: reason ?? "unknown" });
+});
+
+app.onClose(async () => {
+  await db.close();
+});
+
+app.register(usersPlugin, { prefix: "/users" });
+await app.ready();
+
+// Later, on SIGTERM:
+await app.shutdown(10_000, "SIGTERM");
+```
+
+Listener errors are caught and logged via the configured logger so a faulty observer does not crash plugin registration or graceful shutdown. Both `shutdown()` and the underlying `onClose` chain remain idempotent.

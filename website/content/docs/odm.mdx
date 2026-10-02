@@ -1,0 +1,128 @@
+---
+title: Using ODMs with DaloyJS
+description: Connect DaloyJS to document databases with ODMs such as Mongoose for MongoDB or Ottoman for Couchbase. Learn the recommended pattern for injecting connections and models into your handlers.
+keywords:
+  - DaloyJS ODM
+  - Mongoose DaloyJS
+  - Ottoman DaloyJS
+  - MongoDB TypeScript framework
+  - Couchbase TypeScript framework
+  - MongoDB ODM
+  - Couchbase ODM
+sitemap:
+  priority: 0.8
+---
+
+# Using ODMs with DaloyJS
+
+DaloyJS works with document databases the same way it works with SQL databases, but the abstractions are different. Use an ODM when your persistence layer is document-shaped and you want schemas, validation, middleware, and query helpers around collections or buckets.
+
+## ORM vs ODM
+
+- ORM maps relational tables and joins into TypeScript objects. Use it for PostgreSQL, MySQL, SQLite, MariaDB, or MSSQL.
+- ODM maps JSON-like documents and collection workflows into TypeScript objects. Use it for document databases such as MongoDB or Couchbase.
+
+## The recommended pattern
+
+Like SQL clients, ODM connections belong in a plugin. Decorate your app with a small database surface and close the connection on shutdown.
+
+<LayerStack title="Where the ODM connection lives" flow="down" layers={[
+          {
+            title: "Route handlers",
+            detail: "Read models from state, never connect directly",
+            items: ["state.db.User", "state.db.Order"],
+            tone: "accent",
+          },
+          {
+            title: "Database plugin",
+            detail: "app.decorate('db', db) plus app.onClose() teardown",
+            items: ["register(app)", "onClose"],
+          },
+          {
+            title: "ODM connection & models",
+            detail: "Schemas, validation, query helpers",
+            items: ["Mongoose", "Ottoman"],
+            tone: "muted",
+          },
+          {
+            title: "Document database",
+            detail: "Collections, buckets, scopes",
+            items: ["MongoDB", "Couchbase"],
+            tone: "muted",
+          },
+        ]} caption="Connections are opened once in a plugin and exposed on state. Handlers read models from state.db, so the connection lifecycle stays in one place and closes cleanly on shutdown." />
+
+```ts
+// src/db/plugin.ts
+import type { App } from "@daloyjs/core";
+
+export function databasePlugin(db: Database) {
+  return {
+    name: "database",
+    async register(app: App) {
+      app.decorate("db", db);
+      app.onClose(async () => {
+        await db.disconnect();
+      });
+    },
+  };
+}
+```
+
+## Pick your ODM
+
+- [Mongoose](/docs/odm/mongoose): mature schemas, middleware, validation, and session support for MongoDB.
+- [Ottoman](/docs/odm/ottoman): schema and model layer for Couchbase buckets, scopes, and collections.
+
+## Runtime compatibility cheat sheet
+
+| ODM | Node.js | Bun | Deno | Cloudflare Workers |
+| --- | --- | --- | --- | --- |
+| Mongoose | Yes | Partial | No | No |
+| Ottoman | Yes | Partial | No | No |
+
+Mongoose and Ottoman both depend on Node.js database drivers, so they are primarily Node.js choices. If you need a portable edge-friendly database layer, stay in the SQL-oriented [ORM section](/docs/orm) and choose a compatible client there.
+
+## Typing the decorated client
+
+Declare the augmentation in the module that exports the models (a regular `.ts` file the compiler always checks), not in a separate `.d.ts` file: declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/mongoose.ts (the module that exports db)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: typeof db;
+  }
+}
+```
+
+## Sessions and transactions
+
+MongoDB transactions require a replica set and a session. Start the session inside the handler that owns the unit of work, then pass it through each model operation.
+
+```ts
+handler: async ({ body, state }) => {
+  const session = await state.db.connection.startSession();
+  try {
+    let createdOrder: unknown;
+    await session.withTransaction(async () => {
+      createdOrder = await state.db.Order.create([{ ...body }], { session });
+      await state.db.Inventory.updateOne(
+        { sku: body.sku },
+        { $inc: { stock: -body.qty } },
+        { session }
+      );
+    });
+
+    return { status: 201, body: createdOrder };
+  } finally {
+    await session.endSession();
+  }
+}
+```
+
+## Next steps
+
+- [Mongoose guide](/docs/odm/mongoose)
+- [Ottoman guide](/docs/odm/ottoman)
+- [SQL ORM overview](/docs/orm)

@@ -1,0 +1,290 @@
+---
+title: Accept PayPal & cards with Braintree in DaloyJS
+description: Accept PayPal, cards, Venmo, Apple Pay, and Google Pay from a DaloyJS API using the official Braintree Node SDK. Covers gateway setup, client tokens, transaction.sale, webhook signature parsing, and Node-only runtime caveats.
+keywords:
+  - DaloyJS Braintree
+  - braintree node sdk
+  - PayPal server-side Node
+  - BraintreeGateway
+  - Braintree webhook parse Node
+---
+
+# Accept PayPal & cards with Braintree in DaloyJS
+
+[Braintree](https://www.braintreepayments.com/) is PayPal's full-stack payments gateway. A single integration gives you PayPal, cards, Venmo, Apple Pay, Google Pay, ACH, and local payment methods. This guide uses the official [`braintree`](https://github.com/braintree/braintree_node) Node SDK and the modern [server-side PayPal flow](https://developer.paypal.com/braintree/docs/guides/paypal/server-side/node/).
+
+## Pick the right Braintree SDK
+
+Braintree ships two server SDKs and PayPal ships a third. Don't mix them up:
+
+- `braintree` (this guide): the long-standing Braintree server SDK. Uses the classic REST/XML gateway with a polished promise-based API. Production-ready, actively maintained, and what every Braintree docs example uses.
+- `@braintree/graphql-client-node`: a thin GraphQL client for the same gateway. Useful if you want to write GraphQL queries directly, but you'll re-implement a lot that the classic SDK gives you for free. Skip unless you have a reason.
+- `@paypal/paypal-server-sdk`: the *PayPal REST* SDK (Checkout / Orders v2). Different product, different account, different API. Don't install it for a Braintree integration.
+
+## 1. Provision
+
+1. Sign up for a [sandbox account](https://www.braintreepayments.com/sandbox) and grab your [Merchant ID, Public Key, and Private Key](https://developer.paypal.com/braintree/articles/control-panel/important-gateway-credentials) from the sandbox control panel.
+2. In **Settings -\> Processing**, link your sandbox PayPal Business account so PayPal nonces flow through the same gateway as cards.
+3. When you're ready, repeat with a production account and swap `Environment.Sandbox` for `Environment.Production`.
+
+## 2. Install
+
+```ts
+pnpm add braintree
+```
+
+The package bundles its own TypeScript declarations, no `@types/braintree` needed.
+
+## 3. Environment variables
+
+```ts
+# .env
+BRAINTREE_ENVIRONMENT=sandbox          # or "production"
+BRAINTREE_MERCHANT_ID=use_your_merchant_id
+BRAINTREE_PUBLIC_KEY=use_your_public_key
+BRAINTREE_PRIVATE_KEY=use_your_private_key
+```
+
+Public and private keys are *both* server-side secrets despite the names, the word “public” here means “safe to log alongside the merchant ID”, not “safe to ship to the browser”. Keep both out of client bundles.
+
+## 4. Plugin
+
+```ts
+// src/plugins/braintree.ts
+import braintree, { BraintreeGateway, Environment } from "braintree";
+import type { App } from "@daloyjs/core";
+
+function envFor(name: string | undefined) {
+  switch (name) {
+    case "production":
+      return Environment.Production;
+    case "qa":
+      return Environment.Qa;
+    case "development":
+      return Environment.Development;
+    case "sandbox":
+    default:
+      return Environment.Sandbox;
+  }
+}
+
+const gateway: BraintreeGateway = new braintree.BraintreeGateway({
+  environment: envFor(process.env.BRAINTREE_ENVIRONMENT),
+  merchantId: process.env.BRAINTREE_MERCHANT_ID!,
+  publicKey: process.env.BRAINTREE_PUBLIC_KEY!,
+  privateKey: process.env.BRAINTREE_PRIVATE_KEY!,
+});
+
+export interface BraintreeClient {
+  gateway: BraintreeGateway;
+  clientToken(customerId?: string): Promise<string>;
+  sale(input: {
+    amount: string;            // string, two-decimal - e.g. "10.00"
+    paymentMethodNonce: string;
+    deviceData?: string;
+    orderId?: string;
+    customerId?: string;
+    submitForSettlement?: boolean;
+  }): Promise<{ id: string; status: string }>;
+  parseWebhook(signature: string, payload: string): Promise<unknown>;
+}
+
+export const braintreePlugin = {
+  name: "braintree",
+  register(app: App) {
+    const client: BraintreeClient = {
+      gateway,
+      async clientToken(customerId) {
+        const res = await gateway.clientToken.generate(
+          customerId ? { customerId } : {},
+        );
+        return res.clientToken;
+      },
+      async sale(input) {
+        const result = await gateway.transaction.sale({
+          amount: input.amount,
+          paymentMethodNonce: input.paymentMethodNonce,
+          deviceData: input.deviceData,
+          orderId: input.orderId,
+          customerId: input.customerId,
+          options: {
+            submitForSettlement: input.submitForSettlement ?? true,
+          },
+        });
+        if (!result.success) {
+          // result.message + result.errors.deepErrors() carry the details.
+          throw Object.assign(new Error(result.message), {
+            code: "BRAINTREE_SALE_FAILED",
+            errors: result.errors?.deepErrors?.() ?? [],
+          });
+        }
+        return { id: result.transaction.id, status: result.transaction.status };
+      },
+      parseWebhook(signature, payload) {
+        return gateway.webhookNotification.parse(signature, payload);
+      },
+    };
+    app.decorate("braintree", client);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    braintree: BraintreeClient;
+  }
+}
+```
+
+## 5. Generate a client token
+
+Your browser SDK (Drop-in, Hosted Fields, Fastlane) needs a fresh client token to talk to Braintree. Pass an optional `customerId` so returning customers see their vaulted payment methods:
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { braintreePlugin } from "./plugins/braintree.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.register(braintreePlugin);
+
+app.post(
+  "/checkout/client-token",
+  {
+    operationId: "createBraintreeClientToken",
+    request: {
+      body: z.object({ customerId: z.string().optional() }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ clientToken: z.string() }) },
+    },
+  },
+  async ({ body, state }) => ({
+    status: 200,
+    body: { clientToken: await state.braintree.clientToken(body.customerId) },
+  }),
+);
+```
+
+## 6. Create a transaction
+
+Once the browser SDK returns a `paymentMethodNonce` (and, for fraud scoring, [`deviceData`](https://developer.paypal.com/braintree/docs/guides/premium-fraud-management-tools/client-side)), submit a sale. Always send `amount` as a string with two decimals, floats lose pennies.
+
+```ts
+app.post(
+  "/checkout",
+  {
+    operationId: "checkout",
+    request: {
+      body: z.object({
+        amount: z.string().regex(/^\d+\.\d{2}$/),
+        paymentMethodNonce: z.string().min(1),
+        deviceData: z.string().optional(),
+        orderId: z.string().max(36).optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "transaction settled or submitted",
+        body: z.object({ id: z.string(), status: z.string() }),
+      },
+    },
+  },
+  async ({ body, state }) => {
+    const tx = await state.braintree.sale({
+      amount: body.amount,
+      paymentMethodNonce: body.paymentMethodNonce,
+      deviceData: body.deviceData,
+      orderId: body.orderId,
+      submitForSettlement: true,
+    });
+    return { status: 201, body: tx };
+  },
+);
+```
+
+For **recurring** charges that re-use a vaulted payment method while the customer is offline, swap `paymentMethodNonce` for `paymentMethodToken` and add `transactionSource: "recurring"` to the sale request. Braintree's built-in Recurring Billing sets this for you; only do it manually if you wrote your own subscription engine.
+
+## 7. Receive and verify webhooks
+
+<SequenceDiagram title="Webhook verification" participants={["Braintree", "DaloyJS route", "Your queue"]} steps={[
+          {
+            from: "Braintree",
+            to: "DaloyJS route",
+            label: "POST /webhooks/braintree",
+            detail: "form-encoded bt_signature + bt_payload",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "webhookNotification.parse() verifies the signature",
+            detail: "throws InvalidSignatureError on tamper",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Braintree",
+            label: "401 when parse throws",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Enqueue the notification, then ack",
+            detail: "200 within ~30s",
+            kind: "async",
+          },
+        ]} caption="The SDK verifies the signature for you, so reject parse failures with 401, hand the notification to a background job, and ack within 30 seconds." />
+
+Braintree posts webhooks as `application/x-www-form-urlencoded` with two fields: `bt_signature` and `bt_payload`. Pass them to `webhookNotification.parse()`, which verifies the signature and rejects tampered payloads with an `InvalidSignatureError`. You don't hash anything yourself.
+
+```ts
+app.post(
+  "/webhooks/braintree",
+  {
+    operationId: "braintreeWebhook",
+    request: {
+      // Braintree posts form-encoded data.
+      body: z.object({
+        bt_signature: z.string(),
+        bt_payload: z.string(),
+      }),
+    },
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    let notification: Awaited<ReturnType<typeof state.braintree.parseWebhook>>;
+    try {
+      notification = await state.braintree.parseWebhook(body.bt_signature, body.bt_payload);
+    } catch {
+      return { status: 401, body: { error: "invalid signature" } };
+    }
+
+    // Notification shape: { kind, timestamp, transaction?, subscription?, dispute?, ... }
+    // Hand off to a queue; ack within 30s or Braintree will retry.
+    await enqueueBraintreeEvent(notification);
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+Braintree expects a 2xx within **30 seconds** and retries hourly for up to 24 hours in production (3 hours in sandbox). Always do the work in a background job and return 200 fast.
+
+## Errors & result objects [#errors-and-result-objects]
+
+The SDK doesn't throw on declined transactions, it resolves with `result.success === false` and details under `result.message`, `result.transaction.processorResponseCode`, and `result.errors.deepErrors()`. The plugin above turns the unsuccessful result into a thrown error so it lands in your [problem+json](/docs/errors) mapper. For genuine network failures the SDK throws an exception directly.
+
+## Runtimes
+
+The `braintree` package uses Node's `http`/`https` modules and reads cert/key files from disk on init. It runs on Node, Bun, and AWS Lambda without changes, but is **not** compatible with [Cloudflare Workers](/docs/adapters) or Vercel. On edge runtimes, hit the [Braintree GraphQL API](https://developer.paypal.com/braintree/graphql/) directly over `fetch` with HTTP Basic auth (public key + private key).
+
+## Deprecation policy
+
+Braintree publishes a [server SDK deprecation policy](https://developer.paypal.com/braintree/docs/reference/general/server-sdk-deprecation-policy/): major versions are supported for 3 years and you should pin a recent major in `package.json`. Stay current, old SDKs lose support for new payment methods, new fields, and security patches.
+
+See also the [payments overview](/docs/payments), [problem+json errors](/docs/errors), and [rate-limit + security hardening](/docs/security).

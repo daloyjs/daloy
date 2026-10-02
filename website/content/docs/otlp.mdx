@@ -1,0 +1,153 @@
+---
+title: OTLP export (OpenTelemetry push)
+description: Push logs and OTel semantic-convention HTTP metrics to an OpenTelemetry collector with zero dependencies. One App option reads the standard OTEL_EXPORTER_OTLP_* variables. Standalone exporters cover custom signals.
+keywords:
+  - OTLP
+  - OpenTelemetry
+  - collector
+  - OTEL_EXPORTER_OTLP_ENDPOINT
+  - http.server.request.duration
+  - semantic conventions
+  - DaloyJS observability
+sitemap:
+  priority: 0.8
+---
+
+# OTLP export (OpenTelemetry push)
+
+Many container platforms run an in-cluster OpenTelemetry collector and expect workloads to **push** telemetry: they inject the standard `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_RESOURCE_ATTRIBUTES` / `OTEL_SERVICE_NAME` variables into every container and scrape nothing. They do not scrape stdout or a `/metrics` route. On such platforms, one App option turns on a dependency-free OTLP/HTTP pipeline:
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  telemetry: true,
+});
+```
+
+That flag tees the app logger's output to the collector as OTLP logs and records [`http.server.request.duration`](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) per the OTel HTTP semantic conventions. With no endpoint configured it is a silent no-op, so it is safe to keep enabled in development. There is no OTel SDK, loader hook, or runtime dependency.
+
+<FlowDiagram title="Push pipeline" numbered caption="The logger write sink and the semconv HTTP hook feed two batched exporters. Both post OTLP/HTTP JSON to the collector named by the platform-injected environment variables. The collector fans out to Loki-style log stores and Mimir/Prometheus-style metric stores." steps={[
+          {
+            label: "OTEL_* env vars",
+            eyebrow: "platform-injected",
+            detail: "endpoint, tenant headers, resource attributes",
+          },
+          {
+            label: "logger + hooks",
+            detail: "log lines tee, http.server.request.duration per request",
+            tone: "accent",
+          },
+          {
+            label: "batched exporters",
+            detail: "OTLP/HTTP JSON: /v1/logs and /v1/metrics",
+          },
+          {
+            label: "collector",
+            detail: "routes on tenant headers, converts, forwards",
+          },
+          {
+            label: "Grafana",
+            eyebrow: "standard dashboards",
+            detail: "semconv names and buckets work unchanged",
+            tone: "success",
+          },
+        ]} />
+
+## What gets exported
+
+- **Logs**: every line the app logger writes. JSON lines are decomposed into an OTLP record: `msg` / `message` / `event` becomes the body, `level` maps to the OTLP severity, and remaining fields ship as attributes (structured metadata in Loki-style backends). Non-JSON lines ship verbatim.
+- **`http.server.request.duration`**: a histogram with the spec bucket boundaries and attributes `http.request.method` (normalized to the well-known set, else `_OTHER`), `http.route` (the matched route *template*, e.g. `/books/:id`, from `ctx.routePath`), `http.response.status_code`, `url.scheme`, and `error.type` on `5xx`. Unmatched 404s record nothing (the 404 fast path builds no request context), so raw paths can never mint metric series.
+
+## Configuration
+
+Everything defaults from the standard environment variables. Override per signal or per exporter:
+
+```ts
+const app = new App({
+  telemetry: {
+    logs: true, // tee the app logger to OTLP (default true)
+    metrics: true, // semconv HTTP metrics (default true)
+    exporter: {
+      // all optional; defaults from OTEL_EXPORTER_OTLP_* env vars
+      endpoint: "http://collector.internal:4318",
+      headers: { tenant_id: "acme-prod" },
+      resourceAttributes: { "service.name": "orders-api" },
+      flushIntervalMs: 15_000,
+    },
+  },
+});
+
+// flush on demand (also flushed automatically on shutdown)
+await app.telemetry?.flush();
+```
+
+The conventional injected endpoint is the gRPC form (`http://host:4317`). A trailing `:4317` is rewritten to `:4318`, the collector's OTLP/HTTP port. Header values often carry multi-tenant routing credentials. DaloyJS never logs them. Spec values are percent-encoded (`tenant_id=a%2Cb` arrives as `a,b`).
+
+## Fail-safe by contract [#fail-safety]
+
+- A dead or misconfigured collector never affects request serving: export errors are swallowed and counted in `droppedBatches`. That counter mixes overflowed log lines, failed POSTs, and series refused at the cardinality cap, so do not treat it as "POSTs that failed" alone.
+- Every export POST is aborted after 5 seconds (override with `exporter.flushTimeoutMs`) so a blackholed collector cannot latch the flusher forever. Redirects are refused, so tenant headers cannot follow a 302 off-box.
+- The log queue is bounded (drop-oldest). Metric series are capped and attribute values length-truncated, so hostile cardinality cannot grow memory.
+- Metrics use *cumulative* temporality: totals survive a failed push and the next successful push carries them.
+
+## Standalone exporters [#standalone]
+
+The pieces compose individually from `@daloyjs/core/otlp` for custom signals, for example domain-specific counters next to the built-in HTTP histogram:
+
+```ts
+import {
+  createOtlpMetricsExporter,
+  semconvHttpMetrics,
+} from "@daloyjs/core/otlp";
+
+const metrics = createOtlpMetricsExporter(); // null without an endpoint
+
+// business counters with your own names and attributes
+metrics?.count("orders_placed_total", { plan: "pro" });
+metrics?.record("checkout_amount", { currency: "USD" }, 129.99, {
+  unit: "1",
+  boundaries: [10, 50, 100, 500, 1000],
+});
+
+// or install just the semconv HTTP hook on an existing app
+const app = new App({ hooks: metrics ? semconvHttpMetrics(metrics) : {} });
+```
+
+## Serverless and isolate runtimes [#serverless]
+
+Long-lived Node, Bun, and Deno processes flush on an `unref`'d interval and again on graceful shutdown. Cloudflare Workers, Vercel isolates, and AWS Lambda freeze when the handler returns, so the interval never runs. Use the adapters:
+
+- `toFetchHandler` from `@daloyjs/core/cloudflare` calls `ctx.waitUntil(app.telemetry.flush())` after each request.
+- `toFetchHandler` / `toWebHandler` from `@daloyjs/core/vercel` uses `globalThis.waitUntil` when the runtime provides it.
+- `toLambdaHandler` awaits the flush before returning, so the export is billed as part of the invocation.
+
+Workers without `nodejs_compat` cannot read `process.env`. Pass `telemetry: { exporter: { endpoint, headers } }` from the Worker bindings instead of relying on `OTEL_*`.
+
+## What this does not do [#limits]
+
+- A caller-supplied `Logger` instance (pino, winston, a custom sink) is not intercepted. Tee it yourself with `createOtlpLogExporter` and your logger's write hook. The built-in logger, or `{ level }`, is teed automatically.
+- Export uses raw `fetch`. It does not go through `fetchGuard`. The collector URL is operator config (the same trust class as a database URL), and in-cluster collectors are typically private IPs that SSRF defaults would refuse.
+- There is no OTLP trace export yet. Keep using [`otelTracing()`](/docs/tracing) with a bring-your-own tracer.
+- Calling `app.fetch` directly on an isolate, skipping the adapter, will queue telemetry and mostly never send it. Use `toFetchHandler` / `toLambdaHandler`, or call `await app.telemetry.flush()` yourself.
+
+## Pull vs push, and tracing [#relationship]
+
+- [`app.metrics()` (Prometheus)](/docs/metrics) is the *pull* pillar: a scrape endpoint with Prometheus naming. Use it when something scrapes you. Use `telemetry` when a collector expects pushes. They coexist. The `httpMetrics()` route label also benefits from `ctx.routePath` now.
+- [`otelTracing()`](/docs/tracing) remains the tracing pillar (bring your own tracer). OTLP trace export is a planned follow-up.
+
+## Querying in Grafana [#grafana]
+
+After the collector's Prometheus conversion the histogram appears as `http_server_request_duration_seconds_*`:
+
+```promql
+# p95 latency per route
+histogram_quantile(0.95, sum by (http_route, le) (
+  rate(http_server_request_duration_seconds_bucket[5m])
+))
+
+# request volume by status
+sum by (http_response_status_code) (
+  rate(http_server_request_duration_seconds_count[5m])
+)
+```

@@ -5,7 +5,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REPO_ROOT = process.cwd();
-const DOCS_ROOT = path.join(REPO_ROOT, "website", "app", "docs");
+// Docs pages are MDX under website/content/docs (see website/AGENTS.md).
+const DOCS_ROOT = path.join(REPO_ROOT, "website", "content", "docs");
 const PACKAGE_JSON = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
   exports: Record<string, unknown>;
 };
@@ -13,13 +14,22 @@ const JSR_JSON = JSON.parse(readFileSync(path.join(REPO_ROOT, "jsr.json"), "utf8
   exports: Record<string, string>;
 };
 
+/**
+ * Read a docs page for scanning. Code samples inside raw JSX are stored as
+ * JSON string literals (`code={"import { x } from \\"@daloyjs/core\\";"}`), so
+ * unescape their quotes to keep them visible to the import patterns below.
+ */
+function readDocsSource(page: string): string {
+  return readFileSync(page, "utf8").replace(/\\"/g, '"');
+}
+
 function collectDocsPages(directory: string): string[] {
   const pages: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true }) as Dirent[]) {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       pages.push(...collectDocsPages(absolute));
-    } else if (entry.name === "page.tsx") {
+    } else if (entry.name.endsWith(".mdx")) {
       pages.push(absolute);
     }
   }
@@ -39,7 +49,7 @@ test("documented @daloyjs/core package imports resolve through the published exp
   const importPattern = /\bfrom\s+["'](@daloyjs\/core(?:\/[^"'`]+)?)["']/g;
 
   for (const page of docsPages) {
-    const source = readFileSync(page, "utf8");
+    const source = readDocsSource(page);
     for (const match of source.matchAll(importPattern)) {
       const specifier = match[1]!;
       const subpath =
@@ -57,7 +67,7 @@ test("documented runtime imports name real public exports", async () => {
     /import\s+(type\s+)?\{([^}]*)\}\s+from\s+["'](@daloyjs\/core(?:\/[^"']+)?)['"]/g;
 
   for (const page of docsPages) {
-    const source = readFileSync(page, "utf8");
+    const source = readDocsSource(page);
     for (const match of source.matchAll(importPattern)) {
       if (match[1]) continue;
       const specifier = match[3]!;
@@ -87,7 +97,7 @@ test("documented runtime imports name real public exports", async () => {
 });
 
 test("AI SDK docs wire the exported logger instead of a nonexistent middleware", () => {
-  const source = readFileSync(path.join(DOCS_ROOT, "ai-sdk", "page.tsx"), "utf8");
+  const source = readDocsSource(path.join(DOCS_ROOT, "ai-sdk.mdx"));
   assert.doesNotMatch(source, /\bstructuredLogger\b/);
   assert.match(source, /\bcreateLogger\b/);
   assert.match(source, /logger:\s*createLogger\(/);
@@ -105,7 +115,7 @@ test("payment webhook docs use bounded raw-body reads from the root package", ()
   ];
 
   for (const provider of providers) {
-    const source = readFileSync(path.join(DOCS_ROOT, "payments", provider, "page.tsx"), "utf8");
+    const source = readDocsSource(path.join(DOCS_ROOT, "payments", `${provider}.mdx`));
     assert.doesNotMatch(source, /@daloyjs\/core\/raw|\breadRawBody\b/);
     assert.match(source, /readBodyLimited\(request,\s*1_048_576\)/);
   }

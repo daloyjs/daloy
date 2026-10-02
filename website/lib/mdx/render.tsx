@@ -11,6 +11,7 @@ import { AutoTypeTable } from "@/components/auto-type-table";
 import { Callout } from "@/components/callout";
 import { Card, Cards } from "@/components/cards";
 import { CodeBlock } from "@/components/code-block";
+import { CoreVersion } from "@/components/core-version";
 import { BranchDiagram, Diagram, FlowDiagram, LayerStack, SequenceDiagram } from "@/components/diagram";
 import { File, Files, Folder } from "@/components/files";
 import { PackageInstall } from "@/components/package-install";
@@ -18,6 +19,7 @@ import { SiteApiReference } from "@/components/site-api-reference";
 import { Step, Steps } from "@/components/steps";
 import { TypeTable } from "@/components/type-table";
 import { UseCaseGuide } from "@/components/use-case-guide";
+import { cn } from "@/lib/utils";
 
 import remarkDaloy from "./remark-daloy";
 
@@ -60,6 +62,7 @@ export const mdxComponents: MDXComponents = {
   Card,
   Cards,
   CodeBlock,
+  CoreVersion,
   Diagram,
   File,
   Files,
@@ -86,10 +89,24 @@ export const mdxComponents: MDXComponents = {
  *
  * @param props.source - MDX source (frontmatter already removed).
  * @param props.file - Source path, for error messages.
+ * @param props.components - Extra components available to this page only.
+ * @param props.scope - Page-specific helpers, exposed to the MDX as `props.scope`.
  * @returns The rendered page body.
  * @throws {Error} When the MDX fails to compile; the message names the file.
  */
-export async function MdxContent({ source, file }: { source: string; file: string }) {
+export async function MdxContent({
+  source,
+  file,
+  components,
+  scope = {},
+}: {
+  source: string;
+  file: string;
+  /** Extra components for this page only (e.g. a blog post's own helpers). */
+  components?: MDXComponents;
+  /** Page-specific helper values, reachable from the MDX as `props.scope.<name>`. */
+  scope?: Record<string, unknown>;
+}) {
   let Content;
   try {
     ({ default: Content } = await evaluate(source, {
@@ -101,5 +118,7 @@ export async function MdxContent({ source, file }: { source: string; file: strin
     throw new Error(`MDX compile failed in ${file}: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  return <Content components={mdxComponents} />;
+  // `cn` is exposed as a prop because MDX cannot import: content written as
+  // `className={props.cn("a", cond && "b")}` keeps the same class merging.
+  return <Content components={components ? { ...mdxComponents, ...components } : mdxComponents} cn={cn} scope={scope} />;
 }

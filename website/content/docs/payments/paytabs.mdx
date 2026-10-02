@@ -1,0 +1,403 @@
+---
+title: Accept payments with PayTabs in DaloyJS
+description: Integrate PayTabs (cards, Mada, KNET, BenefitPay, STC Pay, Apple Pay) from a DaloyJS API using the official paytabs_pt2 Node package. Covers setConfig, createPaymentPage wrapped as a Promise, the redirect + IPN flow, HMAC-SHA256 signature verification, and transaction queries.
+keywords:
+  - DaloyJS PayTabs
+  - paytabs_pt2
+  - PayTabs Node
+  - createPaymentPage
+  - PayTabs IPN signature
+---
+
+# Accept payments with PayTabs in DaloyJS
+
+[PayTabs](https://paytabs.com/) is a MENA-region payment gateway with strong coverage of **Mada**, **KNET**, **BenefitPay**, **STC Pay**, **OmanNet**, cards, and Apple Pay. This guide uses the official [`paytabs_pt2`](https://docs.paytabs.com/manuals/Backend-Web-Packages/NodeJs/) npm package from a DaloyJS server, wrapped to feel like a normal async API.
+
+## What you should know up front
+
+- The official SDK is callback-based with positional array arguments. It works, but it's noisy. We'll wrap `createPaymentPage` once in a Promise-returning function with named object arguments, every route handler stays clean after that.
+- Regions are not interchangeable. Your profile lives in one of `ARE`, `SAU`, `OMN`, `JOR`, `EGY`, `IRQ`, `PSE`, or `GLOBAL`. Passing the wrong region results in *"Invalid credentials"* even when the key is right.
+- It's a redirect flow. You call `createPaymentPage`, PayTabs returns a `redirect_url`, the customer pays there and comes back to your *return* URL. The *callback* URL is the server-side IPN, that's the only signal you should mark an order paid on.
+- IPN signature is HMAC-SHA256. The raw POST body is signed with your `server_key` and sent in the `signature` header. Verify before trusting anything in the payload.
+- Use `tran_type: "sale"` for direct capture, `"auth"` for an authorisation you'll capture later, and `tran_class: "ecom"` for normal online checkouts.
+
+## 1. Provision
+
+1. Sign in to the [PayTabs merchant dashboard](https://merchant.paytabs.com/).
+2. Developers -\> Profile to grab your **Profile ID** and **Server Key**. Note your **Region**.
+3. Enable the payment methods you need (Mada, KNET, BenefitPay, STC Pay all require explicit activation, some need extra paperwork).
+4. In Developers -\> IPN, point the IPN URL at your DaloyJS webhook endpoint.
+
+## 2. Install
+
+```ts
+pnpm add paytabs_pt2
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+PAYTABS_PROFILE_ID=12345
+PAYTABS_SERVER_KEY=SXXXXXXXXX-JXXXXXXXXX-LXXXXXXXXX
+PAYTABS_REGION=ARE                  # ARE | SAU | OMN | JOR | EGY | IRQ | PSE | GLOBAL
+APP_URL=https://your-app.example.com
+```
+
+## 4. Plugin
+
+We wrap two things here: `createPaymentPage`'s positional-array+callback shape into a Promise with named args, and the IPN signature check into a one-call helper. `setConfig` is module-global, so we only call it once at register time.
+
+```ts
+// src/plugins/paytabs.ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+import PayTabs from "paytabs_pt2";
+import type { App } from "@daloyjs/core";
+
+PayTabs.setConfig(
+  process.env.PAYTABS_PROFILE_ID!,
+  process.env.PAYTABS_SERVER_KEY!,
+  process.env.PAYTABS_REGION!,
+);
+
+interface PayTabsResponse {
+  tran_ref?: string;
+  redirect_url?: string;
+  payment_result?: { response_status: string; response_code: string; response_message: string };
+  cart_id?: string;
+  cart_amount?: string;
+  cart_currency?: string;
+  signature?: string;
+  [k: string]: unknown;
+}
+
+export interface PayTabsClient {
+  createPaymentPage(input: {
+    cart: { id: string; amount: number; currency: string; description: string };
+    customer: {
+      name: string;
+      email: string;
+      phone: string;        // include country code, e.g. "971500000000"
+      street: string;
+      city: string;
+      state: string;
+      country: string;      // ISO-3166-1 alpha-2, e.g. "AE"
+      zip: string;
+      ip: string;
+    };
+    shipping?: PayTabsClient extends never ? never : Parameters<PayTabsClient["createPaymentPage"]>[0]["customer"];
+    paymentMethods?: string[];          // ["all"], ["creditcard", "mada"], ["knet"], ...
+    type?: "sale" | "auth";
+    class?: "ecom" | "recurring" | "moto";
+    lang?: "ar" | "en";
+    frame?: boolean;
+  }): Promise<PayTabsResponse>;
+
+  queryTransaction(tranRef: string): Promise<PayTabsResponse>;
+
+  refund(input: {
+    tranRef: string;
+    amount: number;
+    currency: string;
+    cartId: string;
+    description: string;
+  }): Promise<PayTabsResponse>;
+
+  verifyIpnSignature(rawBody: string, signatureHeader: string | null): boolean;
+}
+
+function pageArgs(input: Parameters<PayTabsClient["createPaymentPage"]>[0]) {
+  const c = input.customer;
+  const customer = [c.name, c.email, c.phone, c.street, c.city, c.state, c.country, c.zip, c.ip];
+  const s = input.shipping ?? c;
+  const shipping = [s.name, s.email, s.phone, s.street, s.city, s.state, s.country, s.zip, s.ip];
+  return {
+    methods: input.paymentMethods ?? ["all"],
+    transaction: [input.type ?? "sale", input.class ?? "ecom"],
+    cart: [input.cart.id, input.cart.currency, input.cart.amount, input.cart.description],
+    customer,
+    shipping,
+    urls: [
+      `${process.env.APP_URL}/checkout/paytabs/return?order=${encodeURIComponent(input.cart.id)}`,
+      `${process.env.APP_URL}/webhooks/paytabs`,
+    ],
+    lang: input.lang ?? "en",
+    frame: input.frame ?? false,
+  };
+}
+
+export const paytabsPlugin = {
+  name: "paytabs",
+  register(app: App) {
+    const client: PayTabsClient = {
+      createPaymentPage(input) {
+        const a = pageArgs(input);
+        return new Promise((resolve, reject) => {
+          PayTabs.createPaymentPage(
+            a.methods,
+            a.transaction,
+            a.cart,
+            a.customer,
+            a.shipping,
+            a.urls,
+            a.lang,
+            (response: PayTabsResponse) => {
+              if (response?.redirect_url) resolve(response);
+              else reject(Object.assign(new Error("paytabs createPaymentPage failed"), { response }));
+            },
+            a.frame,
+          );
+        });
+      },
+
+      queryTransaction(tranRef) {
+        return new Promise((resolve, reject) => {
+          PayTabs.queryTransaction(tranRef, (response: PayTabsResponse) => {
+            if (response) resolve(response);
+            else reject(new Error("paytabs queryTransaction failed"));
+          });
+        });
+      },
+
+      refund({ tranRef, amount, currency, cartId, description }) {
+        return new Promise((resolve, reject) => {
+          PayTabs.refund(
+            tranRef,
+            [amount, currency, cartId, description],
+            (response: PayTabsResponse) => {
+              if (response) resolve(response);
+              else reject(new Error("paytabs refund failed"));
+            },
+          );
+        });
+      },
+
+      verifyIpnSignature(rawBody, signatureHeader) {
+        if (!signatureHeader) return false;
+        const expected = createHmac("sha256", process.env.PAYTABS_SERVER_KEY!)
+          .update(rawBody)
+          .digest("hex");
+        const a = Buffer.from(signatureHeader);
+        const b = Buffer.from(expected);
+        return a.length === b.length && timingSafeEqual(a, b);
+      },
+    };
+
+    app.decorate("paytabs", client);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    paytabs: PayTabsClient;
+  }
+}
+```
+
+The signature check uses the *raw* request body, if you JSON.parse and re-stringify, the byte order changes and the HMAC won't match.
+
+## 5. Create a payment page
+
+<SequenceDiagram title="Payment page flow" participants={["Customer", "DaloyJS route", "PayTabs"]} steps={[
+          {
+            from: "Customer",
+            to: "DaloyJS route",
+            label: "POST /checkout/paytabs",
+            detail: "cart + customer (region-bound profile)",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "createPaymentPage with return + callback URLs",
+            detail: "tran_type 'sale', tran_class 'ecom'",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Customer",
+            label: "Return redirect_url",
+            detail: "201 { tranRef, redirectUrl }",
+            kind: "response",
+          },
+          {
+            from: "Customer",
+            to: "PayTabs",
+            label: "Pays on the hosted page, returns via the return URL",
+            detail: "return URL is a UX hint, not proof",
+            kind: "async",
+          },
+        ]} caption="Create the payment page, redirect the customer to redirect_url, and render a confirmation on the return URL only. The server-side IPN is the only signal you should mark an order paid on." />
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { paytabsPlugin } from "./plugins/paytabs.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 30 }));
+app.register(paytabsPlugin);
+
+app.post(
+  "/checkout/paytabs",
+  {
+    operationId: "createPayTabsPaymentPage",
+    request: {
+      body: z.object({
+        orderId: z.string().min(1).max(80),
+        amount: z.number().positive(),
+        currency: z.enum(["AED", "SAR", "KWD", "BHD", "OMR", "QAR", "EGP", "JOD", "USD"]),
+        description: z.string().min(1).max(255),
+        paymentMethods: z.array(z.string()).optional(),
+        customer: z.object({
+          name: z.string().min(1).max(80),
+          email: z.email(),
+          phone: z.string().min(7).max(20),
+          street: z.string().max(120),
+          city: z.string().max(60),
+          state: z.string().max(60),
+          country: z.string().length(2),
+          zip: z.string().max(20),
+        }),
+      }),
+    },
+    responses: {
+      201: {
+        description: "redirect to PayTabs",
+        body: z.object({ tranRef: z.string(), redirectUrl: z.url() }),
+      },
+    },
+  },
+  async ({ body, request, state }) => {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "0.0.0.0";
+
+    const response = await state.paytabs.createPaymentPage({
+      cart: {
+        id: body.orderId,
+        amount: body.amount,
+        currency: body.currency,
+        description: body.description,
+      },
+      customer: { ...body.customer, ip },
+      paymentMethods: body.paymentMethods,
+    });
+
+    return {
+      status: 201,
+      body: { tranRef: response.tran_ref!, redirectUrl: response.redirect_url! },
+    };
+  },
+);
+```
+
+## 6. IPN webhook
+
+<SequenceDiagram title="IPN verification" participants={["PayTabs", "DaloyJS route"]} steps={[
+          {
+            from: "PayTabs",
+            to: "DaloyJS route",
+            label: "POST /webhooks/paytabs",
+            detail: "signature header (HMAC-SHA256) over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "HMAC-SHA256 the raw body with the server_key",
+            detail: "timingSafeEqual vs the signature header",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'bad signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "queryTransaction(tran_ref), fulfil on status 'A', ack",
+            detail: "200, re-query before fulfilment",
+            kind: "async",
+          },
+        ]} caption="Verify the HMAC-SHA256 signature over the raw body with your server_key, reject mismatches with 401, then re-query the transaction and fulfil only when response_status is 'A'." />
+
+PayTabs POSTs the same payload as a successful `queryTransaction` call to your IPN URL on every transaction state change. Always verify the signature, ack 200 fast, and re-query before fulfilment if you don't fully trust the body:
+
+```ts
+import { readBodyLimited } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/paytabs",
+  {
+    operationId: "paytabsIpn",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
+    const signature = request.headers.get("signature");
+
+    if (!state.paytabs.verifyIpnSignature(raw, signature)) {
+      return { status: 401, body: { error: "bad signature" } };
+    }
+
+    const event = JSON.parse(raw) as Awaited<ReturnType<typeof state.paytabs.queryTransaction>>;
+    const orderId = event.cart_id;
+    const status = event.payment_result?.response_status; // "A" authorized, "H" hold, "P" pending, "V" voided, "E" error, "D" declined
+
+    if (status === "A" && orderId) {
+      // Optional safety net: re-fetch before fulfilment.
+      const fresh = await state.paytabs.queryTransaction(event.tran_ref!);
+      if (fresh.payment_result?.response_status === "A") {
+        // Fulfil the order. Idempotency key = (orderId, tran_ref).
+      }
+    }
+
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+## 7. Refunds and capture
+
+```ts
+// Full or partial refund of a captured sale.
+await state.paytabs.refund({
+  tranRef: "TST2026000000001",
+  amount: 100,
+  currency: "AED",
+  cartId: "order_123",
+  description: "Customer request",
+});
+
+// Capture a previously authorized transaction (tran_type "auth").
+// The SDK exposes PayTabs.capture(tranRef, [amount, currency, cartId, description], cb)
+// — wrap it the same way as refund() in the plugin if you need it.
+```
+
+## Runtimes
+
+`paytabs_pt2` uses Node's `https` module and runs on Node 18+. It is *not* edge-runtime compatible. If you're deploying to Cloudflare Workers, call the PayTabs PT2 REST endpoints directly with `fetch` (Bearer auth on `Authorization` using the server key, endpoints like `POST /payment/request` and `POST /payment/query` against your regional base URL).
+
+## Errors
+
+On failure, `response.payment_result.response_code` tells you the gateway outcome (e.g. `200` success, `481` 3-D Secure failed, `500` generic decline). Surface declines through [problem+json](/docs/errors) with the PayTabs `response_message` in the `detail` field, do not pass it verbatim to end users. Declines often include scheme-specific text the customer can't act on.
+
+## Modernisation notes
+
+- Wrap the SDK in one plugin. The positional-array signatures are easy to typo and harder to grep for than named-object arguments. The plugin above pays that cost in one place.
+- Verify the IPN signature, always. Don't fall back to "the IP is from PayTabs", IPs change, and HMAC over the raw body is the only verification PayTabs actually publishes a contract for.
+- Fulfil on IPN, not on return URL. The customer can close the tab mid-3DS. The IPN is the source of truth. The return URL renders a confirmation page.
+- Consider the REST API directly if you need edge. The Node SDK predates the wide adoption of edge runtimes. A 30-line `fetch` wrapper gives you the same shape and works on Workers/Edge, at the cost of maintaining the request shape yourself.
+
+See also the [payments overview](/docs/payments), [Tap Payments guide](/docs/payments/tap), [Adyen guide](/docs/payments/adyen), and [problem+json errors](/docs/errors).

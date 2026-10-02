@@ -26,23 +26,23 @@ Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant
 
 ## Repo notes
 
-- Docs navigation and sitemap entries are manually maintained. When changing docs routes, check [components/docs-nav.ts](components/docs-nav.ts) (sidebar, breadcrumb, pager; an item may carry `badge: "new" | "beta"`) and [app/sitemap.ts](app/sitemap.ts). Search, MCP, OG images and llms.txt discover pages automatically from both `app/docs/**/page.tsx` and `content/docs/**/*.mdx` via [lib/docs-content.ts](lib/docs-content.ts). Run `pnpm verify:docs-links` from the repo root afterwards — it fails on broken internal `/docs` links, dangling nav/sitemap entries, pages missing from the sitemap, nav↔sitemap drift, and broken `#anchor` targets, for TSX and MDX pages alike.
+- Every docs page is an MDX file under `content/docs/` (see "Authoring docs pages" below). The **sidebar** in [components/docs-nav.ts](components/docs-nav.ts) is the only hand-maintained list: add each new page there (it drives the sidebar, breadcrumb and pager; an item may carry `badge: "new" | "beta"`). Everything else is automatic: the sitemap ([lib/sitemap-entries.ts](lib/sitemap-entries.ts), docs from content, posts from `BLOG_POSTS`), search, MCP, OG images, llms.txt and the `.md` route all read the same content tree via [lib/docs-content.ts](lib/docs-content.ts). Run `pnpm verify:docs-links` from the repo root afterwards; it fails on broken internal `/docs` links, broken `#anchor` targets, nav entries with no page, pages missing from the nav, and docs or blog URLs hand-listed in the sitemap.
 - "Last updated" dates and sitemap `lastModified` come from git history ([lib/git-dates.ts](lib/git-dates.ts)). A shallow clone yields no dates rather than fake ones, so the Vercel project needs `VERCEL_DEEP_CLONE=true` for them to appear in production.
 
 ## Authoring docs pages
 
-New docs pages should be MDX: `content/docs/<section>/<page>.mdx` renders at `/docs/<section>/<page>` through [app/docs/[slug]/[child]/page.tsx](app/docs/[slug]/[child]/page.tsx). Existing `page.tsx` pages keep working; a static `page.tsx` wins over an MDX file for the same route.
+All docs pages are MDX. `content/docs/<page>.mdx` renders at `/docs/<page>`, `content/docs/<section>/<page>.mdx` at `/docs/<section>/<page>`, a section index is `content/docs/<section>.mdx`, and `content/docs/index.mdx` is `/docs`. The route files in `app/docs/` (`page.tsx`, `[slug]/page.tsx`, `[slug]/[child]/page.tsx`) are loaders; do not add `page.tsx` docs pages. Routes nest at most two levels under `/docs`. Adding a page is one `.mdx` file plus its sidebar entry. After adding a new file, restart `pnpm dev`: the content list is cached for the life of the dev server.
 
-- **Frontmatter** is validated strictly ([lib/mdx/content.ts](lib/mdx/content.ts)): `title`, `description` (140–160 chars), optional `keywords`. It replaces the `buildMetadata` call.
+- **Frontmatter** is validated strictly ([lib/mdx/content.ts](lib/mdx/content.ts)): `title`, `description` (140–160 chars), optional `keywords`, and optional `sitemap: { priority, changeFrequency }` (defaults 0.7 / monthly; raise priority for entry points). It replaces the `buildMetadata` call.
 - **Headings** get GitHub-style ids automatically. To keep an existing anchor stable, append a marker: `## Install it [#install]`.
 - **Code fences** render through `CodeBlock`: ` ```ts title="src/app.ts" {2,4-6} lineNumbers `. Shiki notation comments work in any block: `// [!code ++]`, `// [!code --]`, `// [!code highlight]`, `// [!code focus]`, `// [!code word:foo]`; the copy button strips them.
 - **Install commands** use ` ```package-install ` (add `dev` for `-D`): the body is the package list, rendered as pnpm / npm / yarn / bun tabs that remember the reader's choice.
-- **Components** are available without imports (see `mdxComponents` in [lib/mdx/render.tsx](lib/mdx/render.tsx)): `Callout` (`note | tip | warning | danger | security`), `Steps`/`Step`, `Cards`/`Card`, `Files`/`Folder`/`File`, `TypeTable`, `AutoTypeTable` (generated from `src/` TSDoc, e.g. `<AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />`; the Vercel build cannot see `../src`, so tables render from the committed `lib/api-types.snapshot.json`: run `pnpm gen:api-types` after adding a table or changing the TSDoc it shows, and a drift test fails until you do), the diagram components, `AuthRole`/`IdpBoundary`, `UseCaseGuide`, and `SiteApiReference`. MDX is compiled server-side as trusted repository content only; never feed it request data.
-- In TSX pages, import the same components from `components/`; prefer `<Callout>` over hand-rolled bordered `<div>`s and `<AutoTypeTable>` over copying an options interface into a code block.
-- **Migrating a TSX page:** `node --import tsx scripts/tsx-to-mdx.ts app/docs/<route>/page.tsx` (add `--check` to print instead of write). It refuses pages it cannot convert faithfully. Verify by diffing `/docs/<route>.md` before and after; the four tutorials migrated with a zero-byte diff.
-- The diagram and OG image rules above apply to MDX pages too; OG images are generated for them automatically.
-- Every new documentation page under `app/docs/` must include a diagram that matches the current documentation style. Use the existing docs pages as the visual baseline so new pages keep the same diagram-led explanation pattern.
-- Every new documentation page under `app/docs/` must have its own Open Graph image. Create or wire the page-specific `opengraph-image` route so shared links resolve to `/docs/<slug>/opengraph-image` instead of the homepage image.
+- **Components** are available without imports (see `mdxComponents` in [lib/mdx/render.tsx](lib/mdx/render.tsx)): `Callout` (`note | tip | warning | danger | security`), `Steps`/`Step`, `Cards`/`Card`, `Files`/`Folder`/`File`, `TypeTable`, `AutoTypeTable` (generated from `src/` TSDoc, e.g. `<AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />`; the Vercel build cannot see `../src`, so tables render from the committed `lib/api-types.snapshot.json`: run `pnpm gen:api-types` after adding a table or changing the TSDoc it shows, and a drift test fails until you do), the diagram components, `AuthRole`/`IdpBoundary`, `UseCaseGuide`, `SiteApiReference`, and `CoreVersion` (the live `@daloyjs/core` version, e.g. `v<CoreVersion />`). MDX is compiled server-side as trusted repository content only; never feed it request data.
+- Prefer `<Callout>` over hand-rolled bordered `<div>`s and `<AutoTypeTable>` over copying an options interface into a code block. MDX pages cannot `import`; anything a page needs must be in `mdxComponents`.
+- Raw JSX is fine where markdown cannot express something. MDX parses text inside JSX as markdown (a line break is a space, a text line gets a `<p>`), so keep an element's inline content on one line, as the migrated pages do.
+- Every new docs page must include a diagram that matches the current documentation style. Use the existing docs pages as the visual baseline so new pages keep the same diagram-led explanation pattern.
+- Every docs page gets its own Open Graph image automatically (`/docs/<slug>/opengraph-image`, generated from the frontmatter title); there is nothing to wire.
+- `scripts/tsx-to-mdx.ts` is the one-shot converter the TSX pages were migrated with (every page came out identical in markdown and DOM structure). Keep it for converting other TSX content (for example blog posts); it refuses pages it cannot convert faithfully.
 - Database docs split SQL ORMs (`/docs/orm`) from ODMs (`/docs/odm`); Supabase is treated as a platform client, not an ORM.
 
 ## Identity-adjacent docs must declare their OAuth2 role
@@ -51,19 +51,19 @@ Any docs page describing an auth, credential, session, or token capability **mus
 
 - `role="resource-server"` — DaloyJS's home turf. Verifying tokens, enforcing scopes, gating routes. Example: `jwk()`, `bearerAuth()`, `requireScopes()`.
 - `role="client-rp"` — yours **if** you run a backend-for-frontend. Browser sessions, CSRF, login-endpoint throttling. Example: `session()`, `csrf()`, `loginThrottle()`.
-- `role="authorization-server"` — **not** DaloyJS. Password storage, login UI, consent, MFA, token issuance and revocation. Tell the reader to use a provider and link to [/docs/auth](app/docs/auth/page.tsx).
+- `role="authorization-server"` — **not** DaloyJS. Password storage, login UI, consent, MFA, token issuance and revocation. Tell the reader to use a provider and link to [/docs/auth](content/docs/auth.mdx).
 
 Rules:
 
-- Use the three role names verbatim. `app/docs/auth/architecture/page.tsx` is the canonical definition; every callout links back to it automatically. Do not invent a fourth role or a plain "this is an IdP feature" banner.
+- Use the three role names verbatim. `content/docs/auth/architecture.mdx` is the canonical definition; every callout links back to it automatically. Do not invent a fourth role or a plain "this is an IdP feature" banner.
 - Never label a capability "not our job" without naming what to use instead. A label with no destination is just scolding.
 - **Do not** add `<AuthRole>` to middleware with no identity dimension (`rateLimit`, `cors`, `secureHeaders`, `requestId`). Over-tagging dilutes the signal on the pages where it matters.
-- For APIs that are legitimate in narrow cases but become a home-grown IdP when overused, pair the callout with `<IdpBoundary>` (two columns: reasonable to implement yourself / you are building an identity provider). `createJwtSigner()` on [app/docs/api-reference/security/page.tsx](app/docs/api-reference/security/page.tsx) is the reference example.
+- For APIs that are legitimate in narrow cases but become a home-grown IdP when overused, pair the callout with `<IdpBoundary>` (two columns: reasonable to implement yourself / you are building an identity provider). `createJwtSigner()` on [content/docs/api-reference/security.mdx](content/docs/api-reference/security.mdx) is the reference example.
 - Verification is always the reader's job even when the provider owns the login. Do not let a callout imply that consuming a JWKS is IdP territory; publishing one is.
 
 ## Blog authoring
 
-When writing a new blog post under `app/blog/<slug>/page.tsx`, follow these rules.
+Blog posts are MDX: `content/blog/<slug>.mdx` renders at `/blog/<slug>` through [app/blog/[slug]/page.tsx](app/blog/[slug]/page.tsx). The header (badges, title, description, byline), the JSON-LD, and the closing author card all come from frontmatter via [components/blog-post-layout.tsx](components/blog-post-layout.tsx); the file only holds the body. When writing a new post, follow these rules.
 
 ### Voice and tone
 
@@ -77,17 +77,18 @@ When writing a new blog post under `app/blog/<slug>/page.tsx`, follow these rule
 ### Content and formatting
 
 - Don't hesitate to mock up a **text-editor UI** (file tabs, line numbers, a faux terminal) inside a post when it helps explain code or a principle. Use the existing primitives — typically the `CodeBlock` component plus Tailwind containers — rather than inventing new ones.
+- A post that needs its own React helpers (an `EditorFrame`, a chart, a card grid) puts them in `components/blog/<slug>.tsx` and lists the module in [components/blog/index.ts](components/blog/index.ts). PascalCase exports are usable as components in the post; other exports are reached as `props.scope.<name>`, and `cn` as `props.cn(...)` (MDX cannot `import`).
 - Stack: assume the **latest Next.js (App Router) + React 19 + Tailwind v4 + shadcn/ui**. Examples and screenshots should reflect that combination; don't regress to Pages Router, Tailwind v3 syntax, or pre-React-19 patterns.
 - Code samples must be runnable or clearly marked as illustrative. Prefer TypeScript.
 - Keep posts skimmable: short intro, headings every few paragraphs, a concrete takeaway near the end.
 
 ### Checklist for every new post
 
-1. Create `app/blog/<slug>/page.tsx` with `buildMetadata({ title, description, path: "/blog/<slug>", keywords: [...] })`.
-2. **Adjust the date** — use the current real-world date for `publishedAt` / displayed date, not a copy-pasted one from another post.
-3. Add the post to the `POSTS` (or equivalent) list in [app/blog/page.tsx](app/blog/page.tsx) so it appears on the blog index.
-4. Add a matching entry to `STATIC_PATHS` in [app/sitemap.ts](app/sitemap.ts) (`changeFrequency: "monthly"`, `priority: 0.7` to match siblings).
-5. Create or wire the post-specific Open Graph image so shared links resolve to `/blog/<slug>/opengraph-image` instead of the homepage image.
+1. Create `content/blog/<slug>.mdx` with frontmatter (validated strictly in [lib/blog-posts.ts](lib/blog-posts.ts)): `title`, `description`, `date` (`YYYY-MM-DD`), `readingTime`, `author`, `authorRole`, optional `authorBio`, `badges` (strings, or `{ label, variant }`), `keywords`, and optional `footerLinks` (`[{ label, href }]`, the closing author card; needs `authorBio`).
+2. **Adjust the date** — use the current real-world date, not a copy-pasted one from another post. It drives ordering, the byline, RSS and JSON-LD.
+3. That one file is the whole registration: the blog index, RSS, llms.txt, the sitemap and the OG image all read the frontmatter. Restart `pnpm dev` to see a new file.
+4. The OG image is generated from the title automatically. For a custom card, add `app/blog/<slug>/opengraph-image.tsx` (only that file; never a `page.tsx` there).
+5. Run `pnpm verify:docs-links` from the repo root: it also checks the post's `/docs` links.
 6. Run `pnpm lint` and `pnpm typecheck` before finishing.
 
 ## Skills

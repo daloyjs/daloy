@@ -1,0 +1,272 @@
+---
+title: Response caching
+description: "Cache rendered response bodies server-side with the built-in, dependency-free responseCache() middleware: cache-key + TTL, Cache-Control orchestration (s-maxage/max-age), stale-while-revalidate, request directives, and a pluggable ResponseCacheStore mirroring SessionStore."
+keywords:
+  - response cache
+  - server-side cache
+  - HTTP caching
+  - DaloyJS responseCache
+  - stale-while-revalidate
+  - Cache-Control
+  - s-maxage
+  - ResponseCacheStore
+  - cache key
+  - TTL
+sitemap:
+  priority: 0.8
+---
+
+# Response caching
+
+A hot read endpoint often renders the same response over and over while nothing has changed. Re-running the handler (and its database or upstream calls) each time is pure waste. The `responseCache()` middleware stores rendered response bodies and replays them for matching requests, so the handler is *not invoked at all* while a cached representation is fresh.
+
+It completes (and does not overlap with) the two caching-adjacent helpers DaloyJS already ships. `etag()` answers conditional `GET`s with `304 Not Modified` but still runs the handler to produce the body it hashes; `compression()` shrinks the bytes on the wire but caches nothing. `responseCache()` caches the **body**.
+
+It is **built-in and dependency-free**, built on the Web-standard `Request`/`Response`, so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
+
+<UseCaseGuide featureName="Response caching middleware" recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Credentialed requests bypass the cache by default. To cache personalized responses, identify the caller with principal() so each one gets its own entry instead of sharing yours." whenToUse={[
+          "Public, non-personalized read endpoints (e.g., product lists, public profiles, configuration feeds).",
+          "Handlers that perform expensive database operations, complex calculations, or third-party API fetches.",
+          "GET or HEAD endpoints with high request volumes where responses change infrequently.",
+          "Personalized reads, ONLY with a principal() that names the caller so the key partitions per user.",
+        ]} whenNotToUse={[
+          "Personalized, user-specific data without a principal(). The request bypasses the cache, so you gain nothing and should not reach for the middleware.",
+          "Mutative requests (POST, PUT, PATCH, DELETE) which perform side-effects.",
+          "Real-time data feeds (e.g., live stock prices, chat messages) where any latency is unacceptable.",
+          "Endpoints that carry high-entropy security tokens in headers or response bodies.",
+        ]} />
+
+## Quick start
+
+Mount `responseCache()` ahead of the read routes whose rendered bodies are safe to reuse for a short window. By default only `GET` / `HEAD` responses with status `200` are cached.
+
+One ordering rule: if the app also uses `rateLimit()` or `loginThrottle()`, register the limiter **before** the cache. A cache hit is returned from `beforeHandle` and ends the hook chain, so a limiter mounted behind the cache never counts the requests the cache serves and the declared budget is effectively unlimited. In production that order [refuses to boot](/docs/security/boot-guards#8-stored-response-mounted-ahead-of-a-request-budget).
+
+```ts
+import { App, responseCache } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App();
+
+// Reuse rendered bodies for 30 seconds.
+app.use(responseCache({ ttlSeconds: 30 }));
+
+app.get(
+  "/products",
+  {
+    operationId: "listProducts",
+    responses: {
+      200: { description: "ok", body: z.array(z.object({ id: z.string() })) },
+    },
+  },
+  async () => {
+    const products = await db.listProducts(); // skipped on a fresh cache hit
+    return { status: 200 as const, body: products };
+  },
+);
+```
+
+Each response the cache handles carries an `X-Cache` marker (`HIT`, `MISS`, or `STALE`), plus an `Age` header on a hit, so caches and clients can observe the outcome. A request that bypasses the cache entirely (a non-GET/HEAD method, an `Authorization` header, or a request `Cache-Control: no-store`) passes through unmarked.
+
+## How it works
+
+For an eligible request the middleware derives a cache key and:
+
+<BranchDiagram title="Three cache outcomes" source={{
+          eyebrow: "request",
+          label: "Eligible GET/HEAD, derive cache key",
+          detail: "method + path + query (+ varyHeaders)",
+        }} branches={[
+          {
+            eyebrow: "fresh",
+            label: "HIT",
+            detail: "stored body served, handler skipped",
+            tone: "success",
+          },
+          {
+            eyebrow: "within SWR window",
+            label: "STALE",
+            detail: "stale served now, one background refresh",
+            tone: "accent",
+          },
+          {
+            eyebrow: "no entry",
+            label: "MISS",
+            detail: "handler runs, cacheable response stored",
+            tone: "muted",
+          },
+        ]} caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS). A request that bypasses the cache (non-GET/HEAD, an Authorization header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry." />
+
+- Fresh hit: the stored response is served and the handler does *not* run (`X-Cache: HIT`).
+- Stale hit within the SWR window (requires `revalidate`): the stale response is served immediately (`X-Cache: STALE`) while a single, de-duplicated background refresh repopulates the cache.
+- Miss: the handler runs and a cacheable response is stored (`X-Cache: MISS`).
+
+## Cache-Control orchestration
+
+Freshness is derived from the response’s own `Cache-Control` when present (`s-maxage` wins over `max-age`), falling back to the configured `ttlSeconds`. Responses are **never** cached when they:
+
+- carry `Cache-Control: no-store`, `private`, or `no-cache`.
+- include a `Set-Cookie` header (per-user / credentialed responses must not be shared);
+- fail `cacheableStatus` (default: only `200`), or
+- exceed `maxBodyBytes` (1 MiB by default).
+
+On the request side:
+
+- `Cache-Control: no-store` bypasses the cache entirely (no read, no write).
+- `Cache-Control: no-cache` bypasses the read but still refreshes the stored entry. This is exactly what the background stale-while-revalidate refresh uses, which makes revalidation recursion-safe.
+
+## stale-while-revalidate
+
+With `staleWhileRevalidateSeconds` plus a `revalidate` callback (typically wired to `app.fetch`), a stale-but-recent entry is served immediately while a single background refresh runs. The refresh request carries `Cache-Control: no-cache` so it bypasses the cached read and repopulates the entry without recursing.
+
+```ts
+const app = new App();
+
+app.use(
+  responseCache({
+    ttlSeconds: 30,             // serve fresh for 30s
+    staleWhileRevalidateSeconds: 300, // then serve stale up to 5 min while refreshing
+    revalidate: (req) => app.fetch(req),
+  }),
+);
+```
+
+## Options
+
+```ts
+app.use(
+  responseCache({
+    // Freshness lifetime when the response has no s-maxage/max-age. Default: 60.
+    ttlSeconds: 60,
+    // Extra seconds a stale entry may be served while refreshing. Default: 0.
+    staleWhileRevalidateSeconds: 0,
+    // Background refresh callback; required to enable SWR.
+    revalidate: (req) => app.fetch(req),
+    // Methods eligible for caching. Default: GET, HEAD.
+    methods: ["GET", "HEAD"],
+    // Which response statuses are cacheable. Default: status === 200.
+    cacheableStatus: (status) => status === 200,
+    // Request headers whose values partition the cache (e.g. localization).
+    varyHeaders: ["accept-language"],
+    // Identify the caller so credentialed responses cache per principal
+    // instead of bypassing. Return null for anonymous.
+    principal: (ctx) => ctx.state.session?.get("userId") ?? null,
+    // Cache credentialed requests only when responses are shareable. Boolean
+    // sets Authorization, Cookie, and clientIdentity (mTLS / HTTP-signature
+    // callers, since 1.3.7); an object controls them separately.
+    cacheAuthenticatedRequests: false,
+    // Custom cache key BODY; the tenant/principal partition is applied around it.
+    // Return null to skip caching this request.
+    keyGenerator: (ctx) => new URL(ctx.request.url).pathname,
+    // Largest response body buffered + stored. Default: 1 MiB.
+    maxBodyBytes: 1_048_576,
+    // Response header marking the outcome. Set to null to disable. Default: "x-cache".
+    statusHeaderName: "x-cache",
+    // Share one in-memory store across mounts with the same id.
+    groupId: "catalog",
+  }),
+);
+```
+
+## Pluggable stores
+
+The default `MemoryResponseCacheStore` is process-local, perfect for tests and single-instance deployments. For a multi-instance or serverless fleet, supply a shared backend by implementing `ResponseCacheStore`. The contract mirrors `SessionStore` and the rate-limit store. Entries whose `staleUntil` is in the past should be treated as missing.
+
+```ts
+import type { ResponseCacheStore, CachedResponse } from "@daloyjs/core";
+
+const redisResponseCacheStore: ResponseCacheStore = {
+  async get(key) {
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as CachedResponse) : null;
+  },
+  async set(key, entry, ttlMs) {
+    await redis.set(key, JSON.stringify(entry), "PX", ttlMs);
+  },
+  async delete(key) {
+    await redis.del(key);
+  },
+};
+
+app.use(responseCache({ store: redisResponseCacheStore }));
+```
+
+## Cache key and cross-principal isolation [#cache-key-and-isolation]
+
+A shared response cache is only as safe as its key. Anything that varies the response but *not* the key becomes a cross-principal disclosure (CWE-524): the next caller of the same URL receives the previous caller's private body, with a perfectly normal-looking `x-cache: HIT`. DaloyJS is fail-closed on every principal dimension the framework can see.
+
+<div className="not-prose my-6 overflow-x-auto rounded-lg border border-border bg-muted/30 p-4">
+<pre className="text-xs leading-relaxed"><code>{"cache key = [ tenant partition ] [ principal partition ] method + effective request URI + varyHeaders\n             │                    │                          │\n             │                    │                          └─ scheme + authority + path + query  (RFC 9111 §4)\n             │                    └─ principal(ctx), when supplied\n             └─ ctx.state.tenant, folded in automatically by tenancy()\n\n            + [ secondary key ] ─── the request's values for the fields the\n                                    response's own Vary header names (RFC 9111 §4.1)\n\nAuthorization, Cookie, or an mTLS / signature identity present, and neither handled nor identified?  →  bypass the cache entirely"}</code></pre>
+</div>
+
+### The authority is part of the key
+
+The key is built from the **effective request URI** (scheme, authority, path, and query) per RFC 9111 §4. One process serving several hostnames (vanity domains, subdomain-per-customer, staging alongside production) therefore never shares an entry across them. A key covering only path and query would silently mix them.
+
+### Credentials fail closed
+
+Requests carrying `Authorization` **or** `Cookie` bypass the shared cache entirely (RFC 9111 §3.5). `Cookie` counts because a session cookie is the single most common way a response becomes private. A cache that only knew about `Authorization` would happily serve one logged-in user's page to the next visitor.
+
+Rather than losing the cache on authenticated routes, name the caller with `principal`. The id is folded into the key, so each principal gets their own entry and hits still work:
+
+```ts
+app.use(
+  responseCache({
+    ttlSeconds: 30,
+    // Return a stable id, never the raw credential. null means anonymous.
+    principal: (ctx) => ctx.state.session?.get<string>("userId") ?? null,
+  }),
+);
+
+// Genuinely shareable content behind a gate? Opt in per header instead.
+app.use(
+  responseCache({
+    // e.g. a public endpoint that receives unrelated analytics cookies, but
+    // must still never cache a bearer-authenticated response.
+    cacheAuthenticatedRequests: { cookie: true },
+  }),
+);
+```
+
+A `principal` that returns `null` for a request that *does* carry credentials is treated as "cannot identify this caller", and the request bypasses the cache rather than sharing one anonymous entry among authenticated users. Declaring the credential in `varyHeaders` also counts as handling it, since its value then partitions the key by itself.
+
+Callers authenticated by `clientCertAuth()` (mTLS) or `httpSignatureAuth()` carry no `Authorization` or `Cookie`, but they are still identified callers. Both hooks run in `preBody`, before the cache lookup, and record the verified identity, so such a request bypasses the cache the same way (since 1.3.7). Name the caller with `principal` to cache per peer, or set `cacheAuthenticatedRequests: { clientIdentity: true }` when the response is genuinely the same for every authenticated peer. Passing `true` opts in all three dimensions.
+
+```ts
+app.use(clientCertAuth({ /* ... */ }));
+app.use(
+  responseCache({
+    // Public catalogue behind mTLS: every partner sees the same body.
+    cacheAuthenticatedRequests: { clientIdentity: true },
+  }),
+);
+```
+
+### Declared variants are honoured
+
+A response's own `Vary` header is the origin telling the cache which request headers its content depends on, and DaloyJS honours it as a **secondary key** (RFC 9111 §4.1) with no configuration. This matters because middleware you already mount emits `Vary` for you: `cors()` adds `Vary: Origin` alongside the reflected `Access-Control-Allow-Origin`, and `compression()` adds `Vary: Accept-Encoding` alongside `Content-Encoding`. A cache that ignored those would serve one caller's allowed origin (or their gzipped bytes) to the next.
+
+Each distinct set of values is stored as its own variant, so several variants of one URL stay warm at the same time rather than evicting one another. A response carrying `Vary: *` declares itself unreusable and is never stored.
+
+`varyHeaders` remains useful and is additive: it partitions *before* the handler runs, which is what you want when the response does not declare `Vary` itself but you know it depends on a header anyway.
+
+### Tenants partition automatically
+
+When `tenancy()` has resolved a tenant for the request, that tenant is folded into the cache key with no wiring on your part, and the partition is applied *around* a custom `keyGenerator` too, so a hand-written generator cannot accidentally widen it. A caller that resolves to no tenant is kept in its own partition rather than sharing the resolved ones.
+
+Ordering still matters, and it is enforced rather than merely documented: because the key is built in `beforeHandle`, a `responseCache()` mounted *ahead of* `tenancy()` would run before the tenant exists in `ctx.state`. In production that combination **refuses to boot** (see [boot guards](/docs/security/boot-guards)) instead of quietly serving one tenant's data to another. Register `tenancy()` first.
+
+### Access control is not order-sensitive
+
+A cache hit returns a response from `beforeHandle`, which ends the hook chain. Any gate running in that *same* phase could therefore be skipped by a hit above it. That is why the network-identity gates (`geoBlock()`, `ipRestriction()`, `botGuard()`, `autoBan()` and `ipReputation()`) run in `preBody`, which always precedes `beforeHandle`. They hold whether you mount them above or below the cache. Authentication (`bearerAuth()`, `basicAuth()`, `clientCertAuth()`, `httpSignatureAuth()`) runs in `preBody` for the same reason.
+
+This matters for a hand-written gate: a custom guard in `beforeHandle` *can* be preempted by a cache hit mounted ahead of it. Put your own access-control checks in `preBody` too, or register them before the cache.
+
+## Other security notes [#security-notes]
+
+- Responses carrying `Set-Cookie` or `Cache-Control: private | no-store | no-cache` are never stored, the same skip posture as `etag()`.
+- Only `200 OK` is cached unless you widen `cacheableStatus`, so error pages do not poison the cache.
+- Stored bodies are capped by `maxBodyBytes` to bound memory growth from large replies, and `MemoryResponseCacheStore` is bounded on both entry count (`maxEntries`, default 10,000) and retained body bytes (`maxBytes`, default 64 MiB). Both limits are needed: expiry-based pruning alone cannot bound a burst of requests for distinct URLs, because every entry in it is unexpired for the whole TTL.
+- Use `varyHeaders` (or a custom `keyGenerator`) to partition the cache whenever the response depends on a request header such as `Accept-Language` without saying so in `Vary`.
+- Hop-by-hop headers (`Connection`, `Transfer-Encoding`, `TE`, …) and the `X-Request-Id` correlation id are stripped before an entry is stored, so a cached reply never replays another request's trace id or corrupts message framing. Add a custom correlation header to `excludeHeaders`.
+- Partition components are length-prefixed, so a principal or tenant id containing the key delimiter cannot be crafted to collide with another partition (cache-key injection).

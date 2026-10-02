@@ -1,0 +1,152 @@
+---
+title: Command injection
+description: How DaloyJS keeps the framework itself free of shell-out primitives, and the safe patterns (and grep rules) you should use when your own handlers need to invoke an external program.
+keywords:
+  - DaloyJS command injection
+  - Node.js command injection
+  - child_process exec safe
+  - execFile vs exec
+  - BatBadBut
+  - CVE-2024-27980
+  - shell injection Node
+---
+
+# Command injection
+
+<blockquote>Pass executable arguments as an array with <code>execFile</code>. A shell command assembled from input can interpret attacker-controlled separators as additional commands.</blockquote>
+
+Aikido's [Command injection in 2024 unpacked](https://www.aikido.dev/blog/command-injection-in-2024-unpacked) report is a good reminder that “just shell out for this one thing” remains a top source of RCE in Node services. The pattern is always the same: untrusted input ends up inside a string that gets handed to `/bin/sh -c` (or `cmd.exe /c` on Windows), and a metacharacter like `;`, `|`, `$()`, or a stray `&` turns one command into many.
+
+DaloyJS is an HTTP framework, not a shell, so the framework itself can't generally interpolate attacker input into a child process on your behalf. What it *can* do is (1) keep its own runtime free of the primitives that get abused, and (2) document the safe pattern so the handlers you write don't reintroduce the bug.
+
+## What Daloy already does for you
+
+| Layer | What it blocks |
+| --- | --- |
+| Zero `child_process` in `src/**` | A CI gate ([`verify-no-remote-exec.ts`](https://github.com/daloyjs/daloy/blob/main/scripts/verify-no-remote-exec.ts)) refuses to merge any PR that imports `node:child_process`, `node:vm`, `eval`, `new Function`, or a remote dynamic `import()` inside the runtime source. The framework cannot accidentally shell out, and a compromised maintainer cannot add an `exec('curl ... \| sh')` at import time. |
+| Strict per-route schemas (Zod) | Every route declares `params`, `query`, and `body` shapes. If you constrain a field with `z.enum([...])`, a tight regex, or `z.uuid()`, attacker shell metacharacters don't reach your handler in the first place. The request is rejected with **422 problem+json**. |
+| Body-size cap (1 MiB default) | Stops the “DoS-amplified injection” pattern where the attacker uploads a multi-MB payload of shell glue hoping something on the server pipes it into a process. |
+| CLI `spawn` uses fixed argv | When you run `daloy dev`, the framework spawns `node` / `bun` / `deno` with a hardcoded argv built by `buildDevCommand()`, never a shell string. The `create-daloy` scaffolder does the same for `git init` and `<pm> install`: the command and arguments are constants. Only the working directory is derived from input, and `cwd` is not shell-parsed. |
+
+None of that *prevents your handler from shelling out unsafely*. That is on you. The rest of this page is the pattern to follow when you do need to invoke an external program from a Daloy route.
+
+## The safe shape: `execFile` / `spawn`, no shell [#the-safe-shape-execfile-spawn-no-shell]
+
+Two rules cover \~95% of the real-world Node CVEs in the Aikido write-up:
+
+<FlowDiagram title="Where the second command comes from" steps={[
+          {
+            eyebrow: "ingress",
+            label: "User input",
+            detail: 'sourcePath = "x.mp4; rm -rf /"',
+          },
+          {
+            eyebrow: "shell string",
+            label: "exec(`cmd ${input}`)",
+            detail: "/bin/sh -c parses ; | $() &",
+            tone: "danger",
+          },
+          {
+            eyebrow: "argv array",
+            label: "execFile + [args]",
+            detail: "shell: false, one literal arg",
+            tone: "success",
+          },
+        ]} caption="A shell string lets a stray metacharacter turn one command into many. An argv array with no shell passes the whole value as a single literal argument, so the metacharacters are inert." />
+
+1. Use `execFile` or `spawn` with an *array of arguments*. Never `` exec(`cmd ${userInput}`) `` with a template string.
+2. Leave `shell: false` (the default). If you set `shell: true`, every argument becomes shell-parsable and you have to escape metacharacters yourself, which is exactly the bug class you're trying to avoid.
+
+```ts
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const execFileAsync = promisify(execFile);
+const app = new App();
+
+const ConvertBody = z.object({
+  // 1) Constrain the input at the HTTP boundary. An enum, a tight regex, or
+  //    a UUID is almost always enough - shell metacharacters can't survive
+  //    a Zod schema that doesn't allow them.
+  format: z.enum(["png", "jpeg", "webp"]),
+  sourcePath: z
+    .string()
+    .regex(/^[a-zA-Z0-9_\-./]+$/, "path may only contain [A-Za-z0-9_-./]")
+    .max(256),
+});
+
+app.post(
+  "/convert",
+  {
+    operationId: "convert",
+    request: { body: ConvertBody },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ body }) => {
+    // 2) execFile with an argv array - no shell, no interpolation.
+    const { stdout } = await execFileAsync(
+      "ffmpeg",
+      ["-i", body.sourcePath, "-f", body.format, "pipe:1"],
+      { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 }
+    );
+    return { status: 200 as const, body: { bytes: stdout.length } };
+  },
+);
+```
+
+Even if `body.sourcePath` were `"foo.mp4; rm -rf /"`, the regex would reject it at the boundary. If you removed the regex, `execFile` would still pass the whole string as a single argv element to `ffmpeg`, which would fail to open a file by that name. No shell ever runs.
+
+## Anti-patterns to grep for
+
+These are the patterns the Aikido write-up keeps finding in compromised packages. Wire them into a CI grep (or Semgrep / CodeQL) on your own repo and you'll catch most new command-injection bugs at PR time:
+
+```bash
+# 1. exec / execSync / spawnSync with a template literal or string concat.
+git grep -nE 'exec(Sync)?\(\s*[\`"][^\`"]*\$\{' -- '*.ts' '*.tsx' '*.js' '*.mjs'
+git grep -nE 'exec(Sync)?\(\s*[^,]+\+' -- '*.ts' '*.tsx' '*.js' '*.mjs'
+
+# 2. spawn / spawnSync with shell: true.
+git grep -nE 'spawn(Sync)?\([^)]*shell:\s*true' -- '*.ts' '*.tsx' '*.js' '*.mjs'
+
+# 3. Direct shell helpers that always go through /bin/sh.
+git grep -nE '\\bshelljs\\b|\\bexeca\\b\\(.*shell:\\s*true' -- '*.ts' '*.tsx' '*.js' '*.mjs'
+
+# 4. The 'just one line of bash' temptation.
+git grep -nE 'require\(["'\\'']child_process["'\\'']\)|from\s+["'\\'']node:child_process["'\\'']' -- '*.ts' '*.tsx' '*.js' '*.mjs'
+```
+
+If you want to lock the framework-level guarantee into your own app, copy [`scripts/verify-no-remote-exec.ts`](https://github.com/daloyjs/daloy/blob/main/scripts/verify-no-remote-exec.ts) and run it from `pnpm test`. It refuses any import of `child_process` / `vm`, any bare `eval`, `new Function`, or remote dynamic `import()`. If a handler genuinely needs to shell out, scope the allow-list to that one file rather than turning the gate off for the whole repo.
+
+## Windows footgun: BatBadBut (CVE-2024-27980)
+
+Node.js 21.7.2+ ships the fix for [CVE-2024-27980](https://nvd.nist.gov/vuln/detail/CVE-2024-27980) (“BatBadBut”): on Windows, launching a `.bat` / `.cmd` file through `spawn` without `shell: true` used to be vulnerable to argv-to-cmd-line re-quoting injection. If you target older Node versions, either **upgrade Node**, or set `shell: true` and validate every argument against a strict allow-list before you spawn. Daloy's engines field already requires a fixed Node version, so you inherit the patched runtime by default, but you're still responsible for argument validation if you opt into `shell: true`.
+
+## When you really do need a shell
+
+Sometimes you genuinely need pipes, globs, or output redirection. The safe pattern is to write the script as a real file on disk (or check it in) and spawn it as an argument-only invocation:
+
+```ts
+// Instead of: exec(`bash -c "tar -czf - ${dir} | aws s3 cp - s3://bucket/${key}"`)
+//
+// Check in a script that takes the variable parts as positional arguments,
+// validates them itself, and shell-quotes them with printf %q. Then call:
+await execFileAsync("/usr/local/bin/upload-backup.sh", [
+  validatedDir,    // already matched against /^[a-zA-Z0-9_/-]+$/
+  validatedKey,    // already matched against /^[a-zA-Z0-9_/-]+\.tar\.gz$/
+], { timeout: 60_000 });
+```
+
+The script lives in your repo, gets code-reviewed, and only the validated values cross the process boundary. The Node side never has to build a shell string.
+
+## Defense in depth
+
+- Drop privileges. Run the Node process as a non-root user and constrain it with [seccomp / Kubernetes Pod Security](https://kubernetes.io/docs/concepts/security/pod-security-standards/) or a Docker `USER` directive. Even a successful command injection then runs as an unprivileged user with no write access outside `/tmp`.
+- Audit your runtime dependencies. Most real-world command-injection CVEs in 2024 were not in application code. They were in transitive npm packages that wrapped `child_process.exec()`. Use `pnpm audit` on a schedule, and prefer the supply-chain hardened install path documented in [Supply-chain security](/docs/security/supply-chain).
+- Reach for a library when possible. `sharp` for image processing, `archiver` for zip files, `node:fs/promises` for copies: an in-process Node library never invokes a shell, so the entire bug class disappears.
+
+## Reporting
+
+Found a command-injection-shaped weakness in Daloy itself (e.g. a CLI or scaffolder that interpolates user input into a spawn call, or a documented example that demonstrates an unsafe pattern)? Report it privately via [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new). Don't open a public issue.

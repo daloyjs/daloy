@@ -1,0 +1,176 @@
+---
+title: Send email from DaloyJS with Mailtrap
+description: Send transactional email from a DaloyJS API using the official mailtrap Node SDK. Includes sandbox vs. production sending, MailtrapClient configuration, and switching with a single flag.
+keywords:
+  - DaloyJS Mailtrap
+  - Mailtrap Node SDK
+  - MailtrapClient
+  - Mailtrap sandbox
+  - email testing DaloyJS
+---
+
+# Send email from DaloyJS with Mailtrap
+
+[Mailtrap](https://mailtrap.io) bundles an **Email Sandbox** (safe test inbox) and an **Email API/SMTP** for production sending under one SDK. That makes it especially handy for staging environments: dev/staging captures messages, production actually delivers, with the same code path.
+
+<BranchDiagram title="One client, two destinations" source={{
+          eyebrow: "state.email.send(...)",
+          label: "MailtrapClient",
+          detail: "MAILTRAP_SANDBOX flips the mode",
+        }} branches={[
+          {
+            eyebrow: "dev / staging",
+            label: "Email Sandbox",
+            detail: "sandbox: true + testInboxId · captured, never delivered",
+          },
+          {
+            eyebrow: "production",
+            label: "Email Sending",
+            detail: "verified domain · delivered to recipients",
+            tone: "success",
+          },
+        ]} caption="The same plugin code path serves every environment. Set MAILTRAP_SANDBOX=true in dev/staging to capture messages in a test inbox, and leave it off in production to deliver for real." />
+
+## 1. Provision
+
+1. For testing, open **Email Sandbox -\> Inboxes** and copy the inbox **ID** plus an **API token** scoped to the sandbox.
+2. For production, open **Email Sending -\> Sending Domains**, verify a domain via SPF/DKIM/DMARC records, then create an API token with *Email Sending* permissions.
+
+## 2. Install
+
+```ts
+pnpm add mailtrap
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+MAILTRAP_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+MAILTRAP_FROM_EMAIL=no-reply@acme.example.com
+MAILTRAP_FROM_NAME=Acme
+# Sandbox mode (testing) - set both to enable
+MAILTRAP_SANDBOX=true
+MAILTRAP_TEST_INBOX_ID=1234567
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/mailtrap.ts
+import { MailtrapClient } from "mailtrap";
+import type { App } from "@daloyjs/core";
+
+const sandbox = process.env.MAILTRAP_SANDBOX === "true";
+const client = new MailtrapClient({
+  token: process.env.MAILTRAP_TOKEN!,
+  ...(sandbox
+    ? { sandbox: true, testInboxId: Number(process.env.MAILTRAP_TEST_INBOX_ID) }
+    : {}),
+});
+
+const FROM = {
+  email: process.env.MAILTRAP_FROM_EMAIL!,
+  name: process.env.MAILTRAP_FROM_NAME ?? "Acme",
+};
+
+export const mailtrapPlugin = {
+  name: "mailtrap",
+  register(app: App) {
+    app.decorate("email", {
+      async send({ to, subject, text, html }) {
+        const res = await client.send({
+          from: FROM,
+          to: [{ email: to }],
+          subject,
+          text,
+          html,
+        });
+        return { id: res.message_ids?.[0] ?? "" };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    email: {
+      send(msg: {
+        to: string;
+        subject: string;
+        text?: string;
+        html?: string;
+      }): Promise<{ id: string }>;
+    };
+  }
+}
+```
+
+The same plugin works for dev, staging, and prod, flip `MAILTRAP_SANDBOX` per environment.
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { mailtrapPlugin } from "./plugins/mailtrap.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 10 }));
+app.register(mailtrapPlugin);
+
+app.post(
+  "/feedback",
+  {
+    operationId: "sendFeedback",
+    request: {
+      body: z.object({
+        to: z.email(),
+        message: z.string().min(1).max(2000),
+      }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const { id } = await state.email.send({
+      to: body.to,
+      subject: "Thanks for your feedback",
+      text: body.message,
+    });
+    return { status: 202, body: { id } };
+  },
+);
+```
+
+## Bulk sending
+
+Mailtrap exposes a separate **Bulk Sending** stream optimised for marketing volume. Toggle it on the same client by setting `bulk: true` instead of `sandbox: true`:
+
+```ts
+const bulkClient = new MailtrapClient({
+  token: process.env.MAILTRAP_TOKEN!,
+  bulk: true,
+});
+```
+
+## Templates
+
+Create a template in **Email Sending -\> Email Templates**, then send it by UUID and provide variables instead of `subject`/`text`/`html`:
+
+```ts
+await client.send({
+  from: FROM,
+  to: [{ email: "user@example.com" }],
+  template_uuid: "11111111-2222-3333-4444-555555555555",
+  template_variables: { name: "Devlin", company: "Acme" },
+});
+```
+
+## Runtimes
+
+The `mailtrap` SDK targets Node (uses Node's HTTPS module). For [Cloudflare Workers](/docs/adapters), call the REST API directly with `fetch`: `POST https://send.api.mailtrap.io/api/send` (production) or `POST https://sandbox.api.mailtrap.io/api/send/{inbox_id}` (sandbox), with header `Authorization: Bearer ${token}`.
+
+See also [Resend](/docs/email/resend), [Postmark](/docs/email/postmark), and the [email integrations overview](/docs/email).

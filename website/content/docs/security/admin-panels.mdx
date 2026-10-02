@@ -1,0 +1,255 @@
+---
+title: Secure admin panels
+description: "Map Aikido's secure admin panel checklist to DaloyJS primitives: internal-only routes, ipRestriction, strict CSP, per-admin bearer/JWT auth, login-throttle rate limits, and structured audit logging."
+keywords:
+  - DaloyJS admin panel
+  - secure admin panel
+  - internal routes
+  - ipRestriction
+  - CSP nonce
+  - admin audit log
+  - Aikido checklist
+---
+
+# Secure admin panels
+
+<blockquote>Keep the admin surface separate from the public app. Give it its own authentication policy, host boundary, audit trail, and tighter network controls.</blockquote>
+
+Aikido's ["How to build a secure admin panel for your SaaS app"](https://www.aikido.dev/blog/build-secure-admin-panel) lists the recurring mistakes that turn customer-success tooling into a breach: admin endpoints stitched into the same surface as the public app, shared support accounts with no audit trail, single-factor authentication, and no Content-Security-Policy to contain injected JavaScript. Daloy doesn't ship an admin panel, but every primitive you need to follow that checklist is already in the framework. This page maps each rule to the helper that enforces it.
+
+<LayerStack title="Defense layers a request crosses before it changes admin state" flow="down" layers={[
+          {
+            title: "Network perimeter",
+            detail: "rejected before authentication even runs",
+            tone: "accent",
+            items: ["internal: true", "ipRestriction()", "VPN / tunnel"],
+          },
+          {
+            title: "Per-admin authentication",
+            detail: "no shared support@ accounts",
+            items: ["bearerAuth()", "JWT verify", "rateLimit(admin-auth)"],
+          },
+          {
+            title: "Session & CSRF",
+            detail: "stops cross-site state changes",
+            items: ["session() Strict+Secure", "csrf()"],
+          },
+          {
+            title: "Strict CSP",
+            detail: "injected scripts dropped by the browser",
+            items: ["default-src 'none'", "nonce: true", "Trusted Types"],
+          },
+          {
+            title: "Audit log",
+            detail: "who did what, when, from where",
+            tone: "success",
+            items: ["requestId()", "structured logger", "otelTracing()"],
+          },
+        ]} caption="Each layer maps to one rule on Aikido's checklist. A leaked password alone clears none of them: it still has to come from the right network, carry an unthrottled per-admin token, survive CSRF, and leave an audit record." />
+
+## 1. Don't mix admin routes into your public app [#1-don-and-apos-t-mix-admin-routes-into-your-public-app]
+
+The first rule is the most important: admin endpoints should not be reachable from the same hostname as the public API, and they should not leak into client-side bundles where attackers can probe them. Daloy gives you two tools that compose into a clean "private API only" posture:
+
+- `internal: true` on a route hides it from the public listener entirely. It is only reachable via `app.inject()` (server-to-server) or through an adapter that explicitly mounts internal routes on a separate socket / hostname / port.
+- `subdomains()` lets you mount the admin sub-app on `admin.example.com` while the public API stays on `api.example.com`, so a critical issue in the admin code can be taken offline (firewall, DNS, deploy) without affecting the customer-facing app.
+
+```ts
+import { App, every, ipRestriction, bearerAuth } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+// Public surface stays minimal and visible.
+app.get(
+  "/health",
+  {
+    operationId: "health",
+    responses: { 200: { description: "ok" } },
+  },
+  async () => ({ status: 200 as const, body: { ok: true } }),
+);
+
+// Admin surface is opt-in only. The internal flag keeps it out of the
+// OpenAPI document and out of the public listener entirely.
+app.post(
+  "/admin/users/:id/disable",
+  {
+    operationId: "adminDisableUser",
+    internal: true,
+    // route.hooks is a SINGLE Hooks object: combine layers with every(...).
+    // Passing a raw array would silently apply no hooks at all.
+    hooks: every(
+      ipRestriction({
+        allow: ["10.0.0.0/8", "203.0.113.4/32"],
+        trustProxyHeaders: true, // resolve the real client IP behind your proxy/VPN
+      }),
+      bearerAuth({
+        // validate receives the token only; reach for verify(token, ctx) when
+        // you need per-request context.
+        validate: (token) => verifyAdminToken(token),
+        realm: "daloy-admin",
+      }),
+    ),
+    responses: { 204: { description: "ok" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+```
+
+Front the internal listener with a VPN, a Cloudflare Access tunnel, or a private load balancer. The combination of `internal: true` + `ipRestriction()` means misconfigured DNS or a routing accident cannot expose the admin surface to the public internet by default.
+
+## 2. Per-admin accounts with an audit log
+
+Aikido's second rule is to ban shared `support@app.io` logins so every sensitive change is attributable. Daloy doesn't ship an identity provider. Pick one (Auth0, Clerk, Cognito, Keycloak, or your own JWT issuer) and verify per-admin tokens with `bearerAuth()` or the JWT helpers. The framework gives you the audit-log primitives:
+
+- `requestId()` stamps every request with a propagated `x-request-id` so the same identifier appears in every downstream log line.
+- The built-in `logger` emits structured JSON. Attach the authenticated admin's subject claim in your `hooks` so "who did what, when, from where" falls out for free.
+- `otelTracing()` ties the same request id into OpenTelemetry spans for long-term retention in your observability stack.
+
+```ts
+import { every, jwk, ipRestriction, requestId } from "@daloyjs/core";
+
+// The structured logger is an App option, not middleware:
+//   const app = new App({ env: "production", logger: { level: "info" } });
+app.use(requestId()); // stamps ctx.state.requestId + the x-request-id header
+
+// Verify per-admin JWTs against your IdP's JWKS (asymmetric only).
+const adminAuth = jwk({
+  jwks: "https://login.example.com/.well-known/jwks.json",
+  algorithms: ["RS256"],
+  issuer: "https://login.example.com/",
+  audience: "daloy-admin",
+  // Require an "admin" role claim; verify() rejects with 403 on false.
+  verify: (payload) =>
+    Array.isArray((payload as { roles?: string[] }).roles) &&
+    (payload as { roles: string[] }).roles.includes("admin"),
+});
+
+app.post(
+  "/admin/feature-flags/:flag",
+  {
+    operationId: "adminToggleFlag",
+    internal: true,
+    hooks: every(
+      ipRestriction({ allow: ["10.0.0.0/8"], trustProxyHeaders: true }),
+      adminAuth,
+      {
+        // afterHandle receives (ctx, result), in that order.
+        afterHandle: (ctx) => {
+          const user = ctx.state.user as
+            | { sub?: string; claims?: { email?: string } }
+            | undefined;
+          // Structured audit record - one line per sensitive change.
+          app.log.info({
+            event: "admin.flag.toggle",
+            actor: user?.sub,
+            actorEmail: user?.claims?.email,
+            flag: ctx.params.flag,
+            requestId: ctx.state.requestId,
+          }, "admin toggled feature flag");
+        },
+      },
+    ),
+    responses: { 204: { description: "ok" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+```
+
+## 3. Enforce 2FA (or 3FA) for admin auth
+
+Daloy doesn't implement TOTP / WebAuthn itself (that belongs in your identity provider), but it gives you three layers that compose with whatever 2FA your IdP enforces, so a stolen password alone is not enough:
+
+- Network factor. `ipRestriction()` with a tight CIDR allow-list (corporate VPN, Cloudflare WARP egress, office gateway) means a credential leak from outside that range is rejected before authentication even runs.
+- Login-throttle factor. `loginThrottle({ groupId: "admin-auth" })` (keyed per client: the TCP peer, or the trusted forwarded IP with `trustedProxies`) shares one bucket per client across `/admin/login`, `/admin/otp`, and `/admin/recovery` so password spraying and OTP guessing are both throttled by the same counter.
+- Session factor. `session()` with `cookieOptions: { secure: true, sameSite: "strict" }` plus `csrf()` on every mutating route closes the state-changing-request loophole even if a cookie escapes the admin subdomain.
+
+```ts
+import { every, rateLimit, session, csrf } from "@daloyjs/core";
+
+const adminLoginLimit = () =>
+  rateLimit({ windowMs: 60_000, max: 5, groupId: "admin-auth" });
+
+app.use(session({
+  secret: process.env.ADMIN_SESSION_SECRET!,
+  cookieOptions: { secure: true, httpOnly: true, sameSite: "Strict" },
+}));
+app.use(csrf({ strategy: "fetch-metadata" }));
+
+app.post(
+  "/admin/login",
+  {
+    operationId: "adminLogin",
+    internal: true,
+    // Combine the limiter with your IdP verification via every(...).
+    hooks: every(adminLoginLimit() /* , verifyIdpLogin */),
+  },
+  // ...
+);
+app.post(
+  "/admin/otp",
+  {
+    operationId: "adminOtp",
+    internal: true,
+    hooks: every(adminLoginLimit() /* , verifyTotpOrWebauthn */),
+  },
+  // ...
+);
+```
+
+## 4. Block unknown JavaScript with CSP
+
+Aikido's last rule (and the one that would have prevented the "Apple email injection" case they cite) is a strict Content-Security-Policy on the admin HTML. Daloy's `secureHeaders()` already emits a CSP, and it can mint a fresh per-request nonce so legitimate inline bootstrap scripts run while *any* injected `<script>` from a future XSS is silently dropped by the browser.
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  // Strict CSP for the admin surface: only same-origin code, no inline
+  // scripts unless they carry the per-request nonce, no objects, no
+  // framing, and Trusted Types required for any DOM sink.
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'none'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+      "connect-src": "'self'",
+      "frame-ancestors": "'none'",
+      "base-uri": "'none'",
+      "form-action": "'self'",
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+  // Modern HSTS + tight cross-origin posture for an admin host.
+  hsts: { maxAgeSeconds: 31536000, includeSubDomains: true, preload: true },
+  crossOriginOpenerPolicy: "same-origin",
+  crossOriginResourcePolicy: "same-origin",
+  // Route violations to a reporting endpoint so you see attempted XSS in
+  // production instead of finding out from a customer.
+  reportingEndpoints: { csp: "https://csp.example.com/report" },
+  reportTo: "csp",
+}));
+```
+
+Pair this with `app.cspReportRoute()` if you want Daloy to terminate the report endpoint itself (size-capped, with optional body redaction so reported URLs don't leak PII into logs).
+
+## Checklist: Aikido rule -\> Daloy primitive [#checklist-aikido-rule-daloy-primitive]
+
+| Rule | What Daloy gives you |
+| --- | --- |
+| Admin panel is not built into the public app | `internal: true` routes + `app.inject()`, optional `subdomains()` mount on a separate host |
+| Admin reachable only from trusted networks | `ipRestriction({ allow: [...] })` with CIDR support, fails closed when no peer address is available |
+| Per-admin authentication, no shared accounts | `bearerAuth()`, `basicAuth()`, JWT helpers, `session()`: each ties a request to an identifiable subject |
+| Action audit log | `requestId()` + structured JSON logger + `otelTracing()` spans |
+| 2FA / 3FA: throttle login + OTP + recovery together | `rateLimit({ groupId: "admin-auth" })` shared bucket across all auth routes |
+| State-changing routes can't be cross-site triggered | `csrf()` (double-submit or fetch-metadata) + `session()` with `SameSite=Strict; Secure; HttpOnly` |
+| Block unknown JavaScript (CSP) | `secureHeaders({ contentSecurityPolicy: { ..., nonce: true, trustedTypes }, hsts, ... })` + `app.cspReportRoute()` |
+| Take admin offline without taking the app offline | Separate internal listener / subdomain mount: flip a feature flag or firewall rule, leave the public API running |
+
+## What Daloy intentionally does *not* do
+
+- Implement TOTP, WebAuthn, or SSO. Use an identity provider. Daloy verifies the resulting bearer tokens / JWTs.
+- Render an admin UI. The framework is API-first. Pair it with any admin framework (Refine, AdminJS, Retool, internal Next.js) and point that UI at the internal-only Daloy routes.
+- Decide your network perimeter. `ipRestriction()` enforces a CIDR list, but you still own the firewall, VPN, or zero-trust access layer that determines which addresses are trustworthy in the first place.

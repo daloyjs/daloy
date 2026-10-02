@@ -1,0 +1,374 @@
+---
+title: "Supply-Chain Hardening for TypeScript Libraries: Everything We Did and Why"
+description: "A maintainer's field guide to the supply-chain posture we shipped for DaloyJS, .npmrc that says no by default, pnpm 11 workspace keys (blockExoticSubdeps / strictDepBuilds / verifyDepsBeforeRun), SHA-pinned actions, permissions: {}, no Actions cache on installs, zizmor + Scorecard + CodeQL, npm trusted publishing with provenance, and the create-daloy --with-ci bundle that drops the app-safe parts into your project."
+date: 2026-05-26
+readingTime: 16 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work, currently writing TypeScript from a desk in Norway. Has been on the receiving end of two npm-worm news cycles and would prefer not to be on the receiving end of a third.
+badges:
+  - Security
+  - Supply chain
+  - Maintainer notes
+keywords:
+  - supply chain TypeScript
+  - pnpm 11 blockExoticSubdeps
+  - strictDepBuilds
+  - verifyDepsBeforeRun
+  - minimum-release-age
+  - npm trusted publishing provenance
+  - GitHub Actions SHA pin
+  - zizmor Scorecard CodeQL
+  - create-daloy --with-ci
+  - ignore-scripts npmrc
+footerLinks:
+  - label: Read the supply-chain docs
+    href: /docs/security/supply-chain
+  - label: create-daloy reference
+    href: /docs/scaffolder
+  - label: More posts
+    href: /blog
+---
+
+export const NPMRC = `# .npmrc, DaloyJS root npm/pnpm config (supply-chain hardening)
+
+# ---------------------------------------------------------------------------
+# Lifecycle scripts
+# ---------------------------------------------------------------------------
+# Reject preinstall/install/postinstall/prepare hooks from transitive deps.
+# This is the primary execution channel in chalk/debug, node-ipc, and the
+# Shai-Hulud worm campaigns. Anything that legitimately needs to build (esbuild)
+# is on an explicit allowlist via pnpm-workspace.yaml allowBuilds.
+ignore-scripts=true
+
+# ---------------------------------------------------------------------------
+# Install integrity
+# ---------------------------------------------------------------------------
+frozen-lockfile=true
+verify-store-integrity=true
+prefer-frozen-lockfile=true
+strict-peer-dependencies=true
+auto-install-peers=false
+
+# ---------------------------------------------------------------------------
+# Release-age cooldown
+# ---------------------------------------------------------------------------
+# Wait 24h (1440 minutes) before installing a freshly published version.
+# Most worm campaigns are detected and unpublished within hours.
+minimum-release-age=1440
+
+# ---------------------------------------------------------------------------
+# Registry posture
+# ---------------------------------------------------------------------------
+registry=https://registry.npmjs.org/
+provenance=true
+
+audit-level=moderate
+fund=false`;
+
+export const PNPM_WORKSPACE = `# pnpm-workspace.yaml, pnpm 11 supply-chain keys
+packages:
+  - "packages/*"
+
+# Wait 24h before resolving a freshly published version. Mirrors .npmrc.
+minimumReleaseAge: 1440
+
+# Only direct dependencies may use exotic sources (git, tarball URLs).
+# Transitive deps MUST resolve from the configured registry. This blocks
+# the "transitive dep pulled from a hijacked git fork" attack class.
+blockExoticSubdeps: true
+
+# Refuse to install any dependency with an unreviewed lifecycle script.
+# Packages that genuinely need a build go through allowBuilds, below.
+strictDepBuilds: true
+
+# Re-check dependency state before \`pnpm run\` / \`pnpm exec\` so scripts
+# never run against a stale node_modules - which is how cache-poisoning
+# chains achieve persistence on CI.
+verifyDepsBeforeRun: install
+
+# Explicit allowlist of packages permitted to run install scripts. New
+# entries require a PR that explains *why* the package needs to build.
+allowBuilds:
+  esbuild: true`;
+
+export const RELEASE_WORKFLOW = `# .github/workflows/release.yml, npm publish with OIDC + provenance
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Top-level permissions: deny everything by default. Each job opts in.
+# Security-critical: keep this line.
+permissions: {}
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5
+        with:
+          persist-credentials: false
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 20
+          # NOTE: deliberately no \`cache: pnpm\` - the GHA cache is a known
+          # exfiltration channel and a known persistence channel.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm coverage
+
+  publish:
+    name: publish
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-publish # manual approval gate
+    permissions:
+      contents: read
+      # id-token: write is required by npm trusted publishing (OIDC).
+      # It is granted on THIS job only - never to verify, never globally,
+      # and never on a workflow that a fork PR could run.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Publish to npm with provenance
+        run: pnpm publish --access public --no-git-checks --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          # NOTE: no NODE_AUTH_TOKEN. Trusted publishing gets the credential
+          # from the OIDC exchange. Long-lived npm tokens have been retired.`;
+
+export const ZIZMOR_WORKFLOW = `# .github/workflows/zizmor.yml, static analysis on the workflows themselves
+name: zizmor
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+permissions: {}
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5
+        with: { persist-credentials: false }
+      - name: Run zizmor
+        uses: woodruffw/zizmor-action@0c4ee94d3ea53cd6fd34a05dd07a4ba14e1f9b4c # v0.4.1
+        with: { upload-sarif: true }`;
+
+export const SCORECARD_WORKFLOW = `# .github/workflows/scorecard.yml, OpenSSF Scorecard weekly
+name: scorecard
+on:
+  branch_protection_rule:
+  schedule: [{ cron: "30 5 * * 0" }]
+  push: { branches: [main] }
+permissions: {}
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write   # only for publishing the result
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { persist-credentials: false }
+      - uses: ossf/scorecard-action@62b2cac7ed8198b15735ed49ab1e5cf35480ba46 # v2.4.0
+        with: { results_file: results.sarif, results_format: sarif, publish_results: true }
+      - uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda
+        with: { sarif_file: results.sarif }`;
+
+export const VERIFY_LOCKFILE = `// scripts/verify-lockfile-sources.mjs, run in CI before install
+// Catches "registry override sneaks into pnpm-lock.yaml" attacks.
+
+import { readFileSync } from "node:fs";
+
+const lock = readFileSync("pnpm-lock.yaml", "utf8");
+const FORBIDDEN = [
+  /resolution:\\s*\\{\\s*tarball:/, // direct tarball URL in a transitive resolution
+  /resolution:\\s*\\{\\s*git:/,     // git resolution in a transitive dep
+  /registry:\\s*['"]?(?!https:\\/\\/registry\\.npmjs\\.org\\/)/, // any non-npm registry
+];
+
+const offenders = FORBIDDEN.flatMap((re) => {
+  const matches = lock.match(new RegExp(re, "g")) ?? [];
+  return matches.map((m) => ({ re: re.source, snippet: m }));
+});
+
+if (offenders.length > 0) {
+  console.error("Forbidden resolutions in pnpm-lock.yaml:");
+  for (const o of offenders) console.error(" ", o.re, "->", o.snippet);
+  process.exit(1);
+}
+console.log("Lockfile sources OK.");`;
+
+export const CREATE_DALOY_CI = `# Scaffold a new app with the app-safe posture baked in.
+pnpm create daloy@latest my-api \\
+  --template node-basic \\
+  --with-ci \\
+  --code-owner @acme/security
+
+# What this drops into the new repo:
+#   .github/workflows/ci.yml         - pinned actions, no cache, --ignore-scripts
+#   .github/workflows/codeql.yml     - TS/JS static analysis
+#   .github/workflows/deploy.yml     - manual-only app deployment starter
+#   .github/workflows/container-scan.yml - runs Trivy scans on your dockerfile
+#   .github/workflows/scorecard.yml  - weekly OpenSSF Scorecard
+#   .github/workflows/vuln-scan.yml  - checks for known vulnerabilities
+#   .github/workflows/zizmor.yml     - workflow lint on every push
+#   .github/dependabot.yml           - weekly bumps, grouped by ecosystem
+#   .github/CODEOWNERS               - @acme/security on workflow files
+#   SECURITY.md                      - disclosure policy + supported versions
+#   scripts/verify-lockfile-sources.mjs - the script above, runnable as
+#                                        pnpm verify:lockfile`;
+
+export const ATTACK_PATHS = `# A short, opinionated map of the attack paths the above shuts down:
+
+attack path                                 -> blocked by
+------------------------------------------- -----------------------------------
+Malicious postinstall in a transitive dep   -> ignore-scripts + strictDepBuilds
+Hijacked package published as a new patch   -> minimum-release-age=1440
+Transitive dep swapped for a git/tarball    -> blockExoticSubdeps
+Stale node_modules survives an attack PR    -> verifyDepsBeforeRun
+GitHub Actions @v1 silently rolls to evil   -> SHA-pinned actions (every step)
+GHA cache contains an attacker's payload    -> no \`cache: pnpm\` on install
+Workflow accidentally gets contents: write  -> top-level permissions: {}
+Workflow exfiltrates secrets to an attacker -> zizmor checks for it, blocks PR
+Long-lived npm token leaks from a runner    -> trusted publishing (OIDC) only
+Build artifacts can't be traced to a commit -> --provenance attaches a Sigstore
+                                              attestation to every publish
+Lockfile silently picks a wrong registry    -> verify-lockfile-sources.mjs in CI`;
+
+Hi, Devlin. Ten years of fullstack, currently in Norway, currently wishing I could un-read the changelogs of three different npm worm campaigns. The 2025 and 2026 supply-chain news has been *rough*: chalk/debug, node-ipc, Shai-Hulud, TanStack, and if you maintain a TypeScript library that other people install, you probably had the same thought I did: *this could've been me, and I'm not actually sure my defaults would've saved me*.
+
+So this post is the maintainer-facing writeup of every supply-chain control we shipped for DaloyJS, plus the `create-daloy --with-ci` flag that drops the app-safe pieces into a brand-new user project. Nothing here is DaloyJS-specific, these are reusable defaults for pnpm-based TypeScript projects in 2026. Steal what you need.
+
+## The mental model: deny by default, opt in deliberately
+
+Every control below is a variant of the same trick: take a permissive default that the ecosystem ships, flip it to *deny*, and add a small allowlist for the legitimate cases. Lifecycle scripts go from "run all of them silently" to *none of them, except `esbuild`*. GitHub Actions permissions go from *everything* to *nothing, except `contents: read` on these specific jobs*. NPM tokens go from *long-lived, attached to a human account* to *none, ever, the runner does an OIDC exchange at publish time*. The pattern repeats: deny by default, then open only the path you need.
+
+## Layer 1: .npmrc, the gate everything passes through
+
+This file runs on every contributor's laptop and on every CI run. If you only fix one file in your repo, fix this one.
+
+<EditorFrame files={[".npmrc"]} activeFile=".npmrc" status="ignore-scripts · minimum-release-age=1440 · provenance · frozen">
+<CodeBlock language="bash" code={NPMRC} />
+</EditorFrame>
+
+Three lines do most of the work. `ignore-scripts=true` stops every transitive postinstall hook, the canonical execution channel for the recent worm campaigns. `frozen-lockfile=true` makes a tampered lockfile cause an install failure, not a silent "sure, let me grab a different version". `minimum-release-age=1440` says "don't install anything published in the last 24 hours", which is the single most effective filter against worm campaigns because they are typically detected and unpublished within hours.
+
+## Layer 2: pnpm 11 workspace keys
+
+pnpm 11 added a set of workspace-level keys that complement`.npmrc` and let you encode supply-chain intent at the workspace boundary, not the per-process boundary. We use all of them.
+
+<EditorFrame files={["pnpm-workspace.yaml"]} activeFile="pnpm-workspace.yaml" status="blockExoticSubdeps · strictDepBuilds · verifyDepsBeforeRun · allowBuilds">
+<CodeBlock language="bash" code={PNPM_WORKSPACE} />
+</EditorFrame>
+
+<ControlCard name="blockExoticSubdeps: true" blocks="A transitive dep specified as a git URL or tarball. That's how a hijacked maintainer's GitHub fork has been smuggled into apps before, the direct dep on npm looks clean, the transitive one resolves to a git fork the attacker controls." cost="Approximately zero. If you genuinely need a git dep, declare it directly. Indirect git deps are almost never intentional." />
+
+<ControlCard name="strictDepBuilds: true" blocks="Any dep with an unreviewed install script. Combined with allowBuilds: { esbuild: true }, every other build-time script in the dep graph fails the install loud and proud." cost="The first time you add a new dep with a postinstall, you have to add it to allowBuilds. That's a feature." />
+
+<ControlCard name="verifyDepsBeforeRun: install" blocks="A stale node_modules persisting across a malicious PR being merged and reverted. Every pnpm run / pnpm exec re-validates the install state first." cost="A handful of ms per script invocation. You will not notice." />
+
+## Layer 3: GitHub Actions
+
+Most of the Actions security advice on the internet is some variant of *be careful*, which is not advice. Three rules are concrete:
+
+1. Top-level `permissions: {}`. Every workflow starts with zero scopes. Each job opts in to the minimum it needs. `id-token: write` in particular is granted on the publish job only, it's the credential the TanStack attackers extracted in 2026-05.
+2. SHA-pin every action. Not `@v4`, not `@main`, the full 40-character commit SHA. The comment after it (`# v4`) is for humans. Dependabot keeps the SHAs updated.
+3. No `cache: pnpm` on the install step. The GitHub Actions cache has been used as both an exfiltration channel and a persistence channel. Cold installs in CI cost \~30s. Pay them.
+
+The full release workflow is what those three rules look like in practice:
+
+<EditorFrame files={[".github/workflows/release.yml"]} activeFile=".github/workflows/release.yml" status="permissions:{} · SHA-pinned · no cache · trusted publishing">
+<CodeBlock language="bash" code={RELEASE_WORKFLOW} />
+</EditorFrame>
+
+## Layer 4: static analysis on the workflows themselves
+
+You can write the most carefully locked-down workflow on earth and someone will paste a snippet from a blog post and re-introduce `contents: write` on a PR-triggered job. The fix is to *lint your workflows*, the way you lint your code. `zizmor` is the tool I've been pleased with: it catches missing permissions, unpinned actions, dangerous `pull_request_target` usage, and a long list of paper-cut security smells.
+
+<EditorFrame files={[".github/workflows/zizmor.yml"]} activeFile=".github/workflows/zizmor.yml" status="zizmor · uploads SARIF to GitHub code scanning">
+<CodeBlock language="bash" code={ZIZMOR_WORKFLOW} />
+</EditorFrame>
+
+## Layer 5: continuous scoring: Scorecard + CodeQL
+
+**OpenSSF Scorecard** gives you a weekly numeric score of your security posture across \~18 checks (signed releases, branch protection, dependency update tools, etc). It is imperfect, and still a useful trend line. **CodeQL** is GitHub's built-in static analysis for TS/JS. Both upload SARIF to the same code-scanning UI, which keeps the noise in one place.
+
+<EditorFrame files={[".github/workflows/scorecard.yml"]} activeFile=".github/workflows/scorecard.yml" status="weekly cron · publishes results to scorecard.dev">
+<CodeBlock language="bash" code={SCORECARD_WORKFLOW} />
+</EditorFrame>
+
+## Layer 6: trusted publishing + provenance: bye, npm tokens
+
+For most of npm's history, publishing meant `NODE_AUTH_TOKEN` sitting in GitHub Actions secrets. That token is the keys to the kingdom: anyone with it can publish anything to your package. When it leaks, and tokens leak, the attacker has minutes before anyone notices.
+
+Trusted publishing is the fix. Your npm account configures a trust policy that says "this exact GitHub repo, this exact workflow, this exact environment". At publish time the runner does an OIDC exchange and gets a one-shot, short-lived credential. **You delete all long-lived npm tokens.** They cannot leak if they do not exist.
+
+`--provenance` is the companion: every published tarball gets a Sigstore attestation that records the exact commit SHA, workflow file, and runner that produced it. Consumers can verify that an install is from the source you claim it is. (`npm` verifies provenance automatically on install for packages that publish it.)
+
+## Layer 7: lockfile source verification
+
+One last paranoid layer. `pnpm-lock.yaml` can record a non-npm registry, a git URL, or a raw tarball URL for any resolution. A malicious PR can change a single resolution and the install will silently succeed. This script catches that:
+
+<EditorFrame files={["scripts/verify-lockfile-sources.mjs"]} activeFile="scripts/verify-lockfile-sources.mjs" status="run before install in CI · grep is plenty here">
+<CodeBlock language="ts" code={VERIFY_LOCKFILE} />
+</EditorFrame>
+
+It's 20 lines and it has caught a real PR mistake (not malicious, a contributor pasted a tarball URL into a `packageManager` override). Worth the 20 lines.
+
+## The shortcut: create-daloy --with-ci
+
+All of the above is reusable, and reusable should mean *one command, you have it*. So we wired it into the scaffolder:
+
+<EditorFrame files={["~/.pnpm/global/bin/create-daloy"]} activeFile="~/.pnpm/global/bin/create-daloy" status="--with-ci is default Y · --code-owner adds CODEOWNERS">
+<CodeBlock language="bash" code={CREATE_DALOY_CI} />
+</EditorFrame>
+
+`--with-ci` defaults to *yes*. The scaffolded project starts with the application-safe posture this post describes: the `.npmrc`, the `pnpm-workspace.yaml` keys, every workflow SHA-pinned with `permissions: {}`, CODEOWNERS, Dependabot, SECURITY.md, and `verify-lockfile-sources.mjs` as a `pnpm verify:lockfile` script. Pass `--no-ci` if you insist on skipping that bundle. It does not generate an npm publish workflow, because a scaffolded Daloy app is a service, not a library release train.
+
+## The attack-path map, in one screen
+
+This is the cheat sheet I keep open when I'm reviewing a new repo's security posture. Each row is an attack class. Whichever rows on the right are missing, that's your work list.
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="print and pin to the laptop · or steal for your wiki">
+<CodeBlock language="bash" code={ATTACK_PATHS} />
+</EditorFrame>
+
+## What this *doesn't* protect you from
+
+Limits. Supply-chain hardening protects against *install-time* and *build-time* compromise. It does nothing for runtime vulnerabilities in your own code, write tests, run CodeQL, treat input as untrusted. It does nothing for a maintainer's laptop being compromised, use a hardware key, separate publish identities, and read the audit log of your npm account every so often. And it does nothing for the case where your *upstream* language ecosystem ships a bad release, the `minimum-release-age` cooldown helps with that, but isn't a guarantee. Layered defenses, applied where the cost is reasonable.
+
+Five years ago I shipped a supply-chain footgun. I wrote the guide I wish I had read before making that mistake. I hope it lands for at least one other maintainer who opens their `.npmrc` today and finds `ignore-scripts` isn't there.
+
+## Steal the config
+
+Every file in this post is open-source in the DaloyJS repo and comes with comments that explain *why*, not just *what*. The best place to start is `.npmrc` + `pnpm-workspace.yaml`. The next best place is to copy `.github/workflows/release.yml` and adapt the package name if you are publishing a library. For an app, run `pnpm create daloy@latest --with-ci` and cherry-pick from the generated CI and deploy starters.
+
+The full discussion of the trade-offs is in [the supply-chain docs](/docs/security/supply-chain), and the broader [security overview](/docs/security) shows how this slots in with sessions, CSRF, and CSP.
+
+Thanks for reading. Now go grep your `.github/workflows` for `@v` and replace each one with the SHA. I'll wait. (It's tedious for ten minutes and then you're done, forever, until Dependabot does it for you.)
+
+Devlin

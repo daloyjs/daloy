@@ -1,0 +1,194 @@
+---
+title: Protect a DaloyJS API with Auth0
+description: Authenticate and authorize requests in a DaloyJS API with Auth0. Verifies access tokens with jose against your tenant's JWKS, enforces scopes and permissions, and works on Node and edge runtimes.
+keywords:
+  - DaloyJS Auth0
+  - Auth0 JWT verification
+  - Auth0 access token
+  - Auth0 scopes
+  - Auth0 RBAC
+  - express-oauth2-jwt-bearer alternative
+---
+
+# Protect a DaloyJS API with Auth0
+
+[Auth0](https://auth0.com) is a developer-friendly IdP that handles universal login, MFA, social login, and a rich rule/action engine. For backend protection, Auth0's official quickstart uses [`express-oauth2-jwt-bearer`](https://github.com/auth0/node-oauth2-jwt-bearer/tree/main/packages/express-oauth2-jwt-bearer), which is Express-only. DaloyJS isn't Express, so we use the same primitive, JWT verification against Auth0's JWKS, through [`jose`](https://github.com/panva/jose). That keeps the same security guarantees while running on every runtime DaloyJS targets, including the edge.
+
+<SequenceDiagram title="Auth0 access-token verification" participants={[
+          "Client app",
+          "Auth0 tenant",
+          "DaloyJS API",
+          "Auth0 JWKS",
+        ]} steps={[
+          {
+            from: "Client app",
+            to: "Auth0 tenant",
+            label: "Universal Login (authorization-code + PKCE)",
+            detail: "Auth0 owns login, MFA, social",
+            kind: "request",
+          },
+          {
+            from: "Auth0 tenant",
+            to: "Client app",
+            label: "Access token (RS256 JWT, aud = your API)",
+            kind: "response",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Request with Authorization: Bearer <token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Auth0 JWKS",
+            label: "Fetch signing keys (cached by jose)",
+            detail: "GET /.well-known/jwks.json",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label:
+              "jwtVerify checks iss (trailing slash), aud, RS256, then scopes",
+            detail: "401 on a bad token, 403 on a missing scope",
+            kind: "response",
+          },
+        ]} caption="DaloyJS is the resource server: jose verifies the RS256 token against your tenant's JWKS and enforces scopes or permissions. Auth0 owns login and is the only party that mints tokens." />
+
+## 1. Configure an Auth0 API
+
+1. In the Auth0 dashboard, go to **Applications -\> APIs -\> Create API**. Pick an **identifier** (e.g. `https://api.acme.example.com`), this becomes the `aud` claim on issued tokens.
+2. Define **permissions** (e.g. `read:items`, `write:items`) and enable **RBAC** + *Add Permissions in the Access Token* if you want them in `permissions`.
+3. Note your tenant's **domain** (e.g. `dev-abc123.us.auth0.com`). Your issuer is `https://{domain}/` (trailing slash).
+
+## 2. Install
+
+```ts
+pnpm add jose
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+AUTH0_DOMAIN=dev-abc123.us.auth0.com
+AUTH0_AUDIENCE=https://api.acme.example.com
+AUTH0_REQUIRED_SCOPE=read:items
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/auth0.ts
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import type { App } from "@daloyjs/core";
+
+const issuer = `https://${process.env.AUTH0_DOMAIN}/`;
+const audience = process.env.AUTH0_AUDIENCE!;
+
+const jwks = createRemoteJWKSet(
+  new URL(`https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
+);
+
+export interface Principal {
+  sub: string;
+  scopes: string[];
+  permissions: string[];
+  claims: JWTPayload;
+}
+
+export const auth0Plugin = {
+  name: "auth0",
+  register(app: App) {
+    app.decorate("verifier", {
+      async verify(token: string): Promise<Principal> {
+        const { payload } = await jwtVerify(token, jwks, {
+          issuer,
+          audience,
+          algorithms: ["RS256"],
+        });
+        const scopes =
+          typeof payload.scope === "string" ? payload.scope.split(" ") : [];
+        const permissions = Array.isArray(payload.permissions)
+          ? (payload.permissions as string[])
+          : [];
+        return { sub: String(payload.sub), scopes, permissions, claims: payload };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    verifier: { verify(token: string): Promise<Principal> };
+    principal?: Principal;
+  }
+}
+```
+
+## 5. Guard a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { auth0Plugin } from "./plugins/auth0.ts";
+import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.register(auth0Plugin);
+
+app.get(
+  "/items",
+  {
+    operationId: "listItems",
+    hooks: requireAuth(process.env.AUTH0_REQUIRED_SCOPE!),
+    responses: {
+      200: { description: "OK", body: z.object({ user: z.string(), items: z.array(z.string()) }) },
+    },
+  },
+  ({ state }) => ({
+    status: 200,
+    body: { user: state.principal!.sub, items: ["a", "b"] },
+  }),
+);
+```
+
+## Permissions (RBAC)
+
+If you enabled *Add Permissions in the Access Token*, the JWT carries a `permissions` array. Tighten the overview's `requireAuth` to check `principal.permissions` when you want to enforce role assignments rather than OAuth 2.0 scopes:
+
+```ts
+import { ForbiddenError, type Hooks } from "@daloyjs/core";
+
+export function requirePermission(...perms: string[]): Hooks {
+  return {
+    preBody: (ctx) => {
+      // ... bearer extraction & verify() as before ...
+      const have = ctx.state.principal!.permissions;
+      if (!perms.every((p) => have.includes(p))) {
+        throw new ForbiddenError("Missing permission");
+      }
+      // continue
+    },
+  };
+}
+```
+
+## Auth0 Actions & custom claims [#auth0-actions-and-custom-claims]
+
+Add custom claims through an [Action on the Login flow](https://auth0.com/docs/customize/actions/flows-and-triggers/login-flow). Namespace them (e.g. `https://acme.example.com/tenant`) per Auth0's rules, that prevents collisions with standard claims and is required for non-reserved claims to be included.
+
+## Runtimes
+
+`jose` uses Web Crypto, so this setup runs everywhere DaloyJS does: Node.js, Bun, Deno, Cloudflare Workers, and AWS Lambda. You do not need to swap libraries between environments.
+
+## Notes
+
+- The `iss` claim Auth0 issues includes a **trailing slash**. Mismatching it (with or without the slash) is a common cause of validation failures.
+- Set a non-empty **audience** on the API, without it Auth0 returns an opaque token that you can't verify locally.
+- For sensitive operations, also check Auth0's `azp` (authorized party) claim against your allowed client IDs.
+
+See also [Okta](/docs/auth/okta), [Clerk](/docs/auth/clerk), and the [auth integrations overview](/docs/auth).

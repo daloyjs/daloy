@@ -1,0 +1,124 @@
+---
+title: Netlify adapter
+description: Deploy DaloyJS to Netlify Edge Functions (Deno) or Netlify Functions v2 (Node fetch-style). Both share the same Request -> Response model.
+keywords:
+  - DaloyJS Netlify adapter
+  - Netlify Edge Functions
+  - Netlify Functions v2
+  - Netlify fetch handler
+  - netlify.toml
+---
+
+# Netlify
+
+Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based, global) and **Functions v2** (Node, fetch-style). Both speak the web-standard `Request -> Response` contract, so the DaloyJS adapter is the same helper in both places. Only the file location and the optional config export change.
+
+<BranchDiagram title="One app, two Netlify targets" source={{
+          eyebrow: "identical app",
+          label: "Your DaloyJS App",
+          detail: "Request -> Response",
+        }} branches={[
+          {
+            eyebrow: "deno · global",
+            label: "Edge Functions",
+            detail: "netlify/edge-functions/ · toWebHandler(app)",
+          },
+          {
+            eyebrow: "node · recommended",
+            label: "Functions v2",
+            detail: "netlify/functions/*.mts · toWebHandler(app)",
+          },
+          {
+            eyebrow: "legacy v1",
+            label: "Lambda-shape handler",
+            detail: "toLambdaHandler(app)",
+            tone: "muted",
+          },
+        ]} caption="Edge and Functions v2 both speak Request -> Response, so they share toWebHandler. Only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2." />
+
+## When to choose Netlify
+
+- You want a platform-managed REST API with Edge or Node function options.
+- You want preview deploys per branch with zero config.
+- You're fine with platform-managed cold starts.
+
+## Netlify Edge Functions (Deno)
+
+Edge Functions run on a Deno-based runtime. Use `toWebHandler`, the same helper as the Vercel adapter, because the input/output shape is identical.
+
+```ts
+// netlify/edge-functions/api.ts
+import { toWebHandler } from "@daloyjs/core/vercel";
+import type { Config } from "@netlify/edge-functions";
+import { app } from "../../src/server.ts";
+
+export default toWebHandler(app);
+
+export const config: Config = {
+  path: "/api/*",
+};
+```
+
+## Netlify Functions v2 (Node, fetch-style)
+
+Functions v2 is GA and is the recommended way to write Node functions on Netlify. The old v1 lambda-style handler (`exports.handler = (event, context) => ...`) is legacy. It still works for compatibility but you should write new code in v2.
+
+```ts
+// netlify/functions/api.mts
+import { toWebHandler } from "@daloyjs/core/vercel";
+import type { Config } from "@netlify/functions";
+import { app } from "../../src/server.js";
+
+export default toWebHandler(app);
+
+export const config: Config = {
+  path: "/api/*",
+};
+```
+
+If you have an existing v1 codebase you can't migrate yet, the Lambda adapter still works against the v1 event shape:
+
+```ts
+// netlify/functions/api.ts (legacy v1, only if you can't move to v2)
+import { toLambdaHandler } from "@daloyjs/core/lambda";
+import { app } from "../../src/server.js";
+
+export const handler = toLambdaHandler(app);
+```
+
+## netlify.toml [#netlify-toml]
+
+For a REST-API-only project there is no static site to publish. Omit the `publish` key (or point it at an empty directory) so Netlify doesn't try to serve your compiled server code as static files.
+
+```toml
+[build]
+  command = "pnpm build"
+
+[functions]
+  node_bundler = "esbuild"
+
+# only needed if you don't use the config export above
+[[edge_functions]]
+  function = "api"
+  path = "/api/*"
+```
+
+## Deploy
+
+```bash
+pnpm netlify dev
+pnpm netlify deploy --build
+pnpm netlify deploy --build --prod
+```
+
+## Gotchas
+
+- Edge Functions don't expose `node:*`, the same caveat as Vercel and Cloudflare Workers.
+- Functions v2 returns a `Response` directly. Don't use the v1 `statusCode`/`body` object shape in v2 code.
+- `context.waitUntil` is available in v2 for fire-and-forget work.
+
+## See also
+
+- [Adapters overview](/docs/adapters)
+- [Deno adapter](/docs/adapters/deno)
+- [AWS Lambda adapter](/docs/adapters/aws-lambda)

@@ -1,0 +1,186 @@
+---
+title: Config validation
+description: "Validate application configuration at boot with defineConfig(): load from env, a file, or an async secrets resolver, validate against any Standard Schema validator, and fail fast with every issue reported at once."
+keywords:
+  - DaloyJS config
+  - defineConfig
+  - config validation
+  - env validation
+  - fail fast configuration
+  - Standard Schema config
+---
+
+# Config validation
+
+<blockquote>Validate configuration before the app starts. DaloyJS reports every invalid value in one pass, so a deploy fails before it accepts traffic.</blockquote>
+
+`defineConfig()` is a single boot-time helper that loads your application configuration from a source you choose, validates the merged object against a Standard Schema validator (Zod, Valibot, ArkType, TypeBox, and others), and aggregates **every** validation issue into one structured error printed to stderr before startup continues.
+
+The point is to fail fast and loud: a misconfigured deployment should surface every missing or invalid key in one shot, so operators do not have to redeploy four times to discover four different typos.
+
+<FlowDiagram numbered title="What defineConfig() does at boot" steps={[
+          {
+            eyebrow: "source",
+            label: "Load raw values",
+            detail: "env, file, object, or custom resolver",
+          },
+          {
+            eyebrow: "transform",
+            label: "Coerce & rename",
+            detail: "optional transform(raw)",
+            tone: "muted",
+          },
+          {
+            eyebrow: "validate",
+            label: "Check Standard Schema",
+            detail: "Zod, Valibot, ArkType, TypeBox",
+            tone: "accent",
+          },
+          {
+            eyebrow: "ok",
+            label: "Typed config",
+            detail: "fully inferred from your schema",
+            tone: "success",
+          },
+        ]} caption="On success you get a typed config object. On failure defineConfig() aggregates every issue into one ConfigValidationError and exits before the server binds a port." />
+
+## Quick start (from the environment)
+
+By default `defineConfig()` reads from `process.env`. The result is fully typed from your schema.
+
+```ts
+import { z } from "zod";
+import { defineConfig } from "@daloyjs/core";
+
+const Config = z.object({
+  PORT: z.coerce.number().int().min(1).max(65535),
+  DATABASE_URL: z.url(),
+  NODE_ENV: z.enum(["development", "production", "test"]),
+});
+
+// Top-level await at module scope; resolves only when validation passed.
+export const config = await defineConfig({ schema: Config });
+
+// config.PORT is a number, config.DATABASE_URL is a string, etc.
+```
+
+If any key is missing or malformed, the process prints a summary and throws before your server ever binds a port:
+
+```text
+defineConfig(): configuration is invalid (2 issues)
+  - PORT: Invalid input: expected number, received NaN
+  - DATABASE_URL: Invalid URL
+```
+
+## Use the validated config
+
+Load configuration before constructing the app, then pass the typed values into DaloyJS options and your runtime adapter:
+
+```ts
+import { App } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { config } from "./config.js";
+
+const app = new App({
+  env: config.NODE_ENV,
+  openapi: { info: { title: "API", version: "1.0.0" } },
+  docs: config.NODE_ENV !== "production",
+});
+
+serve(app, { port: config.PORT });
+```
+
+## Choosing a source
+
+The `source` option selects where the raw object comes from. The built-in sources are intentionally narrow. Anything more elaborate (Vault, Doppler, AWS Secrets Manager) arrives through the `custom` source with an async resolver.
+
+File sources read through `node:fs/promises`. On edge runtimes, prefer `env`, `object`, or `custom` sources supplied by the platform.
+
+```ts
+// Default: read from process.env
+await defineConfig({ schema: Config });
+await defineConfig({ schema: Config, source: "env" });
+
+// Read from an explicit env map (handy in tests)
+await defineConfig({ schema: Config, source: { kind: "env", env: customEnv } });
+
+// Read and parse a file on disk (defaults to JSON.parse)
+await defineConfig({
+  schema: Config,
+  source: { kind: "file", path: "./config.json" },
+});
+
+// Use a custom parser for dotenv, INI, TOML, or another text format
+await defineConfig({
+  schema: Config,
+  source: {
+    kind: "file",
+    path: "./config.env",
+    parse: (text) =>
+      Object.fromEntries(
+        text
+          .trim()
+          .split("\n")
+          .map((line) => {
+            const [key, ...value] = line.split("=");
+            return [key.trim(), value.join("=").trim()];
+          }),
+      ),
+  },
+});
+
+// Validate an in-memory object
+await defineConfig({
+  schema: Config,
+  source: {
+    kind: "object",
+    data: {
+      PORT: "3000",
+      DATABASE_URL: "https://example.com/db",
+      NODE_ENV: "test",
+    },
+  },
+});
+
+// Pull from an async secrets resolver
+await defineConfig({
+  schema: Config,
+  source: { kind: "custom", resolve: async () => fetchSecretsFromVault() },
+});
+```
+
+## Transforming before validation
+
+Use `transform` to coerce or rename raw values before they hit the schema, for example mapping `FOO_BAR` to `fooBar`, or normalizing string flags. It receives the raw source object and returns the object handed to the validator.
+
+```ts
+await defineConfig({
+  schema: Config,
+  transform: (raw) => ({
+    ...raw,
+    FEATURE_FLAGS: String(raw.FEATURE_FLAGS ?? "").split(","),
+  }),
+});
+```
+
+## Handling the error programmatically
+
+On failure, `defineConfig()` throws a `ConfigValidationError` whose `issues` array holds every `{ key, message }` pair. Catch it when you want to render the failures in a startup probe or dashboard instead of relying on the stderr summary.
+
+```ts
+import { defineConfig, ConfigValidationError } from "@daloyjs/core";
+
+try {
+  const config = await defineConfig({ schema: Config });
+  startServer(config);
+} catch (err) {
+  if (err instanceof ConfigValidationError) {
+    for (const issue of err.issues) {
+      reportToHealthDashboard(issue.key, issue.message);
+    }
+  }
+  throw err;
+}
+```
+
+The stderr summary is on by default. Set `stderr: false` to suppress the printed output. The thrown `ConfigValidationError` still carries `issues`.

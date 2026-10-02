@@ -1,0 +1,173 @@
+---
+title: Deploy to Replit
+description: Deploy a DaloyJS API to Replit as a Node web server. Covers pnpm, Node 24, Autoscale and Reserved VM Publishing, Secrets, PORT binding, 0.0.0.0, health checks, and Replit Agent guidance.
+keywords:
+  - Deploy DaloyJS to Replit
+  - Replit Node.js deployment
+  - Replit Autoscale deployment
+  - Replit Reserved VM deployment
+  - Replit PORT 0.0.0.0
+  - Replit Secrets DaloyJS
+  - replit.md DaloyJS
+---
+
+# Replit
+
+Replit can run DaloyJS as a Node web server. Use the [Node adapter](/docs/adapters/node), publish as a web server, and make sure the process listens on `0.0.0.0` and the platform-provided `PORT`. For APIs with variable traffic, start with Autoscale. For always-on workloads or long-running background work, use Reserved VM.
+
+<FlowDiagram title="Replit publish path" numbered steps={[
+          {
+            label: "Import or create",
+            detail: "GitHub import, template, or Agent project",
+            eyebrow: "replit",
+          },
+          {
+            label: "Install",
+            detail: "pnpm install, Node 24 LTS / 26+",
+          },
+          {
+            label: "Build",
+            detail: "pnpm build",
+          },
+          {
+            label: "Publish",
+            detail: "Autoscale or Reserved VM web server",
+            tone: "accent",
+          },
+          {
+            label: "Monitor",
+            detail: "Publishing logs, health, resources",
+            tone: "success",
+          },
+        ]} caption="A DaloyJS API is a long-running Node web server on Replit. Preview it first in the Project Editor, then publish with production secrets and the same start command." />
+
+## When to choose Replit
+
+- You want browser-based development plus deployment in one place.
+- You want Replit Agent to help inspect, modify, and publish the app.
+- You are deploying a small to medium Node API and want Autoscale or Reserved VM without writing Docker config.
+
+## 1. Check Node and pnpm
+
+DaloyJS requires **Node.js 24 LTS or Node.js 26+** and pnpm 11 or newer. In Replit Shell, verify the runtime before publishing:
+
+```bash
+node --version
+pnpm --version
+```
+
+Keep the requirement visible in `package.json` so Replit Agent and the publishing environment do not silently drift to an older runtime:
+
+```json
+{
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "packageManager": "pnpm@11.0.0"
+}
+```
+
+## 2. Server entrypoint
+
+Bind to all interfaces and use the `PORT` value provided by Replit. This matters for published apps, not only local preview.
+
+```ts
+// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.js";
+
+serve(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+});
+```
+
+## 3. Scripts
+
+Keep development and production commands separate. Use the production command in the Publishing pane.
+
+```json
+{
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js"
+  }
+}
+```
+
+## 4. Replit app configuration
+
+The `.replit` file controls the editor Run button. Publishing can also ask for build and run commands in the Publishing pane. Keep them aligned so Preview and the published app behave the same way.
+
+```toml
+run = "pnpm dev"
+
+[deployment]
+build = ["sh", "-c", "pnpm install --frozen-lockfile && pnpm build"]
+run = ["sh", "-c", "pnpm start"]
+```
+
+## 5. Publish
+
+1. Run the app in the Project Editor and open Preview. Fix Preview before publishing.
+2. Open **Publishing** and choose **Autoscale** for an API that should scale down when idle, or **Reserved VM** when you need an always-on machine.
+3. Set the build command to `pnpm install --frozen-lockfile && pnpm build`.
+4. Set the run command to `pnpm start`.
+5. Choose **Web server**, not Background worker.
+6. Add production Secrets for every required environment variable.
+
+## Secrets
+
+Replit Secrets are exposed to the app as environment variables. Add runtime values such as `NODE_ENV`, database URLs, auth secrets, JWT keys, and webhook secrets through Replit Secrets or published app secrets. Do not commit a `.env` file.
+
+```bash
+NODE_ENV=production
+SESSION_SECRET=...
+DATABASE_URL=...
+TRUST_PROXY_HOPS=1
+```
+
+## Trust Replit's proxy [#trust-replit-and-apos-s-proxy]
+
+Published Replit web apps sit behind Replit's edge proxy. If your DaloyJS app enables production forwarded-header protection, declare the proxy posture instead of disabling the guard:
+
+```bash
+TRUST_PROXY_HOPS=1
+```
+
+If you put Cloudflare or another proxy in front of Replit, count both hops and use `TRUST_PROXY_HOPS=2`. See the [deployment overview](/docs/deployment) for the proxy posture matrix.
+
+## Replit Agent guidance
+
+Replit Agent reads `replit.md` when it exists in the project root. Add a short file that tells Agent this is a DaloyJS API and that it must keep pnpm, Node 24, security defaults, and the production commands intact:
+
+```md
+# DaloyJS API on Replit
+
+- Package manager: pnpm only.
+- Runtime: Node.js 24 LTS or Node.js 26+.
+- Build: pnpm build.
+- Start: pnpm start.
+- Server must bind to process.env.PORT and hostname 0.0.0.0.
+- Do not remove secureHeaders(), requestId(), rateLimit(), body limits, request timeouts, or proxy posture checks.
+- Store secrets in Replit Secrets, never in committed files.
+```
+
+## Gotchas
+
+- Do not bind to `localhost` or `127.0.0.1` in a published web server. Use `0.0.0.0`.
+- Do not hard-code `PORT=80`. Let Replit provide `PORT` unless you have explicitly configured port mappings.
+- Published app secrets are part of publishing setup. Check them when Preview works but the published URL fails.
+- The app must keep running. A one-shot script belongs in Scheduled Deployments, not a web-server deployment.
+- Replit performs a health check before marking the published app live. Keep startup fast and serve a cheap `/healthz` endpoint.
+
+## See also
+
+- [Replit Autoscale Deployments](https://docs.replit.com/references/publishing/autoscale-deployments)
+- [Replit Reserved VM Deployments](https://docs.replit.com/references/publishing/reserved-vm-deployments)
+- [Replit publishing troubleshooting](https://docs.replit.com/build/troubleshooting)
+- [Replit app configuration](https://docs.replit.com/references/project-setup/configuration)
+- [Replit Secrets](https://docs.replit.com/core-concepts/project-editor/app-setup/secrets)
+- [replit.md](https://docs.replit.com/references/project-setup/replit-dot-md)

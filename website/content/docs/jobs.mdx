@@ -1,0 +1,641 @@
+---
+title: Background jobs (queue-agnostic)
+description: Enqueue JSON jobs after the HTTP response. JobStore SPI, MemoryJobStore for tests, a leased worker with retries and dead letters, and cronEnqueue for cluster-wide schedules. Zero runtime dependencies. Redis, Postgres, and SQS adapters live in your app.
+keywords:
+  - background jobs
+  - job queue
+  - queue-agnostic
+  - JobStore SPI
+  - service provider interface
+  - DaloyJS jobs
+  - cronEnqueue
+  - at-least-once delivery
+  - job idempotency key
+  - job worker leases
+  - lease fencing token
+  - full jitter backoff
+  - dead letter queue DLQ
+  - job queue glossary
+  - retry backoff dead letter
+  - Redis Postgres job adapter
+  - serverless enqueue
+sitemap:
+  priority: 0.8
+---
+
+# Background jobs (queue-agnostic)
+
+DaloyJS ships a background-job interface. Work that must outlive the HTTP request (and maybe the process) becomes a named handler plus a JSON payload, persisted behind the `JobStore` SPI and run by a leased worker with bounded retries. It is the durable counterpart to [in-process cron](/docs/scheduler), with zero runtime dependencies.
+
+**SPI** is short for *service provider interface*, the mirror image of an API. An API is the surface you call; an SPI is the surface you *implement* so the framework calls you. DaloyJS defines `JobStore` and ships one implementation (`MemoryJobStore`); your Redis, Postgres, or SQS adapter is the other. Every other term here that reads like queue jargon (lease, fencing, full jitter, dead letter, redrive, outbox) is defined in the [glossary](#glossary) at the end of the page.
+
+- **Idempotent enqueue.** A `(queue, idempotencyKey)` pair is unique. Retried producers (a client that re-POSTs, a cron tick firing on 8 replicas) collapse into one job instead of eight side effects.
+- **At-least-once worker.** Atomic claims with leases and heartbeats, retries with full-jitter backoff, per-attempt timeouts, and a dead-letter state for poison jobs. Graceful shutdown drains in-flight work.
+- **Bring your own durability.** `MemoryJobStore` covers tests and single-process dev. Production plugs Redis, Postgres, or a cloud queue in through the same SPI, as application code. DaloyJS never takes a storage dependency.
+
+<Callout type="note" title="Boundary with Temporal, Inngest, and Eve">
+<p>A job is <code>{"{ name, payload }"}</code> plus a store. It does not checkpoint, sleep for days, or park a workflow, so{" "}<code>await sleep("7 days")</code> in the middle of a function is out of scope. If the same TypeScript function must pause for hours and resume, use{" "}<a href="https://temporal.io" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Temporal</a>{", "}<a href="https://www.inngest.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Inngest</a>{", "}or Eve, and keep DaloyJS as the HTTP API in front of it. A handler that enqueues the next job is a job chain. Sagas with compensations belong in a workflow engine.</p>
+</Callout>
+
+The companion post [Background Jobs After the HTTP Response](/blog/background-jobs-after-the-http-response) covers the design argument. This page is the reference.
+
+<FlowDiagram title="One job, start to finish" numbered steps={[
+          {
+            label: "Enqueue",
+            detail: "HTTP handler / cron tick / another job",
+            eyebrow: "produce",
+          },
+          {
+            label: "JobStore.put",
+            detail: "durable record, idempotency key checked",
+            eyebrow: "persist",
+          },
+          {
+            label: "Claim",
+            detail: "atomic lease, lockedBy = workerId",
+            eyebrow: "consume",
+            tone: "accent",
+          },
+          {
+            label: "Handler runs",
+            detail: "ctx: job, signal, attempt, heartbeat, log",
+          },
+          {
+            label: "Completed",
+            detail: "terminal, optional result stored",
+            tone: "success",
+          },
+          {
+            label: "Dead",
+            detail: "fatal error or attempts spent",
+            tone: "danger",
+          },
+        ]} caption="A retry loops from the handler back to a delayed re-claim with full-jitter backoff. If the process dies after the handler succeeded but before complete is persisted, the lease expires and another worker runs the job again. Delivery is at-least-once, so handlers must be idempotent." />
+
+## Quick start
+
+Mount jobs with `app.useJobs()`. That creates the queue, optionally starts an in-process worker, and registers the graceful-shutdown drain. In-flight jobs get the grace period, then their `AbortSignal` fires and they fail back to the queue for another worker to claim.
+
+```ts
+import { createApp, MemoryJobStore, jobIdempotencyKey } from "@daloyjs/core";
+
+const app = createApp();
+
+app.useJobs({
+  // Tests / single-process dev. Production: your Redis/Postgres JobStore adapter.
+  store: new MemoryJobStore(),
+  handlers: {
+    "email.welcome": async ({ job, signal }) => {
+      const { to, locale } = job.payload as { to: string; locale: string };
+      await sendWelcomeEmail(to, locale, { signal }); // your mailer
+    },
+  },
+  startWorker: true, // this process also claims and runs jobs
+});
+
+app.post("/users", contract, async (ctx) => {
+  const user = await db.insertUser(ctx.body); // commit FIRST, then enqueue
+  await app.jobs!.enqueue({
+    name: "email.welcome",
+    payload: { userId: user.id, to: user.email, locale: user.locale },
+    tenant: ctx.state.tenant,
+    idempotencyKey: jobIdempotencyKey({
+      tenant: ctx.state.tenant,
+      name: "email.welcome",
+      key: user.id, // a duplicate of this request never double-sends
+    }),
+  });
+  return { status: 201 as const, body: user };
+});
+```
+
+Without an `App` (scripts, dedicated worker binaries, tests), drive the primitives directly. `worker.runOnce()` claims and settles one job, so tests stay deterministic without timers or Redis:
+
+```ts
+import {
+  createJobQueue,
+  createJobWorker,
+  MemoryJobStore,
+} from "@daloyjs/core/jobs";
+
+const queue = createJobQueue({ store: new MemoryJobStore() });
+const worker = createJobWorker({
+  queue,
+  handlers: {
+    "email.welcome": async ({ job }) => {
+      const { to } = job.payload as { to: string };
+      await sendWelcomeEmail(to, "en");
+    },
+  },
+});
+
+const { job, duplicate } = await queue.enqueue({
+  name: "email.welcome",
+  payload: { to: "ada@example.com" },
+});
+
+await worker.runOnce(); // true: claimed, ran, completed
+(await queue.get(job.id))?.status; // "completed"
+```
+
+A runnable end-to-end version of this flow (dedupe, a transient failure that succeeds on retry, graceful stop) ships in the repo as `examples/jobs-basic.ts`.
+
+## When to use
+
+Jobs are for work that must survive the HTTP request, or the process. If the work fits in the request, do not enqueue.
+
+```text
+Does the client need the result to build the HTTP response?
+  YES -> do it in the handler (maybe resilientFetch). Not a job.
+  NO  -> would losing this work on process crash / deploy be unacceptable?
+          NO  -> in-process is fine (handler fire-and-forget or app.cron).
+          YES -> can it be one named function + JSON payload, retried as a whole?
+                  NO  -> workflow engine (Temporal / Inngest / Eve). Daloy stays the API.
+                  YES -> JOBS (this feature).
+```
+
+- **Now, in this request.** Handler.
+- **Now, in this process, on a clock.** `app.cron()`
+- **Eventually, even if this process dies.** `jobs.enqueue`
+- **Same function must pause for hours and resume.** Temporal, Inngest, or Eve. Daloy stays the HTTP API.
+
+A job is worth it when most of these hold:
+
+1. The HTTP response can succeed without the side effect having finished (email, webhook fan-out, thumbnail, search index, PDF, analytics).
+2. The side effect may fail transiently (SMTP 421, Stripe 429, a 503 from Azure OpenAI) and should retry with backoff.
+3. A deploy, OOM, or rolling update must not drop the work.
+4. The unit of work is one handler, or you are willing to enqueue the next job at the end of this one (a job chain).
+5. Duplicate runs are safe because you pass an idempotency key through to the downstream API (delivery is at-least-once).
+6. The runtime is mixed: an API on Lambda/Workers cannot finish a two-minute PDF, but a Node worker pool can.
+
+### When not to use
+
+| Situation | Use instead |
+| --- | --- |
+| Need the result in the `200` body (quote a price, login, GET by id) | Handler, maybe with `responseCache` / `idempotency` |
+| Client retries the same POST (payments) | [`idempotency()`](/docs/idempotency) middleware, or both: HTTP idempotency *and* a job key |
+| Deliver *this* webhook before `send()` returns, few retries | [`createWebhookSender()`](/docs/webhook-delivery) |
+| Sweep *this process's* memory cache every 60s | `app.cron()` |
+| Multi-replica global nightly sweep | `cronEnqueue` → job (not raw `cron`) |
+| Human approval in two days, then continue the same function | Temporal / Eve / Inngest |
+| Multi-step saga with compensations (charge, then book, then email, and undo the charge if book fails) | Workflow engine, or an explicit job chain plus your own compensation jobs. |
+| CPU-heavy ML inference / GPU | Separate service. The job can call it. |
+| Huge blobs (video files) | Object-storage URL in the payload. The job processes the URL. Payloads cap at 64 KiB. |
+| Exactly-once banking ledger | Database transaction + an outbox table you own. The job consumer is still at-least-once |
+| Request-scoped rate limit / concurrency | `rateLimit` / `concurrencyLimit` |
+| Run the worker loop on Cloudflare Workers isolates | You can **enqueue** to a remote store from Workers. Do not poll there in v1. |
+
+## Where it runs
+
+The queue is producer-only and needs no timers, so any runtime can enqueue. The worker is a poll loop, so it belongs where a long-lived process exists.
+
+| Environment | Enqueue | Worker | Store |
+| --- | --- | --- | --- |
+| Unit tests | yes | `runOnce()` | Memory |
+| `daloy dev` single process | yes | optional in-process | Memory |
+| 1× Node VM, small prod | yes | in-process OK | Redis/Postgres |
+| Kubernetes, many pods | API pods | dedicated worker pods | Redis/Postgres |
+| Lambda / Workers | yes | **separate** Node service | remote only |
+| Cloud queue already exists | `put` adapter | cloud consumer or Daloy worker | SQS/Service Bus adapter |
+
+### A. Local dev / CI (always Memory) [#topology-a]
+
+One Node process: `MemoryJobStore` + `createJobWorker` + `runOnce()` in tests, or `startWorker: true` while developing. Use this for unit and integration tests. The store dies with the process, so it is not production-durable.
+
+### B. Single VPS / one replica (small prod) [#topology-b]
+
+One long-lived Node process serves HTTP and runs the worker (`useJobs({ startWorker: true })`). That is fine when side effects are light and brief deploy downtime is acceptable, if the store is Redis or Postgres so jobs survive the restart. Do not run Memory in production. `useJobs` logs a warning. `strictProduction: true` refuses to boot. Prefer `cronEnqueue` over `cron` for side effects, so a second process cannot double-send.
+
+### C. Kubernetes (AKS) [#topology-c]
+
+Deployment `api`: N pods, enqueue only (`startWorker: false`). Deployment `worker`: M pods, claim and run (`startWorker: true`, no public ingress). The store is Azure Cache for Redis or Azure Database for PostgreSQL through a `JobStore` adapter in your repo. Core does not ship that adapter. Ingress exposes only `api`. Workers need egress to the store plus SMTP, Stripe, or OpenAI. Set `terminationGracePeriodSeconds` above the worker's `stop(graceMs)` so SIGTERM drains instead of killing in-flight jobs.
+
+### D. Serverless API + always-on worker [#topology-d]
+
+Vercel, Lambda, or Cloudflare handlers enqueue to a remote store, then the isolate dies. A Node container (Container Apps, a VM, Fly.io) runs the worker. Do not set `startWorker: true` on Lambda or Workers in v1. Isolates are the wrong place for a poll loop.
+
+### E. The queue is SQS / Service Bus already [#topology-e]
+
+A `JobStore` adapter maps `put` → send message, `claim` → receive + visibility timeout, `complete` → delete, `fail` → the broker's native retry and dead-letter queue (DLQ). If Azure Functions or another consumer already drains the queue, DaloyJS can be producer-only. The worker is optional.
+
+### F. Multi-tenant SaaS [#topology-f]
+
+Every enqueue sets `tenant` and builds its key with `jobIdempotencyKey({ tenant, name, key })`, so two tenants cannot collide on the same natural key. Share one `queue: "mail"` with the tenant field on the record, or partition at the broker with a per-tenant queue name when isolation demands it. Jobs are not HTTP, so pass `ctx.state.tenant` explicitly. Nothing reads it for you.
+
+<Callout type="tip" title="Example: AKS + Redis layout">
+<p>DaloyJS is not Azure-specific. This is the sketch teams ask for. Secrets come from Key Vault into env on both deployments. Workload identity lives in your handler (Graph, Azure OpenAI). Jobs do not implement Entra.</p>
+<CodeBlock language="text" code={"Deployment/api     replicas: N   startWorker: false   PORT 3000 (public ingress)\nDeployment/worker  replicas: M   startWorker: true    no public Service\nSecret             DATABASE_URL / REDIS_URL (Key Vault -> env, both deployments)\nClock              ONE K8s CronJob -> authenticated POST that enqueues,\n                   or cronEnqueue on the api pods (duplicate ticks collapse\n                   into one job via the per-slot idempotency key)"} />
+</Callout>
+
+## Delivery is at-least-once [#delivery-semantics]
+
+A job is delivered at least once. The worker claims a record with an atomic lease (`lockedBy` + `leaseUntil`), runs your handler, then marks it complete. If the process dies between “handler succeeded” and “complete persisted”, the lease expires and another worker runs the handler again. Two enqueues with the same idempotency key and a deep-equal payload return one job (`duplicate: true`). The same key with a different payload throws `JobIdempotencyConflictError`.
+
+Handlers must be idempotent. For side effects that move money or send messages, pass a key through to the downstream API so a duplicate run is a no-op there. With Stripe, that is the `Idempotency-Key` header. The Daloy job key and the Stripe key should be the same natural value.
+
+```ts
+import { JobFatalError } from "@daloyjs/core/jobs";
+
+const worker = createJobWorker({
+  queue,
+  handlers: {
+    // You already returned 201 for the order; capture happens here.
+    "payments.capture": async ({ job, signal }) => {
+      const { orderId } = job.payload as { orderId: string };
+      const order = await db.getOrder(orderId);
+      if (!order) throw new JobFatalError("order vanished: " + orderId); // no retry
+      await stripe.paymentIntents.create(
+        { amount: order.totalCents, currency: order.currency, confirm: true },
+        { idempotencyKey: orderId }, // Stripe dedupes retries of THIS job
+      );
+      // Forward ctx.signal to any fetch-based I/O so timeouts unwind promptly.
+    },
+  },
+});
+```
+
+Long-running handlers get a heartbeat: the worker extends the lease every `leaseMs / 3` automatically, and `ctx.heartbeat()` extends it manually. If the lease is lost (it expired, another worker claimed the job, and this worker's writes are now fenced off), the handler's `signal` aborts so it stops touching the job. Keep `leaseMs` above your slowest expected attempt so the automatic heartbeat can keep the lease.
+
+A heartbeat that throws (a store outage, a dropped connection) is logged as `jobs.heartbeat_failed` and never becomes an unhandled rejection. After 3 consecutive failures (roughly one `leaseMs` of failed beats) the worker assumes the lease is gone, logs `jobs.lease_lost`, and aborts the local run (since 1.3.7). A successful beat resets the counter.
+
+A crashed worker (OOM, `SIGKILL`) never calls `fail`, so the attempt budget is also enforced when an expired lease is reclaimed: if the job already used its last attempt it dead-letters with `lastError` `"lease expired after max attempts"` instead of running again (since 1.3.7). A process-crashing poison job therefore stops after `maxAttempts` runs.
+
+## Job status machine [#status-machine]
+
+```text
+delayed  --(runAt <= now)----------> queued
+queued   --claim--------------------> running
+running  --complete-----------------> completed  (terminal)
+running  --fail, attempts < max-----> delayed (runAt = now + backoff) or queued
+running  --fail, attempts >= max----> dead       (terminal)
+running  --JobFatalError------------> dead       (terminal)
+running  --lease expired, attempts < max--> queued (attempts already counted)
+running  --lease expired, attempts >= max-> dead   (terminal, lastError =
+                                                    "lease expired after max attempts")
+queued / delayed / running --cancel-> cancelled  (terminal)
+completed / dead / cancelled: no transitions
+```
+
+Terminal records are not deleted on the spot. `completed`/`cancelled` are retained 24h and `dead` 7d (for inspection) by default, swept lazily on mutating operations. A dead job keeps its `lastError` message. Wire `onDead` to your alerting.
+
+## API reference
+
+Everything lives at `@daloyjs/core/jobs` and is re-exported from `@daloyjs/core`.
+
+### `createJobQueue(options)` [#api-create-job-queue]
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `store` (required) |  | The `JobStore` persistence backend. `MemoryJobStore` for tests / single process. |
+| `payloadMaxBytes` | 65536 | Max UTF-8 bytes of a serialized payload (and of a completion result). Jobs are not a blob store. |
+| `defaultQueue` | `"default"` | Partition used when enqueue omits `queue`. |
+| `defaultMaxAttempts` | 5 | Default starts before dead-letter. |
+| `defaultTimeoutMs` | 30000 | Per-attempt timeout. |
+| `defaultLeaseMs` | 30000 | Lease granted per claim. |
+| `backoff` | 200ms → 60s, full jitter | `{ baseDelayMs?, maxDelayMs?, random? }` retry policy. `random` is injectable for tests. |
+| `logger`, `now` |  | Structured logger. Injectable clock for deterministic tests. |
+
+### `queue.enqueue(options)` [#api-enqueue-options]
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `name` (required) |  | Handler registry key. Charset `^[a-zA-Z][a-zA-Z0-9._:-]{0,127}$`. |
+| `payload` (required) |  | Plain JSON only. Prototype-pollution keys (`__proto__`, `constructor`, `prototype`) are rejected, never stripped. |
+| `idempotencyKey` |  | Unique per queue. Same key + deep-equal payload returns `{ job, duplicate: true }`. Different payload throws. Build tenant-safe keys with `jobIdempotencyKey`. |
+| `queue` | `"default"` | Named partition. |
+| `runAt` / `delayMs` | now | Absolute earliest claim time, or a relative delay (ignored when `runAt` is set). Future times start as `delayed`. |
+| `priority` | 0 | Claim ordering: higher first. |
+| `maxAttempts` | 5 | Starts before dead-letter. |
+| `timeoutMs` | 30000 | Per-attempt timeout. Aborts the handler's `signal`. `0` disables (dangerous). |
+| `leaseMs` | 30000 | Lease duration per claim. |
+| `tenant` |  | Tenant discriminator copied onto the record for partitioning and logs. This is a data partition field. It is not authorization. |
+
+Also on the queue: `queue.get(id)` reads one job, `queue.cancel(id)` cancels a non-terminal job.
+
+### `createJobWorker(options)` [#api-create-job-worker]
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `queue` (required) |  | The `JobQueue` to claim from. |
+| `handlers` (required) |  | Name → handler map, frozen at construction. Unknown job names dead-letter as poison pills (a record no worker can ever run, parked instead of retried). No dynamic registration, no `import(job.name)`. |
+| `queues` | `[queue.defaultQueue]` | Partitions to claim from, in order. |
+| `concurrency` | 1 | Max jobs run in parallel (soft warn above 32). |
+| `pollIntervalMs` | 200 | Idle poll cadence. |
+| `workerId` | random UUID | Fencing identity written to `lockedBy`. |
+| `onDead`, `onComplete`, `onFail` |  | Lifecycle callbacks. Wire `onDead` to alerting. |
+| `timers`, `now`, `logger` |  | Injectable primitives, same shape as the Scheduler. |
+
+Worker methods: `start()` begins the poll loop, `stop(graceMs?)` drains in-flight jobs then aborts stragglers (they fail back to the queue), `runOnce()` settles one job (tests), `getState()` reports `{ running, inFlight, workerId }`.
+
+### `MemoryJobStore` [#api-memory-job-store]
+
+A correct, full implementation of the SPI for tests and single-process apps. It is not durable across processes and is invisible to other replicas. `useJobs` warns when it sees this store with production config. Payloads are serialized and re-parsed with the prototype-pollution-safe parser on every read, and returned as deep copies, so callers cannot mutate store state. Options: `capacity` (10,000 jobs, overflow sweeps expired terminal records then throws `store_full` without evicting queued work), `retentionMs` (24h for completed/cancelled), `deadRetentionMs` (7d), and an injectable `now`. Adds `list(filter)` and `dump()` for test inspection.
+
+### Errors [#api-errors]
+
+| Error | Thrown when |
+| --- | --- |
+| `JobConfigError` | Config or enqueue-time rejection, nothing persisted. Codes: `invalid_name`, `invalid_payload`, `payload_too_large`, `invalid_option`, `unknown_handler`, `store_required`, `store_full`. |
+| `JobIdempotencyConflictError` | An idempotency key was reused with a different payload fingerprint. |
+| `JobFatalError` | Throw inside a handler for permanent failure: the job dead-letters immediately, no retry. |
+| `JobTimeoutError` | A per-attempt `timeoutMs` elapsed. Retried like any other throw. |
+
+## `cron` vs `cronEnqueue` vs jobs [#cron-vs-jobs]
+
+|  | `app.cron()` | `app.cronEnqueue()` | `jobs.enqueue()` |
+| --- | --- | --- | --- |
+| Clock-driven | yes | yes | no (you enqueue) |
+| Work runs | in this process | on any worker | on any worker |
+| Survives restart | re-fires next tick | yes (job persisted) | yes (job persisted) |
+| Once, cluster-wide | no (per-process timers) | yes (per-slot key) | yes (with a key) |
+| Use for | Process-local maintenance: cache sweeps, token refresh | Global scheduled side effects: nightly reconcile, digest mail | Side effects offloaded from a request |
+
+`cronEnqueue` registers a scheduler task whose tick enqueues a job instead of running the side effect in-process:
+
+```ts
+app.cronEnqueue(
+  { name: "nightly-reconcile", cron: "0 2 * * *" },
+  { name: "ops.reconcile", payload: {} },
+);
+// Every replica may tick. The derived idempotency key
+// "cron:nightly-reconcile:<schedule slot>" is identical on all of them,
+// so 8 ticks collapse into 1 job and exactly 1 worker runs it.
+// Requires app.useJobs() first; it throws store_required at registration
+// otherwise, not silently at the first tick.
+```
+
+Sweeping *this* isolate's `MemoryResponseCacheStore` must stay `app.cron()`, because other replicas have their own memory. A job would run on one random worker and sweep the wrong process's cache.
+
+## Production stores and the JobStore SPI [#production-stores]
+
+All durability lives behind `JobStore`. DaloyJS ships the SPI and the Memory implementation. Redis, Postgres, SQS, and similar backends are adapters in your repository, so the core keeps zero runtime dependencies and your queue choice stays yours. Each method owes this atomicity:
+
+| Method | Contract |
+| --- | --- |
+| `put(job, fingerprint)` | Insert. `fingerprint` is a SHA-256 hex digest of the serialized payload (`null` when no idempotency key is set), supplied so adapters compare payloads without re-hashing. Idempotency key present and seen: return the existing job with `duplicate: true` (first writer wins, even if terminal). If the fingerprint differs, throw `JobIdempotencyConflictError`. Must be atomic. |
+| `claim(queue, workerId, now)` | Atomically pick the next runnable job in this queue (highest priority, then oldest), set `running` + lease + owner, increment `attempts`. Two concurrent claims must never hand out the same job. `null` when idle. An expired-lease job whose `attempts >= maxAttempts` must be dead-lettered, not claimed (see below). |
+| `heartbeat(id, workerId, leaseUntil, now, attempt?)` | Extend the lease while still owned. `false` means the lease was lost (not running, wrong owner, stale attempt, or already expired). The caller must stop touching the job. |
+| `complete(id, workerId, now, result, attempt?)` | Mark `completed` (terminal), storing an optional result. `false` when the lease was lost. |
+| `fail(id, workerId, error, next, now, attempt?)` | Apply `next`: requeue `delayed`/`queued`, or `dead` when the attempt budget is spent. `false` when the lease was lost (another worker, or a newer claim, owns the job). |
+| `cancel(id, now)` | Cancel a non-terminal job. Terminal returns false. |
+| `get(id, now)` | Read one job. Reap an expired lease lazily before the snapshot. |
+| `list?(filter)` | Optional filtered listing (queue/status/name/tenant). Required on Memory for tests. Production adapters may omit it. |
+
+Two rules for adapter authors (since 1.3.7). A third, optional method, `takeReaped(queue, now)`, lets the worker report a job your reaper dead-lettered: return (and forget) each such job once, and the worker emits the usual `jobs.dead` log (with `reason: "lease_expired"`) plus `onFail` / `onDead`. Without it those jobs are still `dead` in the store, just not announced.
+
+- **Attempt fencing.** `heartbeat`, `complete`, and `fail` receive an optional `attempt` argument: the `attempts` value of the caller's claim. When it is supplied, reject the write unless it equals the record's current `attempts`. That stops a stale run of the same `workerId` (an earlier claim) from overwriting a newer claim. The parameter is optional for backward compatibility; an adapter that ignores it fences on `workerId` only, which is weaker.
+- **Dead-letter on final lease expiry.** Wherever your store reclaims an expired lease (in `claim`, `get`, or a reaper), a `running` job with `attempts >= maxAttempts` must become `dead` with `lastError` `"lease expired after max attempts"` instead of going back to `queued`. Otherwise a job that crashes the process reruns forever. As defence in depth the worker also refuses to run a claimed job whose `attempts` exceeds `maxAttempts` and dead-letters it with a `JobFatalError`.
+
+```ts
+// Illustrative: `row` is your adapter's mutable stored record.
+// Fencing check shared by heartbeat / complete / fail.
+function ownedRunning(row: Row | undefined, workerId: string, attempt?: number) {
+  if (!row || row.status !== "running" || row.lockedBy !== workerId) return undefined;
+  if (attempt !== undefined && row.attempts !== attempt) return undefined; // stale claim
+  return row;
+}
+
+// Reaping an expired lease: never hand a spent job out again.
+if (row.status === "running" && row.leaseUntil !== null && row.leaseUntil < now) {
+  if (row.attempts >= row.maxAttempts) {
+    row.status = "dead";
+    row.lastError = "lease expired after max attempts";
+  } else {
+    row.status = "queued";
+  }
+  row.lockedBy = null;
+  row.leaseUntil = null;
+}
+```
+
+A Redis adapter is application code. The sketch below is docs-only (implement `JobStore`, DaloyJS does not ship Redis):
+
+```ts
+// src/jobs/redis-store.ts - application code, NOT shipped by DaloyJS.
+// Illustrative sketch: bring your own redis client and own the atomics.
+import type { EnqueueResult, Job, JobStore } from "@daloyjs/core/jobs";
+
+export class RedisJobStore implements JobStore {
+  constructor(private redis: RedisClient) {}
+
+  async put(job: Job, fingerprint: string | null): Promise<EnqueueResult> {
+    // Idempotency: SET queue:{q}:idem:{key} -> job.id NX.
+    // On a hit, load the winner and compare fingerprints (conflict throws).
+    // On a miss, HSET job:{id} and ZADD queue:{q} (score = runAt, priority).
+    // One Lua script keeps the pair atomic.
+    // ...
+  }
+
+  async claim(queue: string, workerId: string, now: number): Promise<Job | null> {
+    // Lua: ZRANGEBYSCORE queue:{q} up to now -> HSET job:{id} status=running,
+    // lockedBy=workerId, leaseUntil=now+leaseMs, attempts+1 -> ZREM.
+    // The SET-lock equivalent: SET job:{id}:lock workerId PX leaseMs NX.
+    // Also requeue records whose leaseUntil < now (lease-expired crashes),
+    // or mark them dead when attempts >= maxAttempts.
+    // ...
+  }
+
+  // heartbeat: extend PX only when the lock value is still workerId
+  //   and, when attempt is passed, attempts === attempt.
+  // complete / fail / cancel: compare-lock (+ attempt), update hash.
+  // get: HGETALL, then lazily reap when leaseUntil < now (same dead rule).
+}
+```
+
+SQS / Service Bus adapters map even more directly: `put` is send-message, `claim` is receive with a visibility timeout (the broker's name for a lease), `complete` is delete, and `fail` is the native redrive policy that moves the message to a dead-letter queue.
+
+## Recipes
+
+The recipes below cover the cases people hit first. Each names the job, the payload shape, the idempotency key, and the fatal-vs-retry split. The full list of fourteen is at the end of this section.
+
+### 1. Welcome email after signup [#recipe-welcome-email]
+
+Shown end to end in the [quick start](#quick-start). SMTP must not delay the 201. Payload is `{ userId, to, locale }`, never the password. Key per user id. Retry SMTP 4xx and timeouts. Throw `JobFatalError` on an unknown user or a permanent bounce.
+
+### 2. Stripe (or any provider) webhook → 202 + job [#recipe-webhook-202]
+
+Providers demand a fast 2xx and will disable endpoints that time out. Verify the signature, enqueue, and return 202. Entitlements and invoice work run in the worker.
+
+```ts
+app.post("/webhooks/stripe", contract, async (ctx) => {
+  const event = verifyStripeSignature(ctx); // your existing check, first
+  await app.jobs!.enqueue({
+    name: "billing.stripe_event",
+    // The id and type, not the megabyte event body: the handler re-fetches
+    // or reads your stored copy.
+    payload: { providerEventId: event.id, type: event.type },
+    idempotencyKey: jobIdempotencyKey({
+      name: "billing.stripe_event",
+      key: event.id, // Stripe event ids are already unique: provider retries
+                     // of the webhook collapse into one job.
+    }),
+  });
+  return { status: 202 as const, body: { received: true } };
+});
+// Handler: retry downstream 503s; JobFatalError on event types you refuse.
+```
+
+### 9. LLM / Azure OpenAI batch → 202 + job id [#recipe-ai-202]
+
+A two-minute summarization cannot hold an API request, and cannot run on a Workers isolate at all. Return 202 with the job id and let the client poll a status route you write. DaloyJS mounts no `/jobs` HTTP API.
+
+```ts
+app.post("/tickets/:id/summary", contract, async (ctx) => {
+  const { job } = await app.jobs!.enqueue({
+    name: "ai.summarize_ticket",
+    payload: { ticketId: ctx.params.id }, // handler loads the text itself
+    maxAttempts: 3,
+    timeoutMs: 120_000,
+    idempotencyKey: jobIdempotencyKey({
+      name: "ai.summarize_ticket",
+      key: ctx.params.id,
+    }),
+  });
+  return { status: 202 as const, body: { jobId: job.id } };
+});
+
+// Handler: call Azure OpenAI with your credential + ctx.signal.
+// Retry 429/5xx; JobFatalError on a 400 (bad prompt / policy).
+// Status route (yours): GET /jobs/:id -> queue.get(id) -> { status, result }.
+```
+
+### 12. Idempotent payment capture off the request [#recipe-payment-capture]
+
+Shown in [delivery semantics](#delivery-semantics). The order already returned 201, capture runs as a job, and the handler sends Stripe `Idempotency-Key: orderId` so retries of the job are no-ops at Stripe. The Daloy job key and the Stripe key are different systems. Set them to the same natural value so you never confuse the two.
+
+### 7. Nightly reconciliation, once, cluster-wide [#recipe-cron-global]
+
+Shown in [cron vs cronEnqueue](#cron-vs-jobs): `cronEnqueue` turns every replica's 02:00 tick into one idempotent enqueue. The key includes the calendar slot, so tonight's run never dedupes against tomorrow's.
+
+### 8. Process-local cache sweep [#recipe-cache-sweep]
+
+This stays on `app.cron()`. It sweeps *this* process's memory, and the other replicas sweep their own. Enqueueing this work would sweep one random worker's cache and leave the API pods dirty.
+
+### All fourteen instances [#all-instances]
+
+1. **Welcome email after `POST /users`**: payload `{ userId, to, locale }`. Key per user. Fatal on permanent bounce.
+2. **Provider webhook processing**: signature at HTTP, 202 immediately. Payload `{ providerEventId, type }`. Key = provider event id.
+3. **Outbound webhook that must live 24h**: `webhook.deliver` with `{ url, eventType, bodyId }`. The handler calls `createWebhookSender()` once. `JobFatalError` when the sender dead-letters so you do not retry forever in two systems.
+4. **Search reindex**: `search.index_article` with `{ articleId }`. Key articleId + version (or last-write-wins in the handler). `delayMs: 500` coalesces bursts.
+5. **Thumbnail / PDF / image variant**: `media.derive` with `{ blobUrl, ownerId, variant }`, a URL on blob storage, never bytes. Fatal on unsupported MIME.
+6. **Fan-out notifications**: one domain event enqueues N jobs (`notify.email`, `notify.sms`) or one `notify.fanout` that enqueues children. That is a job chain.
+7. **Nightly tenant reconciliation**: `cronEnqueue` on 8 replicas, instead of `app.cron()`.
+8. **Process-local cache sweep**: `app.cron()`
+9. **LLM batch off the API**: 202 + job id. The client polls your status route.
+10. **Graph / Entra invite user**: `entra.invite` with `{ userId }`. Your 201 is the local user row. Fatal on 404 user deleted.
+11. **Data export (GDPR dump)**: the worker writes the zip to blob storage, then enqueues `email.export_ready`. That is a job chain.
+12. **Idempotent payment capture**: Stripe `Idempotency-Key` set to the same natural key as the job.
+13. **Test suite**: Memory + `runOnce()` + fake timers. No Redis in CI.
+14. **MCP / agent tool that would time out the client**: return a job id fast, then let the agent poll.
+
+## Runtime matrix
+
+| Runtime | Enqueue | Worker poll loop |
+| --- | --- | --- |
+| Node 24+ | yes | yes (primary) |
+| Bun | yes | yes |
+| Deno | yes | yes |
+| Cloudflare Workers | yes, if the store is remote (KV/D1/HTTP). Memory is request-scoped and wrong. | no, in v1 |
+| Vercel / Lambda | yes, with a remote store | no. Use a separate Node worker service |
+| Tests (`node:test`) | yes | `runOnce()` + fake timers |
+
+## Security model [#security]
+
+| Threat | Control |
+| --- | --- |
+| Prototype pollution in payloads | Forbidden keys (`__proto__`, `constructor`, `prototype`) rejected at enqueue and on every store read via the shared safe parser |
+| Huge-payload OOM | `payloadMaxBytes` (64 KiB default) |
+| Job-name injection / path traversal | Anchored charset allowlist, linear-time, ReDoS-free |
+| Tenant key injection | Tenant grammar shared with `tenancy()`. `jobIdempotencyKey` builds prefixed keys. |
+| Handler RCE | The registry is frozen at construction, so a job record cannot `eval`, `new Function`, or `import(job.name)` |
+| SSRF in handlers | Wrap handler fetches in [`fetchGuard`](/docs/security/fetch-guard) |
+| Unauthenticated `/jobs` HTTP API | None exists. Status/polling routes are yours to mount, with your auth |
+| Memory store in prod, jobs lost | Warning log from `useJobs`. `strictProduction: true` refuses to boot |
+| Worker runs another tenant's jobs | `tenant` is data. Store filtering is the adapter's job. Memory supports `list({ tenant })` |
+| PII in logs | Log job id, name, queue, attempts. Payloads at debug level only. |
+| Cross-queue claims | `claim(queue)` only ever claims its own partition |
+
+Config-time throws: `concurrency < 1`, `maxAttempts < 1`, `payloadMaxBytes < 1`, a missing store, `cronEnqueue` before `useJobs`, a handler name outside the charset, or a duplicate `define`. Boot warnings: Memory in production, `startWorker` without handlers, `concurrency > 32`.
+
+## Jobs next to cron, idempotency, and webhooks [#comparison]
+
+| Primitive | Runs where | Survives restart | Use for |
+| --- | --- | --- | --- |
+| [`app.cron()`](/docs/scheduler) | this process | re-fires next tick | Process-local maintenance on a clock |
+| [`idempotency()`](/docs/idempotency) | in-request | n/a | Client-retried POSTs never double-apply |
+| [`createWebhookSender()`](/docs/webhook-delivery) | in-request | no | Deliver this webhook now, with a few retries |
+| **Jobs (this page)** | any worker, any runtime | yes, via the store | Side effects after the HTTP response |
+| Workflow engines (Temporal / Inngest / Eve) | their service | yes | Multi-step durable functions, human waits, sagas with compensations |
+
+## Anti-patterns
+
+1. **Enqueue before the DB commit.** The job runs, the row is missing, and you get spurious retries. Commit first, then enqueue (or use a transactional outbox: insert the order and the outbox row in one SQL transaction, and let a drainer call `JobStore.put`).
+2. **File bytes in the payload.** Payloads cap at 64 KiB. Store the blob, enqueue the URL.
+3. **`startWorker: true` on every API replica and a worker deployment, without idempotency keys.** That is the duplicate-send scenario. Pick one topology per queue, and always set keys.
+4. **Catch-all handler (`handlers[job.name] = dynamicImport`).** Forbidden. A store record must never pick the code that runs it. The registry is frozen at construction for this reason.
+5. **Jobs as a distributed cron lock without keys.** “Only one nightly run in the cluster” works because of the per-slot idempotency key. The queue alone does not provide that uniqueness. Without a key there is no uniqueness guarantee.
+6. **Treating `completed` as exactly-once evidence for money movement.** A completed job proves the handler finished at least once. Money needs the downstream idempotency key (or a ledger transaction you own).
+7. **MemoryJobStore behind a load balancer.** Each replica gets its own private queue. Use a shared store, or accept that jobs are process-local.
+
+## Glossary
+
+Queues borrow vocabulary from three unrelated worlds: Java service loading, distributed locking, and cloud message brokers. A reader who knows one of the three still trips on the other two. Every term this page uses is defined below, in the sense DaloyJS means it.
+
+### The interface [#glossary-interface]
+
+| Term | What it means here |
+| --- | --- |
+| **SPI** | *Service provider interface.* An interface the framework defines and *your* code implements, so the framework calls you. It is the mirror image of an API, which is code you call. `JobStore` is the only SPI in this feature: DaloyJS ships the interface plus `MemoryJobStore`, and your Redis, Postgres, or SQS class is the second implementation. The term comes from Java, where JDBC drivers, `ServiceLoader`, and SLF4J bindings all work this way. |
+| **Adapter** | One concrete implementation of the SPI for one backend. It lives in your repository, not in `@daloyjs/core`, which is how the core keeps zero runtime dependencies while still supporting Redis, Postgres, SQS, or Service Bus. |
+| **Producer / consumer** | The producer calls `enqueue` (an HTTP handler, a cron tick, another job). The consumer is a worker that claims and runs. One process can be both, or producer-only with `startWorker: false`. |
+| **Queue** (partition) | A named subset of jobs. `claim(queue)` never crosses partitions, so `"mail"` and `"video"` can have separate workers, concurrency, and priorities without competing for each other's records. |
+| **Topology** | How producers, workers, and the store are spread across processes and machines. The six worth naming are [A through F](#topology-a) above. |
+
+### Delivery, retries, and failure [#glossary-delivery]
+
+| Term | What it means here |
+| --- | --- |
+| **At-least-once** | Every enqueued job runs one or more times, never zero. The gap between “handler succeeded” and “completion persisted” is a real crash window, and re-running is how it is closed. There is no exactly-once mode. |
+| **Idempotent handler** | Running it twice leaves the world in the same state as running it once. Not a nice-to-have: it is the price of at-least-once delivery. |
+| **Idempotency key** | The dedupe token on `enqueue`, unique per `(queue, key)`. Same key plus a deep-equal payload returns the existing job with `duplicate: true` instead of creating a second one. |
+| **Payload fingerprint** | A SHA-256 hex digest of the serialized payload, handed to `JobStore.put` alongside the record. It is how a store detects “same key, different payload” and throws `JobIdempotencyConflictError` without re-hashing anything itself. |
+| **Attempt budget** | `maxAttempts`. Every claim increments `attempts`, including a claim that only happened because a lease expired. When the budget is spent, the next failure is terminal instead of another retry, and so is the next lease expiry (a crash on the final attempt). |
+| **Backoff** | The wait before a failed job becomes claimable again. Exponential here: the ceiling doubles per attempt from `baseDelayMs` until it reaches `maxDelayMs`. |
+| **Full jitter** | The delay is a random point in the whole interval, `random(0, min(maxDelayMs, baseDelayMs * 2^attempt))`, rather than the ceiling itself. Without it, 500 jobs that failed on one outage retry in lockstep and flatten the dependency again the moment it recovers (a *thundering herd*). “Full” distinguishes it from the equal-jitter variant, which randomizes only half the interval. |
+| **Dead letter** | The `dead` status: a terminal parking state for a job that spent its attempt budget or threw `JobFatalError`. It is neither retried nor deleted on the spot, and it keeps `lastError` for 7 days so a human can read what happened. Used as a verb too: a job *dead-letters*. |
+| **DLQ** | Dead-letter queue: the broker-native form of the same idea in SQS or Service Bus, where failed messages are moved to a separate physical queue. A DLQ is a place; the DaloyJS `dead` status is a field on the record. An adapter maps one onto the other. |
+| **Redrive** | The SQS term for moving messages back out of a DLQ into the main queue once you have shipped the fix, so they get another run. |
+| **Poison pill** | A job that can never succeed however often it is retried: an unregistered handler name, a payload the handler cannot parse, a row somebody deleted. These dead-letter immediately instead of burning the whole attempt budget and the backoff window. |
+| **Terminal** | `completed`, `dead`, and `cancelled`. No transition leaves these states. Retention sweeps them later (24h, or 7d for `dead`). |
+
+### Ownership and lifetime [#glossary-ownership]
+
+| Term | What it means here |
+| --- | --- |
+| **Lease** | A time-boxed exclusive claim on one job: `lockedBy = workerId` plus `leaseUntil`. A lock with a deadline, which is the point: when a worker dies mid-job nobody is left to release a plain lock, but a lease simply expires and the job becomes claimable again. |
+| **Heartbeat** | Pushing `leaseUntil` further out while still working, so a slow-but-healthy handler is not mistaken for a dead one. The worker does it automatically every `leaseMs / 3`; `ctx.heartbeat()` does it on demand around an unusually slow step. |
+| **Fencing** | Passing `workerId` on every write so a worker whose lease already expired cannot clobber the job that another worker now owns. The store returns `false` to the loser and its `AbortSignal` fires. The `workerId` plus the claimed `attempt` number (since 1.3.7) form the fencing token, and the pattern is what stops a process that was paused (GC, a stalled VM) from writing stale results on resume. |
+| **Reap** | Returning a job whose lease expired to `queued` (or to `dead` when its attempt budget is spent) lazily, on the next read or mutation, rather than running a background reaper loop. |
+| **Visibility timeout** | What SQS calls a lease: a received message is hidden from other consumers for N seconds and reappears if nobody deletes it in time. An SQS adapter maps `claim` straight onto it. |
+| **Drain** | Shutdown that stops claiming new jobs and gives in-flight ones a grace period to finish. `stop(graceMs)` then aborts the stragglers, which fail back to the queue for another worker. Keep Kubernetes `terminationGracePeriodSeconds` above `graceMs` or the pod is killed mid-drain. |
+
+### Patterns named on this page [#glossary-patterns]
+
+| Term | What it means here |
+| --- | --- |
+| **Job chain** | A handler enqueues the next job as its last act. This is how DaloyJS expresses multi-step work without becoming a workflow engine: each link is retried independently, and there is no shared execution history tying them together. |
+| **Fan-out** | One domain event produces N jobs, either enqueued in a loop by the producer or by a single parent job that enqueues the children. |
+| **Coalesce** | Collapsing a burst of near-identical enqueues into one run, by pairing a small `delayMs` with a stable idempotency key. Reindexing a document once after forty edits in a second, instead of forty times. |
+| **Transactional outbox** | Insert the business row and an outbox row in a single database transaction, then let a drainer read the outbox and call `JobStore.put`. It closes the window where the commit succeeds and the enqueue does not, which no amount of ordering in application code can close on its own. |
+| **Saga** / compensation | A multi-step distributed transaction where every step carries an explicit undo (the compensation), because the steps span systems that share no rollback. Charge, then book, then undo the charge when booking fails. Out of scope for jobs: use a workflow engine, or write the compensations as jobs yourself and own the correctness. |
+
+## Not in v1 [#later]
+
+- First-party `@daloyjs/jobs-postgres` / Redis adapters as separate packages with their own dependencies
+- A signed job-completion HTTP callback helper (auth + idempotency)
+- Recurring job definitions beyond `cronEnqueue`
+- Job metrics / OTLP export
+- Cloudflare `waitUntil` run-once semantics
+- Workflow engines as store backends, and batch enqueue
+
+Until those land, implement `JobStore` in your repo and keep the handler registry explicit. The [companion blog post](/blog/background-jobs-after-the-http-response) covers the design argument. `examples/jobs-basic.ts` is the runnable reference.

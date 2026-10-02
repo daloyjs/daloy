@@ -1,0 +1,179 @@
+---
+title: Pagination & cursor helpers
+description: "Paginate list endpoints with the built-in, dependency-free cursor helpers: opaque base64url cursor encode/decode, RFC 8288 Link header emission, and a paginationQuery() Standard Schema that validates the cursor + limit query parameters and wires them into the generated OpenAPI document and typed client."
+keywords:
+  - cursor pagination
+  - opaque cursor
+  - Link header
+  - RFC 8288
+  - DaloyJS paginationQuery
+  - encodeCursor
+  - decodeCursor
+  - OpenAPI parameters
+  - limit query parameter
+  - keyset pagination
+sitemap:
+  priority: 0.8
+---
+
+# Pagination & cursor helpers
+
+List endpoints need a way to page through results that is stable under concurrent writes, cheap on the database, and self-describing in the contract. DaloyJS ships **built-in, dependency-free** cursor-pagination helpers that cover all three concerns: an **opaque cursor** codec, an **RFC 8288 `Link` header** builder, and a `paginationQuery()` Standard Schema that validates the `cursor` / `limit` query parameters *and* wires them into the generated OpenAPI document and typed client.
+
+Everything is built on Web-standard `URL`, `btoa` / `atob`, and `JSON`, so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
+
+<FlowDiagram title="One page of a cursor-paginated list" numbered steps={[
+          {
+            eyebrow: "validate",
+            label: "paginationQuery()",
+            detail: "typed { limit, cursor }",
+          },
+          {
+            eyebrow: "decode",
+            label: "decodeCursor()",
+            detail: "opaque token to sort key",
+          },
+          {
+            eyebrow: "query",
+            label: "Fetch limit + 1 rows",
+            detail: "one extra row reveals next page",
+            tone: "accent",
+          },
+          {
+            eyebrow: "encode",
+            label: "encodeCursor(last row)",
+            detail: "next cursor or null",
+          },
+          {
+            eyebrow: "advertise",
+            label: "buildPageLinks() Link header",
+            detail: "rel=next · prev · first",
+            tone: "success",
+          },
+        ]} caption="paginationQuery() validates and coerces the limit and cursor query params, decodeCursor() turns the opaque token back into a sort key, and fetching limit + 1 rows reveals whether another page exists. The last row becomes the next cursor, advertised through an RFC 8288 Link header." />
+
+## Quick start
+
+Mount `paginationQuery()` as the route's `request.query`. The handler receives a fully typed, validated `{ limit, cursor }`. Build the next cursor from the last row and advertise it with a `Link` header.
+
+```ts
+import {
+  App,
+  paginationQuery,
+  encodeCursor,
+  decodeCursor,
+  buildPageLinks,
+} from "@daloyjs/core";
+
+const app = new App();
+
+app.get(
+  "/books",
+  {
+    operationId: "listBooks",
+    request: { query: paginationQuery({ defaultLimit: 25, maxLimit: 100 }) },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ query, request, set }) => {
+    const { limit, cursor } = query; // typed + validated
+    const after = cursor ? decodeCursor<{ id: number }>(cursor).id : 0;
+
+    // Fetch limit + 1 to know whether another page exists.
+    const rows = await db.books.findMany({
+      where: { id: { gt: after } },
+      orderBy: { id: "asc" },
+      take: limit + 1,
+    });
+
+    const page = rows.slice(0, limit);
+    const next =
+      rows.length > limit
+        ? encodeCursor({ id: page[page.length - 1].id })
+        : null;
+
+    const { linkHeader } = buildPageLinks({ url: request.url, next });
+    if (linkHeader) set.headers.set("Link", linkHeader);
+
+    return { status: 200 as const, body: { items: page } };
+  },
+);
+```
+
+## Opaque cursors
+
+`encodeCursor()` serializes any JSON-serializable value (typically the sort key of the last row) into a compact, URL-safe base64url token. `decodeCursor()` reverses it.
+
+```ts
+const cursor = encodeCursor({ id: 42, createdAt: "2026-05-31T00:00:00.000Z" });
+// "eyJpZCI6NDIsImNyZWF0ZWRBdCI6IjIwMjYtMDUtMzFUMDA6MDA6MDAuMDAwWiJ9"
+
+const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
+// { id: 42, createdAt: "2026-05-31T00:00:00.000Z" }
+```
+
+Decoding is hardened: the input is capped at `MAX_CURSOR_LENGTH` (4 KiB), malformed base64url and invalid JSON are rejected, and any `__proto__` / `constructor` / `prototype` keys in the decoded graph are stripped (prototype-pollution defense). A tampered cursor surfaces as a `400 Bad Request`, not a `500`.
+
+```ts
+try {
+  decodeCursor(untrustedCursor);
+} catch (err) {
+  // BadRequestError -> 400 problem+json
+}
+```
+
+## RFC 8288 Link header
+
+`buildPageLinks()` clones the current request URL and swaps its cursor query parameter to produce `next`, `prev`, and `first` page URLs, preserving every other query parameter (filters, `limit`, ...), then serializes them into a single `Link` header.
+
+```ts
+const { links, linkHeader, urls } = buildPageLinks({
+  url: request.url,
+  next: nextCursor,
+  prev: prevCursor,
+  first: true,
+});
+
+// linkHeader:
+//   <https://api.example.com/books?cursor=NEXT>; rel="next",
+//   <https://api.example.com/books?cursor=PREV>; rel="prev",
+//   <https://api.example.com/books>; rel="first"
+
+set.headers.set("Link", linkHeader);
+// urls.next / urls.prev / urls.first are also available for a JSON body.
+```
+
+Need lower-level control? `buildLinkHeader()` serializes an explicit list of `{ url, rel, title? }` entries. Both builders reject control characters, `<`/`>` in URLs, and `"`/`\\` in rel/title values: a structural defense against `Link`-header / response-splitting injection.
+
+## OpenAPI parameter wiring
+
+Because `paginationQuery()` exposes a `toJSONSchema()` method, the OpenAPI generator emits the `cursor` and `limit` query parameters into the contract automatically, with no duplicate parameter declarations, and the typed client picks them up on the next `pnpm gen`.
+
+```yaml
+// Generated for GET /books:
+// parameters:
+//   - in: query
+//     name: limit
+//     schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+//   - in: query
+//     name: cursor
+//     schema: { type: string, maxLength: 4096 }
+```
+
+At runtime the same schema coerces `limit` from its string query value to an integer and rejects out-of-range or non-integer values at the request boundary with a `422`. Customize the parameter names and bounds:
+
+```ts
+paginationQuery({
+  cursorParam: "after",   // default "cursor"
+  limitParam: "perPage",  // default "limit"
+  defaultLimit: 20,        // default min(20, maxLimit)
+  minLimit: 1,             // default 1
+  maxLimit: 100,           // default 100
+});
+```
+
+## Security notes
+
+- Cursors are **opaque**. They are encoded without encryption or a signature. Never trust a decoded cursor for authorization. Always re-scope the underlying query by the authenticated principal on the server.
+- `decodeCursor()` caps input length, rejects malformed tokens, and strips prototype-pollution keys, so a hostile cursor cannot crash the handler or poison object prototypes.
+- The `Link` builders reject CRLF, angle brackets, and quote characters, preventing header-injection through computed URLs or titles.
+- `maxLimit` bounds the page size a client can request, protecting the database from unbounded scans.

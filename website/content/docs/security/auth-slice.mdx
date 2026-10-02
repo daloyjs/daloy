@@ -1,0 +1,184 @@
+---
+title: JWT and authentication safeguards
+description: Secure DaloyJS authentication with asymmetric JWKS middleware, per-scheme revalidation hooks, typed basic-auth callbacks, and non-cacheable authentication challenges.
+keywords:
+  - DaloyJS jwk
+  - JWKS
+  - Bearer revalidation
+  - verify hook
+  - basicAuth onAuthSuccess
+  - Cache-Control no-store
+  - WWW-Authenticate
+  - RFC 6750
+  - asymmetric JWT
+  - kid
+  - alg cross-check
+  - secureDefaults
+---
+
+# JWT and authentication safeguards
+
+<blockquote>The authentication slice resolves signing keys by <code>kid</code>, runs the <code>verify</code> hook on every request, and adds{" "}<code>Cache-Control: no-store</code> to authentication failures.</blockquote>
+
+<AuthRole role="resource-server">
+<p>Everything below is verification and enforcement. The provider you pair with owns the other half: accounts, credentials, MFA, consent, and the tokens themselves.</p>
+</AuthRole>
+
+## DaloyJS is a Relying Party, not an auth server
+
+DaloyJS validates tokens. It does not mint user sessions through an authorization-code flow, host a consent screen, or store user/client credentials. Pair these middleware with a dedicated identity provider:
+
+- Hosted IdPs: Auth0, Okta, Azure AD / Entra ID, AWS Cognito, Google Identity, Clerk, WorkOS, Supabase Auth, Logto, Stytch, Kinde. Anything that publishes a standard `/.well-known/jwks.json` works with `jwk()` out of the box.
+- Self-hosted IdPs: Keycloak, Ory Hydra, ZITADEL, Authentik, Dex. Same JWKS contract, same one-line `jwk()` setup.
+- Your own sibling auth service: a separate DaloyJS app using `createJwtSigner()` to mint tokens and exposing a JWKS endpoint. The API service then validates those tokens with `jwk()` exactly as it would for an external IdP.
+
+Rough mapping of which middleware to reach for:
+
+- Browser app + external IdP (OIDC): `jwk()` on the API, `requireScopes()` per route, `session()` only if you also need server-side session state alongside the access token.
+- Service-to-service inside one tenant: `bearerAuth({ validate })` with an opaque token, or `jwk()` if both sides already speak JWT. The [internal-service preset](/docs/security/internal-service-preset) relaxes browser-only headers for these endpoints.
+- Webhook receivers: neither `bearerAuth()` nor `jwk()`. Use the dedicated HMAC verifier (see the [security overview](/docs/security)).
+- Admin tools / scripts: `basicAuth()` behind `ipRestriction()`, or short-lived JWTs from your IdP.
+
+Daloy provides a cohesive set of authentication safeguards. Each one is additive and opt-in:
+
+- `jwk()`: asymmetric-only Bearer-token middleware backed by a JWKS source. Refuses `HS*` at construction, requires a `kid` header that matches a JWK in the set, and cross-checks JWT-header `alg` against the JWK's declared `alg` when both are present.
+- `bearerAuth({ verify })` / `jwk({ verify })`: per-request revalidation hook so revocation lists, token-version counters, and "user changed password since this token was issued" checks can invalidate previously-issued credentials.
+- `basicAuth({ onAuthSuccess })`: typed-context callback that fires after `ctx.state.user.username` is stamped, so handlers do not re-parse the `Authorization` header.
+- `Cache-Control: no-store` on every first-party auth helper `401` challenge (`bearerAuth()`, `basicAuth()`, `jwk()`) so intermediaries never cache an auth challenge, RFC 9111 §3.5 and audit alignment.
+
+## 1. `jwk()` middleware
+
+Drop-in Bearer-token middleware backed by a JWKS source. The algorithm allowlist is intentionally narrow: only `RS256` / `RS384` / `RS512`, `PS256` / `PS384` / `PS512`, `ES256` / `ES384` / `ES512`, and `EdDSA`. Symmetric `HS*` algorithms are refused at construction, the classic confused-deputy "HS256 verified with the JWKS public key as the HMAC secret" attack cannot be configured. The middleware is exported from the dedicated subpath `@daloyjs/core/jwk`.
+
+<SequenceDiagram title="Verifying a Bearer token with jwk()" participants={["Client", "jwk() middleware", "IdP JWKS"]} steps={[
+          {
+            from: "Client",
+            to: "jwk() middleware",
+            label: "Request with Bearer token",
+            detail: "JWT header carries kid + alg",
+            kind: "request",
+          },
+          {
+            from: "jwk() middleware",
+            to: "IdP JWKS",
+            label: "Fetch key set by kid",
+            detail: "TTL-cached, in-flight dedup, stale fallback",
+            kind: "async",
+          },
+          {
+            from: "jwk() middleware",
+            to: "jwk() middleware",
+            label: "Cross-check JWT alg vs JWK alg. Reject HS*",
+            detail: "asymmetric-only allowlist",
+            kind: "note",
+          },
+          {
+            from: "jwk() middleware",
+            to: "Client",
+            label: "Verify signature + exp, stamp ctx.state.user",
+            detail: "{ sub, scopes, claims }",
+            kind: "response",
+          },
+        ]} caption="jwk() resolves the signing key by kid from the JWKS source, cross-checks the JWT-header alg against the JWK, and refuses HS*. Signatures are always verified; exp is checked when present and required when maxLifetimeSeconds is configured." />
+
+```ts
+import { App } from "@daloyjs/core";
+import { jwk } from "@daloyjs/core/jwk";
+
+const app = new App();
+
+app.use(
+  jwk({
+    algorithms: ["RS256", "ES256"],
+    jwks: "https://login.example.com/.well-known/jwks.json",
+    issuer: "https://login.example.com/",
+    audience: "https://api.example.com",
+    maxLifetimeSeconds: 300,
+    fetchTtlSeconds: 600,
+    maxStaleSeconds: 3600,
+    realm: "api",
+  }),
+);
+```
+
+`jwks` accepts a static `JwkSet`, an `https://` URL (with TTL caching and in-flight-promise dedup so a thundering-herd of concurrent requests resolves into a single fetch), or a custom resolver function. `http://` JWKS URLs and non-finite / negative `fetchTtlSeconds` / `maxStaleSeconds` are refused at construction. The middleware stamps `ctx.state.user = { sub, scopes, claims }`. The scope normalizer reads `scope` (RFC 6749 space-separated string), `scp` (Azure AD array), and `scopes` (array) claims and dedupes the result.
+
+`maxLifetimeSeconds` is an optional positive integer. The example requires `exp` and rejects tokens whose lifetime exceeds five minutes with `401 invalid_token`. The check is` exp - (iat ?? now) <= maxLifetimeSeconds`, using the verification time when `iat` is absent. It does not renew a token or rotate its signing key. Zero, negative, fractional, and non-finite values are refused at construction. When omitted, there is no lifetime cap and `exp` is validated only when present.
+
+When the JWKS source is a URL, a TTL-expiry refresh that fails (network error, non-2xx, or malformed body) does not take down every request: the last successfully fetched key set keeps serving for a bounded `maxStaleSeconds` grace window (default `3600`, set `0` to disable) on top of `fetchTtlSeconds`. The first fetch is never eligible for this fallback, so an unreachable IdP at boot still fails closed, and tokens are always cryptographically verified and `exp`-checked when present. Removing a key at the provider does not immediately invalidate cached keys. Setting `maxStaleSeconds: 0` disables stale fallback, not the normal cache TTL; use a per-request revocation check when offboarding must take effect immediately.
+
+Every JWKS source (object, URL, or resolver function) is read per verification, after the token header parses, so a malformed token never triggers a JWKS fetch. Each key is imported into WebCrypto once for the life of the middleware, cached by its full JWK content rather than its `kid`. A resolver that rotates key material under the same `kid` takes effect on the next request, and a resolver that returns different key sets per request (for example per tenant) always verifies each token against the set returned for that request.
+
+### Service-to-service policy [#workload-identity-policy]
+
+For machine callers, pin both `issuer` and `audience`, set a short `maxLifetimeSeconds`, and apply `requireScopes()` to protected routes. Both issuer and audience checks are opt-in. Use distinct identities and secret stores for each workload and environment; `env: "production"` does not isolate credentials. The `verify` hook below can check whether the verified service identity is still active in your own store. DaloyJS does not inventory service accounts, rotate credentials, detect credential reuse, or automate offboarding. Use an identity provider and secret manager for those lifecycle controls.
+
+## 2. Per-scheme `verify(credentials, ctx)` hook [#2-per-scheme-verify-credentials-ctx-hook]
+
+Both `bearerAuth()` and `jwk()` accept an optional `verify` callback that runs after the static `validate` / signature check passes. Returning `false` throws `ForbiddenError` (`403`, no `WWW-Authenticate` per RFC 6750); returning `true` or `undefined` accepts. Use it to consult a revocation list, a token-version counter, or any other per-request signal that a previously-issued token has been invalidated. These callbacks run in `preBody`: raw route/header context is available, but `ctx.body` is always `undefined` so an unauthenticated upload can be rejected before it is consumed.
+
+<FlowDiagram title="Static check then per-request revalidation" numbered steps={[
+          {
+            eyebrow: "static",
+            label: "validate / signature check",
+            detail: "token shape or JWT signature + exp",
+          },
+          {
+            eyebrow: "revalidate",
+            label: "verify(credentials, ctx)",
+            detail: "revocation list, token-version, password-changed",
+            tone: "accent",
+          },
+          {
+            eyebrow: "returns false",
+            label: "ForbiddenError",
+            detail: "403, no WWW-Authenticate (RFC 6750)",
+            tone: "danger",
+          },
+          {
+            eyebrow: "true / undefined",
+            label: "Request accepted",
+            detail: "handler runs",
+            tone: "success",
+          },
+        ]} caption="The verify hook runs only after the static validate or signature check passes, so a structurally valid but revoked token is still rejected with 403. Returning true or undefined accepts the request." />
+
+```ts
+import { bearerAuth } from "@daloyjs/core";
+
+app.use(
+  bearerAuth({
+    validate: (token) => verifyOpaqueToken(token),
+    verify: async (token, ctx) => {
+      const tenantId = ctx.request.headers.get("x-tenant-id") ?? "default";
+      return !(await isTokenRevoked(tenantId, token));
+    },
+  }),
+);
+```
+
+## 3. `basicAuth({ onAuthSuccess })` [#3-basicauth]
+
+Fires once `ctx.state.user.username` has been stamped, with the typed `(credentials, ctx)` tuple. The previous idiomatic workaround was a separate `beforeHandle` that re-parsed the `Authorization` header in every handler. That is no longer necessary. The callback runs in `preBody`, so move any logic that requires a validated request body into a later `beforeHandle`.
+
+```ts
+import { basicAuth } from "@daloyjs/core";
+
+app.use(
+  basicAuth({
+    verify: (username, password) => verifyCredentials(username, password),
+    onAuthSuccess: async ({ username }, ctx) => {
+      ctx.state.authenticatedUser = username;
+      await recordBasicAuthSuccess(username);
+    },
+  }),
+);
+```
+
+## 4. `Cache-Control: no-store` on auth 401 challenges
+
+Every first-party auth helper now emits `Cache-Control: no-store` alongside `WWW-Authenticate` on the `401` response. A shared CDN, a corporate proxy, or a service-worker cache could previously cache the challenge and serve it to a different user; `no-store` closes that fingerprinting and stale-challenge risk. This applies uniformly to `bearerAuth()`, `basicAuth()`, and the new `jwk()`.
+
+## Related auth safeguards
+
+Related protections include the `wsRateLimit()` adapter, `loginThrottle()` preset, `rotateSession()` helper, the file-upload MIME + magic-byte + size guard, the `requirePayloadAuth` scheme flag, and the WebSocket-helper safe defaults, are covered in [WebSocket and login safeguards](/docs/security/websocket-login-throttle).

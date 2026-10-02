@@ -1,0 +1,215 @@
+---
+title: AsyncAPI for WebSockets
+description: "Generate AsyncAPI 3.0 contract documents for your DaloyJS app.ws() surfaces with the built-in, dependency-free generateAsyncAPI() generator, plus an auto-mounted interactive AsyncAPI UI (asyncapi: true) that mirrors the Scalar/Swagger OpenAPI docs, a handler meta block, and the daloy inspect --asyncapi CLI flag."
+keywords:
+  - AsyncAPI
+  - AsyncAPI 3.0
+  - WebSocket contract
+  - generateAsyncAPI
+  - asyncapiToYAML
+  - DaloyJS asyncapi
+  - WebSocket documentation
+  - real-time contract
+  - daloy inspect --asyncapi
+sitemap:
+  priority: 0.8
+---
+
+# AsyncAPI for WebSockets
+
+DaloyJS already turns every HTTP route into an OpenAPI 3.1 operation. The same contract-first story extends to your real-time surfaces: the `@daloyjs/core/asyncapi` module emits a standards-compliant **AsyncAPI 3.0** document for the WebSocket routes you register with `app.ws()`. It is **built-in and dependency-free**, the same posture as the OpenAPI generator, so it adds nothing to your runtime footprint.
+
+Each `app.ws()` route becomes one AsyncAPI **channel** (the socket address plus any path parameters) and one or more **operations**:
+
+- a `receive` operation for messages the server receives from clients (always emitted, because clients can send messages after the upgrade), and
+- an optional `send` operation for messages the server pushes to clients (emitted only when you declare an outbound schema).
+
+<FlowDiagram title="From socket route to AsyncAPI" numbered caption="The same contract-first flow as OpenAPI: each app.ws() route becomes one channel with a receive operation plus an optional send operation. The generator is read-only, it never mounts a route or changes your socket's security posture." steps={[
+          {
+            label: 'app.ws("/chat/:room")',
+            detail: "+ optional meta block",
+            tone: "accent",
+          },
+          {
+            label: "generateAsyncAPI(app)",
+            detail: "built-in, dependency-free",
+          },
+          { label: "AsyncAPI 3.0 document", detail: "channels + operations" },
+          {
+            label: "receive / send ops",
+            detail: "receive always, send when declared",
+          },
+          {
+            label: "UI / YAML / codegen",
+            detail: "GET /asyncapi, asyncapiToYAML, CLI",
+            tone: "success",
+          },
+        ]} />
+
+## Quick start
+
+Call `generateAsyncAPI(app, options)` and you get a plain, JSON-serializable AsyncAPI document. Hand it to AsyncAPI Studio, write it to disk for codegen, or serve it from a route.
+
+```ts
+import { App } from "@daloyjs/core";
+import { generateAsyncAPI } from "@daloyjs/core/asyncapi";
+import { writeFileSync } from "node:fs";
+
+const app = new App();
+
+app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
+  open(conn, ctx) {
+    conn.data = { room: ctx.params.room };
+  },
+  message(conn, data) {
+    conn.send(typeof data === "string" ? data.toUpperCase() : data);
+  },
+});
+
+const doc = generateAsyncAPI(app, {
+  info: { title: "Realtime API", version: "1.0.0" },
+  servers: { production: { host: "api.example.com", protocol: "wss" } },
+});
+
+writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));
+```
+
+## Serving an interactive UI
+
+You don't have to wire the spec up yourself. Set `asyncapi: true` on the app and DaloyJS auto-mounts the AsyncAPI surface, the WebSocket counterpart to `docs: true` for OpenAPI (Scalar / Swagger / Redoc):
+
+- `GET /asyncapi`: an **interactive UI** that renders the official AsyncAPI React component, loaded from a CDN via a `<script>` tag exactly like the OpenAPI viewers (no build step, no extra runtime dependency).
+- `GET /asyncapi.json` and `GET /asyncapi.yaml`: the AsyncAPI 3.0 document, generated lazily so `app.ws()` routes registered afterwards are included.
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  asyncapi: true, // or "auto" (skips production), or an AsyncAPIRouteOptions object
+  openapi: { info: { title: "Realtime API", version: "1.0.0" } },
+});
+
+app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
+  meta: { summary: "Room chat" },
+  message(conn, data) {
+    conn.send(data);
+  },
+});
+
+// GET /asyncapi        -> interactive AsyncAPI UI
+// GET /asyncapi.json   -> AsyncAPI 3.0 document
+// GET /asyncapi.yaml   -> AsyncAPI 3.0 document (YAML)
+```
+
+Like the Scalar/Swagger docs link, surface the URL in your startup banner so it shows up in the terminal:
+
+```ts
+import { printStartupBanner } from "@daloyjs/core/banner";
+
+printStartupBanner({
+  name: "Realtime API",
+  url: `http://localhost:${port}`,
+  runtime: "Node.js",
+  links: [{ label: "AsyncAPI", url: `http://localhost:${port}/asyncapi` }],
+});
+```
+
+The UI page ships the same hardened response as the OpenAPI docs: a strict Content-Security-Policy that only allows the CDN asset origin (jsDelivr by default) plus `connect-src 'self'` so the component can fetch the served spec, `nosniff`, and `no-referrer`. Pin Subresource Integrity hashes or point at self-hosted assets via the `assets` option (`asyncapiScriptUrl` / `asyncapiScriptIntegrity` / `asyncapiStyleUrl` / `asyncapiStyleIntegrity`) for supply-chain hardening, exactly as with the OpenAPI docs UIs. Use `asyncapi: "auto"` to mount everywhere except production.
+
+The WebSocket route itself keeps the normal production guardrails. If you run with secure defaults in production, each `app.ws()` route still needs an `allowedOrigins` policy or an explicit `acknowledgeCrossOriginUpgrade: true`. AsyncAPI generation is descriptive. It never relaxes Cross-Site WebSocket Hijacking defenses.
+
+## Describing the messages
+
+WebSocket handlers accept an optional `meta` block that mirrors the HTTP route `meta`. It is purely descriptive (it never changes the RFC 6455 handshake or runtime behavior), and the AsyncAPI generator reads it to fill in summaries, tags, and message payloads.
+
+- `summary` / `description` / `tags`: surfaced on the generated channel and operations.
+- `receive`: a Standard Schema describing messages the server receives from clients. Falls back to the handler's `request.body` schema (the same schema used for payload-size checks).
+- `send`: a Standard Schema describing messages the server sends to clients. Adds a `send` operation when present.
+- `operationId`: overrides the channel key that is otherwise derived from the path.
+
+```ts
+import { z } from "zod";
+
+const ClientMessage = z.object({ text: z.string() });
+const ServerMessage = z.object({ user: z.string(), text: z.string() });
+
+app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
+  request: { body: ClientMessage },
+  meta: {
+    summary: "Room chat",
+    description: "Bidirectional chat scoped to a room.",
+    tags: ["chat"],
+    send: ServerMessage,
+  },
+  open() {},
+  message() {},
+});
+```
+
+Schemas that expose a `toJSONSchema()` method are converted to JSON Schema for the message payload. Zod 4 schemas expose that method directly. Other validators may need the same adapter they use for OpenAPI output. Anything else still validates at runtime, but the generated AsyncAPI payload falls back to a permissive `{}` placeholder rather than throwing.
+
+## Generated document shape
+
+A single `app.ws("/chat/:room", ...)` route with the `meta` above produces roughly:
+
+```ts
+{
+  "asyncapi": "3.0.0",
+  "info": { "title": "Realtime API", "version": "1.0.0" },
+  "servers": { "production": { "host": "api.example.com", "protocol": "wss" } },
+  "channels": {
+    "chatRoom": {
+      "address": "/chat/{room}",
+      "summary": "Room chat",
+      "parameters": { "room": { "description": "Path parameter `room`." } },
+      "messages": {
+        "receiveMessage": { "$ref": "#/components/messages/chatRoomReceive" },
+        "sendMessage": { "$ref": "#/components/messages/chatRoomSend" }
+      }
+    }
+  },
+  "operations": {
+    "chatRoomReceive": {
+      "action": "receive",
+      "channel": { "$ref": "#/channels/chatRoom" },
+      "messages": [{ "$ref": "#/channels/chatRoom/messages/receiveMessage" }]
+    },
+    "chatRoomSend": {
+      "action": "send",
+      "channel": { "$ref": "#/channels/chatRoom" },
+      "messages": [{ "$ref": "#/channels/chatRoom/messages/sendMessage" }]
+    }
+  },
+  "components": { "messages": { /* ... payloads ... */ } }
+}
+```
+
+## YAML output
+
+`asyncapiToYAML(doc)` renders the document as YAML 1.2 using the same dependency-free emitter shared with the OpenAPI generator.
+
+```ts
+import { generateAsyncAPI, asyncapiToYAML } from "@daloyjs/core/asyncapi";
+
+const yaml = asyncapiToYAML(generateAsyncAPI(app, {
+  info: { title: "Realtime API", version: "1.0.0" },
+}));
+```
+
+## CLI
+
+The `daloy inspect` command can print the AsyncAPI document for any app it can load, mirroring `--openapi`. Use `--format yaml` (or `--yaml`) for YAML output.
+
+```bash
+daloy inspect --asyncapi > asyncapi.json
+daloy inspect --asyncapi --format yaml > asyncapi.yaml
+```
+
+## Notes
+
+- When the app has no WebSocket routes the document still validates, with empty `channels` and `operations` maps.
+- Channel keys are derived from the path (`/chat/:room/feed` -\> `chatRoomFeed`). Collisions are de-duplicated with a numeric suffix. Set `meta.operationId` for a stable, explicit key.
+- The generator is read-only: it never mounts a route or changes your socket's security posture. See the [WebSocket primitives](/docs/websocket) page for the CSWSH refuse-to-boot guards.

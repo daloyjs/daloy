@@ -16,11 +16,11 @@ import { ThemeSwitcher } from "./theme-switcher";
 import { CORE_PACKAGE_VERSION } from "@/lib/seo";
 
 const primaryNav: Array<{ href: Route; label: string }> = [
-  { href: "/docs", label: "Docs" },
+  { href: "/docs" as Route, label: "Docs" },
   { href: "/blog", label: "Blog" },
-  { href: "/docs/getting-started", label: "Getting started" },
+  { href: "/docs/getting-started" as Route, label: "Getting started" },
   { href: "/docs/tutorials/bookstore" as Route, label: "Tutorials" },
-  { href: "/docs/api-reference", label: "API" },
+  { href: "/docs/api-reference" as Route, label: "API" },
 ];
 
 const socialLinks = [

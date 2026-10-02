@@ -1,0 +1,232 @@
+---
+title: Sessions
+description: Use the built-in session() middleware for an edge-friendly signed-cookie session with a pluggable store, key rotation, automatic privilege-change rotation, and conservative __Host- defaults.
+keywords:
+  - DaloyJS sessions
+  - signed cookie session
+  - edge session middleware
+  - TypeScript session store
+  - key rotation
+  - rotateSession
+  - session fixation
+  - __Host- cookie
+---
+
+# Sessions
+
+<blockquote>Session data stays in the configured store. The browser receives a signed identifier, and rotating that identifier after login or a privilege change invalidates the previous session reference.</blockquote>
+
+DaloyJS ships a small, runtime-portable `session()` middleware: a signed`__Host-` cookie carries the session id, the payload lives in a pluggable `SessionStore` (in-memory by default, KV / Redis-shaped stores plug in directly), and per-request mutations are exposed on `ctx.state.session`. There are no adapter-specific code paths - the same middleware runs on Node, Bun, Deno, Cloudflare and Workers because it only uses `WebCrypto` and standard `Set-Cookie` headers.
+
+<AuthRole role="client-rp">
+<p><code>session()</code> is for the server that sits between your frontend and your provider. It holds a session for a user who has{" "}<em>already</em> authenticated somewhere else. It is not a login system: it will not check a password, enrol a second factor, or tell you whether an account is locked. If you find yourself adding those, you have started writing an identity provider.</p>
+</AuthRole>
+
+<SequenceDiagram title="Login + fixation defense" participants={["Browser", "session()", "Store", "Handler"]} steps={[
+          {
+            from: "Browser",
+            to: "session()",
+            label: "Request carries the signed __Host- cookie",
+            detail: "Cookie: __Host-daloy.sid=<id>.<hmac>",
+            kind: "request",
+          },
+          {
+            from: "session()",
+            to: "Browser",
+            label: "Bad / forged signature is rejected, no data loaded",
+            detail: "HMAC-SHA256 mismatch to empty session",
+            kind: "note",
+          },
+          {
+            from: "session()",
+            to: "Store",
+            label: "Valid signature loads the server-side payload",
+            detail: "store.get(id)",
+            kind: "request",
+          },
+          {
+            from: "Handler",
+            to: "session()",
+            label: "On login: regenerate() issues a fresh id",
+            detail: "old store record destroyed to defeat fixation",
+            kind: "async",
+          },
+          {
+            from: "session()",
+            to: "Browser",
+            label: "Persist once in onSend, re-emit the cookie",
+            detail: "Set-Cookie: HttpOnly; Secure; SameSite=Lax",
+            kind: "response",
+          },
+        ]} caption="The cookie only carries a signed id, never the payload. A tampered stub fails the HMAC check and loads nothing. On login regenerate() swaps the id and drops the old store record, so a fixated session id is useless after authentication." />
+
+## Quick start
+
+```ts
+import { App, rotateSession, session } from "@daloyjs/core";
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    session: import("@daloyjs/core").SessionContext;
+  }
+}
+
+const app = new App();
+
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(rotateSession({ watch: ["userId", "roles", "tenantId"] }));
+
+app.post(
+  "/login",
+  {
+    operationId: "login",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => {
+    // After authenticating the user, rotate the id to defend against fixation
+    // and write the user payload. Mutating ctx.state.session.data is enough -
+    // the middleware persists changes once per request in onSend.
+    await state.session.regenerate();
+    state.session.set("userId", "u_123");
+    return { status: 200 as const, body: { ok: true } };
+  },
+);
+
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => ({
+    status: 200 as const,
+    body: { userId: state.session.get<string>("userId") ?? null },
+  }),
+);
+
+app.post(
+  "/logout",
+  {
+    operationId: "logout",
+    responses: { 204: { description: "logged out" } },
+  },
+  async ({ state }) => {
+    state.session.destroy();
+    return { status: 204 as const };
+  },
+);
+```
+
+## Defaults
+
+Every option is conservative by default, with explicit error messages when a setting would silently weaken security (for example, a non-`/` path on a `__Host-` cookie or `SameSite=None` without `Secure`).
+
+- `cookieName`: `__Host-daloy.sid` - forces `Secure`, `Path=/`, no `Domain`.
+- `cookieOptions`: `{ secure: true, httpOnly: true, sameSite: "Lax", path: "/", maxAgeSeconds: 86_400 }`.
+- `store`: a fresh `MemorySessionStore()` per app. Replace with a KV-backed store in production.
+- `rolling`: `true` - every authenticated request slides the expiry and re-emits `Set-Cookie`.
+- `saveUninitialized`: `false` - anonymous traffic that never touches the session never writes a cookie or store record.
+- `generateId`: `crypto.randomUUID()` when available, otherwise a base64url-encoded 32-byte random string. Pass your own `generateId` to customize.
+
+## The session API
+
+Inside a handler, `ctx.state.session` exposes:
+
+- `id: string` - current session id.
+- `data: Record<string, unknown>` - payload object. Mutating it through `set` / `delete` marks the session dirty and triggers a single store write in `onSend`.
+- `get<T>(key)` / `set(key, value)` / `delete(key)`.
+- `regenerate({ keepData? })` - issues a new id, destroys the previous store record, and (by default) carries the existing payload over. Call it on login and on privilege escalation to defend against session fixation.
+- `destroy()` - drops server-side state and emits a `Set-Cookie` with `Max-Age=0`. A destroyed session cannot be resurrected by a request that was already in flight when logout ran (since 1.3.7): write-backs of a session loaded from the cookie only succeed if the record still exists, and the middleware remembers ids it destroyed (bounded, for the session TTL) so a concurrent request skips both the store write and the cookie refresh.
+
+## Automatic rotation on privilege changes
+
+`rotateSession()` watches privilege-bearing session values and calls `session.regenerate()` after the handler if they changed. The default watch list covers `userId`, `tenantId`, `roles`, `scopes`, and `isAdmin`. If a handler already calls `regenerate()`, the helper skips itself.
+
+```ts
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(rotateSession({ watch: ["userId", "roles", "tenantId"] }));
+
+app.post(
+  "/admin/promote",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => {
+    state.session.set("roles", ["admin"]);
+    return { status: 200 as const, body: { ok: true } };
+  },
+);
+```
+
+## Key rotation
+
+Pass an array to `secret`. The first entry is always used to sign new cookies. Any later entry can verify (so older clients keep working until their next request) and triggers a transparent re-sign on the way out.
+
+```ts
+session({
+  secret: [process.env.SESSION_SECRET_CURRENT!, process.env.SESSION_SECRET_PREVIOUS!],
+});
+```
+
+## Pluggable store
+
+Implement `SessionStore` against any KV/Redis-shaped backend. Methods may return synchronously or via a `Promise` - DaloyJS always awaits them, so a fully async store works without changes.
+
+Custom stores should implement `update()` as an atomic conditional write. Stores without it still work: before writing back a loaded session, `session()` re-reads it with `get()` and skips the write when it is gone, remembers ids this instance destroyed, and logs a one-time warning at setup. That makes logout revocation complete within one process. When several instances share the store, a narrow window remains between that `get()` and `set()` where an in-flight request on another instance can restore a session that was just destroyed, so multi-instance deployments should implement `update()`.
+
+- `update(sid, record)` (optional, since 1.3.7) - an atomic conditional write: overwrite the record **only if it still exists** and is unexpired, returning `true` when written and `false` when it was missing. The middleware uses it for every write-back of a session loaded from a cookie. Redis `SET ... XX` is one way to make this atomic.
+- `touch(sid, expiresAt)` - slides the expiry for rolling sessions. If provided, it must atomically extend only an **existing** record, never create one. When omitted, rolling refresh uses `update()`.
+
+With Redis, `XX` makes `update()` atomic and `PEXPIRE` on an existing key makes `touch()` safe by construction:
+
+```ts
+import type { SessionStore } from "@daloyjs/core";
+import Redis from "ioredis";
+
+const redis = new Redis(process.env.REDIS_URL!);
+const ttl = (expiresAt: number) => Math.max(1, expiresAt - Date.now());
+
+const redisStore: SessionStore = {
+  async get(id) {
+    const raw = await redis.get(`sess:${id}`);
+    return raw ? JSON.parse(raw) : null;
+  },
+  async set(id, record) {
+    await redis.set(`sess:${id}`, JSON.stringify(record), "PX", ttl(record.expiresAt));
+  },
+  async destroy(id) {
+    await redis.del(`sess:${id}`);
+  },
+  // SET ... XX writes only if the key still exists: logout wins the race.
+  async update(id, record) {
+    const ok = await redis.set(
+      `sess:${id}`, JSON.stringify(record), "PX", ttl(record.expiresAt), "XX",
+    );
+    return ok === "OK";
+  },
+  // PEXPIRE is a no-op on a missing key, so touch() can never revive a session.
+  async touch(id, expiresAt) {
+    await redis.pexpire(`sess:${id}`, ttl(expiresAt));
+  },
+};
+```
+
+## Standalone signing helpers
+
+The same HMAC-SHA256 primitives that power the cookie are exported as `signValue(value, secret)` and `verifySignedValue(signed, secret)` (which accepts a single secret or an array for rotation). Use them for ad-hoc cookies, magic links, or any other place you need a tamper-evident token without standing up the full session pipeline.
+
+```ts
+import { signValue, verifySignedValue } from "@daloyjs/core";
+
+const signed = await signValue("user_123", process.env.LINK_SECRET!);
+const original = await verifySignedValue(signed, process.env.LINK_SECRET!);
+// original === "user_123" or null if tampered / wrong secret.
+```
+
+## Security notes
+
+- The session cookie is **HttpOnly** by default - it is unreadable from JavaScript. Pair it with the `csrf()` middleware on mutating routes.
+- Always rotate the id with `regenerate()` on login and privilege escalation.
+- Use `destroy()` on logout to invalidate both the cookie and the store record.
+- Treat the `secret` array as append-only: when you rotate, prepend the new key and keep the previous entry until the longest plausible session has expired.
+- The default `MemorySessionStore` is per-process - it is suitable for tests and single-instance deployments only. Use a KV/Redis-shaped store across replicas, and implement `update()` there so logout cannot be undone by a concurrent request on another instance.

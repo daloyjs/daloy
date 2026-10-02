@@ -1,0 +1,221 @@
+---
+title: Idempotency keys
+description: "Make unsafe POST/PUT/PATCH/DELETE requests safely retryable with the built-in, dependency-free idempotency() middleware: request fingerprinting, response replay, in-flight 409 conflicts, and a pluggable IdempotencyStore mirroring SessionStore."
+keywords:
+  - idempotency key
+  - Idempotency-Key header
+  - idempotent requests
+  - DaloyJS idempotency
+  - safe retries
+  - payment idempotency
+  - response replay
+  - IdempotencyStore
+  - exactly-once
+sitemap:
+  priority: 0.8
+---
+
+# Idempotency keys
+
+Network retries are a fact of life on serverless platforms, behind load balancers, and on flaky mobile connections. For unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`) a blind retry can charge a card twice or create a duplicate order. The `idempotency()` middleware gives those requests an exactly-once guarantee: the client sends a unique `Idempotency-Key` header, and DaloyJS makes sure the side effect runs at most once no matter how many times the request is replayed.
+
+It is **built-in and dependency-free**, built on Web Crypto and the Web-standard `Request`/`Response`, so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers. The behavior mirrors the IETF *Idempotency-Key HTTP Header Field* draft and the conventions used by major payment processors.
+
+<UseCaseGuide featureName="Idempotency middleware" recommendation="Use idempotency keys for mutative and non-idempotent HTTP methods (POST, PUT, PATCH, DELETE) that perform critical operations like processing payments or updating state. Never require them for safe read-only requests (GET, HEAD, OPTIONS)." whenToUse={[
+          "Critical state-mutating actions where duplicate execution causes business errors (e.g., payments, bank transfers, ticket bookings, creating orders).",
+          "API endpoints exposed to clients on unstable networks (mobile apps, webhooks) that will automatically retry failed requests.",
+          "Any POST/PUT/PATCH/DELETE handler where exactly-once execution is a business constraint.",
+        ]} whenNotToUse={[
+          "Safe HTTP methods (GET, HEAD, OPTIONS, TRACE), which are naturally idempotent and should never change state.",
+          "Non-critical operations where duplicates are harmless (e.g., logging analytic events, page views, search inputs).",
+          "High-frequency low-impact state updates where retries can naturally overwrite state (e.g., updating user cursor positions, simple read counts).",
+        ]} />
+
+## Quick start
+
+Mount `idempotency()` ahead of the routes that need exactly-once semantics. Clients opt in per request by sending an `Idempotency-Key` header.
+
+One ordering rule: if the app also uses `rateLimit()` or `loginThrottle()`, register the limiter **before** `idempotency()`. A replay is returned from `beforeHandle` and ends the hook chain, so a limiter mounted behind it never counts replayed requests and the declared budget is effectively unlimited. In production that order [refuses to boot](/docs/security/boot-guards#8-stored-response-mounted-ahead-of-a-request-budget).
+
+```ts
+import { App, idempotency } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App();
+
+// Safe retries for the whole write surface.
+app.use(idempotency({ ttlSeconds: 86_400 }));
+
+app.post(
+  "/charges",
+  {
+    operationId: "createCharge",
+    request: { body: z.object({ amount: z.number() }) },
+    responses: {
+      201: { description: "created", body: z.object({ id: z.string() }) },
+    },
+  },
+  async ({ body }) => {
+    const id = await chargeCard(body.amount); // runs at most once per key
+    return { status: 201 as const, body: { id } };
+  },
+);
+```
+
+## How it works
+
+For an applicable method that carries an `Idempotency-Key` header, the middleware fingerprints the request (method + path + query string + body) and consults a pluggable store:
+
+<SequenceDiagram title="Same key, replayed request" participants={["Client", "idempotency()", "Store", "Handler"]} steps={[
+          {
+            from: "Client",
+            to: "idempotency()",
+            label: "POST /charges with Idempotency-Key",
+            detail: "first attempt",
+            kind: "request",
+          },
+          {
+            from: "idempotency()",
+            to: "Store",
+            label: "reserve(key): atomic set-if-absent",
+            detail: "wins the reservation",
+            kind: "async",
+          },
+          {
+            from: "idempotency()",
+            to: "Handler",
+            label: "Run handler once, capture response",
+            detail: "complete(key, response) for ttlSeconds",
+            kind: "request",
+          },
+          {
+            from: "Client",
+            to: "idempotency()",
+            label: "Identical retry, same key + fingerprint",
+            detail: "network hiccup, client retries",
+            kind: "request",
+          },
+          {
+            from: "idempotency()",
+            to: "Client",
+            label: "Replay stored response, handler skipped",
+            detail: "Idempotency-Replayed: true",
+            kind: "response",
+          },
+        ]} caption="The first request runs the handler and stores its response under the key. An identical retry replays that stored response byte for byte without running the side effect again. A retry while the first is still in flight gets a 409, and the same key with a different body gets a 422." />
+
+- First request: the handler runs normally. The final response is captured and persisted under the key for `ttlSeconds`.
+- Identical retry (same key, same fingerprint, original completed): the stored response is replayed byte-for-byte with an `Idempotency-Replayed: true` header. The handler does *not* run again.
+- Retry while the first is still in flight: a `409 Conflict` is returned (with `Cache-Control: no-store`) so the client backs off instead of racing.
+- Same key, different body: a `422 Unprocessable Content` is returned. A key is permanently bound to the first payload it was used with.
+
+Responses that are not safe to cache are never stored, and the reservation is released so the client can retry: server errors (`5xx` by default, see `cacheableStatus`) and responses larger than `maxResponseBytes` (1 MiB by default).
+
+### Raw-body routes
+
+On a route with a body schema the fingerprint hashes the parsed `ctx.body`. A route with no body schema (a webhook, a text or form handler, or one that calls `ctx.request.text()`) has no parsed body, so the middleware reads the raw bytes from a clone and hashes them together with the `Content-Type` (since 2.0.0). The handler can still consume the original body. Reusing a key with different raw bytes gets the usual `422`. A body larger than `maxFingerprintBodyBytes` (1 MiB by default, matching `bodyLimitBytes`) is refused with `413` rather than fingerprinted without its payload, which could replay a different request's response. The effective cap is the smaller of `maxFingerprintBodyBytes` and the App's `bodyLimitBytes`. If a hook mounted earlier has already consumed a keyed request's raw body, the request fails closed with `500`; mount `idempotency()` first or declare a body schema.
+
+```ts
+app.use(
+  idempotency({
+    // Raise alongside bodyLimitBytes when raw-body routes accept larger uploads.
+    maxFingerprintBodyBytes: 4 * 1024 * 1024,
+  }),
+);
+```
+
+## Options
+
+```ts
+app.use(
+  idempotency({
+    // How long a key (and its replayed response) lives. Default: 86400 (24h).
+    ttlSeconds: 86_400,
+    // Request header carrying the key. Default: "idempotency-key".
+    headerName: "idempotency-key",
+    // Response header marking a replay. Default: "idempotency-replayed".
+    replayHeaderName: "idempotency-replayed",
+    // Methods the middleware applies to. Default: POST, PUT, PATCH, DELETE.
+    methods: ["POST", "PUT", "PATCH", "DELETE"],
+    // Reject applicable requests that omit the header with 400. Default: false.
+    requireKey: false,
+    // Maximum accepted key length. Default: 255.
+    maxKeyLength: 255,
+    // Largest response body buffered + stored. Default: 1 MiB.
+    maxResponseBytes: 1_048_576,
+    // Largest raw request body read to fingerprint a route with no body
+    // schema; larger bodies get 413. Default: 1 MiB. (since 1.3.7)
+    maxFingerprintBodyBytes: 1_048_576,
+    // Decide whether a response is cached. Default: status < 500.
+    cacheableStatus: (status) => status < 500,
+    // Share one in-memory store across mounts with the same id.
+    groupId: "payments",
+    // Namespace keys by caller. Default: hash of the Authorization header plus
+    // any clientCertAuth() / httpSignatureAuth() identity.
+    scope: (ctx) => (ctx.state.session as { id?: string } | undefined)?.id,
+  }),
+);
+```
+
+## Pluggable stores
+
+The default `MemoryIdempotencyStore` is process-local, perfect for tests and single-instance deployments. For a multi-instance or serverless fleet, supply a shared backend by implementing `IdempotencyStore`. The contract mirrors `SessionStore` and the rate-limit store: the one rule is that `reserve()` must be atomic (“set if absent”), the exact `SET key value NX` semantics of Redis, so two concurrent requests cannot both win the reservation. The `key` passed to your store is already namespaced by `groupId` and `scope`.
+
+```ts
+import type { IdempotencyStore, IdempotencyRecord } from "@daloyjs/core";
+
+const redisIdempotencyStore: IdempotencyStore = {
+  // Atomic reserve: persist only if the key is unused, else return the
+  // existing record untouched.
+  async reserve(key, record, ttlMs) {
+    const ok = await redis.set(key, JSON.stringify(record), "PX", ttlMs, "NX");
+    if (ok) return null;
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as IdempotencyRecord) : null;
+  },
+  async complete(key, record, ttlMs) {
+    await redis.set(key, JSON.stringify(record), "PX", ttlMs);
+  },
+  async release(key) {
+    await redis.del(key);
+  },
+};
+
+app.use(idempotency({ store: redisIdempotencyStore }));
+```
+
+## Client usage
+
+Clients generate a unique key per logical operation (a UUID is ideal) and reuse it across retries of that same operation:
+
+```ts
+const key = crypto.randomUUID();
+
+async function createChargeWithRetries(amount: number) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch("/charges", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": key, // same key on every retry
+      },
+      body: JSON.stringify({ amount }),
+    });
+    if (res.status !== 409) return res; // 409 = still in flight, back off
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+  }
+  throw new Error("charge still in flight after retries");
+}
+```
+
+## Security notes
+
+- Keys are validated up front: empty, over-long (`maxKeyLength`), or non-printable keys are rejected with `400 Bad Request` before any store lookup.
+- Conflict and reuse responses (`409`, `422`) carry `Cache-Control: no-store` so a shared cache cannot mask them.
+- Server errors are never cached, so a transient `5xx` does not poison the key, so the client can safely retry.
+- The stored body is capped by `maxResponseBytes` to bound memory growth from large replies.
+- **Keys are namespaced per principal (CWE-524).** Without this, any client that reused another client's `Idempotency-Key` with the same body would receive that client's stored response. The store key is namespaced by the caller, defaulting to the `Authorization` header so the common bearer- / API-key case is isolated automatically. The default also folds in the identity recorded by `clientCertAuth()` (the certificate) or `httpSignatureAuth()` (the signing key), so mTLS and signed callers, which send no `Authorization`, are scoped per peer without configuration (since 1.3.7). For cookie-based sessions, pass a stable identity via `scope`, e.g. `scope: (ctx) => (ctx.state.session as { id?: string } | undefined)?.id`. Unauthenticated requests (no `Authorization`, no `scope`) still dedupe by key alone.
+- **A cookie-bearing request with no resolvable scope is refused.** Forgetting `scope` on a cookie-authenticated app is the one way the namespace silently collapses: no `Authorization` header means no scope tag, so the retry fingerprint (method + path + body) becomes the only thing separating two users, and two users submit the same fingerprint identically. DaloyJS therefore throws on a request that carries a `Cookie` but yields no scope, rather than serving one caller's stored response to another. Pass `scope`, or set `allowUnscopedCallers: true` if those callers really are interchangeable (a public idempotent write whose response body is not caller-specific). A custom `scope` bypasses the guard entirely, including when it returns `undefined`, because an explicit resolver owns its own posture.
+- **Pass `scope` whenever `Authorization` is not per-user.** The default assumes that header names one caller. If it is shared (a per-tenant API key, a service token, a gateway credential) while end users are distinguished some other way, the scope *does* resolve, so no guard fires, and it partitions per tenant while everyone inside one tenant shares a namespace. DaloyJS cannot detect this: a coarse scope looks exactly like a correctly per-user one, and refusing every cookie-bearing request instead would reject the far more common shape of a per-user bearer token arriving with ordinary browser cookies (analytics, consent, CSRF). So this one is your call. The replay carries no credential either way, so a coarse namespace stays a body disclosure and never becomes a session handover.
+- **A replay never re-issues the original Set-Cookie.** Storing every response header meant a `Set-Cookie` issued to the first caller was handed to whoever replayed the record. Under any coarse namespace that upgrades a body disclosure into giving away a live session, and even for a legitimate same-caller retry it would resurrect a cookie the handler set once, undoing a session rotation performed at login or on a privilege change. `Set-Cookie` is stripped on capture (so a credential never reaches the store) and re-checked on replay, alongside the hop-by-hop and per-request fields (`Connection`, `Transfer-Encoding`, `Age`, `X-Request-Id`). Your application headers replay unchanged.
+- **The in-memory store is bounded.** `MemoryIdempotencyStore` caps live records (`maxEntries`, default 10 000): it sweeps expired records first, then evicts the oldest survivor. Sweeping alone was not a bound, since a stream of unique keys inside the TTL grew the map linearly with each entry pinning a stored response body. Eviction can only cost exactly-once semantics for a retry that arrives after it, so supply a shared (Redis) store when your key volume approaches the cap, which you want anyway for multi-instance deployments.

@@ -19,6 +19,17 @@ export const docFrontmatterSchema = z
     description: z.string().min(1),
     /** SEO keywords merged with the site defaults. */
     keywords: z.array(z.string()).default([]),
+    /**
+     * Sitemap hints for this page. Omit for the defaults (`priority: 0.7`,
+     * `changeFrequency: monthly`); raise priority for entry points.
+     */
+    sitemap: z
+      .object({
+        priority: z.number().min(0).max(1).optional(),
+        changeFrequency: z.enum(["always", "hourly", "daily", "weekly", "monthly", "yearly", "never"]).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -48,16 +59,21 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
  *
  * @param source - Raw file contents.
  * @param file - File path, used in error messages.
+ * @param schema - Frontmatter schema; defaults to the docs schema.
  * @returns The frontmatter and the body (frontmatter lines blanked).
  * @throws {Error} When the frontmatter is missing or fails validation.
  */
-export function parseMdxSource(source: string, file: string): { frontmatter: DocFrontmatter; body: string } {
+export function parseMdxSource<T = DocFrontmatter>(
+  source: string,
+  file: string,
+  schema: z.ZodType<T> = docFrontmatterSchema as unknown as z.ZodType<T>,
+): { frontmatter: T; body: string } {
   const match = FRONTMATTER.exec(source);
   if (!match) {
     throw new Error(`${file}: missing YAML frontmatter (--- title / description ---)`);
   }
 
-  const result = docFrontmatterSchema.safeParse(parseYaml(match[1] ?? "") ?? {});
+  const result = schema.safeParse(parseYaml(match[1] ?? "") ?? {});
   if (!result.success) {
     throw new Error(`${file}: invalid frontmatter: ${z.prettifyError(result.error)}`);
   }
@@ -102,9 +118,7 @@ function routeSegments(file: string): string[] {
  */
 export async function getMdxDocs(): Promise<MdxDoc[]> {
   "use cache";
-  // Short-lived in dev so new or edited content shows up without a restart.
-  if (process.env.NODE_ENV === "development") cacheLife("seconds");
-  else cacheLife("max");
+  cacheLife("max");
 
   const files = await walk(path.join(contentDir, "docs"));
   const docs = await Promise.all(
@@ -132,7 +146,7 @@ export async function getMdxDocs(): Promise<MdxDoc[]> {
  * @returns The page, or `null` when there is no such MDX page.
  */
 export async function getMdxDoc(segments: string[]): Promise<MdxDoc | null> {
-  const route = `/docs/${segments.join("/")}`;
+  const route = segments.length ? `/docs/${segments.join("/")}` : "/docs";
   return (await getMdxDocs()).find((doc) => doc.route === route) ?? null;
 }
 

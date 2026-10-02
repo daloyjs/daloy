@@ -1,0 +1,162 @@
+---
+title: Scheduled tasks (in-process cron)
+description: Run periodic work inside your DaloyJS process with app.cron() and the Scheduler primitive. Cron expressions or fixed intervals, single-flight overlap protection, per-run timeouts, and graceful-shutdown integration with zero runtime dependencies.
+keywords:
+  - in-process cron
+  - scheduled tasks
+  - cron expression
+  - DaloyJS scheduler
+  - app.cron
+  - single-flight
+  - graceful shutdown
+  - periodic jobs
+  - interval scheduler
+  - timezone cron
+sitemap:
+  priority: 0.8
+---
+
+# Scheduled tasks (in-process cron)
+
+DaloyJS ships a **queue-agnostic schedule primitive**: run periodic work inside *this* process on a fixed interval or a cron expression. It is the in-process counterpart to an external job queue. Reach for it for cache sweeps, token refresh, reconciliation, and other housekeeping. It is not for distributed fan-out. It has zero runtime dependencies and three properties a production scheduler needs:
+
+- Flexible schedules: fixed intervals (`intervalMs`) or 5-field cron expressions (`cron`, with `@hourly`/`@daily`/... aliases and an optional IANA `timeZone`).
+- Single-flight: a task never overlaps itself. If a tick fires while the previous run is still in progress, the tick is skipped (and counted), so a slow task can never pile up unbounded concurrent runs.
+- Graceful shutdown: `app.cron()` ties the scheduler to the app lifecycle: on shutdown it stops arming new runs, awaits in-flight runs, and aborts their `AbortSignal` if they outlast the grace period. Timers are `unref`'d, so a scheduler never keeps an idle process alive on its own.
+
+<FlowDiagram title="One tick" numbered steps={[
+          {
+            label: "Tick fires",
+            detail: "cron expr or intervalMs is due",
+            eyebrow: "schedule",
+          },
+          {
+            label: "Single-flight check",
+            detail: "already running? skip + count getState().skipped",
+            tone: "accent",
+          },
+          {
+            label: "Run handler",
+            detail: "({ signal }) with optional timeoutMs budget",
+          },
+          {
+            label: "Completed",
+            detail: "runs++, lastDurationMs recorded",
+            tone: "success",
+          },
+          {
+            label: "Threw / timed out",
+            detail: "failures++, onError(err, { timedOut })",
+            tone: "danger",
+          },
+        ]} caption="Each tick is armed fixed-rate before the run starts. If the previous run is still in flight the overlapping tick is skipped rather than started concurrently, so a slow task degrades to back-to-back runs instead of piling up." />
+
+## Quick start with `app.cron()` [#quick-start-with-app-cron]
+
+The easiest entry point is `app.cron()`. The first call lazily creates an app-managed `Scheduler`, starts it, and registers the shutdown drain for you.
+
+```ts
+import { createApp } from "@daloyjs/core";
+
+const app = createApp();
+
+// Every hour, on the hour.
+app.cron({ name: "purge-sessions", cron: "0 * * * *" }, async ({ signal }) => {
+  await purgeExpiredSessions({ signal });
+});
+
+// Every 30 seconds, starting immediately.
+app.cron(
+  { name: "heartbeat", intervalMs: 30_000, runOnStart: true },
+  () => publishHeartbeat(),
+);
+```
+
+Inspect or manually trigger tasks through `app.scheduledTasks` (the underlying `Scheduler`):
+
+```ts
+app.scheduledTasks?.list();              // execution stats for every task
+app.scheduledTasks?.getState("heartbeat"); // one task's snapshot
+await app.scheduledTasks?.runNow("purge-sessions"); // out-of-band run
+```
+
+## Cron expressions
+
+The `cron` field accepts a standard 5-field expression (`minute hour day-of-month month day-of-week`) with wildcards, lists (`1,15,30`), ranges (`1-5`), steps (`*/5`), and case-insensitive month/day names. Day-of-week accepts both `0` and `7` for Sunday. The named aliases `@yearly`, `@monthly`, `@weekly`, `@daily`, and `@hourly` are also supported.
+
+```ts
+app.cron({ name: "nightly", cron: "0 2 * * *" }, run);          // 02:00 daily
+app.cron({ name: "weekday-9am", cron: "0 9 * * 1-5" }, run);    // 09:00 Mon–Fri
+app.cron({ name: "quarter-hour", cron: "*/15 * * * *" }, run);  // every 15 min
+app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 1st
+```
+
+Cron expressions evaluate in UTC by default. Pass an IANA `timeZone` to schedule against a wall clock:
+
+```ts
+app.cron(
+  { name: "ny-open", cron: "30 9 * * 1-5", timeZone: "America/New_York" },
+  run,
+);
+```
+
+Parsing is purely arithmetic (no backtracking regular expressions), and a malformed or unsatisfiable expression (for example `0 0 30 2 *`, the 30th of February) throws a `CronParseError` at registration time.
+
+## Single-flight & overruns [#single-flight-and-overruns]
+
+Schedules are **fixed-rate**: the next tick is armed before the current run starts. If a run outlasts its interval, the overlapping tick is *skipped* rather than started concurrently, and the skip is counted in `getState(name).skipped`. This guarantees at most one concurrent run per task: a slow task degrades to “runs back-to-back” instead of fanning out.
+
+```ts
+const state = app.scheduledTasks!.getState("purge-sessions")!;
+state.runs;            // total completed runs
+state.failures;        // runs that threw or timed out
+state.skipped;         // ticks skipped due to overrun
+state.running;         // is a run in progress right now?
+state.lastDurationMs;  // wall-clock duration of the last run
+state.nextRunAt;       // epoch ms of the next scheduled run
+```
+
+## Per-run timeouts
+
+Set `timeoutMs` to bound a run. When it elapses the run's `signal` is aborted. Forward it to your I/O so the handler unwinds promptly. A timed-out run is recorded as a failure and reported to `onError` with `timedOut: true`.
+
+```ts
+app.cron(
+  {
+    name: "sync",
+    cron: "*/5 * * * *",
+    timeoutMs: 60_000,
+    onError: (err, info) => metrics.increment("cron.failed", { task: info.name }),
+  },
+  async ({ signal }) => {
+    await reconcile({ signal });
+  },
+);
+```
+
+## Using the `Scheduler` directly
+
+For lifecycles you manage yourself (workers, scripts, tests), construct a `Scheduler` and drive it directly. It accepts an injectable clock and timer primitives, which makes it fully deterministic under test.
+
+```ts
+import { Scheduler } from "@daloyjs/core";
+
+const scheduler = new Scheduler({ logger });
+scheduler.define({ name: "cleanup", intervalMs: 60_000 }, ({ signal }) =>
+  sweep({ signal }),
+);
+scheduler.start();
+
+// On shutdown, wait up to 5s for in-flight runs, then abort:
+process.on("SIGTERM", () => scheduler.stop(5_000));
+```
+
+The cron utilities are exported standalone too: `parseCron(expr)` compiles an expression to its field sets, and `nextCronRun(expr, after?, timeZone?)` returns the next matching `Date`.
+
+Numeric weekday ranges expand before Sunday aliases are normalized:` 0-7` and `1-7` both include every weekday. Impossible calendar dates such as February 30 with an unrestricted weekday throw `CronParseError` immediately. February 29 remains valid, and restricted day-of-month and weekday fields retain their OR semantics. Invalid dates or unsupported timezones throw` RangeError`. Timezone searches reuse one formatter per search; sparse schedules still use a bounded minute-by-minute search.
+
+## When to reach for a real queue instead
+
+This scheduler runs in-process: each instance of your app runs its own timers. That is exactly what you want for idempotent maintenance, but for work that must run *exactly once* across a horizontally-scaled fleet (or that must survive a process restart) use a durable queue or a leader-elected external scheduler and have the elected instance call `runNow()`. The single-flight guarantee is per-process. It does not coordinate across a cluster.
+
+For work that must survive a restart and run once across the cluster, use [background jobs](/docs/jobs). `app.cronEnqueue()` keeps the scheduler as the clock but turns each tick into an idempotent enqueue, so eight replicas firing the same `0 2 * * *` collapse into one job that one worker runs. Keep `app.cron()` for process-local maintenance (the other replicas have their own memory to sweep). Use `cronEnqueue` when the tick's work is a global side effect.

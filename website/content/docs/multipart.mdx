@@ -1,0 +1,153 @@
+---
+title: File uploads (multipart/form-data)
+description: Model multipart/form-data uploads in DaloyJS with typed file fields, per-field MIME, magic-byte, and size caps, plus OpenAPI-aware emission.
+keywords:
+  - multipart
+  - form-data
+  - file upload
+  - fileField
+  - magicBytes
+  - multipartObject
+  - DaloyJS uploads
+---
+
+# File uploads (multipart/form-data)
+
+DaloyJS treats `multipart/form-data` as a first-class request shape. Two helpers, `fileField()` and `multipartObject()`, let you describe an upload contract once, get runtime validation (size caps, MIME allowlists, filename matchers), an end-to-end-typed handler, and a correct OpenAPI document with `multipart/form-data` media type and `format: "binary"` file fields.
+
+DaloyJS does not buffer file bodies for you: the runtime `FormData` entry stays a `File` or `Blob`, so handlers can stream it (`file.stream()`) directly to S3, disk, or another upstream.
+
+<FlowDiagram title="How an upload is validated" numbered steps={[
+          {
+            eyebrow: "request",
+            label: "multipart/form-data body",
+            detail: "File / Blob entries kept as streams, without buffering",
+          },
+          {
+            eyebrow: "app caps",
+            label: "maxFileBytes · maxFields · maxFiles",
+            detail: "413 (size) or 400 (counts)",
+            tone: "muted",
+          },
+          {
+            eyebrow: "field caps",
+            label: "fileField(): size · MIME · magic bytes",
+            detail: "forged image/png rejected, 422",
+            tone: "accent",
+          },
+          {
+            eyebrow: "handler",
+            label: "Typed body",
+            detail: "body.file.stream() to S3 or disk",
+            tone: "success",
+          },
+        ]} caption="App-level caps are evaluated as soon as the body is parsed, so an oversized or over-counted request is rejected before the handler runs. Per-field fileField() checks (size, MIME allowlist, magic bytes) then surface mismatches as a 422 problem+json, leaving the handler a fully typed body." />
+
+## Quick start
+
+```ts
+import { z } from "zod";
+import { App, fileField, multipartObject } from "@daloyjs/core";
+
+const app = new App({
+  // Optional defense-in-depth caps applied to every multipart request.
+  multipart: { maxFileBytes: 5_000_000, maxFields: 32, maxFiles: 4 },
+});
+
+app.post(
+  "/avatars",
+  {
+    operationId: "uploadAvatar",
+    request: {
+      body: multipartObject({
+        title: z.string().min(1),
+        file: fileField({
+          maxBytes: 1_000_000,
+          accept: ["image/png", "image/jpeg"],
+          magicBytes: true,
+        }),
+      }),
+    },
+    responses: {
+      201: {
+        description: "Created",
+        body: z.object({ ok: z.boolean() }),
+      },
+    },
+  },
+  async ({ body }) => {
+    // body.file is a File; body.title is a validated string.
+    const stream = body.file.stream(); // pass this to S3, disk, or another upstream
+    void stream;
+    return { status: 201 as const, body: { ok: true } };
+  },
+);
+```
+
+## fileField() options
+
+- `maxBytes`: reject files larger than this many bytes.
+- `accept`: MIME allowlist. Each entry can be exact (`"image/png"`) or a wildcard (`"image/*"` / `"*/*"`).
+- `filename(name)`: predicate for filename validation, useful for forcing extensions.
+- `magicBytes`: verify file signatures before the handler receives the upload. `true` derives known signatures from `accept` for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP. Custom signatures support domain-specific formats.
+- `rejectScriptableImages`: reject SVG, MVG, MSL, PostScript, and EPS payloads that can execute inside renderers such as ImageMagick. This is enabled automatically when `magicBytes` is configured. Set it to `false` only when the renderer is sandboxed.
+- `optional`: when `true`, accept `undefined`/`null` values without raising.
+- `format`: OpenAPI hint, defaults to `"binary"`.
+
+## Magic-byte verification
+
+MIME types come from the client, so use `magicBytes` when the route only accepts formats with recognizable signatures. Daloy rejects a forged `image/png` upload whose bytes are not PNG bytes, and also rejects a file whose sniffed signature disagrees with the declared MIME type.
+
+```ts
+fileField({
+  maxBytes: 1_000_000,
+  accept: ["image/png", "image/jpeg"],
+  magicBytes: true,
+});
+
+fileField({
+  accept: ["application/x-daloy"],
+  magicBytes: [
+    { mime: "application/x-daloy", bytes: [0x44, 0x4c, 0x59] },
+  ],
+});
+```
+
+## Strict form fields
+
+By default, `multipartObject()` validates the fields you declare and ignores extra form fields. Pass `{ strict: true }` to reject undeclared fields and emit `additionalProperties: false` in OpenAPI.
+
+```ts
+const UploadBody = multipartObject(
+  {
+    title: z.string().min(1),
+    file: fileField({ accept: ["application/pdf"], magicBytes: true }),
+  },
+  { strict: true },
+);
+```
+
+## App-level safety caps
+
+The framework already enforces `bodyLimitBytes` on every request. For multipart bodies you can layer additional limits via `AppOptions.multipart`:
+
+```ts
+new App({
+  bodyLimitBytes: 10 * 1024 * 1024,
+  multipart: {
+    maxFileBytes: 5_000_000, // single-file cap
+    maxFields:    32,        // total fields (file + non-file)
+    maxFiles:     4,         // total file uploads
+  },
+});
+```
+
+These caps are evaluated as soon as the body is parsed, so a request that exceeds them is rejected with `413 Payload Too Large` (size) or `400 Bad Request` (counts) before the handler runs.
+
+## OpenAPI emission
+
+When the request body is built from `multipartObject()`, the OpenAPI generator emits `multipart/form-data` as the request body media type. Each `fileField` becomes `{ type: "string", format: "binary" }` with optional `x-accept`, `x-max-bytes`, and `x-magic-bytes` annotations so codegen tools and humans both see the constraints.
+
+## Validation errors
+
+Field-level failures are returned as a standard `422 Unprocessable Content` problem+json document with one entry per failing field, same shape as JSON body validation, so clients have a single error path to handle.

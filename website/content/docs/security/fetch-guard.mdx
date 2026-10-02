@@ -1,0 +1,203 @@
+---
+title: SSRF guard (fetchGuard)
+description: Wrap user-controlled outbound fetch() with fetchGuard() to block SSRF to RFC1918, loopback, link-local, and every documented cloud-metadata IP.
+keywords:
+  - DaloyJS SSRF
+  - fetchGuard
+  - cloud metadata 169.254.169.254
+  - SSRF protection Node.js
+  - outbound fetch allowlist
+---
+
+# SSRF guard (`fetchGuard`)
+
+<blockquote><code>fetchGuard()</code> blocks private, loopback, link-local, and cloud metadata targets before an outbound request is sent. It checks redirects again so a public URL cannot bounce the request into an internal network.</blockquote>
+
+Any handler that calls `fetch()` on a URL the user can influence (an avatar fetch, a webhook delivery, an “import from URL” feature, an OAuth discovery endpoint, an embed unfurler) is a Server-Side Request Forgery (SSRF) sink. The canonical exploit is [the Aikido write-up](https://www.aikido.dev/blog/how-a-startups-cloud-got-taken-over-by-a-simple-form-that-sends-an-email) in which a contact form that emailed an avatar was redirected to `http://169.254.169.254/`, the AWS cloud metadata service, which handed back short-lived IAM credentials and pivoted into the startup’s S3 buckets.
+
+<UseCaseGuide featureName="SSRF guard (fetchGuard)" recommendation="Use fetchGuard to wrap outbound fetch calls that request user-controlled, dynamic URLs (such as avatar URLs, webhook endpoints, or url imports). Never wrap requests going to hardcoded, static internal services or known, trusted third-party APIs." whenToUse={[
+          "Fetching resources (avatars, images, attachments) directly from user-supplied URLs.",
+          "Calling user-configured webhooks or callbacks from your application backend.",
+          "Parsing arbitrary links or URLs for rich embed previews ('unfurling').",
+        ]} whenNotToUse={[
+          "Making static outbound API requests to known, trusted external services (e.g. Stripe, SendGrid) where URLs are entirely controlled by your code.",
+          "Communicating with internal microservices, databases, or mesh endpoints (where private IP spaces like 10.0.0.x are expected and must be accessible).",
+          "High-performance proxying where you explicitly intend to relay traffic to arbitrary destinations and DNS resolution is cached separately.",
+        ]} />
+
+<FlowDiagram title="What every guarded fetch goes through" steps={[
+          {
+            eyebrow: "url",
+            label: "Check protocol",
+            detail: "http: / https: only",
+            tone: "danger",
+          },
+          {
+            eyebrow: "dns",
+            label: "Resolve hostname",
+            detail: "to one or more IPs",
+          },
+          {
+            eyebrow: "ip",
+            label: "Match deny ranges",
+            detail: "RFC1918, loopback, 169.254.x",
+            tone: "danger",
+          },
+          {
+            eyebrow: "safe",
+            label: "Dispatch request",
+            detail: "redirects re-validated per hop",
+            tone: "success",
+          },
+        ]} caption="A request only leaves the box after the protocol, the resolved IPs, and every redirect Location pass the deny floor. Anything that resolves to an internal or metadata address throws SsrfBlockedError instead of being sent." />
+
+`fetchGuard()` wraps the global `fetch` and refuses to dispatch a request whose target resolves to a dangerous internal address, including every documented cloud metadata IP (AWS / Azure / DigitalOcean `169.254.169.254`, Oracle Cloud `192.0.0.192`, Alibaba `100.100.100.200`).
+
+## Quick start
+
+```ts
+import { App, fetchGuard, SsrfBlockedError } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App();
+const safeFetch = fetchGuard();
+
+app.post(
+  "/import",
+  {
+    operationId: "importFromUrl",
+    request: { body: z.object({ url: z.url() }) },
+    responses: {
+      200: { description: "ok" },
+      422: { description: "bad url or refused: ssrf" },
+    },
+  },
+  async ({ body }) => {
+    const { url } = body;
+    try {
+      const upstream = await safeFetch(url);
+      const body = await upstream.text();
+      return { status: 200 as const, body };
+    } catch (err) {
+      if (err instanceof SsrfBlockedError) {
+        return { status: 422 as const, body: { reason: err.reason } };
+      }
+      throw err;
+    }
+  },
+);
+```
+
+## What gets blocked by default
+
+- Loopback: `127.0.0.0/8`, `::1`. Opt in with `allowLoopback: true` for local-dev fixtures.
+- RFC1918 private: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`. Opt in with `allowPrivate: true`.
+- Link-local (covers every cloud-metadata IP): `169.254.0.0/16`, `fe80::/10`. Opt in with `allowLinkLocal: true`.
+- IPv6 unique-local: `fc00::/7`. Opt in with `allowUniqueLocal: true`.
+- Always-deny floor (no flag lifts these): `0.0.0.0/8`, `100.64.0.0/10` (CGNAT, Alibaba metadata), `192.0.0.0/24` (Oracle Cloud metadata), all IANA-reserved `TEST-NET` / benchmarking / docs ranges, `224.0.0.0/4` multicast, `240.0.0.0/4` reserved, broadcast `255.255.255.255`, IPv6 `::/128` and `ff00::/8`.
+- Protocols other than `http:` / `https:` (`file:`, `data:`, `gopher:`, `ftp:`, `dict:`, `ldap:`).
+
+### IPv6 forms that embed IPv4
+
+A NAT64, 6to4, or Teredo translator turns an IPv6 destination into a connection to the IPv4 address embedded in it, so each of these forms is re-checked against the full IPv4 policy (since 1.3.7 for all but the mapped form). A denied embedded IPv4 denies the IPv6 address:
+
+- IPv4-mapped `::ffff:0:0/96` and SIIT `::ffff:0:0:0/96`
+- IPv4-compatible `::/96` (other than `::` and `::1`, which are classified directly)
+- NAT64 well-known prefix `64:ff9b::/96`
+- 6to4 `2002::/16`
+- Teredo `2001::/32` (both the server IPv4 and the de-obfuscated client IPv4)
+
+So `http://[::ffff:169.254.169.254]/` and `http://[64:ff9b::a9fe:a9fe]/` are rejected the same way as `http://169.254.169.254/`. The local-use NAT64 prefix `64:ff9b:1::/48` is denied outright, because its embedding layout is operator-defined; only an explicit `allowAddresses` range lifts it. IPv6 literal URLs such as `http://[::1]/` are classified by the deny list directly (since 1.3.7) rather than handed to the resolver.
+
+A NAT64 network-specific prefix that your network operator chose cannot be detected from the address alone. If your egress path uses one, add it to `denyAddresses`:
+
+```ts
+const safeFetch = fetchGuard({
+  // Operator-chosen NAT64 prefix used by this VPC's DNS64 resolver.
+  denyAddresses: ["2001:db8:64::/96"],
+});
+```
+
+## Redirects are re-validated at every hop
+
+A common SSRF bypass is to return `302 Location: http://169.254.169.254/` from a public host. `fetchGuard()` follows redirects **manually**: it re-checks the protocol and re-resolves DNS for every Location header before issuing the next request. Set `maxRedirects: 0` to return the 3xx directly, or pass `redirect: "manual"` per call for the same effect.
+
+An in-memory request body (string, `ArrayBuffer` or view, `Blob`, `URLSearchParams`, `FormData`) up to `maxReplayBodyBytes` (default 1 MiB; `0` never buffers) is copied once so a `307` or `308` can replay it on the re-validated next hop (since 2.0.0). Multipart filenames count toward the cap, and the serialized byte length is checked before a body is kept for replay. A `301`/`302`/`303` that downgrades to `GET` drops the body as usual. A body you pass as a `ReadableStream` or async iterable, the body of a `Request` you forward (for example `ctx.request` in a proxy), and an in-memory body over the cap are streamed through without buffering, so a `307`/`308` of one throws `SsrfBlockedError` with reason `redirect-body-not-replayable` instead of a raw `TypeError`. Buffer the body yourself, or use `redirect: "error"`, when a streamed upload must follow redirects.
+
+## Custom allowlists
+
+```ts
+const safeFetch = fetchGuard({
+  // IP / CIDR allowlist (overrides the deny defaults).
+  allowAddresses: ["198.51.100.0/24", "2001:db8::/32"],
+  // Hostname allowlist (skips DNS check entirely; useful for known internal services).
+  allowHosts: ["api.example.com", "billing.internal"],
+  // Extra deny matchers on top of the floor.
+  denyAddresses: ["10.6.6.0/24"],
+  // Permit loopback for local-dev fixtures only.
+  allowLoopback: process.env.NODE_ENV !== "production",
+});
+```
+
+## Custom DNS resolution (non-Node runtimes)
+
+The default resolver uses Node’s `node:dns/promises.lookup()`. On Cloudflare Workers, Deno without `--allow-net`, or any runtime without Node-style DNS, supply a resolver:
+
+```ts
+const safeFetch = fetchGuard({
+  resolve: async (host) => {
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${host}&type=A`, {
+      headers: { accept: "application/dns-json" },
+    });
+    const json = (await res.json()) as { Answer?: Array<{ data: string }> };
+    return (json.Answer ?? []).map((a) => a.data);
+  },
+});
+```
+
+## DNS pinning (`pinDns`) [#dns-pinning-pinDns]
+
+On Node-like runtimes, `fetchGuard()` defaults `pinDns: true` when you do not supply a custom `fetch`. For `http:` requests the socket is then opened through `node:http` against the exact IP that passed validation, while the original `Host` header is preserved. That closes the classic DNS-rebinding (TOCTOU) window for the highest value target: cloud metadata at `http://169.254.169.254`.
+
+```ts
+// Default on Node: pinDns is on (http: only).
+const safeFetch = fetchGuard();
+
+// Opt out if you need the underlying fetch to own DNS (rare).
+const unpinned = fetchGuard({ pinDns: false });
+
+// Custom fetch owns its socket path: pinDns stays off unless you set it.
+const custom = fetchGuard({
+  fetch: myInstrumentedFetch,
+  pinDns: true, // only if you also want the node:http pin path for http:
+});
+```
+
+`https:` is intentionally not pinned by this knob (TLS SNI / certificate validation needs the hostname path). Pass `pinDns: false` on Workers and other edge runtimes only if you had forced it on. The default is already off when `process.versions.node` is absent.
+
+The request's `AbortSignal` is honoured on the pinned `http:` path too (since 1.3.7): an abort before dispatch, while waiting for the response head, or while the body streams tears down the socket and rejects with the signal's reason, the same contract as `fetch`. Timeouts such as `AbortSignal.timeout()` keep working with DNS pinning on.
+
+## Residual risk: DNS rebinding (TOCTOU)
+
+After `pinDns`, the remaining residual is mainly `https:` rebinding and non-Node runtimes without a pin path. Close those with operator egress controls, and optionally a custom undici dispatcher for TLS upstreams:
+
+<ol>
+<li>Operator-side (recommended). Run behind a network policy that already blocks egress to RFC1918 / metadata IPs: Kubernetes{" "}<code>NetworkPolicy</code>{", "}<code>step-security/harden-runner</code> in CI,{" "}<code>iptables -A OUTPUT -d 169.254.169.254 -j DROP</code> on the host. This neutralises rebinding even if the app is naive.</li>
+<li>Caller-side, Node-only, for <code>https:</code>. Daloy ships zero runtime dependencies, so we do not bundle <code>undici</code>{". "}If you install it yourself, you can pin the TLS socket to the IP you validated by plumbing a custom dispatcher through the existing{" "}<code>fetch</code> option:<CodeBlock language="ts" code={"import { fetchGuard } from \"@daloyjs/core\";\nimport { Agent, fetch as undiciFetch } from \"undici\";\nimport * as dns from \"node:dns/promises\";\n\nconst safeFetch = fetchGuard({\n  // pinDns stays off when a custom fetch is supplied unless you force it.\n  fetch: async (input, init) => {\n    const url = new URL(typeof input === \"string\" ? input : input.url);\n    const { address, family } = await dns.lookup(url.hostname, { verbatim: true });\n    const dispatcher = new Agent({\n      connect: { lookup: (_h, _o, cb) => cb(null, address, family) },\n    });\n    return undiciFetch(input, { ...init, dispatcher });\n  },\n});"} />The socket connects to the pre-resolved IP. TLS SNI and certificate validation still use the original hostname.</li>
+</ol>
+
+`fetchGuard()` remains defense-in-depth on top of these controls.
+
+## Error shape
+
+Blocked requests throw `SsrfBlockedError` with a structured `reason`:
+
+- `protocol-not-allowed`: URL was `file:`, `data:`, etc.
+- `address-not-allowed`: resolved IP fell in a blocked range.
+- `dns-resolution-failed`: lookup threw or returned no records.
+- `too-many-redirects`: chain exceeded `maxRedirects`.
+- `credentials-in-url`: the URL carried userinfo (`http://user@host/`), a classic SSRF obfuscation. The credentials are stripped from the URL recorded on the error.
+- `invalid-url`: URL or Location header could not be parsed.
+- `redirect-body-not-replayable`: a `307`/`308` redirect needed to resend a streamed request body that was already consumed (since 1.3.7).
+
+Network failures from the underlying `fetch` (DNS timeouts, TLS errors, connection refused) bubble through unchanged so your retry logic can distinguish “Daloy refused” from “the upstream is sad.”

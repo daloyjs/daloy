@@ -1,0 +1,224 @@
+---
+title: Validation with Zod
+description: Validate request params, query, headers, and bodies in DaloyJS using Zod schemas. Errors are returned as RFC 9457 problem+json with full type inference.
+keywords:
+  - Zod validation
+  - DaloyJS validation
+  - request validation TypeScript
+  - problem+json
+---
+
+# Validation with Zod
+
+[Zod](https://zod.dev/) is the default validator most DaloyJS apps reach for: chainable schemas, mature ecosystem, and a huge community. Zod implements [Standard Schema](https://github.com/standard-schema/standard-schema), so DaloyJS picks it up without any adapter.
+
+Prefer a more modular, tree-shakeable API? See [Validation with Valibot](/docs/validation/valibot). Both work the same way at the framework level.
+
+<FlowDiagram title="One Zod schema, picked up everywhere" steps={[
+          {
+            eyebrow: "you write",
+            label: "Zod schema",
+            detail: "z.object({ ... })",
+            tone: "accent",
+          },
+          {
+            eyebrow: "runtime",
+            label: "Request & response validation",
+            detail: "422 on invalid input",
+          },
+          {
+            eyebrow: "compile time",
+            label: "Inferred handler types",
+            detail: "z.infer<typeof ...>",
+          },
+          {
+            eyebrow: "spec",
+            label: "OpenAPI JSON Schema",
+            detail: "stays in sync via pnpm gen",
+            tone: "success",
+          },
+        ]} caption="Because Zod implements Standard Schema, DaloyJS reuses one schema for runtime validation, handler type inference, and the OpenAPI document. There is no adapter and no second source of truth." />
+
+## Install
+
+```ts
+pnpm add @daloyjs/core zod
+```
+
+## What gets validated
+
+For each route you can declare schemas for:
+
+- `request.params`: decoded path parameters. They start as strings, so use `z.coerce.number()`, `z.uuid()`, or enums when you need stronger shapes.
+- `request.query`: query string values. Repeated keys become arrays before validation.
+- `request.headers`: request headers as lower-case names.
+- `request.body`: parsed request bodies. The body is only read when declared.
+- `responses[status].body`: typed and validated responses.
+
+## Bound numeric fields (money and qty) [#bound-numeric-fields]
+
+Prefer domain-bounded numbers over bare `z.number()`. Money and quantities need a finite range so refund-fraud amounts, `1e308` overflows, and negative balances die at the schema boundary instead of in the ledger:
+
+```ts
+const Money = z.number().finite().positive().max(1_000_000);
+const Qty = z.coerce.number().int().positive().max(10_000);
+
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR"]) })
+  .strict();
+```
+
+## A complete route
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateOrder = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const Order = z.object({
+  id: z.uuid(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    request: {
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateOrder,
+    },
+    responses: {
+      201: { description: "Created", body: Order },
+      422: { description: "Validation failed" },
+    },
+  },
+  async ({ query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: crypto.randomUUID(),
+        tenantId,
+        sku: body.sku,
+        qty: body.qty,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+On invalid input, DaloyJS returns **422 Unprocessable Entity** as RFC 9457 problem+json with an `errors` array of per-issue `path` and `message` records.
+
+## Zod coercion for strings
+
+Path params, query values, headers, and urlencoded form values arrive as strings before schema validation. Use Zod coercion or transforms when you want numbers, booleans, or dates in the handler.
+
+```ts
+const PageQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  published: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+});
+```
+
+## Body limits and content types
+
+When a route declares `request.body`, DaloyJS will also enforce:
+
+- Content-Length and streamed size against `app.bodyLimitBytes` -\> **413**.
+- Content-Type against the route's `accepts` list, or global `allowedContentTypes` if set -\> **415**.
+- Default accepted body types: `application/json`, `application/x-www-form-urlencoded`, and `multipart/form-data`.
+- Prototype-pollution-safe parsing for JSON, query strings, urlencoded forms, and multipart forms.
+
+JSON bodies validate as parsed JSON. Urlencoded bodies validate as an object built from `URLSearchParams`. Multipart bodies validate as an object built from `Request.formData()`. For a custom text media type, opt in with `accepts` and validate a `z.string()` body.
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## Response validation
+
+When a response schema is declared, DaloyJS validates the handler return before serializing it. Zod object schemas strip unknown keys by default, so the validated value also prevents undeclared fields from leaking to clients. Use `z.looseObject()` only when extra keys are part of the intended response contract.
+
+```ts
+const PublicUser = z.object({
+  id: z.string(),
+  email: z.email(),
+});
+
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: {
+      200: { description: "Current user", body: PublicUser },
+    },
+  },
+  async () => ({
+    status: 200,
+    // passwordHash is stripped before serialization.
+    body: { id: "u_1", email: "dev@example.com", passwordHash: "secret" },
+  }),
+);
+```
+
+## Type inference
+
+The handler context is fully typed: `body`, `params`, `query`, and `headers` are inferred from your schemas. The return value is also typed. TypeScript reports an error if you return a status not declared in `responses`.
+
+```ts
+import { z } from "zod";
+
+const Book = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  author: z.string(),
+});
+
+export type Book = z.infer<typeof Book>;
+```
+
+## See also
+
+- [Validation overview](/docs/validation): how validators plug in via Standard Schema.
+- [Validation with Valibot](/docs/validation/valibot): the tree-shakeable alternative.
+- [OpenAPI generation](/docs/openapi): how schemas become a spec.
+- [Errors & problem+json](/docs/errors): the error contract.

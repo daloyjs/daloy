@@ -1,0 +1,284 @@
+---
+title: Use Better Auth with DaloyJS
+description: Use Better Auth with a DaloyJS API. Mount Better Auth's standard Request to Response handler, configure trusted origins and cookies, and protect DaloyJS routes with auth.api.getSession().
+keywords:
+  - DaloyJS Better Auth
+  - Better Auth DaloyJS
+  - better-auth
+  - auth.handler
+  - auth.api.getSession
+  - Better Auth Hono
+  - Better Auth Elysia
+  - Better Auth Fastify
+---
+
+# Use Better Auth with DaloyJS
+
+[Better Auth](https://better-auth.com) is a TypeScript authentication framework you host in your own application. Unlike Auth0, Okta, Clerk, or LoginRadius, it is not only a hosted identity provider integration. Your app owns the auth tables, the session cookies, and the auth endpoints.
+
+Better Auth already documents Hono, Elysia, and Fastify adapters. DaloyJS does not need a special adapter because both libraries meet at the Web-standard boundary: Better Auth exposes `auth.handler(request)` and DaloyJS gives every route and hook the original `Request`.
+
+<SequenceDiagram title="Better Auth inside a DaloyJS app" participants={["Browser", "DaloyJS", "Better Auth", "Database"]} steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS",
+            label: "POST /api/auth/sign-in/email",
+            detail: "credentials, OAuth callbacks, session actions",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS",
+            to: "Better Auth",
+            label: "auth.handler(request)",
+            detail: "mounted under /api/auth/*",
+            kind: "async",
+          },
+          {
+            from: "Better Auth",
+            to: "Database",
+            label: "users, accounts, sessions",
+            kind: "async",
+          },
+          {
+            from: "Better Auth",
+            to: "Browser",
+            label: "Response with Set-Cookie",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "DaloyJS",
+            label: "GET /me with session cookie",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS",
+            to: "Better Auth",
+            label: "auth.api.getSession({ headers })",
+            kind: "async",
+          },
+        ]} caption="The auth endpoints are Better Auth's own Request to Response handler. Normal DaloyJS API routes read the current session from request headers and enforce application authorization." />
+
+## 1. Install
+
+```ts
+pnpm add better-auth
+```
+
+## 2. Create the auth instance
+
+Configure Better Auth once and export the instance. Use the database adapter that matches your app. The example below keeps the database placeholder explicit because production apps should not copy a toy in-memory store into auth.
+
+```ts
+// src/auth.ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL!,
+  secret: process.env.BETTER_AUTH_SECRET!,
+  trustedOrigins: [
+    "http://localhost:3000",
+    "https://app.example.com",
+  ],
+  emailAndPassword: {
+    enabled: true,
+  },
+  // Pick the adapter for your database:
+  // database: prismaAdapter(prisma, { provider: "postgresql" }),
+  // database: drizzleAdapter(db, { provider: "pg" }),
+});
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes
+```
+
+## 4. Mount Better Auth routes
+
+Better Auth owns all routes below `/api/auth/*`. Return the raw `Response` from a `preBody` hook so cookies, redirects, status codes, and multiple `Set-Cookie` headers are preserved exactly. `preBody` runs after routing but before any body I/O, which is the right place to delegate to another web-standard `Request -> Response` handler. Because Better Auth owns the successful response body, cookies, and redirects, both routes explicitly set `acknowledgeNoResponseBodySchema: true`.
+
+```ts
+// src/routes/auth.ts
+import { App } from "@daloyjs/core";
+import { auth } from "../auth.ts";
+
+const app = new App();
+
+const betterAuthHook = {
+  preBody: ({ request }: { request: Request }) => auth.handler(request),
+};
+
+app.get(
+  "/api/auth/*path",
+  {
+    operationId: "betterAuthGet",
+    summary: "Better Auth GET endpoint",
+    // Better Auth owns serialization, cookies, and redirects for this route.
+    acknowledgeNoResponseBodySchema: true,
+    responses: {
+      200: { description: "Handled by Better Auth" },
+      302: { description: "Redirect" },
+      400: { description: "Bad Request" },
+      401: { description: "Unauthorized" },
+    },
+    hooks: betterAuthHook,
+  },
+  () => ({ status: 200, body: null }),
+);
+
+app.post(
+  "/api/auth/*path",
+  {
+    operationId: "betterAuthPost",
+    summary: "Better Auth POST endpoint",
+    acknowledgeNoResponseBodySchema: true,
+    responses: {
+      200: { description: "Handled by Better Auth" },
+      201: { description: "Created" },
+      204: { description: "No Content" },
+      400: { description: "Bad Request" },
+      401: { description: "Unauthorized" },
+    },
+    hooks: betterAuthHook,
+  },
+  () => ({ status: 200, body: null }),
+);
+```
+
+## 5. Protect DaloyJS routes
+
+Use `auth.api.getSession({ headers })` inside a `preBody` guard. Because it only reads headers (no body parsing needed), it runs in the cheapest-rejection phase before validated context is built. This keeps normal DaloyJS routes contract-first while Better Auth owns the session lookup.
+
+```ts
+// src/plugins/better-auth.ts
+import { UnauthorizedError, type Hooks } from "@daloyjs/core";
+import { auth } from "../auth.ts";
+
+export type BetterAuthSession = Awaited<
+  ReturnType<typeof auth.api.getSession>
+>;
+
+export function requireBetterAuth(): Hooks {
+  return {
+    preBody: async (ctx) => {
+      const session = await auth.api.getSession({
+        headers: ctx.request.headers,
+      });
+
+      if (!session) {
+        throw new UnauthorizedError("Missing or expired session");
+      }
+
+      ctx.state.session = session;
+      // return undefined (or nothing) to continue to the handler
+    },
+  };
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    session?: NonNullable<BetterAuthSession>;
+  }
+}
+```
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { requireBetterAuth } from "./plugins/better-auth.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+
+app.get(
+  "/me",
+  {
+    hooks: requireBetterAuth(),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({
+          userId: z.string(),
+          email: z.email(),
+        }),
+      },
+    },
+  },
+  ({ state }) => ({
+    status: 200,
+    body: {
+      userId: state.session!.user.id,
+      email: state.session!.user.email,
+    },
+  }),
+);
+```
+
+## Client usage
+
+Browser apps use Better Auth's client. Point `baseURL` at the same origin or public API origin that serves your DaloyJS app.
+
+```ts
+// src/lib/auth-client.ts
+import { createAuthClient } from "better-auth/client";
+
+export const authClient = createAuthClient({
+  baseURL: "http://localhost:3000",
+});
+
+await authClient.signIn.email({
+  email: "ada@example.com",
+  password: "correct horse battery staple",
+});
+```
+
+## Runtime fit
+
+| Runtime | Fit | Notes |
+| --- | --- | --- |
+| Node.js | Recommended | Best default for database-backed sessions and OAuth callbacks. |
+| Bun / Deno | Depends on adapter | Use only with database drivers tested on that runtime. |
+| Cloudflare Workers | Depends on adapter | The auth handler is Web-standard, but your database adapter must also work on Workers. |
+| Vercel | Yes | Use Node functions unless every selected adapter is edge-safe. |
+| AWS Lambda | Yes | Use pooled or serverless database access. |
+
+## Security notes
+
+<FlowDiagram title="Secure deployment checklist" numbered steps={[
+          {
+            label: "Secret",
+            detail: "BETTER_AUTH_SECRET from a real secret manager",
+            eyebrow: "config",
+          },
+          {
+            label: "Origin",
+            detail: "trustedOrigins pins browser origins",
+          },
+          {
+            label: "Cookies",
+            detail: "preserve raw Response from auth.handler",
+            tone: "accent",
+          },
+          {
+            label: "Proxy",
+            detail: "declare TRUST_PROXY_HOPS behind a platform edge",
+          },
+          {
+            label: "Database",
+            detail: "migrate auth tables before traffic",
+            tone: "success",
+          },
+        ]} caption="Better Auth is part of your deployed app, so the auth route needs the same production posture as the rest of the API: secure secrets, trusted origins, proxy-aware URLs, preserved cookies, and database migrations." />
+
+- Generate a strong `BETTER_AUTH_SECRET` and rotate it with the same care as a JWT signing key.
+- Keep `trustedOrigins` narrow. Do not allow arbitrary origins in production.
+- Preserve Better Auth's raw `Response` for auth endpoints. Rebuilding headers into a plain object can collapse multiple `Set-Cookie` headers.
+- When deployed behind Railway, Render, Fly.io, Vercel, Cloudflare, or another edge proxy, configure DaloyJS's proxy posture so generated URLs, cookies, rate limiting, and audit logs use the expected origin and client IP.
+- Put `rateLimit()` in front of sign-in, sign-up, password reset, and callback routes. Better Auth handles auth logic, but the API still needs abuse controls.
+
+See also the [auth integrations overview](/docs/auth), [Better Auth installation](https://better-auth.com/docs/installation), [Better Auth basic usage](https://better-auth.com/docs/basic-usage), and the framework integration docs for [Hono](https://better-auth.com/docs/integrations/hono), [Elysia](https://better-auth.com/docs/integrations/elysia), and [Fastify](https://better-auth.com/docs/integrations/fastify).

@@ -1,0 +1,152 @@
+---
+title: DaloyJS API docs
+description: "DaloyJS API docs: complete public TypeScript surface for App, routing, middleware, MCP, plugins, errors, security helpers, JWT/JWK, sessions, streaming, websockets, and runtime adapters."
+keywords:
+  - DaloyJS API docs
+  - DaloyJS API reference
+  - DaloyJS docs
+  - TypeScript framework API
+---
+
+# DaloyJS API docs
+
+The complete public surface of DaloyJS v<CoreVersion />, organized by import path. Every signature in this reference is generated from the same TypeScript types your editor reads on hover. Open the source files for fuller TSDoc, examples, and security rationale.
+
+## Reference sections
+
+The reference is split into five focused pages so each one stays scannable:
+
+- [App & routing](/docs/api-reference/app): the `App` class, route contracts, hooks and context types, dispatch order, errors, and schema validation.
+- [Middleware & helpers](/docs/api-reference/middleware): built-in middleware, `every`/`some`/`except` composition, typed dependencies, config, logging, and connection info.
+- [Security & auth](/docs/api-reference/security): hardening primitives, `fetchGuard`, `safeRedirect`, cookies, JWT/JWK, sessions, and password hashing.
+- [Feature modules](/docs/api-reference/modules): OpenAPI, typed client, contract tests, MCP, docs UIs, streaming, multipart, WebSocket, tracing, and the CLI.
+- [Runtime adapters](/docs/api-reference/adapters): `serve()` for Node.js, Bun, and Deno, plus the Cloudflare, Vercel, Fastly, and Lambda handlers.
+
+## Minimal server
+
+This page is a reference. The signatures below are the source of truth, not a step-by-step tutorial. If you are starting from scratch, the [getting-started guide](/docs/getting-started) walks through scaffolding, validation, the typed client, and OpenAPI docs in full. The snippet here is enough to map the types below onto a server you can actually run.
+
+```bash
+pnpm add @daloyjs/core zod
+```
+
+```ts
+// index.ts
+import { z } from "zod";
+import { App } from "@daloyjs/core";          // root barrel
+import { serve } from "@daloyjs/core/node";   // adapters are subpath-only
+
+const app = new App({ title: "Hello API", version: "1.0.0" }).get(
+  "/hello",
+  {
+    operationId: "hello",
+    responses: {
+      // A response `body` schema enables OWASP-API3 field stripping.
+      200: { description: "Greeting", body: z.object({ message: z.string() }) },
+    },
+  },
+  // The handler returns the discriminated union HandlerReturn<Res>:
+  // { status, body, headers? }, keyed by a status declared above.
+  () => ({ status: 200, body: { message: "Hello from DaloyJS" } }),
+);
+
+const { port } = serve(app);                  // NodeServerOptions.port defaults to 3000
+console.log(`listening on http://localhost:${port}`);
+```
+
+Run it with `node index.ts`. Node.js (22.18+) strips TypeScript types natively. No loader is required. Every response already carries the secure-by-default headers (`secureHeaders`) and an `x-request-id` (`requestId`). Errors serialize to RFC 9457 `application/problem+json`. To serve `/docs` and `/openapi.json`, pass `docs: true` to `new App(...)` (it defaults to `false`).
+
+If you drop the response `body` schema the route still works, but DaloyJS logs a `security.response.bodySchemaMissing` warning at startup: response field-level stripping (OWASP API3) cannot be applied to a schema-less body. Declare the schema, or ignore the warning for routes that intentionally return no body.
+
+## Subpath modules
+
+Quick map of subpath modules exposed by the package:
+
+```ts
+@daloyjs/core                       // App, routing types, errors, middleware, security, JWT/JWK, ...
+@daloyjs/core/openapi               // OpenAPI 3.1 document generation + security-scheme builders
+@daloyjs/core/openapi-diff          // Dependency-free OpenAPI 3.x breaking-change diffing
+@daloyjs/core/asyncapi              // AsyncAPI 3.0 generation for app.ws() WebSocket surfaces
+@daloyjs/core/client                // Typed in-process client + Hey API SDK glue
+@daloyjs/core/contract              // Contract-tests harness (assert OpenAPI parity)
+@daloyjs/core/docs                  // Scalar / Swagger UI / Redoc HTML + CSP helper
+@daloyjs/core/mcp                   // MCP Streamable HTTP tools, resources, prompts, and routes
+@daloyjs/core/streaming             // SSE + NDJSON helpers
+@daloyjs/core/websocket             // WebSocket route helper + frame primitives
+@daloyjs/core/multipart             // File-field + multipart object schema helpers
+
+// Observability & ops
+@daloyjs/core/tracing               // OpenTelemetry tracing hook (interface-typed; no runtime dep)
+@daloyjs/core/metrics               // Prometheus / OpenMetrics exposition
+@daloyjs/core/banner                // Pretty startup banner
+@daloyjs/core/cli                   // CLI internals (used by bin/daloy.mjs)
+
+// Auth, sessions & crypto (also on the root barrel)
+@daloyjs/core/session               // Cookie sessions + signed-value helpers
+@daloyjs/core/hashing               // passwordHash / passwordVerify (scrypt)
+@daloyjs/core/jwt                   // createJwtSigner / createJwtVerifier (no "alg: none")
+@daloyjs/core/jwk                   // jwk() JWKS Bearer middleware (refuses HS*)
+@daloyjs/core/cookie                // Cookie serialization + attribute validation
+@daloyjs/core/time-claims           // assertTemporalClaims() (iat / nbf / exp)
+
+// HTTP features & API ergonomics
+@daloyjs/core/etag                  // etag() strong-validation 304 helper
+@daloyjs/core/compression           // compression() with BREACH-aware defaults
+@daloyjs/core/pagination            // Opaque-cursor pagination helpers
+@daloyjs/core/idempotency           // Idempotency-Key handling for unsafe-method retries
+@daloyjs/core/response-cache        // Server-side response caching (pluggable store)
+@daloyjs/core/tenancy               // Multitenancy: per-request tenant resolution
+@daloyjs/core/scheduler             // In-process scheduled (cron) tasks
+
+// Rate limiting, concurrency & access control
+@daloyjs/core/rate-limit-redis      // Distributed rate-limit store
+@daloyjs/core/concurrency-limit     // Per-route/client concurrency limit + FIFO queue
+@daloyjs/core/waf                   // WAF-lite inbound inspection (OWASP CRS-lite)
+@daloyjs/core/auto-ban              // Adaptive fail2ban-style escalating bans
+@daloyjs/core/bot-guard             // Bot / User-Agent management
+@daloyjs/core/ip-reputation         // Pluggable, refreshed IP abuse-feed denylist
+@daloyjs/core/geo-block             // ISO 3166-1 country allow/deny (BYO GeoIP lookup)
+@daloyjs/core/request-decompression // Inbound decompression-bomb guard
+@daloyjs/core/mtls                  // Mutual-TLS / client-certificate auth
+@daloyjs/core/http-signatures       // HTTP Message Signatures (RFC 9421) sign + verify
+
+// Outbound resilience
+@daloyjs/core/fetch-resilience      // resilientFetch(): circuit breaker + retry + timeout
+@daloyjs/core/webhook-delivery      // Outbound webhook delivery (signed, retried)
+
+// Runtime adapters
+@daloyjs/core/node                  // Node.js (http) - serve(app, opts)
+@daloyjs/core/bun                   // Bun.serve adapter
+@daloyjs/core/deno                  // Deno.serve adapter
+@daloyjs/core/cloudflare            // Cloudflare Workers + generic { fetch } default export
+@daloyjs/core/vercel                // Vercel Functions / Edge / Next.js App Router
+@daloyjs/core/fastly                // Fastly Compute@Edge
+@daloyjs/core/lambda                // AWS Lambda (API Gateway v1 + v2 / Function URLs)
+```
+
+You can import any feature two ways: from the root `@daloyjs/core` barrel (convenient and tree-shakeable), or from its own subpath (for example `@daloyjs/core/jwt`) for the smallest possible bundle without relying on a bundler's tree-shaking. Both resolve to the same code. Runtime **adapters** are the one exception: they are available *only* as subpaths (for example `@daloyjs/core/node`), so runtime-specific code such as `node:http` never leaks into an edge or Worker bundle.
+
+<BranchDiagram title="Two ways to import" source={{
+          eyebrow: "same code",
+          label: "@daloyjs/core feature",
+          detail: "App, jwt, fetchGuard, ...",
+        }} branches={[
+          {
+            eyebrow: "convenient",
+            label: "Root barrel",
+            detail: 'import { App } from "@daloyjs/core"',
+          },
+          {
+            eyebrow: "smallest bundle",
+            label: "Own subpath",
+            detail: 'import { ... } from "@daloyjs/core/jwt"',
+          },
+          {
+            eyebrow: "subpath only",
+            label: "Runtime adapters",
+            detail: "@daloyjs/core/node · /bun · /vercel",
+            tone: "muted",
+          },
+        ]} caption="The barrel and per-feature subpaths resolve to the same code, so pick whichever suits your bundler. Runtime adapters are the exception: they ship only as subpaths so platform code (like node:http) never leaks into an edge bundle." />
+
+Ready to dig in? Start with [App & routing](/docs/api-reference/app).

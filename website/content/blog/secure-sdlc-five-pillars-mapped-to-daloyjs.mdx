@@ -1,0 +1,218 @@
+---
+title: The 5 Pillars of a Secure SDLC, Mapped to DaloyJS
+description: Aikido's 'Secure SDLC Explained' lists the five pillars every engineering team needs, Visibility, Early Feedback, Developer Adoption, Consistency, Actionability. This post maps each pillar to what a DaloyJS app and its create-daloy scaffold already give you on day one, what you still configure, and the few items no framework can own.
+date: 2026-06-12
+readingTime: 11 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+badges:
+  - Security
+  - SSDLC
+  - Field report
+keywords:
+  - Secure SDLC
+  - SSDLC
+  - Aikido secure SDLC
+  - Secure software development lifecycle
+  - DaloyJS security
+  - SBOM CycloneDX
+  - CI security gates
+  - Shift left security
+  - SOC 2 ISO 27001 SSDLC
+  - Supply chain hardening TypeScript
+---
+
+A reader sent me [Aikido's "Secure SDLC Explained: The 5 Pillars of a Secure Software Development Lifecycle"](https://www.aikido.dev/blog/secure-sdlc) and asked which parts the DaloyJS scaffold already covers.
+
+The piece is a fine high-level checklist for CTOs and engineering leaders. It groups everything a Secure SDLC needs into five pillars, **Visibility, Early Feedback, Developer Adoption, Consistency,** and **Actionability**: and argues, correctly, that "framework alone cannot guarantee security": culture, tools, and consistent processes have to line up. Fair. But a framework can absolutely make the right process the path of least resistance, and that's exactly what DaloyJS is built to do.
+
+Below is the per-pillar mapping of what an app built on DaloyJS, and scaffolded with `pnpm create daloy@latest --with-ci`: already gives you on day one, what you still configure yourself, and the few items no framework can own. The TL;DR: if you ship the scaffold, you get four-and-a-half of the five pillars wired into a brand-new repo before the first commit. The half you still drive is the cultural piece, but the tools don't fight you on it.
+
+## Pillar 1: Visibility
+
+<PillarCard pillar="Aikido: 'You can't manage security if you can't see it.'" framework="CycloneDX SBOM generated and signed on every release. OSV-Scanner against the lockfile in CI. A daily scheduled vuln-scan.yml that runs the package manager's audit against the committed lockfile, so newly-disclosed CVEs are surfaced even when no PR or push has run CI (SOC 2 CC7.1 continuous-vulnerability-management evidence). Per-request structured logs with correlated requestId go to your SIEM. RFC 9457 problem+json error bodies carry the same requestId for one-click drill-down." user="Pick the SIEM (Datadog, CloudWatch, Loki, whatever) and wire the structured log stream to it. Decide which alerts page humans and which don't. The framework gives you the structured event surface; the dashboard is yours." />
+
+```bash
+# Generated on every release of @daloyjs/core, and shipped to users
+# via the create-daloy templates so their repo gets the same treatment.
+pnpm sbom            # writes a CycloneDX SBOM (sbom.cdx.json)
+pnpm verify:sbom     # fails CI if the SBOM is missing or stale
+pnpm osv-scan        # runs OSV-Scanner against the lockfile (CI)
+pnpm vuln-scan       # daily scheduled - surfaces newly disclosed CVEs
+                     # even when no PR is open (SOC 2 CC7.1 evidence)
+```
+
+The "can you immediately tell whether a new CVE affects you?" question is the whole point of the SBOM. Daloy's `verify:sbom` gate fails the build if the SBOM is missing or stale, there is no "we'll generate one for the audit" mode. Every release carries one. Every scaffolded project gets the same workflow.
+
+On the runtime side, every 4xx / 5xx response is RFC 9457 problem+json and carries the same `requestId` that shows up in the structured log line:
+
+```ts
+HTTP/1.1 413 Payload Too Large
+content-type: application/problem+json
+
+{
+  "type": "https://daloyjs.dev/problems/payload-too-large",
+  "title": "Payload Too Large",
+  "status": 413,
+  "detail": "Request body exceeded the 1048576 byte limit.",
+  "instance": "/orders",
+  "requestId": "01J9XP4M2K3W7Z8V0YQHB6T5RC"
+}
+// Every 4xx / 5xx is RFC 9457 problem+json. The requestId correlates to
+// the structured log line your SIEM already indexed, so a finding goes
+// from "something failed in prod" to a one-click drill-down in seconds.
+// In production, 5xx bodies are redacted by default - no stack traces,
+// no internal hostnames, no DB error messages reach the attacker.
+```
+
+Full detail: [/docs/security/supply-chain](/docs/security/supply-chain) and [/docs/tracing](/docs/tracing).
+
+## Pillar 2: Early Feedback
+
+<PillarCard pillar="Aikido: 'Deliver security findings at the point of code creation, in IDEs, pull requests, and CI/CD, not after deployment.'" framework="14+ verify:* CI gates run on every PR and block the merge button on failure. CodeQL + Opengrep run two SAST engines (different bug classes). OSV-Scanner runs against the lockfile. gitleaks scans the diff on PR. The TypeScript compiler + Zod / Valibot / ArkType schemas catch entire vulnerability classes (mass assignment, missing input validation, wrong-type body) at edit time, in the IDE, before the PR is even opened." user="Read the PR comments. Don't merge a red build. Don't paste 'allow: ['*']' into fetchGuard() because a test fails, the AGENTS.md asks you not to, but the framework can't physically stop you from disabling a check you wrote." />
+
+```bash
+# Repo-wide CI gates DaloyJS runs on every PR and ships into every
+# scaffolded create-daloy project. None of these are aspirational -
+# a failure blocks the merge button.
+pnpm verify:no-leaked-credentials       # AWS / GCP / GH / npm tokens
+pnpm verify:secret-comparisons          # all secret compares use timingSafeEqual
+pnpm verify:no-encoded-payloads         # base64 smuggling
+pnpm verify:no-invisible-unicode        # Trojan Source / zero-width / bidi
+pnpm verify:no-remote-exec              # no curl|sh, no eval(fetch(...))
+pnpm verify:no-lifecycle-scripts        # no install/postinstall/prepare
+pnpm verify:no-registry-exfiltration    # no sneaky POSTs to a registry
+pnpm verify:no-runtime-deps             # @daloyjs/core ships ZERO runtime deps
+pnpm verify:no-weak-random              # Math.random() banned for secrets
+pnpm verify:no-unsafe-buffer            # Buffer(n) banned
+pnpm verify:no-vulnerable-sandboxes     # vm/sandbox escapes blocked
+pnpm verify:actions-pinned              # every GH Action pinned to a SHA
+pnpm verify:lockfile-sources            # no git/tarball deps in lockfile
+pnpm verify:dep-licenses                # license allow-list
+pnpm verify:sbom                        # CycloneDX SBOM generated + signed
+pnpm verify:parity-audits               # secure-by-default parity across runtimes
+pnpm verify:governance-audits           # security docs in sync
+pnpm verify:runtime-parity-audits       # adapter feature parity
+pnpm verify:routing-hardening-audits    # router refuses traversal / NUL / //
+```
+
+And the workflows that run them:
+
+```bash
+# Every project scaffolded with 'pnpm create daloy@latest --with-ci'
+# gets these workflows pre-wired in .github/workflows. Pinned to commit
+# SHAs, top-level 'permissions: {}', no cache poisoning surface,
+# no third-party 'install this tool' actions in the supply chain.
+ci.yml              # typecheck + test + the verify:* family on every PR
+codeql.yml          # GitHub's SAST engine, weekly + on PR
+opengrep.yml        # Aikido's LGPL fork of Semgrep (second SAST engine,
+                    #   curated rule packs, binary verified via cosign)
+osv-scan.yml        # known-CVE lockfile scan
+vuln-scan.yml       # daily 'pnpm audit' against committed lockfile
+                    #   (SOC 2 CC7.1 continuous-vulnerability-management)
+dast.yml            # weekly OWASP ZAP baseline against the booted app
+secret-scan.yml     # gitleaks on PR + daily full-history scan
+                    #   (binary verified by SHA-256, not a 3rd-party action)
+scorecard.yml       # OpenSSF Scorecard
+zizmor.yml          # GitHub Actions workflow auditor
+container-scan.yml  # Trivy + hadolint on Dockerfile + image
+                    #   (only when scaffolded with a Dockerfile)
+```
+
+The reason there are *two* SAST engines (CodeQL + Opengrep) is the same point Aikido themselves make in their [Ultimate SAST Guide](https://www.aikido.dev/blog/ultimate-sast-guide-static-application-security-testing): different engines catch different bug classes. Running both is the recommended layered posture, and the scaffolder gives you both with neither sitting in your supply chain as a third-party action, Opengrep's binary is downloaded from a pinned release and verified by its sigstore cosign signature before it runs.
+
+The DAST half (Pillar 1 + 2 both touch this) is in `dast.yml`: a weekly OWASP ZAP baseline against the booted app, with HIGH-risk findings blocking and MEDIUM / LOW / INFO surfaced for triage. See Aikido's [SAST vs DAST](https://www.aikido.dev/blog/sast-vs-dast-what-you-need-to-now) for why you need both.
+
+## Pillar 3: Developer Adoption
+
+<PillarCard pillar="Aikido: 'A Secure SDLC is only effective if developers engage with security tools consistently. Tools that disrupt workflows are ignored or bypassed.'" framework="The safest configuration is the default constructor. There is no 'production hardening checklist' to remember on launch day, secureHeaders(), problem+json, body limits, request timeouts, prototype-pollution-safe JSON, CRLF refusal, path-traversal rejection, prod-mode redaction, and __Host-/Secure/HttpOnly/SameSite=Lax cookies are all on by default. Schema validation is a route-level requirement, not an afterthought. The scaffolder ships AGENTS.md + a SKILL.md so coding agents (Copilot, Claude, Cursor, GPT) read the rules before generating code." user="Use the scaffolder. Don't manually delete the verify:* gates from ci.yml because a postinstall script 'needs' to run. Treat the secure default as the boring one, because it is." />
+
+```ts
+// The "developer adoption" win: the safest configuration is the
+// default constructor. There is no "production hardening" checklist
+// to remember on launch day - the dangerous knobs are off until you
+// explicitly turn them on.
+import { App } from "@daloyjs/core";
+
+export const app = new App({
+  // bodyLimitBytes: 1 << 20,      // default: 1 MiB
+  // requestTimeoutMs: 30_000,     // default: 30s
+  // production: process.env.NODE_ENV === "production"  // auto-detected
+  //   -> in prod, 5xx bodies are redacted, stack traces never leak,
+  //      DB error messages never reach the wire.
+});
+
+// secureHeaders(), requestId(), problem+json error mapping, prototype-
+// pollution-safe JSON parse, CRLF/header-splitting refusal, path-traversal
+// rejection, method-confusion 405 (not 404), 415 on unsupported content
+// types, __Host-/Secure/HttpOnly/SameSite=Lax cookies - all on by default.
+```
+
+The "agent reads the rules before it writes code" piece is the file layout the scaffolder drops into a brand-new project:
+
+```bash
+# The scaffolder ships the rules the agent reads BEFORE generating code.
+# This is the "PromptBOM" idea applied to the agent's own context window.
+my-app/
+├── AGENTS.md                # repo-wide rules: pnpm only, schema-validated
+│                            #   routes, no template SQL, where admin lives
+├── .github/
+│   ├── copilot-instructions.md  # short pointer back to AGENTS.md
+│   └── workflows/           # the CI gates above
+├── _vscode/
+│   └── skills/
+│       └── daloyjs-best-practices/SKILL.md   # invoked by the agent
+└── scripts/
+    └── verify-lockfile-sources.mjs           # local mirror of the gate
+```
+
+Aikido's point is that adoption fails when tooling switches context. Daloy's answer is to put the rules in the file the agent already loads into its context window, [the AGENTS.md scaffold pattern](/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills), and to make the secure default the *shortest line of code you can type*.
+
+## Pillar 4: Consistency
+
+<PillarCard pillar="Aikido: 'Apply uniform security standards, policies, and enforcement across all teams, repositories, and languages.'" framework="The same verify:* gate set ships in every create-daloy template. The same secure-by-default constructor runs on every supported runtime, Node, Bun, Deno, Cloudflare Workers, Vercel. verify:runtime-parity-audits and verify:parity-audits make sure no adapter drops a security guard. verify:governance-audits keeps the security docs in sync with the code. The whole posture travels with the framework; a new service started this week gets the same gates as a service started last quarter." user="Run the scaffolder for every new service. Don't fork the templates and then forget to merge upstream security fixes, the Dependabot config that ships in the scaffold updates @daloyjs/core for you, and a new version usually re-syncs the templates." />
+
+The reason this works is the audit framing. Daloy's `verify:parity-audits`, `verify:runtime-parity-audits`, and `verify:routing-hardening-audits` are executable checks in `scripts/`. They fail the build if a defense exists in one path but not another. The framework cannot ship a release where the JWT algorithm allowlist is enforced on Node but not on Workers, because the parity gate would catch it.
+
+Consistency in the user's app is the same story extended outward: the scaffolded project carries the same gates, so a ten-service organization that scaffolds each one with `pnpm create daloy@latest` ends up with ten repos that enforce the same standards. ISO 27001 and SOC 2 evidence becomes a directory listing, not an interview.
+
+## Pillar 5: Actionability
+
+<PillarCard pillar="Aikido: 'Turn security findings into clear next steps. Prioritize actionable findings over raw vulnerability data.'" framework="problem+json on every 4xx / 5xx, the type URL is a documented page on this site, the requestId correlates to the SIEM log line, the message tells the caller what to fix. For published CVEs in the framework, every advisory is a GitHub Security Advisory with a CVE through GitHub's CNA, and SECURITY.md publishes a CVSS-keyed patch SLA (Critical 48h, High 7d, Medium 30d, Low 90d, measured from triage) so downstream NIS2 / EU CRA procurement clauses have something concrete to point at." user="Read the advisories you're subscribed to. Apply the patch within your own deploy window. The framework's SLA covers the upstream release; the consumer's pnpm install is the consumer's deploy event." />
+
+Aikido's point is that "thousands of findings without context" means developers either ignore the alerts or fix things at random. Daloy's answer at the framework level is to be parsimonious about what it reports. The router does not log a warning for every path-traversal attempt, it returns 400 and moves on. The body-limit guard does not page anyone, it returns 413. The findings that *do* bubble up to a human come from the verify gates (which are binary: red build or green) and the DAST / SAST workflows (which are scored). Every one comes with a documented fix.
+
+For framework-level vulnerabilities, the [compliance docs](/docs/security/compliance) spell out the per-severity patch SLA, the three timestamps every advisory carries (Discovered, Patch available, Fix deployed), and the npm `--provenance` sigstore attestation that binds the published version to the source commit. That's the evidence shape a NIS2-aligned procurement audit asks for, and it's built in.
+
+## The whole thing in one shell command
+
+```bash
+# The end-to-end "give my team a Secure SDLC starter kit" command.
+# Single line. No follow-up checklist. The five pillars are wired in.
+pnpm create daloy@latest my-app --with-ci
+
+# What that gives you:
+#   - All 14+ verify:* gates wired into .github/workflows/ci.yml
+#   - CodeQL + Opengrep (two SAST engines, different bug classes)
+#   - OSV scanner against your lockfile
+#   - Daily vuln-scan against the committed lockfile (SOC 2 CC7.1)
+#   - Weekly DAST baseline against the booted app
+#   - gitleaks secret scan on PR + daily full-history
+#   - OpenSSF Scorecard + zizmor (Actions auditor)
+#   - Dependabot + CODEOWNERS
+#   - SECURITY.md with the patch-SLA table (NIS2 / CRA shaped)
+#   - AGENTS.md + a SKILL.md so coding agents read the rules first
+#   - Hardened Dockerfile + container-scan workflow (Trivy + hadolint)
+#     (when scaffolded with a Dockerfile)
+```
+
+That one command wires day-one coverage for most of the five pillars. The half you still drive is the "does the team actually use the tools" piece, and the AGENTS.md the scaffolder drops catches drift even when a coding agent makes the change.
+
+## What DaloyJS does not cover
+
+- Use Aikido, Snyk, Wiz, Semgrep, or another specialist for the ASPM dashboard. Daloy emits SBOMs, SARIF, problem+json, request IDs, and OpenAPI 3.1 for those tools to ingest.
+- Secure SDLC culture stays with the team. Code review, threat modeling, incident follow-up, and security ownership are organizational practices.
+- The repository targets useful coverage instead of 100% on every defensive branch. Signal handlers and OS-level shutdown races are documented when unit tests would be artificial.
+- Your team can still remove its own CI workflow or disable a guard. Daloy supplies safe defaults and agent-readable rules; merge discipline remains a team responsibility.
+
+<p className="text-sm text-muted-foreground">Related reading on this blog:{" "}<Link href="/blog/secure-by-default">Secure by Default</Link>{", "}<Link href="/blog/supply-chain-hardening-for-typescript-libraries">Supply-chain hardening for TypeScript libraries</Link>{", "}<Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">Vibe Coding Security</Link>{", "}<Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">Cloud Security Architecture, Mapped</Link>{", "}<Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">OWASP Top 10 for Agentic Applications, Mapped</Link>{", "}<Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">Scaffolding a production-ready DaloyJS app in 60 seconds</Link>{". "}Relevant docs:{" "}<Link href="/docs/security">/docs/security</Link>{", "}<Link href="/docs/security/supply-chain">supply chain</Link>{", "}<Link href="/docs/security/compliance">compliance</Link>{", "}<Link href="/docs/security/runtime-protections">runtime protections</Link>{", "}<Link href="/docs/security/secure-defaults">secure defaults</Link>{"."}</p>

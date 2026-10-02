@@ -1,0 +1,224 @@
+---
+title: Cloud Security Architecture, Mapped to the DaloyJS App Layer
+description: Aikido's 'Cloud Security Architecture' guide is a fine high-level checklist, Zero Trust, defense-in-depth, IAM, segmentation, IaC scanning, continuous monitoring. This post maps each principle to what DaloyJS already ships for the application-layer half of that checklist, what the cloud platform still owns, and the opt-ins worth turning on today.
+date: 2026-06-09
+readingTime: 11 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+badges:
+  - Security
+  - Field report
+keywords:
+  - cloud security architecture
+  - Zero Trust DaloyJS
+  - defense in depth Node.js
+  - secure by default framework
+  - supply chain hardening
+  - IAM JWT JWK
+  - structured logging redaction
+  - OWASP API security
+  - NIS2 application layer
+  - Aikido cloud security
+---
+
+A reader sent me [Aikido's "Cloud Security Architecture" guide](https://www.aikido.dev/blog/cloud-security-architecture) and asked how much of it DaloyJS already covers. The piece is a tour of Zero Trust, defense-in-depth, IAM, network segmentation, IaC scanning, and continuous monitoring, the meat-and-potatoes of modern cloud security architecture.
+
+It's a *cloud* guide, not a framework guide. A lot of it lives at a layer DaloyJS will never touch, VPC peering, S3 bucket ACLs, GuardDuty, the AWS Well-Architected Security Pillar. But every one of its principles has an **application-layer half**, and that half is where a framework lives or dies. Below is the mapping: what Daloy already gives you for free, what it gives you when you opt in, and what stays in the cloud account's lane.
+
+If your worry was "does my framework actively *undermine* the architecture in that post," the answer is no. The boring defenses are on by default. The shared-responsibility line is drawn cleanly.
+
+## Principle 1, Zero Trust: "never trust, always verify"
+
+<PrincipleCard principle="Verify explicitly · least privilege · assume breach" framework="JWT + JWKS middleware with audience/issuer pinning, basic auth wired to timingSafeEqual, per-route auth scopes, IP allow-lists for admin surfaces, signed-cookie sessions with rotating signing keys, production-mode stack-trace redaction in error responses." platform="Issuing the JWTs (Okta / Entra / Auth0), enforcing MFA at the IdP, rotating IAM roles, and segmenting accounts/projects." />
+
+Zero Trust at the application layer requires a chain of *explicit verification points* that don't collapse into "the firewall said it was fine." Daloy gives you the verifying middleware as first-class primitives, so the chain is visible in your `app.ts`:
+
+```ts
+// src/app.ts
+import { App, jwt, ipRestriction, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+export const app = new App();
+
+// 1. Every request is authenticated before reaching handlers.
+app.use(jwt({
+  // Rotates from JWKS - no long-lived shared secrets baked into the image.
+  jwksUri: process.env.JWKS_URI!,
+  audience: "api.example.com",
+  issuer: "https://auth.example.com/",
+}));
+
+// 2. Admin surfaces are network-fenced AND credentialed.
+app.use(
+  "/admin",
+  ipRestriction({ allow: ["10.0.0.0/8"] }),
+  basicAuth({
+    realm: "admin",
+    verify: (user, pass) =>
+      timingSafeEqual(user, process.env.ADMIN_USER!) &&
+      timingSafeEqual(pass, process.env.ADMIN_PASS!)
+        ? { sub: "admin" }
+        : false,
+  }),
+);
+```
+
+Two non-negotiables worth pointing out: every secret comparison in the framework, basic auth, CSRF tokens, session HMAC, webhook signatures, runs through `timingSafeEqual`. There is a CI guard (`verify:secret-comparisons`) that fails the build if anyone tries to slip a raw `===` back in. And the JWT middleware refuses unsigned tokens, refuses `alg: none`, and pins to JWKS by `kid`: so a stolen audience claim doesn't silently become a master key.
+
+## Principle 2: Defense-in-depth
+
+<PrincipleCard principle="Multiple independent layers, any one of which can stop an attack" framework="Bounded body reads, request timeouts, CSP nonces, Trusted Types, HSTS, CORS, multi-instance rate limiting (Redis Lua), load shedding, egress fetch guard (SSRF), BREACH-aware compression, prototype-pollution-safe JSON, CRLF & path-traversal rejection." platform="Network ACLs, WAF, VPC segmentation, security groups, KMS encryption-at-rest, TLS termination." />
+
+The post's castle analogy, moat, wall, towers, keep, maps almost one-for-one to a Daloy middleware pipeline. Each layer works independently, so removing one does not silently disable the others:
+
+```ts
+// src/app.ts, every layer here is a separate middleware.
+// Removing one does not silently disable the others.
+import {
+  App,
+  secureHeaders,
+  rateLimit,
+  loadShedding,
+  fetchGuard,
+  compression,
+  cors,
+} from "@daloyjs/core";
+
+export const app = new App({
+  bodyLimitBytes: 1 << 20,    // L7: bounded reads
+  requestTimeoutMs: 30_000,   // L7: bounded duration
+});
+
+app.use(secureHeaders());     // L7: CSP nonce, Trusted Types, HSTS, X-CTO
+app.use(cors({ origin: ["https://app.example.com"] }));
+app.use(loadShedding({ maxConcurrent: 500 })); // L7: brown-out before OOM
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // L7: per-IP throttle
+app.use(fetchGuard({ allow: ["https://api.example.com"] })); // L7: egress allow-list
+app.use(compression()); // safe defaults - no Brotli on cookies (BREACH-aware)
+```
+
+For the deep tour of which of these run with `new App()` and which require a flag, see the older ["Secure by Default"](/blog/secure-by-default) post.
+
+## Principle 3: Centralize IAM
+
+<PrincipleCard principle="Federated identity, MFA everywhere, roles not long-lived keys" framework="JWKS-based verification (rotation built in), session signing key arrays (rotate without logging users out), no shared-secret defaults baked into the framework, no long-lived API tokens generated for you." platform="Pick the IdP. Wire MFA. Use cloud-native role assumption (IRSA, Workload Identity, Managed Identities) so your pods don't hold static keys." />
+
+The framework explicitly **does not invent a user system** for you. There is no built-in "forgot password" route silently shipped with every project, no default admin account, no auto-issued bearer token. The thing IAM guides hate most, "the framework's default user table", does not exist here. You bring an IdP and Daloy verifies what it signs.
+
+For the secrets that *do* live in the app (session signing key, basic-auth password, webhook HMAC), the framework supports multi-value rotation: pass an array of secrets and the oldest one is accepted-but-not-issued, so a key rotation is a single deploy with no logout storm.
+
+## Principle 4: Segmented network & SSRF protection
+
+<PrincipleCard principle="Limit blast radius; secure ingress AND egress" framework="fetchGuard() egress allow-list with default-deny on cloud metadata IPs (169.254.169.254) and RFC1918 ranges; CORS allow-lists; ipRestriction() for admin surfaces; per-route mount paths so 'public' and 'internal' apps can be split." platform="VPC subnets, security groups, NAT gateways, service mesh mTLS, private endpoints." />
+
+The article spends a lot of words on micro-segmentation. The application-layer analogue, and the one the cloud guide *doesn't* cover, is server-side request forgery. A compromised handler that can `fetch()` anywhere can still reach AWS metadata, your private Redis, your internal admin dashboard, and any IMDSv1 endpoint that didn't get upgraded. `fetchGuard()` is the application-layer firewall:
+
+```ts
+// fetchGuard() blocks server-side request forgery (SSRF) at the source.
+// It wraps the runtime fetch() so a compromised handler cannot pivot to
+// 169.254.169.254 (cloud metadata) or your private VPC ranges.
+import { App, fetchGuard } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(fetchGuard({
+  // Explicit egress allow-list. Everything else throws.
+  allow: [
+    "https://api.example.com",
+    "https://*.s3.amazonaws.com",
+  ],
+  // Always-blocked ranges (defaults - listed for clarity):
+  // 169.254.0.0/16, 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12,
+  // 192.168.0.0/16, ::1, fc00::/7, etc.
+}));
+```
+
+See [the fetch-guard docs](/docs/security/fetch-guard) for the full default deny-list and how it composes with timeouts.
+
+## Principle 5: Automate security with IaC scanning
+
+<PrincipleCard principle="Scan infrastructure-as-code in CI before it ships" framework="The framework's own repo runs ~15 verify-* gates on every PR. The scaffolded app from create-daloy ships with the same CI workflow templates so your project gets them on day one." platform="Terraform / CloudFormation / Pulumi scanners (Checkov, tfsec, Aikido, etc.) for your cloud resources. Daloy does not scan your S3 buckets, but it does refuse to install a dependency that runs a postinstall script." />
+
+The cloud post is talking about Terraform scanners. The framework analogue is the supply-chain CI gate. These gates run today, and any failure blocks merge:
+
+```bash
+# Repository CI gate, these are the framework's "IaC scanners".
+# Every PR runs them; any failure blocks merge.
+pnpm verify:actions-pinned       # all GitHub Actions pinned to SHA
+pnpm verify:dep-licenses         # license allow-list
+pnpm verify:no-lifecycle-scripts # no install / postinstall scripts allowed
+pnpm verify:no-remote-exec       # no curl|sh, no eval(fetch(...))
+pnpm verify:no-leaked-credentials
+pnpm verify:no-registry-exfiltration
+pnpm verify:no-unsafe-buffer
+pnpm verify:no-vulnerable-sandboxes
+pnpm verify:no-encoded-payloads  # base64-blob scanner
+pnpm verify:no-invisible-unicode # bidi / zero-width Trojan Source defense
+pnpm verify:sbom                 # CycloneDX SBOM is generated and signed
+pnpm verify:secret-comparisons   # all secret compares use timingSafeEqual
+```
+
+The reasoning behind each one is in ["Supply-chain hardening for TypeScript libraries"](/blog/supply-chain-hardening-for-typescript-libraries). Short version: pnpm's install-time defaults, plus our CI gates, plus a release-age cooldown, plus SHA-pinned Actions, plus npm provenance, plus a CycloneDX SBOM, chosen because attackers don't need a 0-day if they can ship a malicious `postinstall`.
+
+## Principle 6: Continuous monitoring (CSPM-equivalent)
+
+<PrincipleCard principle="A single pane of glass for security posture" framework="Structured per-request JSON logs with correlated request IDs, automatic redaction of Authorization / Cookie / Set-Cookie / X-API-Key, Server-Timing, and OpenTelemetry-shaped spans, same shape on Node, Bun, and Workers." platform="Ship the logs into your SIEM (CloudWatch / Datadog / Splunk / Loki). Daloy doesn't run the dashboard; it makes sure the events are useful when they arrive." />
+
+CSPM tools want one thing from the application: clean, machine-readable, redacted events. That's what the logger ships:
+
+```ts
+// Structured logs with built-in redaction.
+import { logger } from "@daloyjs/core";
+
+app.use(logger({
+  // Authorization, cookie, set-cookie, x-api-key are redacted by default.
+  // Add anything else your team treats as a secret:
+  redactKeys: ["x-internal-token", "sessionId", "creditCard"],
+  // JSON output - shippable straight into CloudWatch / GCP / Datadog
+  // without a regex-based scrubber in the middle.
+  format: "json",
+}));
+```
+
+The redactor walks the object graph instead of relying on one string regex, so a secret hiding inside `req.body.user.token` gets redacted the same way an Authorization header does. The list of keys is extensible; the defaults are conservative. If your company adds a new secret-shaped header, you add one string.
+
+## The "assume breach" defaults you already have
+
+The article says, "assume a breach will happen. Focus on minimizing the impact." Translated into framework behavior, that means the defaults must minimize blast radius even when a handler is buggy or compromised. Daloy's assume-breach defaults are the seven below, and they are not opt-in:
+
+```ts
+// Assume-breach defaults that DaloyJS turns on without asking:
+//
+// 1. Production redacts 5xx error bodies - no stack traces over the wire.
+// 2. Cookies default to __Host- prefix, Secure, HttpOnly, SameSite=Lax.
+// 3. JSON parser strips __proto__ / constructor / prototype keys.
+// 4. CRLF injection in user-controlled header values is rejected at write time.
+// 5. Path traversal (..%2F, encoded NULs) is rejected before routing.
+// 6. Body limit + request timeout are both enforced, even with no Content-Length.
+// 7. Compression skips secrets-shaped bodies to avoid BREACH-style oracle attacks.
+//
+// None of these require a flag. They are the constructor.
+new App();
+```
+
+## What DaloyJS does not cover
+
+- Cloud configuration scanning belongs to your provider or CSPM vendor. Daloy cannot spot a misconfigured S3 bucket.
+- Database encryption belongs to the data layer. Use RDS encryption, KMS-managed keys, or the equivalent on your platform.
+- Runtime threat detection still needs GuardDuty, Falco, or a similar detector. Daloy supplies structured events for it.
+- Keep your WAF. `secureHeaders()`, `rateLimit()`, and `loadShedding()` work behind one and cover different application-layer controls.
+
+Daloy owns the application-framework controls in this checklist. Cloud-account controls stay with the platform and its security tooling.
+
+## A 60-second checklist for your own deploy
+
+1. `new App()` with no overrides, you already have body limits, request timeouts, problem+json redaction in production, and prototype-pollution-safe JSON.
+2. Add `secureHeaders()`, `rateLimit()`, `loadShedding()`, and `fetchGuard()`: four lines, four layers.
+3. Wire `jwt()` to your IdP's JWKS. Don't pass a static secret. Pin `audience` and `issuer`.
+4. Mount admin under `/admin` with `ipRestriction()` + `basicAuth()` (or move it off the public app entirely).
+5. Turn on the structured logger and point your SIEM at stdout.
+6. Run `pnpm verify:*` in CI and gate merges on it.
+7. Read [/docs/security](/docs/security) once. Bookmark [/docs/security/owasp-api-top-10](/docs/security/owasp-api-top-10).
+
+Daloy's job is to make sure you can't accidentally skip the boring controls that still prevent breaches.
+
+<p className="text-sm text-muted-foreground">Related reading on this blog:{" "}<Link href="/blog/secure-by-default">Secure by Default</Link>{", "}<Link href="/blog/supply-chain-hardening-for-typescript-libraries">Supply-chain hardening for TypeScript libraries</Link>{", "}<Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">CSRF in 2026</Link>{", "}<Link href="/blog/csp-nonces-and-trusted-types-without-tears">CSP nonces and Trusted Types</Link>{", "}<Link href="/blog/sessions-on-the-edge">Sessions on the edge</Link>{", "}<Link href="/blog/observability-without-lock-in-structured-logs-and-otel-tracing">Observability without lock-in</Link>{"."}</p>

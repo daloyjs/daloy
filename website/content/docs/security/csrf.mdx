@@ -1,0 +1,213 @@
+---
+title: CSRF protection
+description: Use the built-in csrf() middleware to protect mutating routes with double-submit-cookie or Fetch Metadata CSRF strategies.
+keywords:
+  - DaloyJS CSRF
+  - double-submit cookie
+  - CSRF protection
+  - TypeScript CSRF middleware
+---
+
+# CSRF protection
+
+<blockquote>Double-submit CSRF protection sends a token in a cookie and requires the same value in a request header. A cross-site form cannot read the cookie value, so it cannot produce the matching header.</blockquote>
+
+DaloyJS ships a small, framework-agnostic `csrf()` middleware that implements the **double-submit cookie** pattern. The server stamps a random token in a cookie on safe requests. The client mirrors that token in a request header on mutating requests. The middleware then compares the cookie and header in constant time and rejects mismatches with **403 Forbidden**.
+
+The token cookie is intentionally readable by client-side JavaScript so a browser client can echo it into the header. Treat XSS prevention as a separate requirement: if an attacker can run script in your origin, they can read the CSRF token too.
+
+<AuthRole role="client-rp">
+<p>CSRF is a cookie-session problem, so it belongs to whichever server holds the browser session. If your provider hosts the session for you, it already handles this. If you run a backend-for-frontend, the session is yours and so is this middleware.</p>
+</AuthRole>
+
+<SequenceDiagram title="Double-submit cookie" participants={["Browser", "Attacker page", "csrf()", "Handler"]} steps={[
+          {
+            from: "Browser",
+            to: "csrf()",
+            label: "Safe request (GET) stamps a token cookie",
+            detail: "Set-Cookie: __Host-daloy.csrf=<random>",
+            kind: "request",
+          },
+          {
+            from: "csrf()",
+            to: "Browser",
+            label: "Token also exposed via ctx.state.csrfToken",
+            detail: "client echoes it on the next mutating call",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "csrf()",
+            label: "POST /transfer with header mirroring the cookie",
+            detail: "x-csrf-token === __Host-daloy.csrf",
+            kind: "request",
+          },
+          {
+            from: "csrf()",
+            to: "Handler",
+            label: "Constant-time compare matches, request proceeds",
+            detail: "timingSafeEqual(cookie, header)",
+            kind: "response",
+          },
+          {
+            from: "Attacker page",
+            to: "csrf()",
+            label: "Cross-site POST cannot read or set the header",
+            detail: "missing / mismatched token to 403 Forbidden",
+            kind: "note",
+          },
+        ]} caption="A forged cross-site request rides the cookie automatically but cannot read it to populate the x-csrf-token header, so the constant-time compare fails and the middleware returns 403. Only a same-origin client that read the token can match it." />
+
+## Quick start
+
+```ts
+import { App, csrf } from "@daloyjs/core";
+
+const app = new App();
+
+app.use(csrf());
+
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => ({
+    status: 200 as const,
+    // ctx.state.csrfToken is always populated; render it into your form
+    // or expose it to the SPA via a JSON envelope.
+    body: { csrfToken: state.csrfToken },
+  }),
+);
+
+app.post(
+  "/transfer",
+  {
+    operationId: "transfer",
+    responses: { 204: { description: "ok" }, 403: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+```
+
+## How clients send the token
+
+Browsers cache the token cookie automatically. Your client code only needs to read it and echo it on the next mutating call. From a SPA:
+
+```ts
+function getCsrf(): string {
+  const m = document.cookie.match(/(?:^|; )__Host-daloy\.csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]!) : "";
+}
+
+await fetch("/transfer", {
+  method: "POST",
+  credentials: "include",
+  headers: {
+    "content-type": "application/json",
+    "x-csrf-token": getCsrf(),
+  },
+  body: JSON.stringify({ amount: 42 }),
+});
+```
+
+## Defaults
+
+| Option | Default |
+| --- | --- |
+| `cookieName` | `__Host-daloy.csrf` |
+| `headerName` | `x-csrf-token` |
+| `ignoreMethods` | `["GET", "HEAD", "OPTIONS"]` |
+| `cookieOptions.sameSite` | `"Lax"` |
+| `cookieOptions.secure` | `true` |
+| `cookieOptions.path` | `"/"` |
+| `strategy` | `"double-submit"` |
+| `allowedOrigins` | Required only for Fetch-Metadata legacy fallback / cross-origin allowlists |
+| `generator` | 32-byte WebCrypto random token |
+
+The default generator requires WebCrypto (`crypto.getRandomValues` or `crypto.randomUUID`). If you run DaloyJS in an unusual runtime without WebCrypto, pass a cryptographically secure custom `generator` rather than falling back to predictable randomness.
+
+## The `__Host-` prefix [#the-host-prefix]
+
+The default cookie name is prefixed with `__Host-`. Browsers refuse to set such a cookie unless it is also `Secure`, has `Path=/`, and has no `Domain` attribute. The middleware enforces those constraints at construction time, so you cannot ship a misconfigured prefix to production. To use a non-prefixed cookie (for example during local HTTP development), pass an explicit `cookieName`:
+
+```ts
+app.use(csrf({
+  cookieName: "csrf",
+  cookieOptions: {
+    secure: false,    // local dev over plain HTTP
+    sameSite: "Lax",
+  },
+}));
+```
+
+## Custom header names and methods
+
+Some clients (Angular, Axios) read `XSRF-TOKEN` and reflect it as `X-XSRF-TOKEN`. To match that convention, override both names and the safe-method list:
+
+```ts
+app.use(csrf({
+  cookieName: "XSRF-TOKEN",
+  headerName: "X-XSRF-TOKEN",
+  ignoreMethods: ["GET", "HEAD", "OPTIONS", "TRACE"],
+  cookieOptions: {
+    sameSite: "Lax",
+    secure: true,
+    // Optional: long-lived cookie so SPAs don't have to reissue per session.
+    maxAgeSeconds: 60 * 60 * 24 * 7,
+  },
+}));
+```
+
+## What is *not* covered
+
+- Cross-origin reads. Set a strict CORS allowlist via `cors()` so other origins cannot trigger credentialed reads.
+- HTML form posts. Render `ctx.state.csrfToken` into a hidden field and forward it as the `x-csrf-token` header (or use a small client-side script to do so), the middleware only reads the header, not multipart bodies.
+- Authentication. CSRF is orthogonal to auth. Combine `csrf()` with `bearerAuth()` or your session middleware.
+
+## Fetch-Metadata strategy (tokenless, recommended for new apps)
+
+The `csrf()` middleware also implements the modern **Fetch Metadata** strategy. Modern browsers send a `Sec-Fetch-Site` header on every request that tells the server whether the request originated from the *same* origin, a *cross*-site context, or no navigable context at all (`none`, such as bookmarks or direct address-bar typing). That single header is enough to defeat the classic CSRF attack model without any cookie round-trip and without coupling your HTML rendering to a token.
+
+<FlowDiagram title="Fetch-Metadata decision" steps={[
+          {
+            eyebrow: "ingress",
+            label: "Mutating request",
+            detail: "POST / PUT / PATCH / DELETE",
+          },
+          {
+            eyebrow: "header",
+            label: "Read Sec-Fetch-Site",
+            detail: "browser-attested origin context",
+          },
+          {
+            eyebrow: "same-origin / none",
+            label: "Accept",
+            detail: "same-origin or none to handler",
+            tone: "success",
+          },
+          {
+            eyebrow: "cross-site",
+            label: "Reject",
+            detail: "cross-site to 403 Forbidden",
+            tone: "danger",
+          },
+        ]} caption="In fetch-metadata mode there is no cookie. The middleware trusts the browser-attested Sec-Fetch-Site header: same-origin and none pass, cross-site is rejected. A missing header (legacy browser) only passes when Origin or Referer matches allowedOrigins." />
+
+```ts
+app.use(csrf({
+  strategy: "fetch-metadata",
+  // Allowed when the legacy browser sends Origin/Referer but no Sec-Fetch-Site.
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+In `"fetch-metadata"` mode the middleware *does not* issue or require a cookie. On mutating requests it accepts the request when:
+
+- `Sec-Fetch-Site` is `same-origin` or `none`, or
+- `Sec-Fetch-Site` is missing (legacy browser) *and* `Origin` or `Referer` matches your `allowedOrigins` list/predicate.
+
+For defense in depth, pass `strategy: "both"`. Mutating requests must then pass *both* the Fetch-Metadata check *and* the double-submit cookie check.
+
+Non-browser clients usually do not send `Sec-Fetch-Site`. If they need to call protected mutating routes, give them an explicit `Origin` that matches `allowedOrigins`, or use route-level middleware so browser and machine clients can follow different CSRF policies.

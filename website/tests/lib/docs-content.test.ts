@@ -15,70 +15,7 @@ mock.module("next/cache", {
   namedExports: { cacheLife: () => {}, cacheTag: () => {} },
 });
 
-const {
-  extractBodyText,
-  parseDocFrontmatter,
-  getRouteFromFile,
-  normalizeDocRoute,
-  getAllDocPages,
-  getDocPage,
-  docsDir,
-} = await import("../../lib/docs-content");
-
-// ─────────────────────────── extractBodyText ───────────────────────────
-
-const SAMPLE_PAGE = `import { CodeBlock } from "@/components/code-block";
-export const metadata = buildMetadata({ title: "Sample", description: "Desc", path: "/docs/sample", keywords: ["alpha"] });
-export default function Page() {
-  return (
-    <main className={wrapClass}>
-      <h1 className={titleClass}>Hello &amp; welcome</h1>
-      <p>Routing is simple.</p>
-      <CodeBlock code={\`const answer = 42;\`} language="ts" />
-    </main>
-  );
-}`;
-
-test("extractBodyText keeps prose and code, drops imports and metadata", () => {
-  const text = extractBodyText(SAMPLE_PAGE);
-  assert.match(text, /Hello & welcome/);
-  assert.match(text, /Routing is simple\./);
-  assert.match(text, /const answer = 42;/);
-  assert.doesNotMatch(text, /import/);
-  assert.doesNotMatch(text, /buildMetadata/);
-});
-
-test("extractBodyText honors the optional length limit", () => {
-  assert.ok(extractBodyText(SAMPLE_PAGE, 5).length <= 5);
-});
-
-test("extractBodyText returns an empty string for empty input", () => {
-  assert.equal(extractBodyText(""), "");
-});
-
-// ─────────────────────────── parseDocFrontmatter ───────────────────────────
-
-test("parseDocFrontmatter extracts title, description, route, and keywords", () => {
-  const fm = parseDocFrontmatter(SAMPLE_PAGE, path.join(docsDir, "sample", "page.tsx"));
-  assert.equal(fm.title, "Sample");
-  assert.equal(fm.description, "Desc");
-  assert.equal(fm.href, "/docs/sample");
-  assert.deepEqual(fm.keywords, ["alpha"]);
-});
-
-test("parseDocFrontmatter falls back to defaults and a file-derived route", () => {
-  const fm = parseDocFrontmatter("export default function P() { return null; }", path.join(docsDir, "foo", "page.tsx"));
-  assert.equal(fm.title, "Untitled");
-  assert.equal(fm.description, "Documentation page");
-  assert.equal(fm.href, "/docs/foo");
-});
-
-// ─────────────────────────── getRouteFromFile ───────────────────────────
-
-test("getRouteFromFile maps nested pages and the docs root", () => {
-  assert.equal(getRouteFromFile(path.join(docsDir, "security", "csrf", "page.tsx")), "/docs/security/csrf");
-  assert.equal(getRouteFromFile(path.join(docsDir, "page.tsx")), "/docs");
-});
+const { normalizeDocRoute, getAllDocPages, getDocPage } = await import("../../lib/docs-content");
 
 // ─────────────────────────── normalizeDocRoute ───────────────────────────
 
@@ -124,4 +61,20 @@ test("getDocPage resolves a known slug to a page with a body", async () => {
 test("getDocPage returns null for missing pages and traversal", async () => {
   assert.equal(await getDocPage("nope-not-real"), null);
   assert.equal(await getDocPage("../secret"), null);
+});
+
+test("the docs corpus is exactly the MDX content tree, with frontmatter metadata", async () => {
+  const { readdirSync } = await import("node:fs");
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(path.join(dir, entry.name)) : entry.name.endsWith(".mdx") ? [path.join(dir, entry.name)] : [],
+    );
+  const files = walk(path.join(process.cwd(), "content", "docs"));
+  const pages = await getAllDocPages();
+  assert.equal(pages.length, files.length, "one docs page per .mdx file, and no page.tsx pages left");
+  assert.ok(pages.some((p) => p.href === "/docs"), "content/docs/index.mdx is the docs root");
+  for (const page of pages) {
+    assert.ok(page.title && page.description, `${page.href} is missing frontmatter`);
+    assert.ok(page.body.length > 100, `${page.href} has an empty body`);
+  }
 });

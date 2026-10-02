@@ -1,0 +1,262 @@
+---
+title: WebSocket primitives (Node & Bun)
+description: Register typed WebSocket routes in DaloyJS with the same Bun-style handler shape running on both Node and Bun adapters, safe defaults, upgrade rate limiting, and graceful close semantics.
+keywords:
+  - WebSocket
+  - RFC 6455
+  - real-time
+  - Bun WebSocket
+  - Node WebSocket
+  - DaloyJS websocket
+  - wsRateLimit
+  - maxPayloadLength
+  - perMessageDeflate
+sitemap:
+  priority: 0.8
+---
+
+# WebSocket primitives
+
+DaloyJS ships runtime-agnostic WebSocket primitives in `src/websocket.ts` (re-exported from `@daloyjs/core/websocket`) plus adapter wiring for `@daloyjs/core/node` and `@daloyjs/core/bun`. Both adapters accept the **same handler shape**: the Bun-style `open` / `message` / `close` / `drain` / `error` callbacks, so the same `app.ws(path, handler)` registration works on either runtime without changes.
+
+On Node the adapter only installs an `upgrade` listener when at least one WS route is registered, so apps that don't use WebSockets pay zero overhead. On Bun the adapter forwards to `Bun.serve`'s native `websocket` config.
+
+`app.ws()` also normalizes safe runtime defaults: `closeOnBackpressureLimit: true`, a 1 MiB `backpressureLimit`, `perMessageDeflate: false`, a non-zero `idleTimeout`, and a 1 MiB `maxPayloadLength`. Production apps running with `secureDefaults` refuse `perMessageDeflate: true`.
+
+Production routes also require an Origin policy with `allowedOrigins` or an explicit `acknowledgeCrossOriginUpgrade: true`. This closes the Cross-Site WebSocket Hijacking pattern behind Storybook's CVE-2026-27148: browsers attach cookies to WS handshakes, even when another site opened the socket.
+
+## Quick start
+
+```ts
+import { App } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App();
+
+app.ws("/chat/:room", {
+  open(conn, ctx) {
+    conn.data = { user: ctx.query.user ?? "anon", room: ctx.params.room };
+    conn.send(`welcome ${(conn.data as { user: string }).user}`);
+  },
+  message(conn, data, isBinary) {
+    // Echo back, upper-cased for text frames
+    conn.send(typeof data === "string" ? data.toUpperCase() : data, { binary: isBinary });
+  },
+  close(conn, code, reason) {
+    // release any per-connection resources here
+  },
+});
+
+serve(app, { port: 3000 });
+```
+
+## Handler shape
+
+Use `defineWebSocket()` for full type-inference on path params (`ctx.params`), query (`ctx.query`), and per-connection state (`conn.data`):
+
+```ts
+import { defineWebSocket } from "@daloyjs/core";
+
+const chatHandler = defineWebSocket({
+  open(conn, ctx) {
+    // ctx.params is typed from the path pattern "/chat/:room"
+    conn.data = { room: ctx.params.room, joinedAt: Date.now() };
+  },
+  message(conn, data) {
+    conn.send(typeof data === "string" ? data : new Uint8Array(data as ArrayBuffer));
+  },
+  close(conn, code, reason) {
+    // cleanup
+  },
+  error(conn, err) {
+    // user error handler - does not affect close code
+  },
+  drain(conn) {
+    // backpressure released
+  },
+});
+
+app.ws("/chat/:room", chatHandler);
+```
+
+## Connection API
+
+The `WebSocketConnection` passed to your handlers mirrors the WHATWG `WebSocket` interface where it makes sense on the server side:
+
+- `conn.readyState`: one of `WS_READY_STATE.CONNECTING / OPEN / CLOSING / CLOSED`.
+- `conn.send(data, options?)`: send a text frame for `string`, or a binary frame for `Uint8Array` / `ArrayBuffer`. Pass `{ binary: true }` to force binary framing of a string.
+- `conn.ping(data?)` / `conn.pong(data?)`: control frames. Payload must be ≤ 125 bytes per RFC 6455.
+- `conn.close(code?, reason?)`: graceful close (sends a CLOSE frame, fires your `close` handler, then closes the underlying socket).
+- `conn.terminate()`: immediate transport-level close, no CLOSE frame.
+- `conn.bufferedAmount`, `conn.protocol`, `conn.extensions`, `conn.binaryType`.
+- `conn.data`: opaque per-connection slot for your app state.
+
+## Protocol negotiation & upgrade hook [#protocol-negotiation-and-upgrade-hook]
+
+Optional `beforeUpgrade(req, ctx)` runs after the path match and Origin policy, but before the 101 response. Return a `Response` to reject (handy for auth or rate-limiting), or return a `string` to pick a subprotocol from `Sec-WebSocket-Protocol`:
+
+<SequenceDiagram title="Upgrade, message, close" participants={["Client", "DaloyJS adapter", "Your handler"]} steps={[
+          {
+            from: "Client",
+            to: "DaloyJS adapter",
+            label: "GET with Upgrade: websocket",
+            detail: "Origin policy checked first, then beforeUpgrade",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS adapter",
+            to: "Client",
+            label: "101 Switching Protocols (or a rejection Response)",
+            detail: "Sec-WebSocket-Accept, optional negotiated subprotocol",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS adapter",
+            to: "Your handler",
+            label: "open(conn, ctx)",
+            detail: "set conn.data, send a welcome frame",
+            kind: "async",
+          },
+          {
+            from: "Client",
+            to: "Your handler",
+            label: "message(conn, data, isBinary)",
+            detail: "text or binary frames, capped by maxPayloadLength",
+            kind: "async",
+          },
+          {
+            from: "Client",
+            to: "Your handler",
+            label: "close(conn, code, reason)",
+            detail: "CLOSE frame, then the socket is torn down",
+            kind: "note",
+          },
+        ]} caption="The adapter runs the Origin policy and beforeUpgrade hook before replying 101. After the upgrade your open, message, and close callbacks run with the same shape on both Node and Bun." />
+
+```ts
+app.ws("/api", {
+  allowedOrigins: "same-origin",
+  beforeUpgrade(req, ctx) {
+    const token = ctx.headers["authorization"]?.replace(/^Bearer /, "");
+    if (!token || !isValid(token)) {
+      return new Response("unauthorized", { status: 401 });
+    }
+    // Pick a subprotocol the client offered
+    const offered = (ctx.headers["sec-websocket-protocol"] ?? "").split(",").map((s) => s.trim());
+    return offered.includes("daloy.v1") ? "daloy.v1" : undefined;
+  },
+  open(conn) {
+    conn.send("ready");
+  },
+  message(conn, data) {
+    conn.send(data);
+  },
+});
+```
+
+## Origin policy and CSWSH
+
+`allowedOrigins` is checked before `beforeUpgrade` in both Node and Bun. Use `"same-origin"` for browser clients served from the same scheme, host, and port as the WS endpoint, use an array for explicit cross-origin browser clients, or use a predicate when machine clients must also send an `Origin` header.
+
+```ts
+app.ws("/session", {
+  allowedOrigins: "same-origin",
+  beforeUpgrade(req, ctx) {
+    const session = readSession(ctx.headers.cookie);
+    if (!session) return new Response("unauthorized", { status: 401 });
+  },
+  open(conn) {
+    conn.send("ready");
+  },
+});
+
+app.ws("/partner-feed", {
+  allowedOrigins: ["https://partner.example.com"],
+  beforeUpgrade(req) {
+    return verifyPartner(req) ? undefined : new Response("forbidden", { status: 403 });
+  },
+  message(conn, data) {
+    conn.send(data);
+  },
+});
+
+app.ws("/cli", {
+  allowedOrigins: (origin) => origin !== null && origin === "https://admin.example.com",
+  beforeUpgrade(req) {
+    return verifyBearerToken(req) ? undefined : new Response("unauthorized", { status: 401 });
+  },
+  open(conn) {
+    conn.send("ready");
+  },
+});
+```
+
+Missing `Origin` is allowed by the `"same-origin"` and array policies because browsers send `Origin` on WS handshakes. No `Origin` usually means a CLI or server-to-server client. Use the predicate form when your route should reject clients that omit the header.
+
+## Upgrade rate limiting
+
+Use `wsRateLimit()` in `beforeUpgrade` when a WebSocket route belongs to the same login or session-establishment surface as HTTP endpoints. It spends from the same `rateLimit({ groupId })` bucket and preserves rate-limit headers on rejection.
+
+A limiter failure never leaks to the client (since 1.3.7). A store or `keyGenerator` error that is not an `HttpError` is rethrown, so the adapter logs it and answers with its own generic `500`; the error message (which can carry connection strings or hostnames) is never echoed. A 5xx `HttpError` has its `detail` scrubbed, because some adapters return the hook's response verbatim.
+
+```ts
+import { wsRateLimit } from "@daloyjs/core";
+
+app.ws("/session", {
+  beforeUpgrade: wsRateLimit({
+    windowMs: 60_000,
+    max: 10,
+    groupId: "auth-entry",
+    // Default key: the trusted forwarded client IP (with trustedProxies), or
+    // the TCP peer. Never key on a raw client header such as x-user-key: a
+    // client that rotates it gets a fresh budget on every attempt.
+    trustedProxies: ["10.0.0.0/8"],
+  }),
+  open(conn) {
+    conn.send("ready");
+  },
+});
+```
+
+## Payload and backpressure limits
+
+Override safe defaults per route when a connection needs tighter bounds. `idleTimeout`, `backpressureLimit`, and `maxPayloadLength` must be positive integers. If your WebSocket handler declares a body schema with a maximum size, Daloy refuses a larger `maxPayloadLength` at registration time.
+
+`maxPayloadLength` caps both a single frame and a reassembled fragmented message. The Node adapter's frame parser also refuses a message split across more than `DEFAULT_WS_MAX_MESSAGE_FRAGMENTS` (4096) frames with close code `1002` (protocol error), since 1.3.7. Without that cap a peer could hold a message open forever with empty continuation frames, which never trip the byte limit.
+
+```ts
+app.ws("/events", {
+  idleTimeout: 120,
+  maxPayloadLength: 64 * 1024,
+  closeOnBackpressureLimit: true,
+  backpressureLimit: 1 * 1024 * 1024,
+  perMessageDeflate: false,
+  message(conn, data) {
+    conn.send(data);
+  },
+});
+```
+
+## Graceful shutdown
+
+The Node adapter tracks every upgraded socket. When `close()` is invoked (or the app receives `SIGTERM` / `SIGINT` with `handleSignals: true`), all active WebSocket sockets are destroyed before `server.close()` resolves so the process exits promptly even if clients linger.
+
+## Custom adapters
+
+If you target a runtime other than Node or Bun, import the primitives directly from `@daloyjs/core/websocket`:
+
+```ts
+import {
+  validateUpgrade,
+  computeAcceptKey,
+  FrameSink,
+  encodeFrame,
+  encodeSendPayload,
+  encodeClosePayload,
+  WS_OPCODE,
+  WS_CLOSE_CODE,
+  WS_READY_STATE,
+} from "@daloyjs/core/websocket";
+```
+
+`FrameSink` is a streaming RFC 6455 parser: feed it bytes via `sink.push(chunk)` and it dispatches `onMessage` (with reassembled payload + `isBinary` flag), `onPing`, `onPong`, `onClose`, and `onProtocolError`. UTF-8 validation on text frames is handled for you.

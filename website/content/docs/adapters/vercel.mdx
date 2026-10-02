@@ -1,0 +1,118 @@
+---
+title: Vercel adapter
+description: Deploy a DaloyJS REST API to Vercel Functions on the Node.js runtime with Fluid compute. One app object, one standalone function.
+keywords:
+  - DaloyJS Vercel adapter
+  - Vercel Functions
+  - Vercel Node.js Functions
+  - toFetchHandler
+  - Fluid compute
+---
+
+# Vercel
+
+Deploy a DaloyJS REST API to Vercel as a single standalone function on the Node.js runtime. Node.js is the default runtime and what Vercel recommends, and it runs on Fluid compute with per-request billing.
+
+<FlowDiagram title="One app, one Vercel function" steps={[
+          {
+            eyebrow: "your code",
+            label: "DaloyJS App",
+            detail: "import { app } from '../src/server.ts'",
+          },
+          {
+            eyebrow: "adapter",
+            label: "toFetchHandler(app)",
+            detail: "export default at api/index.ts",
+          },
+          {
+            eyebrow: "vercel.json",
+            label: "/(.*) -> /api rewrite",
+            detail: "DaloyJS owns routing at the site root",
+            tone: "accent",
+          },
+        ]} caption="The function lives at api/index.ts on the Node.js runtime. The /(.*) -> /api rewrite sends every path to the function so DaloyJS owns routing at the site root." />
+
+## When to choose Vercel
+
+- You want a standalone DaloyJS REST API on Vercel Functions.
+- You want Fluid compute (the default since 2025) with per-request billing.
+- You want preview deployments per PR with zero CI config.
+
+## Scaffold
+
+The Vercel starter scaffolds a standalone REST API on the Node.js runtime (the `toFetchHandler` entrypoint shown below), which Vercel recommends for standalone functions.
+
+```bash
+pnpm create daloy@latest my-api --template vercel
+cd my-api
+pnpm vercel dev
+```
+
+## Vercel Node.js Functions (standalone API) [#1-vercel-node-js-functions-standalone-api]
+
+For a standalone DaloyJS REST API on the Node.js runtime, use a single function at `api/index.ts`. Vercel Node.js Functions expect a default export with a `fetch` method.
+
+```ts
+// api/index.ts
+import { toFetchHandler } from "@daloyjs/core/vercel";
+import { app } from "../src/server.ts";
+
+// Node.js is the default runtime. No runtime export needed.
+export default toFetchHandler(app);
+```
+
+Vercel maps `api/index.ts` to `/api`, but a DaloyJS app registers its routes at the **root** (`/healthz`, `/docs`, ...). Add a **rewrite** so every path reaches the function and DaloyJS owns routing at the site root, without it the deployed root domain returns a Vercel 404:
+
+```json
+// vercel.json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+}
+```
+
+## vercel.json [#vercel-json]
+
+The `rewrites` rule above is required for root routing. Add `functions` for per-function memory/duration limits, and `regions` to pin a region:
+
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "functions": {
+    "api/index.ts": { "memory": 1024, "maxDuration": 30 }
+  },
+  "regions": ["fra1"]
+}
+```
+
+The legacy `builds` property is deprecated, use `functions` instead.
+
+## Deploy
+
+```bash
+# preview
+pnpm vercel deploy
+
+# production
+pnpm vercel deploy --prod
+
+# env vars (encrypted)
+pnpm vercel env add SESSION_SECRET production
+```
+
+## Storage
+
+**Vercel KV and Vercel Postgres no longer exist as Vercel-owned products.** They were sunset in December 2024 and existing stores were migrated automatically, Vercel KV to Upstash Redis, Vercel Postgres to Neon. For new projects, add the equivalent integration from the [Vercel Marketplace](https://vercel.com/marketplace) (Neon for Postgres, Upstash for Redis), the integration provisions the store and injects the connection env vars into your project.
+
+Vercel Blob and Edge Config are still first-party Vercel products. See [Neon](/docs/databases/neon) for the Postgres setup and [distributed rate-limit store](/docs/security/rate-limit-redis) for the Redis setup.
+
+## Gotchas
+
+- Standalone Vercel Node functions want a **default** export with `{ fetch }`. Use `toFetchHandler`.
+- Without the `/(.*)` -\> `/api` rewrite, Vercel serves the function only at `/api` and the root domain returns a 404. The rewrite is what lets DaloyJS own routing at the site root.
+- Secrets are available on `process.env` at runtime. Add them with `vercel env add` rather than committing them.
+
+## See also
+
+- [Adapters overview](/docs/adapters)
+- [Scaffolder](/docs/scaffolder)
+- [Neon on Vercel](/docs/databases/neon)

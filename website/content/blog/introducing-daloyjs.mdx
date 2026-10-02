@@ -1,0 +1,260 @@
+---
+title: "Introducing DaloyJS: One Route, Many Runtimes, Zero Ceremony"
+description: The launch post. One app.route({...}) becomes your validation, types, OpenAPI, typed client, and contract tests, and the same app runs on Node, Bun, Deno, and Workers.
+date: 2026-05-19
+readingTime: 11 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work, currently writing TypeScript from a flat in Norway. Has strong opinions about contracts and weak opinions about the weather.
+badges:
+  - Launch
+  - Announcement
+keywords:
+  - Introducing DaloyJS
+  - DaloyJS launch
+  - TypeScript framework
+  - contract-first framework
+  - OpenAPI TypeScript
+  - Node Bun Deno Cloudflare Workers Vercel
+  - typed client SDK
+footerLinks:
+  - label: Read the quickstart
+    href: /docs/getting-started
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+export const HELLO_DALOY = `// src/app.ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
+
+export const app = new App({
+  bodyLimitBytes: 1 << 20,   // 1 MiB
+  requestTimeoutMs: 5_000,   // 5s
+});
+
+app.use(requestId());
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  operationId: "getBookById",
+  summary: "Fetch a book by id",
+  request: {
+    params: z.object({ id: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: "Found",
+      body: z.object({ id: z.string(), title: z.string() }),
+    },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params }) => {
+    if (params.id === "missing") {
+      return { status: 404 };
+    }
+    return {
+      status: 200,
+      body: { id: params.id, title: \`Book \${params.id}\` },
+    };
+  },
+});`;
+
+export const SERVE_NODE = `// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.ts";
+
+serve(app, { port: 3000 });`;
+
+export const TYPED_CLIENT = `// scripts/smoke.ts
+import { app } from "../src/app.ts";
+import { createInProcessClient } from "@daloyjs/core/client";
+
+const api = createInProcessClient(app);
+
+// 1) Happy path - body is narrowed to { id: string; title: string }
+const ok = await api.getBookById({ params: { id: "42" } });
+if (ok.status === 200) {
+  console.log(ok.body.title.toUpperCase()); // ✅ string method, fully typed
+}
+
+// 2) Unhappy path - TS knows there's no body to read
+const miss = await api.getBookById({ params: { id: "missing" } });
+if (miss.status === 404) {
+  // miss.body // ❌ TS error: Property 'body' does not exist on type { status: 404 }
+}`;
+
+export const RUNTIMES = `// node
+import { serve } from "@daloyjs/core/node";
+serve(app, { port: 3000 });
+
+// bun
+import { serve } from "@daloyjs/core/bun";
+serve(app, { port: 3000 });
+
+// deno
+import { serve } from "@daloyjs/core/deno";
+serve(app, { port: 3000 });
+
+// cloudflare workers
+import { toFetch } from "@daloyjs/core/fetch";
+export default { fetch: toFetch(app) };
+
+// Vercel / any Web Fetch runtime
+import { toFetch } from "@daloyjs/core/fetch";
+export const GET = toFetch(app);`;
+
+export const CONTRACT_TEST = `// tests/books.contract.test.ts
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "../src/app.ts";
+
+const api = createInProcessClient(app);
+
+test("getBookById returns a typed 200", async () => {
+  const res = await api.getBookById({ params: { id: "42" } });
+  assert.equal(res.status, 200);
+  if (res.status === 200) {
+    assert.equal(res.body.id, "42");
+    assert.match(res.body.title, /^Book/);
+  }
+});
+
+test("getBookById returns 404 for missing id", async () => {
+  const res = await api.getBookById({ params: { id: "missing" } });
+  assert.equal(res.status, 404);
+});`;
+
+Hi, I'm Devlin. I've been writing fullstack web apps for about ten years, long enough to have shipped to production using Express, Koa, Hapi, NestJS, Fastify, and Hono, and long enough to have written the same little "just a tiny wrapper" library around all of them, six times, in three different jobs. I live in Norway now, where the sun sets at 11pm in May and the coffee costs about as much as a small server. Today I want to introduce you to the framework I've been working on, the one I kept wishing existed every one of those six times.
+
+It's called **DaloyJS**. The pitch fits on one line:
+
+<blockquote>One route definition, many runtimes, and as little ceremony as we can get away with.</blockquote>
+
+Translated into engineering: a single `app.route({...})` call is the source of truth for *validation*, *TypeScript types*, *OpenAPI*, the *typed client*, and your *contract tests*. And that same `app` runs on Node, Bun, Deno, Cloudflare and Workers, the same file, no rewrites, no "works on my Node version" magic.
+
+If that paragraph already made you go "wait, really?", the rest of this post is the proof. With code. In a fake editor, because I've been told my blog posts are easier to read when they look a bit more like an IDE and a bit less like a wall of grey.
+
+## A small end-to-end example
+
+I'm going to define a single route, start a server, hit `/openapi.json`, and then call the same route through the typed client, without a network in the middle, because the typed client knows it's the same process. Four things, one source of truth, no codegen step. Start with one route.
+
+### Step 1: Define the route
+
+Open your editor. (I'm going to draw mine for you, so we look at the same thing.)
+
+<EditorFrame files={["src/app.ts", "src/server.ts", "scripts/smoke.ts"]} activeFile="src/app.ts" status="● src/app.ts, saved">
+<CodeBlock language="ts" code={HELLO_DALOY} />
+</EditorFrame>
+
+Things to notice before we move on, because they look small but aren't:
+
+- `request` and `responses` use [Standard Schema](https://github.com/standard-schema/standard-schema). I used Zod here, but you can swap in Valibot or ArkType without changing the framework. The schema isn't a decoration, it's the validator, the OpenAPI body, *and* the TypeScript type of `params` inside `handler`.
+- The handler's return type is a discriminated union of every declared status. The compiler catches missing cases and rejects a `404` body when the route never declared one. This is the part that removes about a third of the bugs I've shipped in the last decade.
+- `bodyLimitBytes` and `requestTimeoutMs` are constructor arguments, not optional middlewares you forgot to register at 4pm on a Friday. Security defaults are on. You opt *out*, not in.
+
+### Step 2: Serve it (on Node, for now)
+
+<EditorFrame files={["src/app.ts", "src/server.ts", "scripts/smoke.ts"]} activeFile="src/server.ts" status="▶ pnpm dev, listening on :3000">
+<CodeBlock language="ts" code={SERVE_NODE} />
+</EditorFrame>
+
+That's the whole server. `serve` is the Node adapter. We'll swap it in a minute. Run it:
+
+```bash
+pnpm dev
+```
+
+### Step 3: Hit /openapi.json (the spec was free)
+
+The registered route produces the OpenAPI document directly. There is no separate YAML file for the team to forget around sprint 4:
+
+```bash
+# the spec is generated from the route, not the other way around
+curl http://localhost:3000/openapi.json | jq '.paths."/books/{id}".get.operationId'
+# "getBookById"
+```
+
+This is, I think, the moment where most people stop and reload the URL in a browser. Go ahead. The whole document is consistent with the route by construction, not by convention. [The docs](/docs) explain how to customize `info`, tags, servers, and security schemes, but the default is: open your browser, see your API.
+
+### Step 4: Call it through the typed in-process client
+
+Now for the part that, the first time I saw it work, made me say a word I will not type here because my mother reads this blog. We're going to call the route *without going through HTTP*. Same app object, same validation, same response shape, just no socket in the middle. Perfect for tests, scripts, and anywhere you want speed without spinning up a server.
+
+<EditorFrame files={["src/app.ts", "src/server.ts", "scripts/smoke.ts"]} activeFile="scripts/smoke.ts" status="✓ tsc --noEmit, 0 errors">
+<CodeBlock language="ts" code={TYPED_CLIENT} />
+</EditorFrame>
+
+Read the comments carefully, that `if (ok.status === 200)` branch is a real discriminated union. Inside it, TypeScript narrows `ok.body` to `{ id: string; title: string }`. Outside of it, `ok.body` doesn't exist as far as the compiler is concerned. You get this without writing types, without a codegen step, and without keeping a hand-written client in sync. It just comes from the route.
+
+(If you do want a real over-the-wire fetch SDK to ship to a separate frontend repo, you also get that, run `pnpm gen` and you get a typed fetch client off the generated OpenAPI. The in-process one above is what I reach for in tests.)
+
+## Same app, five runtimes, one file changed
+
+Here is where I usually have to convince people I'm not lying. The `app` object you defined above never imported a runtime. It only knows about `Request` in and `Response` out. The runtime quirks live in adapters at the edges, where they belong. So when your platform changes, because your CFO discovered Cloudflare, or your team migrated to Bun, or your boss said the word "edge" in a meeting, you change exactly *one import*.
+
+<EditorFrame files={[
+              "src/server.node.ts",
+              "src/server.bun.ts",
+              "src/server.deno.ts",
+              "src/worker.ts",
+              "app/api/route.ts",
+            ]} activeFile="src/server.node.ts" status="5 entrypoints · 1 app">
+<CodeBlock language="ts" code={RUNTIMES} />
+</EditorFrame>
+
+That is the entire diff between running on a Node container and running on a Cloudflare Worker. Your route file does not change. Your tests do not change. Your OpenAPI does not change. I've done this migration in real apps. It used to take a week. Now it takes a coffee, which in Norway, to be fair, is still expensive.
+
+## Contract tests come for free, because the contract is the route
+
+One of my favourite side effects of having a single source of truth is that "contract testing" stops being a separate initiative with its own Confluence page. You just write a test against the typed client, and if the contract drifts, the compiler screams before the test even runs.
+
+<EditorFrame files={["tests/books.contract.test.ts"]} activeFile="tests/books.contract.test.ts" status="node --test · 2 passing">
+<CodeBlock language="ts" code={CONTRACT_TEST} />
+</EditorFrame>
+
+The test imports the same `app` as the server. It uses the route schema and inferred response type directly. If someone changes the route's 200 body to remove `title`, this test fails to compile. Not fails to run, fails to *compile*. That's the bug being caught at the earliest possible moment in the lifecycle, which is roughly nine months earlier than I usually catch them.
+
+## What "zero ceremony" actually means
+
+I want to be specific about the "zero ceremony" part, because every framework on Earth claims it and most of them are being a little optimistic. Here's what we mean, concretely:
+
+- Routes are objects and handlers are functions. They need neither decorators nor `reflect-metadata` or experimental TypeScript flags.
+- The route definitions generate the OpenAPI spec, so you customize the result instead of maintaining a separate source file.
+- The in-process client takes one import, and one command generates a fetch SDK for consumers in other repositories.
+- Body limits, request timeouts, prototype-pollution-safe JSON parsing, path-traversal rejection, and production 5xx redaction are defaults. `secureHeaders()`, `rateLimit()`, `requestId()`, CSRF, sessions, and tracing are first-party modules with the same release cadence and test suite.
+- The same application runs through five runtime adapters.
+
+## What later posts assume
+
+This is the launch post, and every later post on this blog will point back here, because everything we build sits on this one idea: the route is the contract, and the contract is the route. The next posts will dig into specific pieces, the typed client in depth, running on Cloudflare Workers in production, how we keep the supply chain hardened with pnpm and SHA-pinned actions, OpenTelemetry without a 60-page setup doc, but they all assume the example you just read.
+
+## Try it in two minutes
+
+You can try this in less time than it takes my espresso machine to warm up. (Mine is slow. Yours is probably fine.)
+
+```bash
+pnpm create daloy@latest my-api
+cd my-api
+pnpm dev
+
+# in another tab
+curl http://localhost:3000/openapi.json | jq '.info.title'
+# "my-api"
+```
+
+Then open [Getting started](/docs/getting-started), poke at `/openapi.json`, change one field in the route and watch the typed client complain at you in red squiggles. If something breaks, please tell me, the only way a framework earns the right to exist is by surviving other people's real code.
+
+## Limits
+
+DaloyJS is not magic, it is not going to make you a better developer overnight, and it is definitely not going to make my coffee any cheaper. What it *is* is the framework I would have wanted ten years ago, eight years ago, five years ago, and last Thursday. It removes a stack of recurring, boring, soul-eroding problems, the kind that cost you a Saturday at 2am, so you can spend your energy on the actually interesting parts of your product.
+
+Thanks for reading. Go write a route. I'll be in Oslo, watching the sun refuse to set, very politely.
+
+Devlin

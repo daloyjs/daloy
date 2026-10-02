@@ -1,0 +1,85 @@
+---
+title: Adapters & runtimes
+description: Run the same DaloyJS REST API on Node.js, Bun, Deno, Cloudflare Workers, Netlify, Fastly Compute, and AWS Lambda without rewriting handlers.
+keywords:
+  - runtime adapters
+  - Cloudflare Workers TypeScript
+  - Vercel adapter
+  - Bun framework
+  - Deno HTTP framework
+  - AWS Lambda framework
+  - Netlify Functions
+  - Fastly Compute
+sitemap:
+  priority: 0.8
+---
+
+# Adapters & runtimes
+
+DaloyJS is a REST API backend framework. The core only ever sees `Request → Response`. Runtime-specific concerns, sockets, signals, edge handlers, Lambda event shapes, live in thin adapters at the edge. Choose the adapter for the place you want to deploy your API.
+
+<BranchDiagram title="One app core, many runtimes" source={{
+          eyebrow: "web-standard core",
+          label: "Your DaloyJS App",
+          detail: "Request -> Response",
+        }} branches={[
+          {
+            eyebrow: "runtime",
+            label: "Node.js",
+            detail: "@daloyjs/core/node",
+          },
+          { eyebrow: "runtime", label: "Bun", detail: "@daloyjs/core/bun" },
+          { eyebrow: "runtime", label: "Deno", detail: "@daloyjs/core/deno" },
+          {
+            eyebrow: "edge",
+            label: "Cloudflare Workers",
+            detail: "@daloyjs/core/cloudflare",
+          },
+          {
+            eyebrow: "serverless",
+            label: "Vercel / Netlify",
+            detail: "@daloyjs/core/vercel",
+          },
+          {
+            eyebrow: "edge / serverless",
+            label: "Fastly / AWS Lambda",
+            detail: "@daloyjs/core/fastly · /lambda",
+          },
+        ]} caption="The core only ever sees a Request and returns a Response. Each thin adapter handles one platform's sockets, signals, or event shape, so the same app ships everywhere without a rewrite." />
+
+## Pick a target
+
+### Runtimes (you own the process)
+
+<Cards>
+<Card title="Node.js" href="/docs/adapters/node">Long-lived process on Node 24 LTS or Node 26+. Sane request/header/keep-alive timeouts and SIGTERM-driven graceful shutdown.</Card>
+<Card title="Bun" href="/docs/adapters/bun">Native Bun.serve for REST APIs. Fast startup, built-in TLS, Unix sockets, and hot reload in dev.</Card>
+<Card title="Deno" href="/docs/adapters/deno">Stable Deno.serve with AbortSignal-based shutdown. Runs anywhere, including Deno Deploy.</Card>
+</Cards>
+
+### Edge & serverless (platform owns the process) [#edge-and-serverless-platform-owns-the-process]
+
+<Cards>
+<Card title="Cloudflare Workers" href="/docs/adapters/cloudflare-workers">Modules-format Worker. wrangler.jsonc, nodejs\_compat, and bindings for KV, R2, D1, DO, Queues, Hyperdrive.</Card>
+<Card title="Netlify" href="/docs/adapters/netlify">Edge Functions (Deno) and Functions v2 (Node, fetch-style). The v1 lambda shape is legacy.</Card>
+<Card title="Fastly Compute" href="/docs/adapters/fastly">JS Compute via @fastly/js-compute and the fetch-event listener model, wrapped by installFastlyListener.</Card>
+<Card title="AWS Lambda" href="/docs/adapters/aws-lambda">API Gateway HTTP API v2.0, REST API v1.0, Function URLs, and streamifyResponse for streaming.</Card>
+</Cards>
+
+## Roll your own
+
+If your runtime exposes the web-standard `Request / Response` contract and isn't listed above, you don't need an adapter at all, pass the incoming request straight to `app.fetch`:
+
+```ts
+// modules-format (Cloudflare Workers, Deno, Bun, etc.)
+export default {
+  fetch(request: Request): Promise<Response> {
+    return app.fetch(request);
+  },
+};
+```
+
+## See also
+
+- [Deployment](/docs/deployment): Docker, reverse proxies, health checks, and Node platform guides (Fly.io, Render, Railway, Heroku).
+- [Scaffolder](/docs/scaffolder): `pnpm create daloy` ships runtime-specific templates.

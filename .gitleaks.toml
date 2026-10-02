@@ -16,8 +16,8 @@ targetRules = ["curl-auth-header"]
 condition = "AND"
 regexTarget = "match"
 paths = [
-  '''(?:^|/)website/app/docs/tutorials/bookstore/page\.tsx$''',
-  '''(?:^|/)website/app/docs/tutorials/multi-user-api/page\.tsx$''',
+  '''(?:^|/)website/content/docs/tutorials/bookstore\.mdx$''',
+  '''(?:^|/)website/content/docs/tutorials/multi-user-api\.mdx$''',
   '''(?:^|/)workshop/src/challenges/4-hour/(?:coding-steps/exercise-4-steps|instructions/(?:challenge-2-bug|exercise-4))\.md$''',
   '''(?:^|/)workshop/src/challenges/8-hour/(?:coding-steps/exercise-6-steps|instructions/(?:challenge-1-feature|exercise-5|exercise-6))\.md$''',
 ]

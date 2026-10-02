@@ -112,8 +112,6 @@ async function computeDocsSearchSections(): Promise<DocsSearchSection[]> {
  */
 export async function getDocsSearchSections(): Promise<DocsSearchSection[]> {
   "use cache";
-  // Short-lived in dev so new or edited content shows up without a restart.
-  if (process.env.NODE_ENV === "development") cacheLife("seconds");
-  else cacheLife("max");
+  cacheLife("max");
   return computeDocsSearchSections();
 }

@@ -219,12 +219,24 @@ function b64urlEncode(bytes: Uint8Array): string {
   return btoa(bin).replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
+const B64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
 function b64urlDecode(input: string): Uint8Array {
   if (!/^[A-Za-z0-9_-]*$/.test(input)) {
     throw new JwtError("invalid_token", "JWT segment is not base64url.");
   }
+  // Reject non-canonical encodings: a trailing char whose unused low bits are
+  // set decodes to the same bytes as the canonical one, which would let a
+  // tampered signature segment still verify (signature malleability).
+  const rem = input.length % 4;
+  if (rem !== 0) {
+    const last = B64URL_ALPHABET.indexOf(input[input.length - 1]!);
+    if (rem === 1 || (last & (rem === 2 ? 0x0f : 0x03)) !== 0) {
+      throw new JwtError("invalid_token", "JWT segment is not canonical base64url.");
+    }
+  }
   const padded = input.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  const pad = rem === 0 ? "" : "=".repeat(4 - rem);
   const bin = atob(padded + pad);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);

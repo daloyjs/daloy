@@ -1,0 +1,184 @@
+---
+title: Scaffold a DaloyJS project
+description: Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Bun, Deno, and Cloudflare Workers, plus optional hardened GitHub CI.
+keywords:
+  - create-daloy
+  - scaffold DaloyJS
+  - DaloyJS template
+  - Cloudflare Worker template
+  - Vercel template
+sitemap:
+  priority: 0.8
+---
+
+# Scaffold a project
+
+`create-daloy` is the official project generator. It scaffolds a working DaloyJS app in seconds, no copy-pasting from the docs.
+
+Package link: [create-daloy on npm](https://www.npmjs.com/package/create-daloy). The generated apps install the framework from [@daloyjs/core on npm](https://www.npmjs.com/package/@daloyjs/core).
+
+<BranchDiagram title="One generator, five templates" source={{
+          eyebrow: "generator",
+          label: "create-daloy",
+          detail: "pnpm create daloy@latest my-api",
+        }} branches={[
+          {
+            eyebrow: "default",
+            label: "node-basic",
+            detail: "@daloyjs/core/node",
+          },
+          {
+            eyebrow: "serverless",
+            label: "vercel",
+            detail: "@daloyjs/core/vercel",
+          },
+          {
+            eyebrow: "edge",
+            label: "cloudflare-worker",
+            detail: "@daloyjs/core/cloudflare",
+          },
+          {
+            eyebrow: "runtime",
+            label: "bun-basic",
+            detail: "@daloyjs/core/bun",
+          },
+          {
+            eyebrow: "runtime",
+            label: "deno-basic",
+            detail: "@daloyjs/core/deno",
+          },
+        ]} caption="Pick a target with --template. Every starter ships the same guardrail-first posture and scripts, only the runtime adapter and config differ." />
+
+## Quick start
+
+```bash
+# pick the package manager you actually use
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+The CLI is interactive when arguments are missing. It will ask for a project name, a template, a package manager, whether to install dependencies, whether to initialize a git repository, and whether to add the GitHub security bundle. The dependency-install prompt defaults to `no` for pnpm projects so you can review the generated `.npmrc` and `pnpm-workspace.yaml` guardrails before the first install. Other package managers default to `yes`.
+
+<FlowDiagram numbered title="The interactive prompts" steps={[
+          { label: "Project name", detail: "my-api" },
+          { label: "Template", detail: "node-basic, vercel, ..." },
+          { label: "Package manager", detail: "pnpm, npm, yarn, bun" },
+          { label: "Install deps?", detail: "--install / --no-install" },
+          { label: "Init git?", detail: "--git / --no-git" },
+          {
+            label: "GitHub security bundle?",
+            detail: "--with-ci",
+            tone: "success",
+          },
+        ]} caption="When you omit flags the CLI prompts for each choice in order. Pass --yes to accept every default and skip the prompts entirely. Defaults are pnpm, node-basic, no pnpm install, the GitHub security bundle enabled, and the deploy starter enabled with it." />
+
+## Non-interactive usage
+
+```bash
+pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security --install --git
+```
+
+### Flags
+
+- `--template <name>`: `node-basic` (default), `vercel`, `cloudflare-worker`, `bun-basic`, or `deno-basic`.
+- `--package-manager <pm>`: `pnpm` (default), `npm`, `yarn`, or `bun`.
+- `--list-templates`: print available templates with descriptions.
+- `--install` / `--no-install`: install dependencies after scaffolding. Defaults to `no` for pnpm projects and `yes` for npm, Yarn, and Bun projects.
+- `--git` / `--no-git`: initialize a git repository.
+- `--minimal`: strip the bookstore demo and the auto-mounted `/docs` + `/openapi.json` API docs routes so the scaffold only ships the framework bootstrap and a health route. Useful when you want to start from the smallest possible app.
+- `--with-ci` / `--no-ci`: add hardened GitHub Actions, Dependabot, CODEOWNERS, `SECURITY.md`, and lockfile-source verification. Defaults to `yes`.
+- `--with-deploy` / `--no-deploy`: add or skip the manual-only starter `.github/workflows/deploy.yml`. Defaults to the same value as `--with-ci`.
+- `--code-owner <owner>`: replace the CODEOWNERS placeholder when `--with-ci` is used, for example `@acme/security`.
+- `--force`: overwrite an existing non-empty directory.
+- `--yes`: accept all defaults. Never prompt.
+
+### Missing-tool hints
+
+Before printing the completion summary, the CLI checks whether the runtime and package manager your selections actually need are on your `PATH`. If something is missing, it prints an official install link next to the next steps instead of leaving you to hit a `command not found` on your first command. For example, scaffolding the `bun-basic` template on a machine without Bun surfaces a [{"https://bun.sh"}](https://bun.sh) link, and choosing `pnpm` without pnpm installed surfaces [{"https://pnpm.io/installation"}](https://pnpm.io/installation). Node-flavored templates (`node-basic`, `vercel`, `cloudflare-worker`) point at [{"https://nodejs.org"}](https://nodejs.org) when Node.js is absent. The probe only reads `PATH` (it never executes the binary), and if you asked to install dependencies but the chosen package manager is missing, the CLI skips the doomed install and shows the link instead. When every required tool is present, no hint is printed.
+
+The CLI also checks **versions**. `npm create daloy` and `npx` will run the scaffolder on an old Node.js because `engines` are only advisory there, so the CLI verifies it itself: if you are on a Node.js older than **24**, it stops before scaffolding with a clear message, the [nodejs.org](https://nodejs.org) link, and a nudge toward a version manager (nvm, fnm, Volta) rather than generating a project your runtime cannot run. And when you pick `npm`, it detects an npm older than **12** up front, tells you to run `npm install -g npm@latest`, and skips the automatic install so you get a readable explanation instead of npm's raw `EBADENGINE` error partway through.
+
+## Templates
+
+Run `create-daloy --list-templates` to inspect the available starters without creating a project.
+
+### `node-basic`
+
+A production-ready Node.js HTTP server using `@daloyjs/core` with `secureHeaders`, `requestId`, `rateLimit`, a hardened `.npmrc`, a sample `GET /healthz` route, a contract-first `GET /books/:id` route with Zod validation, and Hey API codegen wired to `pnpm gen`.
+
+Like FastAPI, every scaffolded project also exposes API documentation out of the box: `/docs` serves a Scalar API reference UI and `/openapi.json` serves the live OpenAPI 3.1 spec generated from your route definitions. The dev server logs both URLs at startup. Pass `docs: { ui: "swagger" }` on the `App` constructor to switch to Swagger UI instead.
+
+### `cloudflare-worker`
+
+A minimal Cloudflare Worker using `@daloyjs/core/cloudflare` with `wrangler.toml` ready to deploy, `secureHeaders` + `requestId` enabled by default, smaller edge-friendly body and timeout limits, and a Zod-validated route exposed as `fetch`.
+
+### `vercel`
+
+A Vercel API on the Node.js runtime (Vercel's recommended runtime for standalone functions) using `@daloyjs/core/vercel` with a single `api/index.ts` function exporting `toFetchHandler(app)` (plus a `vercel.json` rewrite so DaloyJS routes at the site root), `vercel dev` / `vercel deploy` scripts, `secureHeaders` + `requestId` enabled by default, smaller serverless-friendly body and timeout limits, and the same health and bookstore examples as the Node starter.
+
+The Vercel template also ships `/docs` (Scalar API reference) and `/openapi.json` wired to the same app, so the deployed Vercel URL serves API documentation automatically.
+
+### `bun-basic`
+
+A [Bun](https://bun.sh) runtime starter using`@daloyjs/core/bun`. Ships `bun --hot` for instant reloads, `bun test` for the test runner, the same starter security middleware as the Node template (`secureHeaders` / `requestId` / `rateLimit`), the bookstore demo route, and Hey API codegen wired through `bun run gen:openapi` +`bun run gen:client`.
+
+### `deno-basic`
+
+A [Deno](https://deno.com) runtime starter using`@daloyjs/core/deno`. Ships a `deno.json` with `deno task dev`, `deno task test`, and `deno task gen:openapi` tasks, loads `@daloyjs/core` and Zod via `npm:` import-map specifiers, and runs with the minimum permissions Deno requires (`--allow-net --allow-env --allow-read`). The CLI skips Node-style installs for this template, there is no `package.json` to patch.
+
+## Minimal scaffolds
+
+Pass `--minimal` to drop the bookstore demo route and the built-in `/docs` + `/openapi.json` API docs routes from any template that supports them. The scaffolded app is left with the framework bootstrap and a single `/healthz` route, which is the smallest realistic starting point for teams that already know exactly what they want to build:
+
+```bash
+pnpm create daloy@latest my-api --template node-basic --minimal --yes
+```
+
+Sentinel comments (`// daloy-minimal:strip-start <tag>` /`// daloy-minimal:strip-end <tag>`) survive a default scaffold so you can re-run the generator with `--minimal` later, or delete the marked blocks by hand.
+
+## Hardened CI/security bundle [#hardened-ci-security-bundle]
+
+Pass `--with-ci` when the new project should start with GitHub-side supply-chain guardrails as well as runtime defaults. Node-style templates get CI, a manual-only deploy starter, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, `SECURITY.md`, and a lockfile-source verification script. The Deno template gets the same governance and scanning files with a Deno-native CI workflow. No template gets an npm publish workflow, because `create-daloy` scaffolds REST API services rather than reusable libraries.
+
+```bash
+pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security
+```
+
+The generated workflows use top-level `permissions: {}`, pinned third-party actions, `harden-runner`, `persist-credentials: false`, disabled install scripts, and no package-manager cache. Replace the CODEOWNERS placeholder if you did not pass `--code-owner`, then enable branch protection, required status checks, secret scanning, and push protection in GitHub settings. Use `--with-ci --no-deploy` when you want governance without deployment scaffolding, or `--with-deploy --no-ci` when you only want the deployment starter.
+
+## Editor MCP integration
+
+Every scaffold ships a `.vscode/mcp.json` that wires VS Code (and other MCP-aware editors) to the DaloyJS documentation MCP server at `https://daloyjs.dev/mcp` over HTTP. With it, AI assistants in your editor can pull current DaloyJS docs while you work, with no manual setup. The file is authored as `_vscode/mcp.json` in the template and renamed to `.vscode/mcp.json` on copy so it survives npm packing.
+
+```json
+{
+  "servers": {
+    "daloyjs-docs": {
+      "type": "http",
+      "url": "https://daloyjs.dev/mcp"
+    }
+  }
+}
+```
+
+Delete the file or remove the server entry if you do not want the integration. It is editor configuration only and the framework does not depend on it at runtime.
+
+## Which template should I choose?
+
+- Choose `node-basic` for a traditional REST API on Node, Docker, Fly.io, Railway, Render, or any VM/container host.
+- Choose `vercel` when Vercel is your deployment target and you want a catch-all Vercel Functions API route (Node.js runtime) from the first commit.
+- Choose `cloudflare-worker` only when your deployment target is Cloudflare Workers. The template supports that runtime. Cloudflare is optional.
+- Choose `bun-basic` when your team already runs on [Bun](https://bun.sh) and wants `bun --hot` + `bun test` in the box.
+- Choose `deno-basic` when you want a runtime-native [Deno](https://deno.com) project with `deno task` scripts, an import map, and Deno's permission flags.
+
+## Why a generator?
+
+DaloyJS is a backend framework, so the first ten minutes matter. The scaffolder gives every project the same guardrail-first posture, the same TypeScript baseline, and the same scripts so an AI coding agent or a new teammate can navigate it without a tour. Node, Bun, and Deno starters include `secureHeaders`, `requestId`, and `rateLimit`. The edge starters include `secureHeaders` and `requestId` plus tighter body and timeout limits.
+
+The CLI itself ships with **zero runtime dependencies**: only Node built-ins, so the supply-chain story stays clean. Templates are copied verbatim from the package's `templates/` directory and never run scripts during scaffolding. When you choose `pnpm`, the generated app keeps the hardened `.npmrc` and `pnpm-workspace.yaml`, and the CLI adds a `pnpm >= 11` floor to `engines` (pnpm always enforces `engines.pnpm`). older pnpm silently ignores `minimumReleaseAge`, which would disable the 24h supply-chain cooldown. The CLI also warns up front if the installed pnpm is older. When you choose `npm`, the CLI adds an `npm >= 12` floor to `engines` and swaps in an npm-native `.npmrc` with `engine-strict=true` so that floor is a hard install-time failure rather than a warning. Yarn and bun scaffolds drop the pnpm-specific config so installs stay warning-free. When you choose `--with-ci`, it also adds the GitHub-side security files that a company repo normally has to assemble by hand.
+
+## Next
+
+After scaffolding, jump straight to [Getting started](/docs/getting-started) for the route walkthrough, or [Security](/docs/security) for the guardrails and middleware the scaffold installed.

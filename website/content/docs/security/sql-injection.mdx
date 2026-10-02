@@ -1,0 +1,272 @@
+---
+title: SQL injection
+description: How Daloy's HTTP layer helps you stay safe from SQL injection, the ORM/driver patterns that close the rest of the gap, and the dynamic-SQL escape hatch (allowlists) for the cases that parameterized queries can't cover.
+keywords:
+  - DaloyJS SQL injection
+  - SQLi protection
+  - parameterized queries
+  - Prisma safe query
+  - Drizzle parameterized
+  - Kysely safe query
+  - in-app firewall
+---
+
+# SQL injection
+
+<blockquote>Parameterized queries keep SQL instructions separate from input values. String concatenation puts attacker-controlled text into the SQL program and can change what the database executes.</blockquote>
+
+SQL injection is the 7-on-the-original-OWASP-top-10, never-actually-died, still-causing-real-breaches class of bug. Aikido's [State of SQL Injection](https://www.aikido.dev/blog/the-state-of-sql-injections) report shows it still accounts for \~7–10% of vulnerabilities found across open- and closed-source code. Daloy is an HTTP framework, not a database driver, so it can't parameterize your queries for you, but it does ship the layers *before* the database that make SQLi materially harder to introduce, and the patterns below close the rest.
+
+## What Daloy already does for you
+
+These are core-enforced and require no opt-in. They don't replace parameterized queries, but they shrink the attack surface that reaches your repository layer in the first place.
+
+| Layer | What it blocks |
+| --- | --- |
+| Strict per-route schemas (Zod) | Routes declare `params`, `query`, and `body` shapes. Inputs that don't match the schema are rejected with **422 problem+json** before your handler runs, so you almost never have to coerce raw strings into query parameters yourself. |
+| JSON parser hardening | `safeJsonParse` strips `__proto__`, `constructor`, and `prototype` keys. Prevents prototype pollution that NoSQL/SQL adapters can turn into operator injection. |
+| Body-size cap | 1 MiB default, streamed. Removes the “upload a 50 MB payload of `OR 1=1`” DoS-amplified-SQLi pattern. |
+| Structured logging redaction | `redactRecord()` scrubs known credential-shaped fields before they hit logs, helpful when post-incident triage needs to share logs without re-leaking the secrets the injection grabbed. |
+| Secure-by-default HTTP boundary | CRLF header sanitization, path-traversal rejection in the router, and 405 instead of 404 on method confusion all mean attackers can't smuggle DB-bound payloads through quirky transport layers. |
+
+None of that *parameterizes your query*. That is on you and your ORM. The next sections show what “safe” looks like for the ORMs Daloy documents, and what the unsafe siblings look like so you can grep for them in code review.
+
+## The shape of a safe Daloy route
+
+Validated input + parameterized query is the whole pattern. Aikido's report calls it out as defense #1 and #2. Daloy gives you both in one block.
+
+<FlowDiagram title="Two ways the same input reaches the database" steps={[
+          {
+            eyebrow: "ingress",
+            label: "Request value",
+            detail: 'id = "foo\' OR 1=1 --"',
+          },
+          {
+            eyebrow: "spliced",
+            label: "String-concatenated SQL",
+            detail: "`... WHERE id = '${id}'`",
+            tone: "danger",
+          },
+          {
+            eyebrow: "bound",
+            label: "Parameterized query",
+            detail: "WHERE id = $1, [id]",
+            tone: "success",
+          },
+        ]} caption="The same attacker string takes two paths. Spliced into the SQL text it becomes executable syntax. Passed as a bound parameter it is only ever data, so the query structure can never change." />
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+import { db } from "./db.ts";
+import { users } from "./schema.ts";
+import { eq } from "drizzle-orm";
+
+const app = new App();
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    // 1) The HTTP layer validates BEFORE the handler runs.
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ params }) => {
+    // 2) The ORM emits a parameterized query - params.id is bound, never spliced.
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, params.id))
+      .limit(1);
+    return { status: 200 as const, body: user ?? null };
+  },
+);
+```
+
+Notice what is *not* here: no template string with `${params.id}`, no manual quoting, no “just this once we'll trust the input.” If you find yourself writing those in a Daloy handler, treat it as a bug.
+
+## Safe vs. unsafe per ORM
+
+### Prisma
+
+```ts
+// SAFE, Prisma always parameterizes `where` arguments.
+await prisma.user.findUnique({ where: { id: params.id } });
+
+// SAFE - `$queryRaw` is a tagged template; values become bind parameters.
+await prisma.$queryRaw`SELECT * FROM "User" WHERE id = ${params.id}`;
+
+// DANGEROUS - `$queryRawUnsafe` splices the string verbatim.
+// Never pass user input to it. Use `$queryRaw` instead.
+await prisma.$queryRawUnsafe(`SELECT * FROM "User" WHERE id = '${params.id}'`);
+```
+
+### Drizzle
+
+```ts
+import { sql, eq } from "drizzle-orm";
+
+// SAFE - builder API.
+await db.select().from(users).where(eq(users.email, params.email));
+
+// SAFE - `sql` tag binds values, doesn't splice them.
+await db.execute(sql`SELECT * FROM users WHERE email = ${params.email}`);
+
+// DANGEROUS - `sql.raw` inserts the string as-is.
+// Only feed it constants or values you have allowlisted yourself.
+await db.execute(sql.raw(`SELECT * FROM users WHERE email = '${params.email}'`));
+```
+
+### Kysely
+
+```ts
+// SAFE, typed builder, parameterized at the driver level.
+await db.selectFrom("users").where("email", "=", params.email).selectAll().execute();
+
+// SAFE - `sql` template tag.
+await sql`SELECT * FROM users WHERE email = ${params.email}`.execute(db);
+
+// DANGEROUS - `sql.raw` / `sql.lit` skip binding.
+await sql.raw(`SELECT * FROM users WHERE email = '${params.email}'`).execute(db);
+```
+
+### node-postgres / mysql2 (no ORM) [#node-postgres-mysql2-no-orm]
+
+```ts
+// SAFE, placeholders are bound by the driver.
+await pg.query("SELECT * FROM users WHERE email = $1", [params.email]);
+await mysql.execute("SELECT * FROM users WHERE email = ?", [params.email]);
+
+// DANGEROUS - template literal in the SQL string.
+await pg.query(`SELECT * FROM users WHERE email = '${params.email}'`);
+```
+
+## Operator injection (the “NoSQL injection in Prisma” trap) [#operator-injection-the-and-ldquo-nosql-injection-in-prisma-and-rdquo-trap]
+
+Aikido's [Prisma + PostgreSQL is vulnerable to NoSQL-style injection](https://www.aikido.dev/blog/prisma-and-postgresql-vulnerable-to-nosql-injection) write-up describes a real, common bug: even though Prisma always emits parameterized SQL, the *filter object* you pass to `where` is interpreted by Prisma itself. If a field is annotated as `string` in TypeScript but the runtime value is an object like `{ "not": "x" }` or `{ "contains": "" }`, Prisma treats it as a filter operator. An attacker who can submit raw JSON to a login or password-reset endpoint can use that to bypass equality checks. The same idea bites Mongoose, TypeORM `FindOptions`, and any builder that accepts “value or operator” in the same slot.
+
+Daloy's contract-first routes neutralize this *by default*: every `body`, `query`, and `params` slot is validated against a Zod schema before your handler runs, and Zod's primitive checks (`z.string()`, `z.email()`, `z.number()`, …) reject nested objects with a **422 problem+json**. The vulnerability shows up when developers route around that, usually with `z.any()`, `z.unknown()`, a pass-through `z.record()`, or by reading `await req.json()` directly and spreading it into `where`.
+
+```ts
+// DANGEROUS, `email` is typed as string but Zod accepts anything.
+// Attacker posts {"email":{"not":""},"password":"x"} and `findFirst`
+// returns the first user whose email is not empty (i.e. any user).
+const Login = z.object({ email: z.any(), password: z.any() });
+
+app.post(
+  "/login",
+  {
+    request: { body: Login },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ body, state }) => {
+    const user = await state.db.user.findFirst({
+      where: { email: body.email, password: body.password },
+    });
+    return { status: 200 as const, body: { ok: Boolean(user) } };
+  },
+);
+
+// SAFE - primitives are enforced at the wire, so `body.email` is a string.
+const SafeLogin = z.object({
+  email: z.email().max(254),
+  password: z.string().min(1).max(1024),
+});
+```
+
+If you genuinely need to accept a caller-controlled filter (an admin search endpoint, for example), wrap each operator explicitly so a rogue key can't reach Prisma:
+
+```ts
+// SAFE, build the `where` yourself from validated primitives. The
+// shape passed to Prisma is owned by your code, not the request body.
+const Search = z.object({
+  email: z.email().optional(),
+  emailContains: z.string().min(1).max(64).optional(),
+});
+
+const where = {
+  ...(query.email ? { email: query.email } : {}),
+  ...(query.emailContains ? { email: { contains: query.emailContains } } : {}),
+};
+await state.db.user.findMany({ where });
+```
+
+Review-time rules:
+
+- Never use `z.any()`, `z.unknown()`, or unconstrained `z.record()` for a field that is then read out of a Prisma / Mongoose / TypeORM `where` clause. Constrain each property with a primitive schema.
+- Never spread `...body` or `...query` into `where`, `data`, or `orderBy`. Map fields one at a time after validation.
+- Treat a missing `request` schema on a route that touches the DB as the same severity as a missing CSRF token. Daloy's strict-schema gate is doing real work here.
+
+## Dynamic SQL: when you can't parameterize [#dynamic-sql-when-you-can-and-apos-t-parameterize]
+
+Bind parameters cover values, not identifiers. `ORDER BY` columns, table names, direction (`ASC`/`DESC`), and dynamic `IN (...)` arities can't be bound, so the safe pattern is to **allowlist** the legal values instead of escaping. Daloy's recommended approach: encode the allowlist directly in your Zod schema so the HTTP boundary rejects anything else, then index into a typed map of identifiers in the handler.
+
+```ts
+import { z } from "zod";
+
+// Map "API field name" -> "real column reference". The values are
+// owned by your code, never derived from the request.
+const SORT_COLUMNS = {
+  createdAt: users.createdAt,
+  email: users.email,
+  name: users.name,
+} as const;
+
+const ListUsersQuery = z.object({
+  sort: z.enum(["createdAt", "email", "name"]).default("createdAt"),
+  dir: z.enum(["asc", "desc"]).default("desc"),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+app.get(
+  "/users",
+  {
+    operationId: "listUsers",
+    request: { query: ListUsersQuery },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ query }) => {
+    const column = SORT_COLUMNS[query.sort];           // guaranteed safe
+    const order = query.dir === "asc" ? asc(column) : desc(column);
+    const rows = await db.select().from(users).orderBy(order).limit(query.limit);
+    return { status: 200 as const, body: rows };
+  },
+);
+```
+
+Rules of thumb when even allowlisting isn't enough:
+
+- If you must accept a free-form identifier, validate it against a tight regex (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) *and* quote it with your driver's identifier-escape helper (`pg-format`'s `%I`, Knex's `client.wrapIdentifier`, etc.). Never roll your own.
+- For variable-arity `IN`, build the placeholder list from the array length and bind the values: `WHERE id IN ($1, $2, $3)`. Most ORMs do this for you when you pass an array to `inArray()` / `in`.
+- For `LIKE` with user input, escape `%` and `_` in the value, then bind the escaped value. Don't splice the wildcards into the SQL string.
+
+## Things to grep for in code review
+
+Aikido's report says vulnerable organizations average \~30 separate SQLi sites. The fastest way to keep that number at zero is a periodic grep across the repo. The Daloy maintainers use this list:
+
+```bash
+# Tagged-template misuse and raw escape hatches.
+git grep -nE '\$queryRawUnsafe|\$executeRawUnsafe' -- '*.ts' '*.tsx'
+git grep -nE 'sql\.raw\(|sql\.lit\(' -- '*.ts' '*.tsx'
+
+# String concatenation / interpolation into SQL.
+git grep -nE '"\s*(SELECT|INSERT|UPDATE|DELETE)[^"]*"\s*\+' -- '*.ts'
+git grep -nE '\`[^\`]*(SELECT|INSERT|UPDATE|DELETE)[^\`]*\$\{' -- '*.ts'
+
+# Knex / Sequelize raw bypasses.
+git grep -nE '\.raw\(' -- '*.ts'
+```
+
+Wire one of those into CI as a soft check (or as a Semgrep / CodeQL rule) and you'll catch \~all new SQLi at PR time. It's not as clever as a SAST tool, but it's free and runs in 200 ms.
+
+## Defense in depth: runtime firewalls
+
+Daloy intentionally does **not** ship a heuristic SQLi-detector middleware. Pattern-matching `' OR 1=1 --` on every request body is noisy, false- positives easily on legitimate text (think a blog post about SQL injection…), and gives a false sense of security. If you want a runtime backstop, install a proper in-app firewall that tokenizes queries against your real schema:
+
+- [Aikido Zen](https://www.aikido.dev/zen): a Node/Bun-compatible in-app firewall that hooks the driver and blocks requests whose query structure was altered by user input.
+- A reverse-proxy WAF (Cloudflare, AWS WAF, Fastly) for coarse signature matching at the edge. Cheap to deploy, not a substitute for parameterized queries.
+
+## Reporting
+
+Found a SQLi-shaped weakness in Daloy itself (e.g. a sanitizer that leaks DB-meaningful characters, or a code example that demonstrates an unsafe pattern)? Report it privately via [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new). Don't open a public issue.

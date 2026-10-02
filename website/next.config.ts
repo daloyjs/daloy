@@ -44,17 +44,24 @@ const serviceWorkerHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   typedRoutes: true,
-  // The /mcp documentation endpoint reads the docs sources from disk at
-  // runtime (via lib/docs-content): `page.tsx` files and the MDX pages under
-  // `content/`. Trace those files into its serverless bundle so they are
-  // present in production, not just during the build. The markdown docs
-  // endpoint (/docs/*.md) validates routes the same way, and the MDX docs
-  // route may render on demand if its prerendered output is evicted.
+  // The docs are MDX files under `content/`, read from disk at runtime by the
+  // /mcp endpoint, the markdown route (/docs/*.md), and the MDX page routes
+  // when a prerendered page is re-rendered on demand. Trace them into those
+  // serverless bundles so they exist in production, not just at build time.
+  // The blog list (BLOG_POSTS) is read from content/blog the same way, by the
+  // blog pages, RSS, llms.txt and the sitemap.
   outputFileTracingIncludes: {
-    "/mcp": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
-    "/docs-md/[[...slug]]": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
-    "/md/[[...slug]]": ["./app/docs/**/*.tsx", "./content/**/*.mdx"],
+    "/mcp": ["./content/**/*.mdx"],
+    "/docs-md/[[...slug]]": ["./content/**/*.mdx"],
+    "/md/[[...slug]]": ["./content/**/*.mdx"],
+    "/docs": ["./content/**/*.mdx"],
+    "/docs/[slug]": ["./content/**/*.mdx"],
     "/docs/[slug]/[child]": ["./content/**/*.mdx"],
+    "/blog": ["./content/blog/*.mdx"],
+    "/blog/[slug]": ["./content/blog/*.mdx"],
+    "/blog/rss.xml": ["./content/blog/*.mdx"],
+    "/llms.txt": ["./content/**/*.mdx"],
+    "/sitemap.xml": ["./content/**/*.mdx"],
   },
   turbopack: {
     root,

@@ -1,0 +1,154 @@
+---
+title: Deployment
+description: Deploy DaloyJS REST APIs to containers, Node PaaS platforms, and edge or serverless providers. Production-ready guides for Docker, Fly.io, Render, Railway, Heroku, Replit, Vercel, Cloudflare Workers, Bun, and Deno.
+keywords:
+  - deploy DaloyJS
+  - DaloyJS Docker deployment
+  - Fly.io deployment
+  - Render deployment
+  - Railway deployment
+  - Heroku deployment
+  - Replit deployment
+  - Cloudflare Workers deployment
+  - Vercel deployment
+sitemap:
+  priority: 0.8
+---
+
+# Deployment
+
+Deployment answers a different question from adapters. The adapter docs explain which runtime contract DaloyJS plugs into. This page helps you choose where to run a DaloyJS REST API and shows the packaging and platform config that matter in production.
+
+<FlowDiagram title="Build to run" numbered steps={[
+          {
+            label: "Build",
+            detail: "pnpm install --frozen-lockfile, pnpm build",
+            eyebrow: "ci",
+          },
+          {
+            label: "Package",
+            detail: "distroless image or dist/",
+          },
+          {
+            label: "Release",
+            detail: "signed image + SBOM attestation",
+            tone: "accent",
+          },
+          {
+            label: "Run",
+            detail: "Node adapter, graceful shutdown",
+            tone: "success",
+          },
+        ]} caption="The same pipeline underpins every Node platform below. Only the packaging and platform config differ. The build, release, and run stages stay the same." />
+
+## Node platforms
+
+These providers all run the [Node adapter](/docs/adapters/node). What changes is the platform config, health checks, and rollout mechanics.
+
+<Cards>
+<Card title="Fly.io" href="/docs/deployment/fly-io">Containerized Node service with fly.toml, health checks, and scale-to-zero machines.</Card>
+<Card title="Render" href="/docs/deployment/render">Blueprint-based Node web service with healthCheckPath and autoscaling.</Card>
+<Card title="Railway" href="/docs/deployment/railway">Auto-detected Node app with optional railway.json or railway.toml for start, health, and migrations.</Card>
+<Card title="Heroku" href="/docs/deployment/heroku">Procfile-based Node dyno on heroku-24 or heroku-26 with the heroku/nodejs buildpack.</Card>
+<Card title="Replit" href="/docs/deployment/replit">Node web server on Autoscale or Reserved VM with Publishing commands, Secrets, and port checks.</Card>
+</Cards>
+
+## Production checklist
+
+- Set `NODE_ENV=production` so 5xx `detail` is redacted.
+- Set a sane `bodyLimitBytes` per route group (don't default to 1 MiB everywhere).
+- Set `requestTimeoutMs` to less than your load balancer's idle timeout.
+- Mount `secureHeaders()`, `requestId()`, and `rateLimit()` globally.
+- Wire your structured logger and propagate `request-id` to downstream calls.
+- Run contract tests in CI, fail the build if the spec drifts.
+- Use `pnpm install --frozen-lockfile` in CI. Never `pnpm install`.
+
+## Docker (Node, distroless)
+
+```dockerfile
+# syntax=docker/dockerfile:1
+    FROM node:24-bookworm AS deps
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod
+
+    FROM node:24-bookworm AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+    FROM gcr.io/distroless/nodejs24-debian12 AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps  /app/node_modules ./node_modules
+COPY --from=build /app/dist          ./dist
+COPY package.json ./
+USER 1000
+EXPOSE 3000
+CMD ["dist/server.js"]
+```
+
+### Signed images + SBOM attestation [#signed-images-sbom-attestation]
+
+`create-daloy --with-ci` ships a `deploy.yml` that, after every successful push to GHCR, resolves the immutable `@sha256:<digest>`, signs the image with [Sigstore Cosign](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/) (keyless / OIDC, no long-lived signing key), generates an SPDX SBOM for the image, and uploads it as a Cosign attestation (`--type spdxjson`). The job grants `id-token: write` alongside `packages: write`. The top-level workflow keeps `permissions: {}`. This closes the Aikido [container-security checklist](https://www.aikido.dev/blog/container-security-best-practices) items for "Use Signed Images" and "Generate an SBOM." Verify any pulled image with:
+
+```bash
+# Replace owner/repo and the digest with your values.
+cosign verify ghcr.io/<owner>/<repo>@sha256:<digest> \
+  --certificate-identity-regexp 'https://github\.com/<owner>/<repo>/\.github/workflows/deploy\.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+cosign verify-attestation \
+  --type spdxjson \
+  --certificate-identity-regexp 'https://github\.com/<owner>/<repo>/\.github/workflows/deploy\.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/<owner>/<repo>@sha256:<digest>
+```
+
+## Graceful shutdown
+
+The Node adapter installs SIGTERM/SIGINT handlers by default. DaloyJS stops accepting new requests (returning 503) and waits up to `shutdownTimeoutMs` for in-flight requests to drain.
+
+```ts
+const { close } = serve(app, {
+  shutdownTimeoutMs: 15_000,
+  handleSignals: true,
+});
+
+// or trigger manually:
+await app.shutdown(15_000);
+```
+
+## Reverse proxy
+
+If you sit behind nginx / Caddy / a load balancer / a PaaS edge (Railway, Render, Fly, Heroku), declare the proxy posture so DaloyJS resolves the real client IP and stops refusing forwarded requests:
+
+- Set `behindProxy: { hops: N }` on `new App({ ... })`, where `N` is the number of trusted proxy hops in front of the app (a single edge proxy is `1`. Cloudflare in front of one PaaS edge is `2`). In production an **unconfigured** posture makes DaloyJS return `500` on the first request carrying an `X-Forwarded-*` header, so a misconfigured chain cannot feed spoofable client IPs to `rateLimit()`, request-id propagation, or audit logs. Use `behindProxy: "none"` when the app faces the public internet directly.
+- Once the posture is declared, `rateLimit()` keys on the resolved client IP automatically, no custom `keyGenerator` required.
+- Make the LB's idle timeout **greater** than DaloyJS's `requestTimeoutMs`.
+- Make DaloyJS's `keepAliveTimeout` **greater** than the LB's. The Node adapter does this for you.
+
+## Edge / serverless REST APIs [#edge-serverless-rest-apis]
+
+DaloyJS can run on Vercel Functions, Cloudflare Workers, Netlify Functions, AWS Lambda, Fastly Compute, and Deno Deploy because the core is Web-standard `Request -> Response`. Use these targets when you want per-request billing or a managed edge/serverless runtime instead of a long-lived Node process.
+
+For a standalone Vercel REST API, create a single `api/index.ts` function and export the web-standard fetch handler, plus a `vercel.json` rewrite so DaloyJS routes at the site root (without it the root domain 404s):
+
+```ts
+// api/index.ts
+import { toFetchHandler } from "@daloyjs/core/vercel";
+import { app } from "../src/server.js";
+
+export default toFetchHandler(app);
+
+// vercel.json
+// { "rewrites": [{ "source": "/(.*)", "destination": "/api" }] }
+```
+
+See [Vercel](/docs/adapters/vercel), [Cloudflare Workers](/docs/adapters/cloudflare-workers), [Netlify](/docs/adapters/netlify), [AWS Lambda](/docs/adapters/aws-lambda), and [Fastly Compute](/docs/adapters/fastly) for platform-specific entry files.

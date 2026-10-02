@@ -1,14 +1,11 @@
 import type { Route } from "next";
 import { cacheLife } from "next/cache";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 
 import { extractMdxBodyText, getMdxDocs } from "./mdx/content";
 
 /**
- * A single documentation page discovered from the `app/docs` tree (TSX) or
- * the `content/docs` tree (MDX), with its metadata and full extracted
- * plain-text body.
+ * A single documentation page from the `content/docs` MDX tree, with its
+ * frontmatter metadata and full extracted plain-text body.
  *
  * This is the shared shape read from disk by both the cmdk docs search index
  * ([docs-search.ts](./docs-search.ts)) and the public MCP documentation
@@ -16,11 +13,11 @@ import { extractMdxBodyText, getMdxDocs } from "./mdx/content";
  * from a single source of truth.
  */
 export type DocPage = {
-  /** Human-readable page title from the page's `buildMetadata` call. */
+  /** Human-readable page title from the page's frontmatter. */
   title: string;
   /** Canonical route, e.g. `/docs/routing`. */
   href: Route;
-  /** Short meta description from `buildMetadata`. */
+  /** Short meta description from the frontmatter. */
   description: string;
   /** SEO keywords declared on the page (may be empty). */
   keywords: string[];
@@ -28,158 +25,26 @@ export type DocPage = {
   body: string;
 };
 
-/** Absolute path to the `app/docs` directory. */
-export const docsDir = path.join(process.cwd(), "app", "docs");
-
-const HTML_ENTITIES: Record<string, string> = {
-  "&apos;": "'",
-  "&quot;": '"',
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&nbsp;": " ",
-};
-
-function decodeEntities(value: string): string {
-  return value.replace(/&(apos|quot|amp|lt|gt|nbsp);/g, (match) => HTML_ENTITIES[match] ?? match);
-}
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 /**
- * Extract searchable / readable plain text from a docs `page.tsx` source. Strips
- * imports and the metadata block, keeps the contents of any `code={` ... `}`
- * template literals so things mentioned only in code samples (e.g.
- * `ui: "swagger"`) survive, then removes the remaining JSX tags and expression
- * containers.
- *
- * @param source - Raw `page.tsx` file contents.
- * @param limit - Optional max character count for the returned text. Omit to get
- *   the full body (used by the MCP `get_doc` tool); the cmdk search index passes
- *   a small cap to keep the client payload light.
- * @returns The normalized, entity-decoded plain text body.
- */
-export function extractBodyText(source: string, limit?: number): string {
-  let working = source;
-
-  // Drop imports and the metadata block — they are indexed via metadata fields.
-  working = working.replace(/^\s*import[\s\S]*?;\s*$/gm, "");
-  working = working.replace(/export\s+const\s+metadata\s*=\s*buildMetadata\(\{[\s\S]*?\}\);?/, "");
-
-  const collected: string[] = [];
-
-  // Pull CodeBlock template-literal payloads first so they survive tag stripping.
-  for (const match of working.matchAll(/code=\{`([\s\S]*?)`\}/g)) {
-    collected.push(match[1] ?? "");
-  }
-  working = working.replace(/code=\{`[\s\S]*?`\}/g, " ");
-
-  // Drop JSX expression containers (className strings, hrefs, callbacks) then tags.
-  working = working.replace(/\{[^{}]*\}/g, " ");
-  working = working.replace(/<\/?[A-Za-z][^>]*>/g, " ");
-
-  collected.push(working);
-
-  const text = decodeEntities(collected.join(" ")).replace(/\s+/g, " ").trim();
-  return typeof limit === "number" ? text.slice(0, limit) : text;
-}
-
-/** Recursively collect every `page.tsx` path under `dir`. */
-export async function walkDocsPages(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const nestedFiles = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => walkDocsPages(path.join(dir, entry.name))),
-  );
-
-  const pageFile = entries.some((entry) => entry.isFile() && entry.name === "page.tsx")
-    ? [path.join(dir, "page.tsx")]
-    : [];
-
-  return [...pageFile, ...nestedFiles.flat()];
-}
-
-/** Derive a `/docs/...` route from a `page.tsx` absolute path. */
-export function getRouteFromFile(filePath: string): Route {
-  const relativeDir = path.relative(docsDir, path.dirname(filePath));
-
-  if (!relativeDir || relativeDir === ".") {
-    return "/docs";
-  }
-
-  return `/docs/${relativeDir.split(path.sep).join("/")}` as Route;
-}
-
-/**
- * Parse the `buildMetadata({...})` frontmatter (title, description, path,
- * keywords) out of a docs `page.tsx` source. Falls back to a route derived from
- * the file path when no explicit `path` is present.
- *
- * @param source - Raw `page.tsx` file contents.
- * @param filePath - Absolute path to the page, used for the route fallback.
- * @returns The page's parsed metadata (without the body).
- */
-export function parseDocFrontmatter(
-  source: string,
-  filePath: string,
-): { title: string; href: Route; description: string; keywords: string[] } {
-  const title = source.match(/title:\s*"([^"]+)"/)?.[1] ?? "Untitled";
-  const description =
-    source.match(/description:\s*(?:\n\s*)?"([\s\S]*?)",\s*path:/)?.[1] ?? "Documentation page";
-  const href =
-    (source.match(/path:\s*"([^"]+)"/)?.[1] as Route | undefined) ?? getRouteFromFile(filePath);
-  const keywordsBlock = source.match(/keywords:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
-  const keywords = [...keywordsBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? "");
-
-  return {
-    title: normalizeText(title),
-    href,
-    description: normalizeText(description),
-    keywords,
-  };
-}
-
-/**
- * Read and parse every docs page from disk, returning metadata plus the full
- * plain-text body for each, sorted by route. Cached for the lifetime of the
- * deployment (`cacheLife("max")`) because the docs tree is static at runtime
- * and only changes when a new build ships.
+ * Read every docs page, returning metadata plus the full plain-text body for
+ * each, sorted by route. Every page is MDX under `content/docs`; this is the
+ * one corpus search, MCP, OG images, the markdown route and llms.txt share.
+ * Cached for the lifetime of the deployment (`cacheLife("max")`) because the
+ * docs tree is static at runtime and only changes when a new build ships.
  *
  * @returns Every discovered {@link DocPage}.
  */
 export async function getAllDocPages(): Promise<DocPage[]> {
   "use cache";
-  // Short-lived in dev so new or edited content shows up without a restart.
-  if (process.env.NODE_ENV === "development") cacheLife("seconds");
-  else cacheLife("max");
+  cacheLife("max");
 
-  const pageFiles = await walkDocsPages(docsDir);
-  const pages = await Promise.all(
-    pageFiles.map(async (filePath) => {
-      const source = await readFile(filePath, "utf8");
-      const frontmatter = parseDocFrontmatter(source, filePath);
-      return { ...frontmatter, body: extractBodyText(source) } satisfies DocPage;
-    }),
-  );
-
-  // MDX pages (content/docs/**). A static page.tsx for the same route wins in
-  // Next routing, so it wins here too.
-  const tsxRoutes = new Set(pages.map((page) => page.href));
-  for (const doc of await getMdxDocs()) {
-    if (tsxRoutes.has(doc.route as Route)) continue;
-    pages.push({
-      title: doc.frontmatter.title,
-      href: doc.route as Route,
-      description: doc.frontmatter.description,
-      keywords: doc.frontmatter.keywords,
-      body: extractMdxBodyText(doc.body),
-    });
-  }
-
-  return pages.sort((left, right) => left.href.localeCompare(right.href));
+  return (await getMdxDocs()).map((doc) => ({
+    title: doc.frontmatter.title,
+    href: doc.route as Route,
+    description: doc.frontmatter.description,
+    keywords: doc.frontmatter.keywords,
+    body: extractMdxBodyText(doc.body),
+  }));
 }
 
 /**

@@ -1,0 +1,413 @@
+---
+title: Accept payments with Razorpay in DaloyJS
+description: Integrate Razorpay (UPI, cards, netbanking, wallets) from a DaloyJS API using the official razorpay Node SDK. Covers the Orders flow, validatePaymentVerification for the client return, validateWebhookSignature with the raw body, refunds, and edge-runtime caveats.
+keywords:
+  - DaloyJS Razorpay
+  - razorpay node
+  - Razorpay Orders API
+  - validatePaymentVerification
+  - validateWebhookSignature
+  - Razorpay webhook HMAC
+---
+
+# Accept payments with Razorpay in DaloyJS
+
+[Razorpay](https://razorpay.com/) is the default payment stack for India, **UPI**, cards, netbanking, wallets, EMI, and BNPL through one API. This guide uses the official [`razorpay`](https://github.com/razorpay/razorpay-node) Node SDK with the Orders flow, the SDK's built-in `validatePaymentVerification` for the post-checkout callback, and `validateWebhookSignature` for IPN.
+
+## What you should know up front
+
+- Two signatures, not one. Razorpay signs two different things: (1) the client-side checkout result, verify with `validatePaymentVerification` using your *key secret*; (2) the server-side webhook, verify with `validateWebhookSignature` using your *webhook secret*. They're different secrets and different payloads.
+- Orders are the source of truth, not raw payments. Create an Order on your server, hand `order_id` to Checkout, then verify the callback. Skipping the Order step is technically allowed but loses you idempotency, reconciliation, and the "late authorisation" protection.
+- Amounts are paise. ₹500.00 -\> `{ amount: 50000, currency: "INR" }`. Don't pass floats, the API rejects them.
+- Webhook verification needs the raw body. `JSON.parse` + `JSON.stringify` changes byte order, which breaks the HMAC. Read the request body as a string before parsing it.
+- Don't roll your own HMAC. The SDK exposes both verifiers as plain helpers. Using them keeps you aligned when Razorpay tweaks the algorithm or adds new fields.
+
+## 1. Provision
+
+1. Sign in to the [Razorpay dashboard](https://dashboard.razorpay.com/).
+2. Account & Settings -\> API Keys -\> Generate Test Key. Save the `key_id` and `key_secret`: the secret is shown once.
+3. Account & Settings -\> Webhooks -\> Add new. Point it at your DaloyJS endpoint and set a **webhook secret**. Subscribe to at least `payment.captured`, `payment.failed`, `order.paid`, and `refund.processed`.
+4. Activate the methods you need (UPI/cards are on by default. Netbanking and wallets typically need explicit enabling).
+
+## 2. Install
+
+```ts
+pnpm add razorpay
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+RAZORPAY_KEY_ID=rzp_test_replace_me            # public-ish, used by Checkout JS too
+RAZORPAY_KEY_SECRET=replace_me                 # secret; verifies client callback
+RAZORPAY_WEBHOOK_SECRET=replace_me             # webhook secret; verifies IPN
+APP_URL=https://your-app.example.com
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/razorpay.ts
+import Razorpay from "razorpay";
+import { validatePaymentVerification, validateWebhookSignature } from "razorpay/dist/utils/razorpay-utils";
+import type { App } from "@daloyjs/core";
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
+});
+
+export interface RazorpayClient {
+  raw: Razorpay;
+
+  createOrder(input: {
+    amount: number;              // paise
+    currency?: string;           // default "INR"
+    receipt: string;             // your internal order id; max 40 chars
+    notes?: Record<string, string>;
+    paymentCapture?: boolean;    // default true (auto-capture on successful payment)
+  }): Promise<{ id: string; amount: number; currency: string; receipt: string; status: string }>;
+
+  verifyCheckoutSignature(input: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+  }): boolean;
+
+  verifyWebhookSignature(rawBody: string, signatureHeader: string | null): boolean;
+
+  fetchPayment(paymentId: string): Promise<{ id: string; status: string; amount: number; currency: string; order_id?: string; method?: string }>;
+
+  refund(input: {
+    paymentId: string;
+    amount?: number;             // omit for full refund
+    notes?: Record<string, string>;
+    speed?: "normal" | "optimum";
+  }): Promise<{ id: string; status: string; amount: number }>;
+}
+
+export const razorpayPlugin = {
+  name: "razorpay",
+  register(app: App) {
+    const client: RazorpayClient = {
+      raw: razorpay,
+
+      async createOrder({ amount, currency = "INR", receipt, notes, paymentCapture = true }) {
+        const order = await razorpay.orders.create({
+          amount,
+          currency,
+          receipt,
+          notes,
+          payment_capture: paymentCapture,
+        });
+        return {
+          id: order.id,
+          amount: Number(order.amount),
+          currency: order.currency,
+          receipt: order.receipt ?? receipt,
+          status: order.status,
+        };
+      },
+
+      verifyCheckoutSignature({ orderId, paymentId, signature }) {
+        return validatePaymentVerification(
+          { order_id: orderId, payment_id: paymentId },
+          signature,
+          process.env.RAZORPAY_KEY_SECRET!,
+        );
+      },
+
+      verifyWebhookSignature(rawBody, signatureHeader) {
+        if (!signatureHeader) return false;
+        return validateWebhookSignature(rawBody, signatureHeader, process.env.RAZORPAY_WEBHOOK_SECRET!);
+      },
+
+      async fetchPayment(paymentId) {
+        const p = await razorpay.payments.fetch(paymentId);
+        return {
+          id: p.id,
+          status: p.status,
+          amount: Number(p.amount),
+          currency: p.currency,
+          order_id: p.order_id,
+          method: p.method,
+        };
+      },
+
+      async refund({ paymentId, amount, notes, speed = "normal" }) {
+        const refund = await razorpay.payments.refund(paymentId, {
+          ...(amount !== undefined ? { amount } : {}),
+          ...(notes ? { notes } : {}),
+          speed,
+        });
+        return { id: refund.id, status: refund.status, amount: Number(refund.amount) };
+      },
+    };
+
+    app.decorate("razorpay", client);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    razorpay: RazorpayClient;
+  }
+}
+```
+
+The verifier helpers live at `razorpay/dist/utils/razorpay-utils` in the published bundle, Razorpay's own README points there. They're plain functions over `node:crypto`. No SDK instance needed.
+
+## 5. Create an order
+
+The frontend uses [Razorpay Checkout JS](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/) with the `orderId` from this endpoint plus your public `key_id`.
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { razorpayPlugin } from "./plugins/razorpay.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 30 }));
+app.register(razorpayPlugin);
+
+app.post(
+  "/checkout/razorpay/order",
+  {
+    operationId: "createRazorpayOrder",
+    request: {
+      body: z.object({
+        orderId: z.string().min(1).max(40),               // becomes "receipt"
+        amount: z.number().int().positive(),              // paise
+        currency: z.string().length(3).default("INR"),
+        notes: z.record(z.string(), z.string()).optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "order created",
+        body: z.object({
+          orderId: z.string(),
+          amount: z.number(),
+          currency: z.string(),
+          keyId: z.string(),
+        }),
+      },
+    },
+  },
+  async ({ body, state }) => {
+    const order = await state.razorpay.createOrder({
+      amount: body.amount,
+      currency: body.currency,
+      receipt: body.orderId,
+      notes: body.notes,
+    });
+    return {
+      status: 201,
+      body: {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: process.env.RAZORPAY_KEY_ID!,
+      },
+    };
+  },
+);
+```
+
+## 6. Verify the client callback
+
+<SequenceDiagram title="Order + client callback verification" participants={["Browser", "DaloyJS route", "Razorpay"]} steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/razorpay/order",
+            detail: "amount in paise + receipt",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Razorpay",
+            label: "orders.create, return order_id + key_id",
+            detail: "Checkout JS opens with order_id",
+            kind: "request",
+          },
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /verify after Checkout success",
+            detail: "razorpay_order_id, _payment_id, _signature",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "validatePaymentVerification with the key secret",
+            detail: "401 on mismatch, then fetchPayment",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Browser",
+            label: "200 only when payment.status is 'captured'",
+            detail: "signature proves origin, not capture",
+            kind: "response",
+          },
+        ]} caption="Create the Order server-side, verify the client callback signature with your key secret, then refetch the payment because the signature proves the callback came from Razorpay but not that it was captured." />
+
+After a successful payment, Checkout JS posts `{ razorpay_order_id, razorpay_payment_id, razorpay_signature }` back to your client. Forward to the server and verify before doing anything:
+
+```ts
+app.post(
+  "/checkout/razorpay/verify",
+  {
+    operationId: "verifyRazorpayCheckout",
+    request: {
+      body: z.object({
+        razorpay_order_id: z.string(),
+        razorpay_payment_id: z.string(),
+        razorpay_signature: z.string(),
+      }),
+    },
+    responses: {
+      200: { description: "verified", body: z.object({ status: z.literal("captured") }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const valid = state.razorpay.verifyCheckoutSignature({
+      orderId: body.razorpay_order_id,
+      paymentId: body.razorpay_payment_id,
+      signature: body.razorpay_signature,
+    });
+    if (!valid) {
+      return { status: 401, body: { error: "signature mismatch" } };
+    }
+
+    // The signature only proves the callback came from Razorpay — it doesn't
+    // confirm capture. Fetch the payment to read authoritative status.
+    const payment = await state.razorpay.fetchPayment(body.razorpay_payment_id);
+    if (payment.status !== "captured") {
+      return { status: 401, body: { error: `payment not captured: ${payment.status}` } };
+    }
+
+    return { status: 200, body: { status: "captured" as const } };
+  },
+);
+```
+
+## 7. Webhook
+
+<SequenceDiagram title="Webhook verification" participants={["Razorpay", "DaloyJS route", "Your queue"]} steps={[
+          {
+            from: "Razorpay",
+            to: "DaloyJS route",
+            label: "POST /webhooks/razorpay",
+            detail: "X-Razorpay-Signature over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "validateWebhookSignature with the webhook secret",
+            detail: "different secret from the client callback",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Razorpay",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'bad signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Handle payment.captured / refund.processed, then ack",
+            detail: "200 even for unhandled events",
+            kind: "async",
+          },
+        ]} caption="The webhook uses a different secret than the client callback. Verify X-Razorpay-Signature over the raw body with the webhook secret, then ack 200 for every event once it checks out, even ones you do not handle." />
+
+```ts
+import { readBodyLimited } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/razorpay",
+  {
+    operationId: "razorpayWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
+    const signature = request.headers.get("x-razorpay-signature");
+
+    if (!state.razorpay.verifyWebhookSignature(raw, signature)) {
+      return { status: 401, body: { error: "bad signature" } };
+    }
+
+    const event = JSON.parse(raw) as {
+      event: string;
+      payload: { payment?: { entity: { id: string; order_id?: string; status: string } } };
+    };
+
+    switch (event.event) {
+      case "payment.captured": {
+        const payment = event.payload.payment?.entity;
+        if (payment) {
+          // Fulfil. Idempotency key = (payment.order_id, payment.id).
+        }
+        break;
+      }
+      case "payment.failed":
+        // Notify, log, surface to customer.
+        break;
+      case "refund.processed":
+        // Mark refund complete in your ledger.
+        break;
+    }
+
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+Always return 200 once the signature checks out, even for events you don't handle. Razorpay retries non-2xx responses with exponential backoff for up to 24 hours.
+
+## 8. Refunds
+
+```ts
+// Full refund — omit amount.
+await state.razorpay.refund({ paymentId: "pay_xxx" });
+
+// Partial refund.
+await state.razorpay.refund({
+  paymentId: "pay_xxx",
+  amount: 10000,                  // ₹100.00 in paise
+  notes: { reason: "Item missing" },
+  speed: "optimum",               // attempts instant refund where supported
+});
+```
+
+## Runtimes
+
+The `razorpay` SDK ships CJS and depends on Node's `https` module, it runs on Node 18+ but is not edge-runtime compatible. For Cloudflare Workers, hit `https://api.razorpay.com/v1` directly with `fetch` and Basic auth (`Authorization: Basic base64(key_id:key_secret)`). The two signature helpers are pure HMAC and easy to reimplement with `crypto.subtle` if you don't want the bundled ones.
+
+## Errors
+
+Razorpay throws errors with a structured `error.error` object containing `code`, `description`, `field`, and `reason`. Map them through [problem+json](/docs/errors) with the Razorpay `code` on the `type` field so reconciliation tools can match them later.
+
+## Modernisation notes
+
+- Use Orders, not bare payment links. The Orders flow gives you a server-side anchor for idempotency, lets Checkout JS show the right amount, and unlocks `order.paid` webhooks that fire even when the customer closes the tab before the success callback.
+- Verify both signatures. The client callback signature stops forged success posts from the browser. The webhook signature stops spoofed IPNs. Skipping either is a foot-gun.
+- Don't fulfil on the client callback alone. The signature proves the call came from Razorpay, but `status: created` isn't `captured`. Always re-fetch the payment (or wait for the webhook) before flipping an order to paid.
+- Use Promises, ignore the callback API. Every method on the SDK returns a Promise. The error-first callback parameter still works but exists for legacy code only.
+
+See also the [payments overview](/docs/payments), [Tap Payments guide](/docs/payments/tap), [PayTabs guide](/docs/payments/paytabs), and [problem+json errors](/docs/errors).

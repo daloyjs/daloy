@@ -1,0 +1,175 @@
+---
+title: Outbound resilience for fetch
+description: Layer a circuit breaker, retry-with-backoff, and per-call timeout on top of fetchGuard() for DaloyJS outbound calls. A dependency-free resilientFetch() that composes with SSRF protection for a mature outbound HTTP client.
+keywords:
+  - circuit breaker
+  - retry with backoff
+  - fetch timeout
+  - resilientFetch
+  - outbound resilience
+  - DaloyJS fetch
+  - SSRF
+  - fetchGuard
+  - Retry-After
+  - exponential backoff
+sitemap:
+  priority: 0.8
+---
+
+# Outbound resilience for `fetch`
+
+`fetchGuard()` answers *“is this outbound address safe?”*. It blocks the SSRF chain to cloud metadata and internal ranges. `resilientFetch()` answers the operational other half: *“is this upstream healthy, and how do we behave when it is not?”* DaloyJS ships a **dependency-free** resilience layer with three classic guards:
+
+- Per-call timeout: an `AbortController` aborts any attempt that stalls, so a hung upstream can never exhaust your event loop. Surfaces as `FetchTimeoutError`.
+- Retry-with-backoff: bounded retries with exponential backoff and full jitter, scoped to idempotent methods and transient statuses, honouring `Retry-After`.
+- Circuit breaker: a three-state machine (`closed → open → half-open`) that fails fast when an upstream is clearly down, then probes for recovery.
+
+The two compose. Wrap an SSRF-guarded `fetch` in a resilient one and you get both safety *and* resilience with zero runtime dependencies.
+
+<FlowDiagram title="What every guarded call goes through" numbered caption="Each call flows through the circuit breaker, then the SSRF floor, then a timed attempt that retries only transient failures with jittered backoff. An SsrfBlockedError or a caller-initiated abort is terminal, it is never retried and never trips the breaker." steps={[
+          {
+            label: "safeFetch(url)",
+            detail: "drop-in for global fetch",
+            tone: "accent",
+          },
+          {
+            label: "Circuit breaker",
+            eyebrow: "fail fast",
+            detail: "open? throw CircuitOpenError",
+          },
+          {
+            label: "fetchGuard()",
+            eyebrow: "SSRF floor",
+            detail: "refusal is terminal",
+            tone: "muted",
+          },
+          {
+            label: "Attempt + timeout",
+            detail: "AbortController, FetchTimeoutError",
+          },
+          {
+            label: "Retry on transient",
+            detail: "idempotent + 408/429/5xx, backoff + jitter",
+          },
+          {
+            label: "Response",
+            detail: "a success closes the circuit",
+            tone: "success",
+          },
+        ]} />
+
+## Quick start
+
+Layer `resilientFetch()` over `fetchGuard()` so the SSRF floor stays underneath the resilience logic.
+
+```ts
+import { fetchGuard, resilientFetch } from "@daloyjs/core";
+
+const safeFetch = resilientFetch({
+  fetch: fetchGuard(),       // SSRF floor underneath
+  timeoutMs: 2_000,          // abort any attempt that stalls past 2s
+  retries: 2,                // up to 2 retries on transient failures
+  circuitBreaker: { failureThreshold: 5, resetTimeoutMs: 30_000 },
+});
+
+// Same call signature as the global fetch.
+const res = await safeFetch("https://api.example.com/things");
+```
+
+The returned function has the exact call signature of the global `fetch`, so it is a drop-in replacement anywhere you already call `fetch`.
+
+## Per-call timeout
+
+Each attempt (including every retry) gets a fresh `timeoutMs` budget (default `10_000`). A timeout aborts the in-flight request and throws `FetchTimeoutError`. A timeout combines with any caller-supplied `signal`: a caller-initiated abort surfaces as the caller’s own `AbortError` and is **never** retried or counted as an upstream failure. The timeout also reaches `fetchGuard()`'s DNS-pinned `http:` path, which honours the request's `AbortSignal` (since 1.3.7), so a stalled pinned socket is torn down rather than left open.
+
+```ts
+import { resilientFetch, FetchTimeoutError } from "@daloyjs/core";
+
+const fetchWithTimeout = resilientFetch({ timeoutMs: 1_000, retries: 0 });
+
+try {
+  await fetchWithTimeout("https://slow.example.com/");
+} catch (err) {
+  if (err instanceof FetchTimeoutError) {
+    // err.timeoutMs === 1000
+  }
+}
+```
+
+## Retry-with-backoff
+
+Retries only fire for **idempotent** methods (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) and a conservative set of transient statuses (`408`, `429`, `500`, `502`, `503`, `504`), plus network errors and timeouts. Non-idempotent `POST` / `PATCH` calls are never retried unless you opt in via `retryableMethods`. Backoff is exponential with full jitter to avoid a thundering-herd retry storm, and a `Retry-After` response header is honoured (capped by `maxRetryDelayMs`).
+
+```ts
+const client = resilientFetch({
+  retries: 3,
+  retryDelayMs: 100,        // first backoff
+  backoffFactor: 2,         // 100ms, 200ms, 400ms (pre-jitter)
+  maxRetryDelayMs: 2_000,   // cap any single delay
+  jitter: true,             // full jitter: delay * random()
+  respectRetryAfter: true,  // honour Retry-After on 429/503
+  onRetry: (ctx, delayMs) => {
+    metrics.counter("http_client_retries_total").inc({ host: new URL(ctx.request.url).host });
+  },
+});
+```
+
+Override the decision entirely with `isRetryable` when you need bespoke logic:
+
+```ts
+const client = resilientFetch({
+  retries: 2,
+  isRetryable: (ctx) =>
+    // retry only on explicit 503 from this upstream
+    ctx.response?.status === 503,
+});
+```
+
+## Circuit breaker
+
+After `failureThreshold` consecutive failures the breaker trips **open**: every subsequent call fails fast with `CircuitOpenError` (no network round-trip) until `resetTimeoutMs` elapses. The breaker then enters **half-open** and admits a limited number of trial requests. A success closes it again, a failure re-opens it. The breaker is shared across every call made through the returned function, so one hot upstream is protected process-wide. A `5xx` response counts as a failure (configurable via `circuitBreakerFailureStatuses`). An SSRF refusal and a caller-initiated abort do **not**.
+
+```ts
+import { resilientFetch, CircuitOpenError } from "@daloyjs/core";
+
+const client = resilientFetch({
+  fetch: fetchGuard(),
+  circuitBreaker: {
+    failureThreshold: 5,      // trip after 5 consecutive failures
+    resetTimeoutMs: 30_000,   // stay open 30s before probing
+    halfOpenMaxAttempts: 1,   // one probe at a time
+    successThreshold: 1,      // one success closes the circuit
+    onStateChange: (next, prev) => log.warn({ next, prev }, "circuit state"),
+  },
+});
+
+try {
+  await client("https://api.example.com/");
+} catch (err) {
+  if (err instanceof CircuitOpenError) {
+    // fail fast: err.retryAfterMs hints when to try again
+  }
+}
+```
+
+Pass `circuitBreaker: false` to disable it, or pass an existing `CircuitBreaker` instance to share one breaker across several clients targeting the same upstream.
+
+## The standalone CircuitBreaker
+
+The breaker is exported on its own so you can protect any non- `fetch` dependency (a database driver, a gRPC client) with the same semantics.
+
+```ts
+import { CircuitBreaker } from "@daloyjs/core";
+
+const breaker = new CircuitBreaker({ failureThreshold: 3, resetTimeoutMs: 10_000 });
+
+const rows = await breaker.execute(() => db.query("SELECT 1"));
+// breaker.state -> "closed" | "open" | "half-open"
+```
+
+## Security posture
+
+- SSRF protection is preserved. `resilientFetch()` never replaces `fetchGuard()`, it wraps it. An `SsrfBlockedError` is a terminal refusal: it bubbles unchanged, is never retried, and never trips the circuit breaker. That includes `redirect-body-not-replayable` (a `307`/`308` of a streamed body), since resending a consumed stream cannot succeed.
+- Bounded amplification. Retries are capped and scoped to idempotent methods, so a transient blip cannot turn into a retry storm against a struggling upstream.
+- No event-loop exhaustion. Every attempt is bounded by a per-call timeout, and the backoff timer is `unref()`’d so it never keeps the process alive on its own.
+- Zero runtime dependencies. Built entirely on Web-standard `AbortController` / `fetch`, so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers Edge.

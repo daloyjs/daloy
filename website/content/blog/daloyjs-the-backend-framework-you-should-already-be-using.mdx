@@ -1,0 +1,105 @@
+---
+title: "DaloyJS: The Backend Framework You Should Already Be Using"
+description: A contract-first TypeScript backend framework with security guardrails, typed clients, live OpenAPI, and a supply-chain posture that feels designed for 2026 instead of remembered from 2019.
+date: 2026-06-20
+readingTime: 10 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Writes backend code, reviews too many pentest reports, and remains unconvinced that production should be a trust fall.
+badges:
+  - Contract-first
+  - Supply chain
+keywords:
+  - DaloyJS backend framework
+  - contract first TypeScript
+  - OpenAPI typed client
+  - secure headers rate limit request id
+  - pnpm supply chain controls
+---
+
+A friend of mine once shipped a small Express API, went to sleep, and woke up to a server that had spent the night losing a fight with a gradually inflating request body. The service had no body cap or meaningful timeout, so memory use kept climbing. He is a competent developer. He was also busy. Those two facts coexist all the time.
+
+That is why DaloyJS stands out. It bundles the things teams usually forget: typed contracts, OpenAPI, docs, client generation, and a security posture that does not depend on whether somebody had enough coffee before opening the middleware docs.
+
+## The shape of a safer default
+
+A minimal DaloyJS app already looks like a production-minded starting point instead of a tutorial you are meant to harden later. Validation lives beside the handler, the route is a contract, and the common defenses are present without begging for plugins.
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
+
+app.use(requestId());
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  operationId: "getBookById",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params }) => ({
+    status: 200,
+    body: { id: params.id, title: `Book ${params.id}` },
+  }),
+});
+
+serve(app, { port: 3000 });
+```
+
+That single file gives you strong request typing, route-level validation, rate limiting, secure headers, request IDs, and a live OpenAPI document. The nice part is not that these capabilities exist. Most ecosystems have them. The nice part is that they stop being six separate decisions.
+
+## Security you get before you ask for it
+
+DaloyJS is opinionated in the correct direction. Body limits, prototype-pollution-safe parsing, path traversal rejection, response hardening, and request timeout behavior are part of the framework story. You can still add the more specialized network controls when you need them, but the baseline no longer starts at zero.
+
+That matters more in 2026 because the average backend is no longer written only by backend specialists. AI coding agents, copy-paste, and deadline math have made "I meant to secure it later" one of the most common architectural styles on the internet.
+
+## The supply-chain part is unusually sane
+
+The scaffolded pnpm defaults are some of the most practical parts of the whole package. They do not try to turn you into a full-time security program. They remove several easy ways to get hurt.
+
+```ini
+ignore-scripts=true
+minimum-release-age=1440
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+strict-peer-dependencies=true
+```
+
+The 24-hour release-age delay is especially good. Most npm malware campaigns are found fast, because the attackers are greedy and the ecosystem is noisy. Waiting one day before you install a fresh version is one of those rare controls that is both boring and sharp. My favorite category of engineering decision.
+
+## The contract-first workflow is the actual quality-of-life win
+
+Security gets the headline, but the contract-first model is what makes the day-to-day experience good. One route definition feeds the handler types, OpenAPI, docs, and client surface. Less drift, fewer duplicated truths, and fewer meetings where everybody stares at an outdated YAML file like it personally betrayed them.
+
+```ts
+import { createClient } from "@daloyjs/core/client";
+
+const client = createClient(app, { baseUrl: "http://localhost:3000" });
+
+const result = await client.getBookById({ params: { id: "1" } });
+
+if (result.status === 200) {
+  console.log(result.body.title);
+}
+```
+
+If you have ever maintained a frontend and a backend that disagreed about whether a field was optional, you already know why this is a better deal.
+
+## What I would start with on a new service
+
+DaloyJS is solving the least glamorous problems first: install-time safety, runtime defaults, contract drift, typed clients, and portable execution. None of that is a flashy conference demo, but it is exactly what makes teams faster once the demo is over and actual maintenance begins.
+
+If you want to go further down this rabbit hole, start with [the contract-first post](/blog/contract-first-without-the-codegen-dance) and [the supply-chain hardening write-up](/blog/supply-chain-hardening-for-typescript-libraries). Both explain why the boring parts are doing most of the work.
+
+<div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">
+<p className="text-sm leading-7 text-muted-foreground"><span className="font-semibold text-foreground">About the author:</span>{" "}{"Writes backend code, reviews too many pentest reports, and remains unconvinced that production should be a trust fall."}</p>
+</div>

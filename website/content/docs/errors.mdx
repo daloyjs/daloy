@@ -1,0 +1,128 @@
+---
+title: Errors & problem+json
+description: Throw typed errors in DaloyJS and have them serialized as RFC 9457 problem+json responses by default. Customize, extend, and document errors in OpenAPI.
+keywords:
+  - problem+json
+  - RFC 9457
+  - DaloyJS errors
+  - HTTP error responses
+  - typed errors TypeScript
+---
+
+# Errors & problem+json
+
+DaloyJS errors are first-class. Every thrown `HttpError` serializes to [RFC 9457 problem+json](https://www.rfc-editor.org/rfc/rfc9457) with a stable `type` URI, a request-id, and the appropriate Content-Type.
+
+<FlowDiagram title="From thrown error to problem+json" numbered steps={[
+          {
+            eyebrow: "handler",
+            label: "throw new NotFoundError(...)",
+            detail: "any HttpError subclass",
+            tone: "accent",
+          },
+          {
+            eyebrow: "framework",
+            label: "Map to RFC 9457 fields",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "production",
+            label: "Redact 5xx detail",
+            detail: "NODE_ENV=production strips internals",
+            tone: "muted",
+          },
+          {
+            eyebrow: "wire",
+            label: "Serialized response",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]} caption="A thrown HttpError becomes a problem+json document automatically. In production the detail field on 5xx responses is redacted so stack traces and SQL fragments never reach the client, while the full error still goes to your onError hook." />
+
+## Built-in error classes
+
+```ts
+import {
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401
+  ForbiddenError,                    // 403
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + Allow header
+  RequestTimeoutError,               // 408
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500 (detail redacted in production)
+} from "@daloyjs/core";
+```
+
+## Throwing in a handler
+
+```ts
+import { NotFoundError } from "@daloyjs/core";
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
+    const user = await db.find(params.id);
+    if (!user) throw new NotFoundError(`user ${params.id} not found`);
+    return { status: 200, body: user };
+  },
+);
+```
+
+## Wire format
+
+The request id is returned to the client in two places: the `x-request-id` response header, and (per [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail)) the problem document's `instance` field as a `urn:request:<uuid>` URN. There is no top-level `requestId` property, clients should read the header or parse the URN from `instance`.
+
+```json
+HTTP/1.1 404 Not Found
+content-type: application/problem+json
+x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
+
+{
+  "type": "https://daloyjs.dev/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user 42 not found",
+  "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
+}
+```
+
+## Production redaction
+
+When `NODE_ENV=production`, DaloyJS strips the `detail` field on any 5xx response so internal stack traces and SQL fragments don't leak to clients. The full error is still emitted to your logger via the `onError` hook.
+
+## Custom error classes
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+export class QuotaExceededError extends HttpError {
+  constructor(resource: string) {
+    super(429, {
+      title: "Quota exceeded",
+      type: "https://api.example.com/errors/quota-exceeded",
+      detail: `Quota exceeded for ${resource}`,
+    });
+  }
+}
+```
+
+## Custom `onError`
+
+```ts
+app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.requestId }, "request failed");
+    // return a Response to override; otherwise DaloyJS serializes problem+json
+  },
+});
+```

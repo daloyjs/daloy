@@ -1,0 +1,152 @@
+---
+title: OWASP API Security Top 10 mapping
+description: How DaloyJS addresses each item in the OWASP API Security Top 10 (2023), what the core enforces, which middleware to enable, and what stays your responsibility.
+keywords:
+  - OWASP API Security Top 10
+  - API security checklist
+  - BOLA Node.js
+  - SSRF protection
+  - DaloyJS security mapping
+  - broken object level authorization
+  - broken function level authorization
+---
+
+# OWASP API Security Top 10 mapping
+
+<blockquote>This page maps each OWASP API Security Top 10 category to the relevant DaloyJS control. The mapping also names the policy and infrastructure work that remains outside the framework.</blockquote>
+
+The [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) is the canonical checklist for what attackers actually exploit against HTTP APIs. This page maps every item to the Daloy primitive, middleware, or boot guard that addresses it, including the cross-cutting best practices called out in the [Aikido 2025 API security guide](https://www.aikido.dev/blog/api-security-guide) (encryption, validation, rate limiting, logging, inventory, third-party API safety).
+
+Daloy's posture is **secure-by-default**: dangerous choices are refused at construction or boot, the rest is one documented call away. Items marked *your responsibility* are the ones no framework can decide for you (business-logic authorization, data sensitivity classification, threat modelling).
+
+<LayerStack title="Where each item is handled" flow="down" layers={[
+          {
+            title: "Refused at construction or boot",
+            detail: "the dangerous choice never makes it to runtime",
+            tone: "success",
+            items: [
+              "cors origin: '*'",
+              "weak session secret",
+              "HS* under 32 bytes",
+              "session() without csrf()",
+            ],
+          },
+          {
+            title: "Enforced per request by core + middleware",
+            detail: "one documented call away",
+            tone: "accent",
+            items: [
+              "bearerAuth() / jwk()",
+              "requireScopes()",
+              "rateLimit()",
+              "fetchGuard()",
+              "secureHeaders()",
+            ],
+          },
+          {
+            title: "Still your responsibility",
+            detail: "decisions no framework can make for you",
+            items: [
+              "object ownership checks",
+              "data classification",
+              "abuse threat modelling",
+            ],
+          },
+        ]} caption="The OWASP API Top 10 splits cleanly across three layers in Daloy: choices refused before runtime, controls one call away, and the business-logic decisions only your code can make. The mapping table below walks each item through these layers." />
+
+## The mapping
+
+<table>
+<thead>
+<tr>
+<th>OWASP API risk</th>
+<th>What Daloy gives you</th>
+<th>Still your job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>API1: Broken Object Level Authorization (BOLA)</strong>{". "}Attacker swaps an <code>id</code> in the URL to read someone else's record.</td>
+<td>Per-route auth via <code>bearerAuth()</code> /{" "}<code>basicAuth()</code> / <code>requireScopes()</code>.{" "}<code>jwk()</code> and <code>basicAuth()</code> record the verified identity at <code>ctx.state.user</code> so the handler always knows who the caller is, and <code>tenantFromClaim()</code> reads it. Standard Schema params let you validate ID shape. <code>onAuthSuccess</code> hooks for attaching tenant/user context.</td>
+<td>The actual owner or tenant constraint inside the data operation. No framework can know your ownership model. Follow the{" "}<a href="/docs/security/resource-authorization">resource authorization guide</a>{" "}and prove it with cross-user tests.</td>
+</tr>
+<tr>
+<td><strong>API2: Broken Authentication</strong></td>
+<td><code>createJwtSigner()</code> / <code>createJwtVerifier()</code>{" "}with <code>alg</code>-discipline and mandatory <code>exp</code>;{" "}<code>jwk()</code> JWKS middleware (asymmetric-only);{" "}<code>bearerAuth({"{"} verify {"}"})</code>{"; "}<code>basicAuth()</code> with UTF-8 credential decoding and construction-time validation; <code>passwordHash</code> /{" "}<code>passwordVerify</code> at <code>@daloyjs/core/hashing</code>;{" "}<code>session()</code> with <code>\_\_Host-</code> cookie + HMAC-SHA256; <code>loginThrottle()</code>;{" "}<code>wsRateLimit()</code>; <code>rotateSession()</code>;{" "}<code>Cache-Control: no-store</code> baked into{" "}<code>UnauthorizedError</code> / <code>ForbiddenError</code> /{" "}<code>TooManyRequestsError</code>{". "}Refuse-to-boot on weak session secrets and short HS-JWT keys.</td>
+<td>Pick the right identity provider (see{" "}<a href="/docs/auth">Auth integrations</a>) and rotate secrets/keys on a schedule.</td>
+</tr>
+<tr id="api3">
+<td><strong>API3: Broken Object Property Level Authorization</strong>{" "}(excessive data exposure + mass assignment).</td>
+<td>Contract-first <code>app.route()</code> with <code>request</code>{" "}<em>and</em> <code>responses</code> schemas (Zod / Valibot / ArkType / TypeBox). Only fields you declare in the response schema are emitted. Undeclared fields a handler returns (a stray{" "}<code>passwordHash</code>{", "}a spread ORM row) are stripped at serialization, not only flagged. Only fields you declare in the request schema reach your handler. Surfaced in OpenAPI so reviewers can audit every payload.</td>
+<td>Author response schemas that omit internal fields. Don't spread raw ORM rows into responses. Stripping only runs when a{" "}<code>2xx</code> response declares a <code>body</code> schema, so{" "}<code>daloy doctor</code> emits{" "}<code>audit.response.bodySchema</code> (and a dev-mode boot warning) for any success response that has none. For routes that intentionally return an opaque or framework-controlled body (a raw{" "}<code>Response</code>{", "}HTML, a proxied payload), set{" "}<code>acknowledgeNoResponseBodySchema: true</code> on the route to record that intent and silence the finding. Successful raw{" "}<code>preBody</code>/<code>beforeHandle</code> short-circuits require the same acknowledgement. Error denials do not. Framework-mounted routes (<code>/openapi.json</code>{", "}<code>/docs</code>{", "}<code>/asyncapi</code>{", "}health, metrics) acknowledge themselves. The warning only ever names routes you wrote.</td>
+</tr>
+<tr>
+<td><strong>API4: Unrestricted Resource Consumption</strong></td>
+<td>Body-size cap (default 1 MiB, <code>Content-Length</code> checked first → <code>413</code>). Per-route{" "}<code>request.timeout</code>. <code>rateLimit()</code> with{" "}<code>groupId</code> shared buckets;{" "}<code>@daloyjs/core/rate-limit-redis</code> for multi-instance deploys. <code>loadShedding()</code>. <code>ipRestriction()</code>{" "}with CIDR-aware allow/deny. Multipart per-field size caps and MIME allowlist; <code>compression()</code> with BREACH-aware skips and{" "}<code>minimumSize</code> + negative-ratio guard;{" "}connection-draining shutdown.</td>
+<td>Pick numeric limits that match your traffic budget. Run a Redis-backed limiter when you have more than one process.</td>
+</tr>
+<tr>
+<td><strong>API5: Broken Function Level Authorization (BFLA)</strong></td>
+<td><code>requireScopes()</code> with RFC-6750 challenge and per-request aggregation. Per-route middleware via{" "}<code>combine</code> (<code>every</code> / <code>some</code> /{" "}<code>except</code>) so admin actions are explicit, not implicit.{" "}<code>internal: true</code> route flag (<code>404</code> via{" "}<code>app.fetch</code>{", "}dispatched only via <code>app.inject</code>); namespace-protected decorators prevent accidental privilege bleed across plugins.</td>
+<td>Define your scope/role catalog and apply{" "}<code>requireScopes()</code> to every admin or destructive route.</td>
+</tr>
+<tr>
+<td><strong>API6: Unrestricted Access to Sensitive Business Flows</strong></td>
+<td><code>rateLimit({"{"} groupId {"}"})</code>{" "}to share a bucket across related endpoints (checkout, refund, transfer); <code>loginThrottle()</code> for credential stuffing;{" "}<code>wsRateLimit()</code> for socket abuse; <code>csrf()</code> + Fetch-Metadata enforcement to refuse cross-origin state-changing requests by default.</td>
+<td>Threat-model the abuse case (coupon stacking, repeated transfers, mass account creation) and group the limiter accordingly.</td>
+</tr>
+<tr>
+<td><strong>API7: Server-Side Request Forgery (SSRF)</strong></td>
+<td><code>fetchGuard()</code> wraps the global <code>fetch</code> and refuses requests to loopback, RFC1918, link-local (including every documented cloud metadata IP: AWS / Azure / DigitalOcean{" "}<code>169.254.169.254</code>{", "}Oracle <code>192.0.0.192</code>{", "}Alibaba <code>100.100.100.200</code>), and IPv6 unique-local. Throws <code>SsrfBlockedError</code> with a reason code so handlers can surface a clean <code>422</code>{". "}See <a href="/docs/security/fetch-guard">SSRF guard</a>.</td>
+<td>Use the guarded fetch returned by <code>fetchGuard()</code> (e.g.{" "}<code>const safeFetch = fetchGuard()</code>) for <em>every</em>{" "}outbound call whose URL is influenced by user input.</td>
+</tr>
+<tr>
+<td><strong>API8: Security Misconfiguration</strong></td>
+<td><code>secureHeaders()</code> auto-applied (CSP with nonce + Trusted Types, HSTS, frame-defense). <code>Server</code> and{" "}<code>X-Powered-By</code> stripped. Duplicate <code>Host</code> /{" "}<code>Content-Length</code> rejected. <code>safeJsonParse</code>{" "}strips <code>\_\_proto\_\_</code> / <code>constructor</code> /{" "}<code>prototype</code>. Header injection / response splitting guards. Path-traversal rejection. Per-route <code>accepts</code>{" "}content-type opt-in. Cross-origin state-changing requests refused with <code>403</code> unless <code>cors()</code> allows.{" "}<code>cors()</code> <code>methods: \["\*"\]</code> refused at construction and default <code>allowMethods</code> narrowed to{" "}<code>\[GET, HEAD, POST\]</code>. CSP report receiver refuses non-<code>application/json</code> and bodies over 64 KiB; refuse-to-boot in production on{" "}<code>cors({"{"} origin: "\*"{"}"})</code>{", "}weak session secrets, unconfigured{" "}<code>X-Forwarded-\*</code>{", "}missing <code>csrf()</code> alongside <code>session()</code> with state-changing routes, and unauthenticated health endpoints without explicit acknowledgement. Run <code>daloy doctor</code>{" "}and <code>daloy doctor --audit-defaults</code> in CI. See{" "}<a href="/docs/security/secure-defaults">Secure-by-default</a> and{" "}<a href="/docs/security/boot-guards">Boot guards</a>.</td>
+<td>Set{" "}<code>app({"{"} behindProxy {"}"})</code>{" "}correctly for your deployment and keep TLS termination configured upstream.</td>
+</tr>
+<tr>
+<td><strong>API9: Improper Inventory Management</strong></td>
+<td>OpenAPI 3.1 generated from your routes (single source of truth, no annotations); <code>GET /openapi.json</code> +{" "}<code>GET /openapi.yaml</code>; <code>daloy inspect</code> for routes / dead routes / missing <code>operationId</code>;{" "}<code>daloy inspect --ai</code> dump for agents and audit tooling; typed client codegen via Hey API (<code>pnpm gen</code>) so downstream consumers track the same contract.</td>
+<td>Decommission old API versions instead of leaving them mounted. Treat shadow endpoints (the ones no route file defines) as bugs.</td>
+</tr>
+<tr>
+<td><strong>API10: Unsafe Consumption of APIs</strong></td>
+<td><code>fetchGuard()</code> for outbound calls (blocks SSRF pivots through third-party redirects);{" "}<code>verifyWebhookSignature()</code> /{" "}<code>signWebhookPayload()</code> from <code>@daloyjs/core</code>{" "}for HMAC-verified inbound webhooks (HMAC-SHA256 / 384 / 512, accepting GitHub-style <code>sha256=</code> prefixes or raw hex); Standard Schema validation on third-party response bodies so a compromised vendor can't inject unexpected fields. Request timeouts so a slow upstream can't exhaust your event loop.</td>
+<td>Pin the vendor URL list, set <code>fetchGuard()</code> options to match your egress policy, and validate every external payload like it were user input.</td>
+</tr>
+</tbody>
+</table>
+
+## Cross-cutting best practices
+
+The Aikido guide also calls out general defences that aren't in the Top 10 list but matter for any API. Daloy covers those below.
+
+| Practice | Daloy |
+| --- | --- |
+| Encryption in transit | HSTS via `secureHeaders()`; `__Host-` / `__Secure-` cookies refused over plain HTTP; refuse-to-boot if behind a proxy you haven't declared. |
+| Input validation and schema enforcement | Standard Schema (Zod 4 / Valibot / ArkType / TypeBox) on `request.params` / `query` / `headers` / `json` / `form` / `multipart`. Rejected requests turn into RFC 9457 problem+json. |
+| Output validation (no surprise fields) | `responses` schemas validated per status code; mismatched payloads fail loudly in dev and are stripped in prod. |
+| Rate limiting and throttling | `rateLimit()`, `rateLimit({ groupId })`, `loginThrottle()`, `wsRateLimit()`, `@daloyjs/core/rate-limit-redis`. |
+| Logging without leaks | Structured pluggable logger with default redaction of common secret keys (`authorization`, `password`, `token`, `cookie`,...). Request-id propagation. `requestId()` trust-default audit. |
+| Error handling without info leak | RFC 9457 problem+json with prod-mode redaction. Stack traces never leave the process in production. `httpError({ res })` refuses state-mutating headers. |
+| Health checks without DoS amplification | `app.healthcheck()` / `app.readinesscheck()` with optional bearer-token auth and per-IP rate limit; refuse-to-boot in production without explicit `acknowledgeUnauthenticated: true`. |
+| Supply-chain hardening | `ignore-scripts=true`, `minimum-release-age=1440`, SHA-pinned actions, CodeQL + Opengrep, OpenSSF Scorecard, npm trusted publishing with provenance, SBOM. See [Supply-chain security](/docs/security/supply-chain). |
+| Zero-trust posture between services | JWT / JWKS verification helpers, verified identity on `ctx.state.user` (scheme-aware `ctx.state.auth` for custom verifiers), namespace-protected decorators, plugin `dependencies: string[]` refuse-to-boot. |
+
+## What no framework can do for you
+
+- Business-logic abuse: only your code knows whether a sequence of valid API calls amounts to fraud. Threat-model the workflow.
+- Object-level authorization: Daloy enforces *who* can call a route; *which* records they can touch is application logic.
+- Data classification: deciding which fields are sensitive is a product decision. Daloy keeps unwanted fields out if you list them in the response schema.
+- Penetration testing. Automated scanners catch common issues. A human tester catches logic chains. Run both on a schedule.
+
+## Verify your posture
+
+- `daloy doctor`: deployment-config posture checks.
+- `daloy doctor --audit-defaults`: live secure-by-default audit.
+- `pnpm verify:parity-audits`: static gates that fail CI if a secure default is regressed.
+- `pnpm verify:governance-audits`: release-workflow rotation and governance floor.
+- `daloy inspect`: route inventory, dead routes, missing `operationId`s.
+
+Report a vulnerability via GitHub's private advisory at [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new).

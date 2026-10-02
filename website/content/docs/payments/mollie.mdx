@@ -1,0 +1,361 @@
+---
+title: Accept payments with Mollie in DaloyJS
+description: Integrate the official mollie-api-typescript SDK with a DaloyJS API. Covers the Client constructor, payments.create with idempotency keys, the new SignatureValidator for X-Mollie-Signature webhooks, async-iterable pagination, and edge-runtime support.
+keywords:
+  - DaloyJS Mollie
+  - mollie-api-typescript
+  - SignatureValidator
+  - X-Mollie-Signature
+  - Mollie webhook HMAC
+---
+
+# Accept payments with Mollie in DaloyJS
+
+[Mollie](https://www.mollie.com/) is the dominant European payment platform, strong on iDEAL, Bancontact, SEPA, Klarna, and a deep catalogue of local methods alongside cards and wallets. This guide uses the official [`mollie-api-typescript`](https://github.com/mollie/mollie-api-typescript) SDK (v1.8.x, released May 2026) from a DaloyJS server, with the new `SignatureValidator` helper for signed webhooks.
+
+## What you should know up front
+
+- Right package, please. The new SDK is `mollie-api-typescript` (Speakeasy-generated, Fetch-based, tree-shakable, edge-runtime friendly). The older `@mollie/api-client` still works but is the previous generation, new projects should use the TypeScript-first one.
+- It's a redirect flow. You create a payment, Mollie returns a `_links.checkout.href`, you redirect the customer there. They come back to your `redirectUrl` (browser) and your `webhookUrl` gets POSTed (server). The redirect is a UX signal only, the webhook is the source of truth.
+- Webhooks are signed now. Mollie sends `X-Mollie-Signature: sha256=...` on signed endpoints. Verify with `SignatureValidator`. Treat "no signature header" as a legacy webhook (older subscriptions don't sign).
+- Amounts are decimal strings. Unlike most providers, Mollie wants `{ currency: "EUR", value: "10.00" }`: a string with exactly two decimals for EUR. Pass `1000` as a number and you'll get a 422.
+- Test vs live is the API key. Keys are prefixed `test_` or `live_`. There is no separate environment flag for normal API-key auth. `testmode: true` is only needed for organisation-level OAuth tokens.
+
+## 1. Provision
+
+1. Sign up at [my.mollie.com](https://my.mollie.com/) and create a profile.
+2. Generate a **test API key** (Dashboard -\> Developers -\> API keys). It starts with `test_`.
+3. In Developers -\> Webhooks, create a webhook subscription pointing at your DaloyJS endpoint. Save the **signing secret**: you'll only see it once.
+4. Enable the payment methods you want under Settings -\> Website profile -\> Payment methods. iDEAL and Bancontact need explicit activation.
+
+## 2. Install
+
+```ts
+pnpm add mollie-api-typescript
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+MOLLIE_API_KEY=test_replace_me              # or live_...
+MOLLIE_WEBHOOK_SECRET=whsec_replace_me      # from Developers → Webhooks
+APP_URL=https://your-app.example.com
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/mollie.ts
+import { Client, SignatureValidator, InvalidSignatureException } from "mollie-api-typescript";
+import type { App } from "@daloyjs/core";
+
+const mollie = new Client({
+  security: { apiKey: process.env.MOLLIE_API_KEY! },
+});
+
+const validator = new SignatureValidator(process.env.MOLLIE_WEBHOOK_SECRET!);
+
+export interface MollieClient {
+  raw: Client;
+  createPayment(input: {
+    amount: { currency: string; value: string };  // value is a string!
+    description: string;
+    redirectUrl: string;
+    method?: string[];                            // e.g. ["ideal", "creditcard"]
+    metadata?: Record<string, unknown>;
+    idempotencyKey: string;
+  }): Promise<{ id: string; checkoutUrl: string; status: string }>;
+
+  getPayment(id: string): Promise<{ id: string; status: string; amount: { currency: string; value: string } }>;
+
+  verifyWebhook(rawBody: string, signatureHeader: string | null): Promise<"valid" | "legacy" | "invalid">;
+}
+
+export const molliePlugin = {
+  name: "mollie",
+  register(app: App) {
+    const client: MollieClient = {
+      raw: mollie,
+
+      async createPayment({ amount, description, redirectUrl, method, metadata, idempotencyKey }) {
+        const res = await mollie.payments.create({
+          idempotencyKey,
+          paymentRequest: {
+            amount,
+            description,
+            redirectUrl,
+            webhookUrl: `${process.env.APP_URL}/webhooks/mollie`,
+            ...(method ? { method } : {}),
+            ...(metadata ? { metadata } : {}),
+          },
+        });
+        return {
+          id: res.id!,
+          status: res.status!,
+          checkoutUrl: res.links?.checkout?.href ?? "",
+        };
+      },
+
+      async getPayment(id) {
+        const res = await mollie.payments.get({ paymentId: id });
+        return {
+          id: res.id!,
+          status: res.status!,
+          amount: res.amount!,
+        };
+      },
+
+      async verifyWebhook(rawBody, signatureHeader) {
+        try {
+          const verified = await validator.validatePayload(rawBody, signatureHeader ?? undefined);
+          return verified ? "valid" : "legacy";
+        } catch (error) {
+          if (error instanceof InvalidSignatureException) return "invalid";
+          throw error;
+        }
+      },
+    };
+
+    app.decorate("mollie", client);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    mollie: MollieClient;
+  }
+}
+```
+
+`SignatureValidator` uses HMAC-SHA256 over the raw request body. The *raw* body is non-negotiable, re-serialising parsed JSON will reorder fields and break the signature.
+
+## 5. Create a payment
+
+<SequenceDiagram title="Redirect payment flow" participants={["Shopper", "DaloyJS route", "Mollie"]} steps={[
+          {
+            from: "Shopper",
+            to: "DaloyJS route",
+            label: "POST /checkout/mollie",
+            detail: "orderId + amount { value: '10.00' }",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "payments.create with an idempotencyKey",
+            detail: "redirectUrl + webhookUrl",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Shopper",
+            label: "Return _links.checkout.href",
+            detail: "201 { checkoutUrl }",
+            kind: "response",
+          },
+          {
+            from: "Shopper",
+            to: "Mollie",
+            label: "Pays on the hosted checkout, returns via redirectUrl",
+            detail: "redirect is a UX hint, not proof",
+            kind: "async",
+          },
+        ]} caption="Create the payment with an idempotency key, hand the shopper the hosted checkout URL, and treat the redirect back as a UX signal only. The webhook is the source of truth." />
+
+```ts
+import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { molliePlugin } from "./plugins/mollie.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 30 }));
+app.register(molliePlugin);
+
+app.post(
+  "/checkout/mollie",
+  {
+    operationId: "createMolliePayment",
+    request: {
+      body: z.object({
+        orderId: z.string().min(1).max(80),
+        amount: z.object({
+          currency: z.string().length(3),
+          value: z.string().regex(/^\d+\.\d{2}$/),  // "10.00"
+        }),
+        description: z.string().min(1).max(255),
+        method: z.array(z.string()).optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "payment created",
+        body: z.object({
+          paymentId: z.string(),
+          checkoutUrl: z.url(),
+        }),
+      },
+    },
+  },
+  async ({ body, state }) => {
+    const payment = await state.mollie.createPayment({
+      amount: body.amount,
+      description: body.description,
+      redirectUrl: `${process.env.APP_URL}/checkout/return?order=${encodeURIComponent(body.orderId)}`,
+      method: body.method,
+      metadata: { orderId: body.orderId },
+      idempotencyKey: `order:${body.orderId}:${randomUUID()}`,
+    });
+    return {
+      status: 201,
+      body: { paymentId: payment.id, checkoutUrl: payment.checkoutUrl },
+    };
+  },
+);
+```
+
+## 6. Webhook
+
+<SequenceDiagram title="Webhook verification" participants={["Mollie", "DaloyJS route"]} steps={[
+          {
+            from: "Mollie",
+            to: "DaloyJS route",
+            label: "POST /webhooks/mollie",
+            detail: "X-Mollie-Signature: sha256=... over id=tr_xxx",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "SignatureValidator over the raw body",
+            detail: "valid | legacy (unsigned) | invalid",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "401 on invalid, otherwise payments.get(id)",
+            detail: "refetch the authoritative status",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "Fulfil when status === 'paid', ack 200",
+            detail: "use metadata.orderId",
+            kind: "async",
+          },
+        ]} caption="Verify X-Mollie-Signature over the raw body, refetch the full payment with payments.get because the webhook body carries only the id, then fulfil on the 'paid' status and ack 200 fast." />
+
+Mollie's webhook payload is famously minimalist: a form-encoded body of `id=tr_xxx`. You take that `id`, fetch the full payment from the API, and react to its current status. Always 200 OK quickly, even on not-interesting events, Mollie retries non-200 responses.
+
+```ts
+import { readBodyLimited } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/mollie",
+  {
+    operationId: "mollieWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
+    const signature = request.headers.get("x-mollie-signature");
+
+    const status = await state.mollie.verifyWebhook(raw, signature);
+    if (status === "invalid") {
+      return { status: 401, body: { error: "bad signature" } };
+    }
+    // "legacy" = unsigned (old subscription). Decide if you want to accept these.
+    // In production with a fresh subscription, require "valid".
+
+    const params = new URLSearchParams(raw);
+    const paymentId = params.get("id");
+    if (!paymentId) return { status: 200, body: { ok: true as const } };
+
+    const payment = await state.mollie.getPayment(paymentId);
+
+    // payment.status ∈ "open" | "pending" | "authorized" | "paid" | "expired" | "failed" | "canceled"
+    if (payment.status === "paid") {
+      // Fulfil the order. Use the metadata.orderId set at creation.
+    }
+
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+## 7. Refunds, captures, and cancellation
+
+```ts
+// Full refund
+await state.mollie.raw.refunds.create({
+  paymentId: "tr_xxx",
+  refundRequest: {
+    amount: { currency: "EUR", value: "10.00" },
+    description: "Customer request",
+  },
+});
+
+// Capture a previously authorized card payment (when capture mode = manual)
+await state.mollie.raw.captures.create({
+  paymentId: "tr_xxx",
+  captureRequest: {
+    amount: { currency: "EUR", value: "10.00" },
+  },
+});
+
+// Cancel an open payment
+await state.mollie.raw.payments.cancel({ paymentId: "tr_xxx" });
+```
+
+## Pagination
+
+List endpoints return async iterables, let `for await` walk the pages for you:
+
+```ts
+const pages = await state.mollie.raw.payments.list({ limit: 50 });
+for await (const page of pages) {
+  for (const payment of page.embedded?.payments ?? []) {
+    // ...
+  }
+}
+```
+
+## Runtimes
+
+The SDK is built on the Fetch API and ships ESM + CJS, so it runs on Node 18+, Cloudflare Workers, Bun, and Deno without adapters. The webhook verifier is pure crypto using `crypto.subtle.importKey` / `sign` and works in every modern runtime.
+
+## Errors
+
+Mollie returns RFC-7807-shaped problem details. Catch `errors.ErrorResponse` and map it through [problem+json](/docs/errors):
+
+```ts
+import * as errors from "mollie-api-typescript/models/errors";
+
+try {
+  await state.mollie.createPayment(/* ... */);
+} catch (e) {
+  if (e instanceof errors.ErrorResponse) {
+    // e.data$.status, e.data$.title, e.data$.detail, e.data$.field
+    throw new HttpError(e.data$.status, "https://mollie.com/errors", e.data$.title, e.data$.detail);
+  }
+  throw e;
+}
+```
+
+## Modernisation notes
+
+- Use the TypeScript SDK over the JS client. `mollie-api-typescript` ships first-class types, tree-shakable standalone functions, async-iterable pagination, and a Fetch-based HTTP client that runs at the edge. The older `@mollie/api-client` is fine for legacy code but no longer the recommended starting point.
+- Verify signatures. Mollie added signed webhooks specifically so you don't have to rely on "refetch the payment and hope IP allow-lists are right". Use `SignatureValidator` with the raw body.
+- Idempotency keys on every create. The SDK accepts `idempotencyKey` alongside the request body, pass one derived from your order id so a network retry doesn't spawn duplicate payments.
+- Don't trust the redirect. The `redirectUrl` only tells you the user came back, they could close the tab mid-iDEAL. The webhook + a follow-up `payments.get` is what flips an order to paid.
+
+See also the [payments overview](/docs/payments), [Adyen guide](/docs/payments/adyen), [Braintree guide](/docs/payments/braintree), and [problem+json errors](/docs/errors).

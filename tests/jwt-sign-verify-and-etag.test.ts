@@ -372,6 +372,26 @@ test("jwt: full sign + verify round-trip (HS256)", async () => {
   assert.equal(v2.payload.sub, "u");
 });
 
+test("jwt: rejects a non-canonical base64url signature that decodes to the same bytes", async () => {
+  const key = await genHs256Key();
+  const signer = createJwtSigner({ alg: "HS256", key, maxLifetimeSeconds: 60 });
+  const verifier = createJwtVerifier({ algorithms: ["HS256"], key });
+  const now = Math.floor(Date.now() / 1000);
+  const tok = await signer.sign({ sub: "u", iat: now, exp: now + 30 });
+  // A 32-byte HMAC is 43 base64url chars; the last char has 2 unused low
+  // bits. Setting them yields a different string with identical bytes.
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const lastIdx = alphabet.indexOf(tok.at(-1)!);
+  assert.equal(lastIdx & 0x03, 0, "canonical signer output has zero trailing bits");
+  const malleated = tok.slice(0, -1) + alphabet[lastIdx | 0x01];
+  assert.notEqual(malleated, tok);
+  await assert.rejects(verifier.verify(malleated), JwtError);
+  // A segment length of 4n+1 is never valid base64url.
+  await assert.rejects(verifier.verify(tok + "A"), JwtError);
+  // The canonical token still verifies.
+  assert.equal((await verifier.verify(tok)).payload.sub, "u");
+});
+
 test("jwt: round-trip with RS256 (asymmetric)", async () => {
   const pair = await genRs256Pair();
   const signer = createJwtSigner({ alg: "RS256", key: pair.privateKey, maxLifetimeSeconds: 60 });

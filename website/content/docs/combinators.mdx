@@ -1,0 +1,182 @@
+---
+title: Middleware combinators
+description: Compose curated middleware stacks with every(), express any-of-these-proofs auth with some(), and exempt specific paths from a gate with except(). Dependency-free Hooks composition primitives for DaloyJS.
+keywords:
+  - DaloyJS middleware
+  - every some except
+  - middleware composition
+  - selective middleware
+  - auth combinators
+  - Hooks composition
+---
+
+# Middleware combinators
+
+DaloyJS exposes three composition primitives for `Hooks` bundles. Use `every()` to package a full stack, `some()` to accept any one valid proof, and `except()` to skip a gate for specific paths.
+
+## `every()`: run a whole stack in order
+
+`every(...layers)` merges several `Hooks` bundles into one that runs each layer in registration order. It is equivalent to calling `app.use(...)` for each bundle, but lets you name and reuse a curated stack. All lifecycle phases compose: `onRequest` and `onResponse` run in order, `preBody`, `beforeHandle`, and `onError` stop on the first `Response`, and `afterHandle` plus `onSend` thread the value through each layer.
+
+<FlowDiagram title="every() runs each layer in order" numbered steps={[
+          {
+            eyebrow: "layer 1",
+            label: "requestId()",
+            detail: "tag the request",
+          },
+          {
+            eyebrow: "layer 2",
+            label: "bearerAuth()",
+            detail: "verify the token",
+            tone: "accent",
+          },
+          {
+            eyebrow: "layer 3",
+            label: "rateLimit()",
+            detail: "throttle the shared admin bucket",
+          },
+          {
+            eyebrow: "result",
+            label: "Handler",
+            detail: "one reusable adminStack value",
+            tone: "success",
+          },
+        ]} caption="Symbol-keyed security markers such as CORS, CSRF, session, and secure-headers are forwarded onto the merged bundle so boot-time guards still see them." />
+
+```ts
+import { App, every, requestId, bearerAuth, rateLimit, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App();
+
+const adminStack = every(
+  requestId(),
+  bearerAuth({
+    realm: "admin",
+    validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+  }),
+  rateLimit({ windowMs: 60_000, max: 30, groupId: "admin" }),
+);
+
+app.use(adminStack);
+```
+
+## `some()`: accept any one proof of identity
+
+`some(...layers)` runs each bundle's auth gate in order and accepts the request as soon as one bundle passes without throwing or returning a `Response`. When every candidate uses `preBody`, selection happens before body I/O. Mixed stacks defer candidate selection to `beforeHandle` for compatibility. Use it for routes that accept more than one credential style, such as a bearer token or a signed session cookie.
+
+<BranchDiagram title="some() accepts any one proof" source={{
+          eyebrow: "request",
+          label: "auth gate runs each bundle in order",
+          detail: "first to pass wins",
+        }} branches={[
+          {
+            eyebrow: "proof A",
+            label: "bearerAuth()",
+            detail: "valid bearer token",
+          },
+          {
+            eyebrow: "proof B",
+            label: "session auth",
+            detail: "signed cookie with a user id",
+          },
+        ]} converge={{
+          eyebrow: "accepted",
+          label: "First passing bundle wins",
+          detail: "its ctx.state and headers are preserved",
+        }} caption="A bundle that returns a Response counts as a denial and the next bundle gets a chance. If every bundle denies, the first denial wins." />
+
+```ts
+import { App, every, some, bearerAuth, session, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App();
+
+const sessionAuth = every(
+  session({ secret: process.env.SESSION_SECRET! }),
+  {
+    beforeHandle(ctx) {
+      const sessionState = ctx.state.session as
+        | { data?: Record<string, unknown> }
+        | undefined;
+
+      if (typeof sessionState?.data?.userId === "string") return;
+
+      return new Response("Unauthorized", { status: 401 });
+    },
+  },
+);
+
+app.use(
+  some(
+    bearerAuth({
+      realm: "api",
+      validate: (token) => timingSafeEqual(token, process.env.PUBLIC_API_TOKEN!),
+    }),
+    sessionAuth,
+  ),
+);
+```
+
+Semantics worth knowing:
+
+- The first bundle that resolves without throwing or returning a `Response` wins. Its context mutations, including headers and `ctx.state`, are preserved.
+- A bundle that returns a `Response` is treated as a denial, and the next bundle gets a chance. If every bundle returns a denial, the first `Response` is sent.
+- When every bundle fails and the first denial was a thrown error, that error is rethrown. Put the auth method whose status and `WWW-Authenticate` challenge you want clients to see first.
+- Only the `preBody`/`beforeHandle` selection strategy changes. `afterHandle`, `onSend`, `onResponse`, and `onError` from every bundle still compose normally.
+
+## `except()`: apply everywhere but a few paths
+
+`except(when, hooks)` runs a bundle on every request except those matching `when`. The canonical use is applying auth everywhere except health checks, OpenAPI JSON, and docs assets.
+
+```ts
+import { App, except, bearerAuth, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App();
+
+app.use(
+  except(
+    ["/health", "/openapi.json", "/docs/**"],
+    bearerAuth({ validate: (token) => timingSafeEqual(token, process.env.API_TOKEN!) }),
+  ),
+);
+```
+
+The `when` matcher accepts:
+
+- A path string starting with `/`. `*` matches one non-empty path segment with no slash, and `**` matches any suffix.
+- An array of path patterns.
+- A predicate function that receives the request context and returns `true` to skip the gated bundle.
+
+Path matching uses the same `new URL(request.url).pathname` view the router sees. It is case-sensitive, exact for non-wildcard patterns, and does not add a rewrite or extra decode step. It also ignores trailing slashes on both the pattern and the request, just as the router does. So `/docs/` is judged as `/docs` and never as a child of `/docs/*`, and `except("/health/")` covers `/health` too. That makes exemptions fail closed for case changes, trailing-slash mismatches, and encoded traversal tricks: a pattern can only exempt the route that actually runs.
+
+Since 2.0.0 the adapters guarantee that this view and the router agree. A request-target such as `/admin/%2e%2e/health` or `/admin\..\health` is canonicalized by the Node adapter before routing, so `except()` and the router both see `/health`. A `Host` header carrying `\ / ? # @ %` or whitespace (for example `h\health?`) is refused with `400` by the Node and AWS Lambda adapters instead of shifting bytes into the path an exemption matches on. Router params and wildcards never bind `.` or `..`.
+
+The wrapped bundle's `preBody` and `beforeHandle` gates are skipped. Its `onRequest`, `afterHandle`, `onSend`, and `onResponse` phases still run. Wrap each bundle with `except()` individually if you need to gate different phases with different rules.
+
+## Composing the three
+
+The primitives nest. A common production shape is to run correlation, secure headers, and authentication everywhere, but skip the auth gate for health and documentation endpoints.
+
+```ts
+import {
+  App,
+  every,
+  except,
+  requestId,
+  secureHeaders,
+  bearerAuth,
+  timingSafeEqual,
+} from "@daloyjs/core";
+
+const app = new App();
+
+const protectedStack = every(
+  requestId(),
+  secureHeaders(),
+  except(
+    ["/health", "/openapi.json", "/docs/**"],
+    bearerAuth({ validate: (token) => timingSafeEqual(token, process.env.API_TOKEN!) }),
+  ),
+);
+
+app.use(protectedStack);
+```

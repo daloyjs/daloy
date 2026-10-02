@@ -1,0 +1,164 @@
+---
+title: WAF-lite signature/anomaly inspection
+description: "Add a first-party, opt-in defense-in-depth WAF-lite layer with waf(): wire DaloyJS' SQLi, XSS, NoSQL-operator, and command-injection signatures into a single scored inbound-inspection middleware with per-rule enable/disable and a block-or-log mode. Not a replacement for an edge WAF. Zero runtime dependencies."
+keywords:
+  - WAF
+  - WAF-lite
+  - web application firewall
+  - OWASP CRS
+  - SQL injection
+  - XSS
+  - NoSQL injection
+  - command injection
+  - anomaly scoring
+  - defense in depth
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# WAF-lite signature/anomaly inspection
+
+A full Web Application Firewall belongs at your **edge**: a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set. DaloyJS does not try to replace that. But plenty of teams ship without an edge WAF, and for them `waf()` is a first-party, **opt-in defense-in-depth** layer: it wires the framework's high-confidence injection signatures into a single, scored inbound-inspection pass you can turn on with one line.
+
+`waf()` inspects the decoded URL path, the raw and decoded query string, an optional header allowlist, and the validated request body for four rule categories: **SQLi**, **XSS**, **NoSQLi** (Mongo-style operator injection), and **command injection**. Each rule that fires contributes an *anomaly score*. When the total reaches the threshold, the request is rejected with a generic `403` (block mode) or merely reported (log mode).
+
+<FlowDiagram title="beforeHandle inspection" numbered steps={[
+          {
+            label: "Validated request",
+            detail: "path / query / body",
+            eyebrow: "inbound",
+          },
+          {
+            label: "Inspect locations",
+            detail: "sqli / xss / nosqli / cmdi",
+          },
+          {
+            label: "Anomaly score vs threshold",
+            detail: "score >= blockThreshold",
+            tone: "accent",
+          },
+          {
+            label: "Pass to handler",
+            detail: "below threshold",
+            tone: "success",
+          },
+          {
+            label: "Reject (block mode)",
+            detail: "403 generic body",
+            tone: "danger",
+          },
+        ]} caption="In the beforeHandle phase waf() scans the decoded path, query, optional headers, and schema-parsed body. Each firing rule adds its score once per request. Reaching blockThreshold fires onMatch and returns a generic 403 in block mode (log mode only reports)." />
+
+## Quick start
+
+```ts
+import { App, waf } from "@daloyjs/core";
+
+const app = new App();
+
+// Register globally. Secure defaults: all four rules on, block mode,
+// path/query/body inspected (headers are opt-in).
+app.use(waf());
+```
+
+The middleware runs in the `beforeHandle` phase, so it sees the validated context: `query`, `params`, `headers`, and the schema-parsed `body`. Because body inspection reads `ctx.body`, it composes with the framework's schema-first contract: routes that declare a body schema are body-inspected automatically.
+
+## Tune in log mode first
+
+Signatures are curated for a low false-positive rate, but every app is different. Start in `"log"` mode, watch `onMatch` against real traffic, then switch to `"block"` once you are confident.
+
+```ts
+app.use(waf({
+  mode: "log", // never rejects, only reports
+  onMatch: (event) => {
+    logger.warn({ waf: event }, "waf detection");
+    // event = { mode, action, method, path, clientIp, score, threshold, matches }
+  },
+}));
+```
+
+`onMatch` fires once per *actionable* detection (score at or above the threshold) in both modes, immediately before any `403` is thrown. Each entry in `event.matches` carries the `ruleId`, the `score` it contributed, the `location` it matched (`path`, `query`, `header`, or `body`), and a short, control-character-stripped `sample` for your logs.
+
+## The rules
+
+- sqli: `UNION SELECT`, boolean tautologies (`OR 1=1`), stacked statements (`; DROP TABLE`), time-based probes (`SLEEP()`, `WAITFOR DELAY`), `INFORMATION_SCHEMA`, `xp_cmdshell`, and file primitives.
+- xss: `<script>` tags, `javascript:` URIs, inline event handlers (`onerror=`, `onload=`), and `document.cookie` exfiltration.
+- nosqli: Mongo operator strings (`$ne`, `$where`, ...) *and* a structural check that rejects a parsed body containing any `$`-prefixed key, so `{"password": {"$ne": null}}` is caught even when no string value matches.
+- cmdi: shell metacharacters chaining into binaries (`; rm`, `| nc`, `&& curl`), command substitution (`$(...)`, backticks), and sensitive path access (`/etc/passwd`).
+
+## Scoring and the block threshold
+
+Each rule contributes its score **once per request**(deduplicated across all inspected locations). The default score is `5` and the default `blockThreshold` is `5`, so any single high-confidence signature trips the guard. Raise the threshold to require multiple independent categories before acting:
+
+```ts
+// Require two independent rule categories (5 + 5 = 10 >= 8) to fire.
+app.use(waf({ blockThreshold: 8 }));
+
+// Reweight a single rule.
+app.use(waf({ rules: { sqli: { score: 8 } } }));
+```
+
+## Per-rule enable/disable [#per-rule-enable-disable]
+
+Disable a noisy rule with a boolean, or pass an object to enable it with a custom score. Omitted rules keep their defaults (enabled, score 5).
+
+```ts
+app.use(waf({
+  rules: {
+    xss: false,            // turn XSS inspection off entirely
+    sqli: { score: 8 },    // keep SQLi on, weighted higher
+    // nosqli and cmdi keep their defaults
+  },
+}));
+```
+
+## Inspection scope
+
+Path, query, and body are inspected by default. Header inspection is **opt-in** and requires an explicit allowlist, because common headers (`User-Agent`, `Cookie`, `Referer`) carry punctuation that can trip signatures.
+
+```ts
+app.use(waf({
+  inspect: {
+    path: true,
+    query: true,
+    body: true,
+    headers: ["referer", "x-forwarded-host"], // only these headers are scanned
+  },
+}));
+```
+
+## Scan limits never fail open [#scan-limits]
+
+Scanning is bounded so a hostile payload cannot turn inspection into CPU-DoS, but the bounds no longer leave anything uninspected (since 2.0.0). `maxValueLength` (default `8192`) is the scan-window size: a longer string is scanned in overlapping windows (plus a whitespace-collapsed form), not truncated to its prefix, so padding a payload past the first 8 KB does not hide it. Total work stays linear in the body-limited input. Only own enumerable properties are followed. Prototype keys are never inspected.
+
+`maxBodyNodes` (default `10000`) caps how many body nodes are walked. An attacker could hide a payload behind 10,000 junk nodes, so a walk that stops at the cap with nodes left over is itself treated as an anomaly. `onLimitExceeded` (since 2.0.0) decides what happens:
+
+- `"block"` (default): record a synthetic match with `ruleId: "limits"` scoring `blockThreshold`. The request is rejected in block mode and reported through `onMatch` in log mode.
+- `"log"`: report through `onMatch` (action `"logged"`) but never reject on this ground alone. A real signature match still blocks.
+- `"ignore"`: inspect the first `maxBodyNodes` nodes only (the pre-1.3.7 behaviour, which fails open).
+
+This means a body with more than 10,000 nodes is now blocked by default. Routes that legitimately accept large documents (bulk imports, batch upserts) should raise `maxBodyNodes` or switch to `"log"`:
+
+```ts
+// Bulk-import routes: a larger node budget, still blocking when exceeded.
+app.use(waf({ maxBodyNodes: 200_000 }));
+
+// Or keep the default budget but only report oversized bodies.
+app.use(waf({
+  onLimitExceeded: "log",
+  onMatch: (event) => {
+    if (event.matches.some((m) => m.ruleId === "limits")) {
+      logger.warn({ path: event.path }, "waf: body exceeded maxBodyNodes");
+    }
+  },
+}));
+```
+
+## Security notes
+
+- The `403` body is intentionally generic (`Request blocked by security policy`): it never tells an attacker which signature fired. Rule detail is delivered server-side via `onMatch` only.
+- This is a **complement** to input schemas and parameter binding, not a substitute. Keep validating with Zod schemas. The WAF is a second line for traffic that slips through application logic.
+- Routes without a body schema are not body-inspected (their body is never parsed). Add a schema to bring their inputs under coverage.
+- Inspection uses bounded multi-decode (at most two percent-decode passes), `+`-\>space normalization, SQL block-comment stripping, and control-character (NUL/C0) normalization so classic double-encoding, `/**/` keyword splits, and NUL-spliced keywords like `1'%00OR%001=1` still score. Parenthesized subqueries behind boolean operators (`1 OR (SELECT 1)`) are covered by a dedicated signature. Triple-or-deeper encoding remains a residual signature gap: keep schemas and parameterized queries as the primary wall, and keep an edge WAF on your roadmap for high-risk surfaces.
+- A WAF-lite is still best-effort signature matching. Treat it as depth, not a substitute for typed contracts or output encoding.

@@ -1,0 +1,93 @@
+---
+title: Deploy to Heroku
+description: Deploy DaloyJS to Heroku as a Node web dyno. Procfile, heroku-24 or heroku-26 stack, and the heroku/nodejs buildpack.
+keywords:
+  - Deploy DaloyJS to Heroku
+  - Heroku Procfile
+  - heroku-24 stack
+  - heroku/nodejs buildpack
+---
+
+# Heroku
+
+Heroku still runs DaloyJS happily as a Node web dyno. Use the [Node adapter](/docs/adapters/node), declare a `Procfile`, and pin to a supported stack.
+
+<FlowDiagram title="git push deploy pipeline" numbered steps={[
+          {
+            label: "git push heroku main",
+            detail: "heroku-24 / heroku-26 stack",
+            eyebrow: "git",
+          },
+          {
+            label: "heroku/nodejs buildpack",
+            detail: "auto-detected from package.json",
+          },
+          {
+            label: "Procfile web dyno",
+            detail: "web: node dist/server.js",
+            tone: "accent",
+          },
+          {
+            label: "Graceful shutdown",
+            detail: "SIGTERM, shutdownTimeoutMs < 30s",
+            tone: "success",
+          },
+        ]} caption="A push builds with the auto-detected heroku/nodejs buildpack and boots the Procfile web dyno bound to PORT. On a redeploy Heroku sends SIGTERM then SIGKILL after 30 seconds, so keep shutdownTimeoutMs well under that." />
+
+## When to choose Heroku
+
+- You already have Heroku add-ons and pipelines and don't want to migrate.
+- You want a known, stable deploy story without a YAML file.
+
+## Server entrypoint
+
+```ts
+// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.js";
+
+serve(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+});
+```
+
+## Procfile
+
+```text
+web: node dist/server.js
+```
+
+## Stack
+
+Use `heroku-24` or `heroku-26`. `heroku-22` is deprecated.
+
+```bash
+heroku stack:set heroku-24 --app my-daloy-api
+```
+
+## Buildpack
+
+The `heroku/nodejs` buildpack is auto-detected from `package.json`.
+
+```bash
+heroku buildpacks:set heroku/nodejs --app my-daloy-api
+```
+
+## Deploy
+
+```bash
+heroku create my-daloy-api --stack heroku-24
+heroku config:set SESSION_SECRET=...
+git push heroku main
+```
+
+## Gotchas
+
+- Heroku sends `SIGTERM` and then `SIGKILL` after 30 seconds. Set the Node adapter's `shutdownTimeoutMs` to something well under 30,000.
+- Bind to `0.0.0.0` on the `PORT` env var or the routing layer won't reach the process.
+
+## See also
+
+- [Deployment overview](/docs/deployment)
+- [Node adapter](/docs/adapters/node)

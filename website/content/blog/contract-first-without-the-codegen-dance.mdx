@@ -1,0 +1,327 @@
+---
+title: "Contract-First Without the Codegen Dance: OpenAPI, Typed Client, and Contract Tests From One Definition"
+description: One app.route({...}) projects into generateOpenAPI(app), createClient(app), and runContractTests(app), plus pnpm gen for a Hey API typed fetch SDK your frontend can import. With pictures.
+date: 2026-05-21
+readingTime: 12 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work. Has maintained too many openapi.yaml files in too many monorepos. Currently writes TypeScript from Norway.
+badges:
+  - Contract-first
+  - Show, don't tell
+keywords:
+  - DaloyJS contract-first
+  - OpenAPI from TypeScript
+  - Hey API openapi-ts
+  - typed fetch client
+  - contract tests TypeScript
+  - generateOpenAPI
+  - createClient DaloyJS
+  - runContractTests
+footerLinks:
+  - label: Read the typed-client docs
+    href: /docs/typed-client
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+export const ROUTE_FILE = `// apps/api/src/routes/books.ts
+import { z } from "zod";
+import { app } from "../app.ts";
+
+const Book = z.object({
+  id: z.string(),
+  title: z.string(),
+  author: z.string(),
+  publishedYear: z.number().int().optional(),
+});
+
+const Problem = z.object({
+  type: z.url(),
+  title: z.string(),
+  status: z.number().int(),
+  detail: z.string().optional(),
+});
+
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  operationId: "getBookById",
+  summary: "Fetch a book by id",
+  tags: ["books"],
+  request: {
+    params: z.object({ id: z.string().min(1) }),
+  },
+  responses: {
+    200: { description: "Found", body: Book },
+    404: { description: "Not found", body: Problem },
+  },
+  handler: async ({ params }) => {
+    if (params.id === "missing") {
+      return {
+        status: 404,
+        body: {
+          type: "https://example.com/errors/not-found",
+          title: "Not Found",
+          status: 404,
+        },
+      };
+    }
+    return {
+      status: 200,
+      body: { id: params.id, title: \`Book \${params.id}\`, author: "Unknown" },
+    };
+  },
+});`;
+
+export const PROJECTION_OPENAPI = `// apps/api/scripts/dump-openapi.ts
+import { writeFileSync } from "node:fs";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { app } from "../src/app.ts";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "Bookstore API", version: "1.0.0" },
+  servers: [{ url: "http://localhost:3000" }],
+});
+
+writeFileSync("generated/openapi.json", JSON.stringify(doc, null, 2));`;
+
+export const OPENAPI_PEEK = `$ jq '.paths."/books/{id}".get | {operationId, responses: (.responses | keys)}' \\
+    generated/openapi.json
+{
+  "operationId": "getBookById",
+  "responses": ["200", "404"]
+}`;
+
+export const PROJECTION_CLIENT = `// apps/api/tests/books.in-process.test.ts
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "../src/app.ts";
+
+// In-process: route the client's fetch straight into the app. No socket,
+// no port, no flaky CI. Same validation, same response shape as production.
+const client = createInProcessClient(app);
+
+test("getBookById - 200 has a typed body", async () => {
+  const res = await client.getBookById({ params: { id: "42" } });
+  assert.equal(res.status, 200);
+  if (res.status === 200) {
+    // res.body is { id: string; title: string; author: string; publishedYear?: number }
+    assert.equal(res.body.id, "42");
+  }
+});
+
+test("getBookById - 404 has the Problem body", async () => {
+  const res = await client.getBookById({ params: { id: "missing" } });
+  assert.equal(res.status, 404);
+  if (res.status === 404) {
+    assert.equal(res.body.status, 404);
+    // @ts-expect-error - title belongs to Book, not Problem
+    res.body.title;
+  }
+});`;
+
+export const PROJECTION_CONTRACT = `// apps/api/tests/contract.test.ts
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { runContractTests } from "@daloyjs/core/contract";
+import { app } from "../src/app.ts";
+
+test("every route is a good citizen", async () => {
+  const report = await runContractTests(app, {
+    requireOperationId: true,        // default
+    allowBodyOnSafeMethods: false,   // default
+  });
+
+  if (!report.ok) {
+    // Pretty failure: which route, which check, which message.
+    for (const issue of report.issues) {
+      console.error(
+        \`  ✗ \${issue.method} \${issue.path}: \${issue.message} (\${issue.code})\`,
+      );
+    }
+  }
+
+  assert.ok(report.ok, \`\${report.issues.length} contract issue(s) found\`);
+  console.log(\`✓ \${report.checked} routes checked\`);
+});`;
+
+export const PNPM_GEN_SCRIPTS = `// apps/api/package.json
+{
+  "scripts": {
+    "gen:openapi": "tsx scripts/dump-openapi.ts",
+    "gen:client":  "openapi-ts",
+    "gen":         "pnpm gen:openapi && pnpm gen:client"
+  }
+}`;
+
+export const HEY_API_CONFIG = `// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/sdk", "@hey-api/typescript"],
+});`;
+
+export const FRONTEND_USAGE = `// apps/web/app/books/[id]/page.tsx
+import { notFound } from "next/navigation";
+import { client, getBookById } from "@/api-client";
+
+client.setConfig({
+  baseUrl: process.env.NEXT_PUBLIC_API_URL!,
+});
+
+export default async function BookPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  const { data, error, response } = await getBookById({ path: { id } });
+
+  if (response.status === 404) notFound();
+  if (error) throw error;
+
+  return (
+    <article>
+      <h1>{data.title}</h1>
+      <p className="text-muted-foreground">by {data.author}</p>
+      {data.publishedYear ? <p>{data.publishedYear}</p> : null}
+    </article>
+  );
+}`;
+
+export const DIFF_DEMO = `// One change in the route file...
+- 200: { description: "Found", body: Book },
++ 200: { description: "Found", body: Book.extend({ rating: z.number().min(0).max(5) }) },
+
+// ...and immediately, without writing types or running codegen by hand:
+//
+//   - generated/openapi.json gains \`rating\` in the 200 schema
+//   - createClient(app) narrows res.body to include rating
+//   - the contract test still passes (operationId, response set unchanged)
+//   - the frontend's getBookById() refuses to compile until you render it
+//
+// That last bullet is the reason this workflow matters.`;
+
+Hi, I'm Devlin. Ten years of fullstack work. I have, in my career, personally maintained a hand-written `openapi.yaml` in a monorepo, and I have personally been the reason it was three sprints out of date. I've also been the person who shipped a frontend that called `POST /book` when the backend had renamed it to `POST /books` the week before. So when I tell you the codegen dance is a real problem, please understand: I am one of the dancers.
+
+The [launch post](/blog/introducing-daloyjs) promised you that *one* `app.route({...})` call is the source of truth for validation, types, OpenAPI, the typed client, and contract tests. This post walks one route into OpenAPI, the typed client, and contract tests. We're going to define a single route, project it into all three artifacts on disk and in tests, then run `pnpm gen` and use the typed SDK from a separate Next.js frontend. The route remains the source, so there is no YAML copy to edit or version separately.
+
+## The one route
+
+This file is the entire input. Everything that follows derives from it and changes only when the route changes. That is what "single source of truth" means in practice.
+
+<EditorFrame files={["apps/api/src/routes/books.ts", "apps/api/src/app.ts"]} activeFile="apps/api/src/routes/books.ts" status="● apps/api/src/routes/books.ts, saved">
+<CodeBlock language="ts" code={ROUTE_FILE} />
+</EditorFrame>
+
+One route, two declared responses (`200` and `404`), each with a real Zod schema. Hold that file in your head. We'll come back to it three times.
+
+## Three projections, one input
+
+<ProjectionStep index={1} title="generateOpenAPI(app), the spec is a function of the routes" from="app.route({...})" to="generated/openapi.json">
+<p>The registered routes produce the OpenAPI document as a pure function. Call <code>generateOpenAPI(app, ...)</code>{", "}get a fully-formed RFC 3.1 document back, write it wherever you want it.</p>
+<EditorFrame files={["apps/api/scripts/dump-openapi.ts"]} activeFile="apps/api/scripts/dump-openapi.ts" status="tsx scripts/dump-openapi.ts ✓ wrote 14 KB">
+<CodeBlock language="ts" code={PROJECTION_OPENAPI} />
+</EditorFrame>
+<p>The proof is one <code>jq</code> away:</p>
+<CodeBlock language="bash" code={OPENAPI_PEEK} />
+<p>The <code>operationId</code> on the route became the{" "}<code>operationId</code> in the spec. The set of declared responses became the set of documented responses. There is no second list to update.</p>
+</ProjectionStep>
+
+<ProjectionStep index={2} title="createInProcessClient(app), the typed client lives in the same monorepo" from="app.route({...})" to="ClientFor<App>">
+<p><code>createInProcessClient\<A extends App\>(app)</code>{" "}returns an object keyed by every <code>operationId</code> you defined, with full input/output type narrowing per status. The classic use for it is "in-process integration tests": requests traverse <code>app.fetch</code> automatically, giving you a real end-to-end test without a socket:</p>
+<EditorFrame files={[
+                "apps/api/tests/books.in-process.test.ts",
+                "apps/api/src/routes/books.ts",
+              ]} activeFile="apps/api/tests/books.in-process.test.ts" status="✓ node --test, 2 passing">
+<CodeBlock language="ts" code={PROJECTION_CLIENT} />
+</EditorFrame>
+<p>Two things in that snippet are also the two things I celebrate every time I see them at work. First, the{" "}<code>res.body</code> inside the <code>200</code> branch is narrowed to the <code>Book</code> shape, not the union of every declared response, the actual <code>200</code> one. Second, the{" "}<code>@ts-expect-error</code> comment in the <code>404</code>{" "}branch <em>passes</em>{": "}trying to read <code>title</code> from a{" "}<code>Problem</code> is a compile error, by construction.</p>
+</ProjectionStep>
+
+<ProjectionStep index={3} title="runContractTests(app), the guardrails you forgot to write" from="app.route({...})" to="{ ok, checked, issues }">
+<p><code>runContractTests(app, opts)</code> walks every registered route and checks the boring rules that turn into 3am bugs: every route has a unique <code>operationId</code>{", "}every route declares at least one response, declared{" "}<code>examples</code> validate against their declared schema, and safe methods don't carry request bodies unless you explicitly allow it.</p>
+<EditorFrame files={["apps/api/tests/contract.test.ts"]} activeFile="apps/api/tests/contract.test.ts" status="✓ 12 routes checked, all clean">
+<CodeBlock language="ts" code={PROJECTION_CONTRACT} />
+</EditorFrame>
+<p>This is the test I add first to every new project, before any feature tests. It catches the "oh, two routes accidentally share an <code>operationId</code> because copy-paste" bug that ruins your generated SDK before it's even generated. Cheap to add; costly when you skip it.</p>
+</ProjectionStep>
+
+## The codegen dance, but the dance is one command
+
+The three projections above stay in your repo. For consumers in another repo, team, or language, `pnpm gen` produces the client artifacts. It uses two scripts and one parent script:
+
+<EditorFrame files={["apps/api/package.json", "openapi-ts.config.ts"]} activeFile="apps/api/package.json" status="scripts.gen = gen:openapi && gen:client">
+<CodeBlock language="json" code={PNPM_GEN_SCRIPTS} />
+</EditorFrame>
+
+`gen:openapi` calls the dump script you already saw. `gen:client` hands that JSON to [Hey API's](https://heyapi.dev) `@hey-api/openapi-ts` via this tiny config:
+
+<EditorFrame files={["openapi-ts.config.ts"]} activeFile="openapi-ts.config.ts" status="hey-api · plugins: client-fetch, sdk, typescript">
+<CodeBlock language="ts" code={HEY_API_CONFIG} />
+</EditorFrame>
+
+Generate the client:
+
+```bash
+$ pnpm gen
+> apps/api gen
+> pnpm gen:openapi && pnpm gen:client
+
+✓ wrote generated/openapi.json
+✓ wrote generated/client/index.ts
+✓ wrote generated/client/sdk.gen.ts
+✓ wrote generated/client/client.gen.ts
+✓ wrote generated/client/types.gen.ts
+```
+
+One command replaces the old Java invocation, language flags, Docker wrapper, and post-processing script. `generated/client/` is a real, typed, tree-shakeable fetch SDK that you can import from anywhere you can import TypeScript.
+
+## Using it from a separate Next.js frontend
+
+The frontend completes the loop. It lives in a different app (`apps/web` in a monorepo, or a totally separate repo with the client published to a registry, your call). It imports the generated SDK and calls it like any other module. Pay attention to the call shape, `path` for path params, `{ data, error, response }` destructure for results:
+
+<EditorFrame files={[
+              "apps/web/app/books/[id]/page.tsx",
+              "apps/web/api-client/index.ts",
+            ]} activeFile="apps/web/app/books/[id]/page.tsx" status="next 16 · server component · typed">
+<CodeBlock language="tsx" code={FRONTEND_USAGE} />
+</EditorFrame>
+
+That is a Next.js 16 server component, with shadcn-style classes, calling a typed SDK that was generated from a Zod schema on the other side of the monorepo. `data.title` is a `string`. `data.publishedYear` is a `number | undefined`. If the backend renames `title` to `name`, this file refuses to compile, and the frontend developer finds out before the PR even opens, not after the user complains.
+
+## Nothing else needs a diff
+
+Change one field in the route and watch what moves on its own.
+
+<EditorFrame files={["apps/api/src/routes/books.ts"]} activeFile="apps/api/src/routes/books.ts" status="◐ src/routes/books.ts, modified">
+<CodeBlock language="diff" code={DIFF_DEMO} />
+</EditorFrame>
+
+The route diff is two lines. Your `openapi.yaml`, client types, contract tests, frontend imports, and "types package" stay at *zero lines*, because those files don't exist as separate truths anymore. Commit the route change and run `pnpm gen` to regenerate the SDK.
+
+## The four-step checklist for new projects
+
+If you're bootstrapping a contract-first stack today, this is the order I'd do it in, having now done it more times than I care to admit:
+
+1. Write the smallest route with real `request` and `responses` schemas. Don't hand-roll types anywhere.
+2. Add the contract test (`runContractTests(app)`) before any feature test. It costs nothing and catches the bugs that hurt the most.
+3. Add the in-process client test (`createInProcessClient(app)`). You now have integration coverage without a server.
+4. Wire `pnpm gen` and import the generated SDK in your frontend. Delete any hand-written API client. (This is the dopamine part.)
+
+## Limits
+
+Code generation has had a bad reputation in the JS world for a long time, and it earned that reputation. Most pipelines were brittle, slow, and produced types that looked like they were translated from another language by someone who didn't want to be there. The workflow works because three mature pieces line up: Standard Schema lets the route own validation *and* types, OpenAPI 3.1 is the lingua franca for handing that to the outside world, and Hey API takes that spec and produces a typed fetch SDK that doesn't look like a translation. We just connected them.
+
+If you want to go deeper, the [typed client docs](/docs/typed-client), the [OpenAPI docs](/docs/openapi), and the [testing docs](/docs/testing) each cover one of these three projections in detail. Or run `pnpm create daloy@latest`, point `pnpm gen` at it, and watch the dance turn into a single key press.
+
+Go delete a hand-written API client.
+
+Devlin

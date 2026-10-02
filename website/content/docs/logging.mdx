@@ -1,0 +1,207 @@
+---
+title: Structured logging
+description: Use the built-in, dependency-free createLogger() for structured JSON logs with secure-by-default redaction of credentials, JWTs, and provider tokens. Access a request-scoped logger via ctx.state.log and swap in pino/winston when you need to.
+keywords:
+  - DaloyJS logging
+  - structured logging
+  - createLogger
+  - log redaction
+  - request-scoped logger
+  - JSON logs TypeScript
+---
+
+# Structured logging
+
+<blockquote>Structured logs record request context as data. DaloyJS redacts known secret keys and token-shaped values before the logger writes them.</blockquote>
+
+DaloyJS ships a tiny, zero-dependency structured logger. Every app gets one by default at `app.log`, and every request handler gets a request-scoped child logger at `ctx.state.log` that is already bound to the request id. Records are emitted as single-line JSON so they drop straight into Loki, Datadog, CloudWatch, or any log aggregator.
+
+The headline feature is **secure-by-default redaction**: common credential keys (`authorization`, `cookie`, `password`, `token`, provider API keys, and more) are replaced with `[REDACTED]` at any depth, and string values shaped like a JWT or an opaque provider token are scrubbed even when they appear under an innocent key.
+
+## The default logger
+
+You do not need to wire anything up. Construct an `App` and a `createLogger({ level: "info" })` instance is attached automatically.
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App();
+
+app.get(
+  "/orders/:id",
+  {
+    operationId: "getOrder",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ params, state }) => {
+    // Request-scoped child logger, already bound to the request id.
+    state.log.info({ orderId: params.id }, "fetching order");
+    return { status: 200 as const, body: { id: params.id } };
+  },
+);
+```
+
+The app-level logger is also available directly when you are outside a request (startup, scheduled jobs, shutdown):
+
+```ts
+app.log.info({ port: 3000 }, "server starting");
+app.log.warn({ retries: 3 }, "upstream slow");
+```
+
+## Choosing a level
+
+Levels follow the familiar pino ordering: `trace` (10), `debug` (20), `info` (30), `warn` (40), `error` (50), `fatal` (60). Records below the configured level are dropped. Set the level when you construct the app:
+
+```ts
+const app = new App({ logger: { level: "debug" } });
+
+// Disable logging entirely (uses the built-in noopLogger):
+const silent = new App({ logger: false });
+```
+
+## Calling the logger
+
+Every level method accepts either a message string, or an object of structured fields followed by an optional message. Prefer the object form so your fields stay queryable.
+
+```ts
+log.info("plain message");
+log.info({ userId: 42, action: "login" }, "user signed in");
+
+// Errors: pass the error under an `err` key for consistent serialization.
+try {
+  await chargeCard();
+} catch (err) {
+  log.error({ err, paymentId }, "charge failed");
+}
+```
+
+## Child loggers
+
+Use `child()` to bind fields that should appear on every subsequent record. This is how the request id is attached to `ctx.state.log`, and it is the right tool for per-component or per-job context.
+
+```ts
+const jobLog = app.log.child({ component: "billing-worker", runId });
+jobLog.info("starting nightly invoice run");
+jobLog.info({ processed: 1280 }, "done");
+```
+
+## Redaction (secure by default)
+
+Redaction is on by default. Keys are matched case-insensitively within the traversal budget and replaced with `[REDACTED]`. The built-in `DEFAULT_REDACT_KEYS` list covers the usual suspects plus AI / LLM provider credential headers. In addition, any string value shaped like a JWT (`eyJ...`) or an opaque provider token (GitHub `ghp_...`, AWS `AKIA...`, Stripe `sk_live_...`, OpenAI `sk-...`, and more) is scrubbed regardless of its key. The default` maxDepth: 6` limits traversal; objects and arrays beyond that depth are replaced in full with the configured censor, never passed through uninspected. Use a larger finite depth only when needed for operational detail, and avoid logging credentials in the first place.
+
+<FlowDiagram title="From log call to log line" steps={[
+          {
+            eyebrow: "your call",
+            label: "log.info(fields, msg)",
+            detail: "{ userId, authorization, ... }",
+            tone: "accent",
+          },
+          {
+            eyebrow: "bound context",
+            label: "requestId + child fields",
+            detail: "ctx.state.log child bindings",
+          },
+          {
+            eyebrow: "secure by default",
+            label: "Redaction",
+            detail: "keys + JWT / token values -> [REDACTED]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "one line",
+            label: "JSON record",
+            detail: '{"level":"info",...}',
+            tone: "success",
+          },
+          {
+            eyebrow: "sink",
+            label: "write()",
+            detail: "stdout -> Loki · Datadog · CloudWatch",
+            tone: "muted",
+          },
+        ]} caption="Every record is enriched with the request id and any child bindings, scrubbed of credential-shaped keys and values, serialized to a single JSON line, then handed to the output sink. Redaction happens before anything is written, so secrets never hit disk." />
+
+```ts
+log.info(
+  {
+    userId: 7,
+    authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig",
+    note: "token is sk-ant-0123456789abcdef0123456789",
+  },
+  "request",
+);
+// => {"level":"info","userId":7,"authorization":"[REDACTED]",
+//     "note":"token is [REDACTED]","msg":"request",...}
+```
+
+Extend the defaults with your own keys, change the replacement string, or opt out entirely:
+
+```ts
+import { createLogger } from "@daloyjs/core";
+
+const log = createLogger({
+  level: "info",
+  redact: {
+    keys: ["ssn", "card_number"], // merged with DEFAULT_REDACT_KEYS
+    censor: "***",
+  },
+});
+
+// Disable redaction (not recommended outside local debugging):
+const raw = createLogger({ redact: false });
+```
+
+Redaction never mutates your data (since 1.3.7). Only the top-level keys of the log record itself are rewritten; nested objects and arrays are copied along the changed paths and the originals are left alone. So logging a live object such as `{ input: ctx.body }` cannot overwrite `ctx.body.password` with the censor before your handler reads it. Subtrees that need no redaction are shared by reference, so a clean record costs no extra allocation. A cycle is written as `"[Circular]"`, an object with a `toJSON()` is redacted on what `toJSON()` returns (the censor if it throws), and a redacted `Error` copy keeps its `name`, `message`, `stack` and `cause`.
+
+```ts
+const body = { user: "ana", password: "hunter2" };
+log.info({ input: body }, "signup");
+// logged: {"input":{"user":"ana","password":"[REDACTED]"},...}
+body.password; // still "hunter2"
+```
+
+Do not turn redaction off in production. The default list exists because these exact keys are the ones most commonly observed leaking secrets into log aggregators in real-world incidents.
+
+Request URLs are a separate path: the structured redactor matches field *names*, so a secret sitting in a query string under the field `url` would not be renamed-matched. The framework therefore runs request URLs through `sanitizeUrlForLog` before they land in the per-request log record. That helper redacts values for keys in `SENSITIVE_URL_QUERY_KEYS` (and known prefixes), JWT-like query values, opaque credential-shaped values, and userinfo in the URL authority, so OAuth `?code=`, `?access_token=`, and signed-URL signatures do not persist under `url`. Export it from `@daloyjs/core` when you bind URLs into your own log calls. When you only have the query string, `sanitizeUrlQueryForLog(search)` (since 1.3.7) applies the same rules and returns the redacted query without a leading `?` (redacted values serialize form-encoded as `%5BREDACTED%5D`). `otelTracing()` uses it for the `url.query` span attribute.
+
+```ts
+import { sanitizeUrlForLog, sanitizeUrlQueryForLog } from "@daloyjs/core";
+
+log.info(
+  { url: sanitizeUrlForLog(request.url) },
+  "outbound callback",
+);
+
+sanitizeUrlQueryForLog("?page=2&code=abc123");
+// => "page=2&code=%5BREDACTED%5D"
+```
+
+## Bring your own logger (pino, winston)
+
+The `logger` option accepts any object implementing the `Logger` interface (the `trace`/`debug`/`info`/`warn`/`error`/`fatal` methods plus `child()`). pino already matches this shape, so you can pass it directly:
+
+```ts
+import pino from "pino";
+import { App } from "@daloyjs/core";
+
+const app = new App({ logger: pino({ level: "info" }) });
+```
+
+When you bring your own logger, redaction becomes that logger's responsibility, so configure pino's `redact` option to match the protection DaloyJS gives you for free.
+
+## Customizing the output sink
+
+By default records are written to stdout. Provide a `write` function to redirect them (for example, to a buffer in tests):
+
+```ts
+import { createLogger } from "@daloyjs/core";
+
+const lines: string[] = [];
+const log = createLogger({ write: (line) => lines.push(line) });
+```
+
+## When to reach for it
+
+- Inside handlers: use `ctx.state.log` so every line is correlated to the request id automatically.
+- Background work: derive a `app.log.child({ component })` so jobs are easy to filter.
+- Security-sensitive payloads: rely on the default redaction rather than hand-stripping fields before you log them.

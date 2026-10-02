@@ -1,0 +1,145 @@
+---
+title: Use Cloudflare D1 with DaloyJS
+description: Run a DaloyJS API on Cloudflare Workers backed by D1, Cloudflare's built-in SQLite-compatible database. Uses Worker bindings instead of a network driver.
+keywords:
+  - Cloudflare D1 DaloyJS
+  - D1 Workers binding
+  - Cloudflare SQLite
+  - Wrangler D1
+  - D1 Drizzle
+---
+
+# Use Cloudflare D1 with DaloyJS
+
+[Cloudflare D1](https://developers.cloudflare.com/d1/) is a serverless SQLite-compatible database built into Cloudflare Workers. You access it through a Worker binding (no network driver, no auth token, no TCP), making it the lowest-friction database for the [Cloudflare adapter](/docs/adapters).
+
+## 1. Provision via Wrangler
+
+```ts
+pnpm add -D wrangler
+pnpm dlx wrangler d1 create my-app-db
+```
+
+Add the returned binding to your `wrangler.toml`:
+
+```ts
+[[d1_databases]]
+binding = "DB"
+database_name = "my-app-db"
+database_id = "<id-from-create>"
+```
+
+## 2. Type the binding
+
+Use a regular `.ts` module (not a `.d.ts`, which `skipLibCheck` would silently skip) so the import below resolves and the shape stays type-checked:
+
+```ts
+// src/types/env.ts
+export interface Env {
+  DB: D1Database;
+}
+```
+
+## 3. Decorate the app per-request
+
+D1 bindings live on `env`, not `process.env`, so decorate inside the Worker's `fetch` handler and call `app.fetch(req)` directly:
+
+<FlowDiagram title="Per-request binding flow" numbered steps={[
+          {
+            label: "Worker fetch(req, env)",
+            detail: "env.DB is the D1 binding",
+            tone: "accent",
+          },
+          {
+            label: "app.decorate('db', env.DB)",
+            detail: "attach the binding to app state",
+          },
+          {
+            label: "app.fetch(req)",
+            detail: "route handler reads state.db",
+          },
+          {
+            label: "state.db.prepare(...).all()",
+            detail: "query D1, no network driver",
+            tone: "success",
+          },
+        ]} caption="D1 bindings live on env, not process.env, so decorate the app inside the Worker fetch handler on every request before calling app.fetch(req)." />
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import type { Env } from "./types/env.ts";
+
+const app = new App();
+app.use(secureHeaders());
+
+const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
+
+app.get(
+  "/todos",
+  {
+    operationId: "listTodos",
+    responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
+  },
+  async ({ state }) => {
+    const { results } = await state.db
+      .prepare("select id, title, done from todos")
+      .all<{ id: number; title: string; done: number }>();
+    return {
+      status: 200,
+      body: results.map((r) => ({ ...r, done: Boolean(r.done) })),
+    };
+  },
+);
+
+export default {
+  async fetch(req: Request, env: Env) {
+    app.decorate("db", env.DB);
+    return app.fetch(req);
+  },
+};
+```
+
+## 4. Augment app state
+
+Add the `declare module` block to the Worker module itself, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a mistake inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/index.ts (same module as the Worker above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: D1Database;
+  }
+}
+```
+
+## Migrations
+
+```ts
+pnpm dlx wrangler d1 migrations create my-app-db init
+pnpm dlx wrangler d1 migrations apply my-app-db --local
+pnpm dlx wrangler d1 migrations apply my-app-db --remote
+```
+
+## With Drizzle ORM
+
+```ts
+pnpm add drizzle-orm
+// src/db/drizzle.ts
+import { drizzle } from "drizzle-orm/d1";
+import type { Env } from "../types/env.ts";
+
+export const createDb = (env: Env) => drizzle(env.DB);
+```
+
+## With Prisma
+
+Prisma supports D1 via the [D1 Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1). Construct the adapter inside the Worker handler since it needs the runtime binding.
+
+## Limitations to know
+
+- D1 only runs in Cloudflare Workers, no Node.js, Lambda, or Edge runtime support.
+- Local development uses `wrangler dev` with a local SQLite file. Behavior is close but not identical to production.
+- For multi-runtime portability, prefer [Turso](/docs/databases/turso) (libSQL) instead.
+
+See also [Turso](/docs/databases/turso), [Neon](/docs/databases/neon), and the [database hosting overview](/docs/databases).

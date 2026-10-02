@@ -1,0 +1,178 @@
+---
+title: Composition & network
+description: "Daloy ships rateLimit({ groupId }) shared buckets, combine primitives every/some/except, ipRestriction() with CIDR allow/deny, and the internal: true route flag with app.inject()."
+keywords:
+  - DaloyJS combine
+  - every some except
+  - ipRestriction
+  - CIDR allow deny
+  - rateLimit groupId
+  - internal routes
+  - app.inject
+  - secureDefaults
+---
+
+# Composition & network
+
+<blockquote>Use <code>ipRestriction</code> for network policy,{" "}<code>rateLimit({"{ groupId }"})</code> for a shared quota, and{" "}<code>internal: true</code> for routes reachable only through{" "}<code>app.inject()</code>.</blockquote>
+
+Daloy ships the composition & network slice of the secure-by-default initiative: four primitives that compose the security stack you already have. Every item is opt-in. No existing behaviour changes unless you call the new helper.
+
+## 1. `rateLimit({ groupId })` shared buckets [#1-ratelimit-shared-buckets]
+
+Every `rateLimit()` call that declares the same `groupId` shares one in-memory bucket. Use it to enforce a combined limit across related routes (e.g. login, OTP, password reset) without juggling a shared store yourself.
+
+```ts
+import { App, rateLimit } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+const authLimit = () =>
+  rateLimit({
+    windowMs: 60_000,
+    max: 10,
+    groupId: "auth",
+    trustedProxies: ["10.0.0.0/8"], // key on the real client IP
+  });
+
+app.post("/login",          { hooks: authLimit(), ... });
+app.post("/login/otp",      { hooks: authLimit(), ... });
+app.post("/password-reset", { hooks: authLimit(), ... });
+// All three endpoints spend from the same bucket per IP.
+```
+
+When you supply a custom `store`, Daloy still prefixes the derived key with `` `${groupId}:` `` so two groups cannot collide in a shared Redis backend either.
+
+The per-IP key needs proxy trust (`trustedProxies`, `trustedHops`, or `trustProxyHeaders`). Without it, and without a `keyGenerator`, `rateLimit()` and `loginThrottle()` key on the TCP peer (since 1.3.7), so behind a proxy every request shares the proxy's address until you configure proxy trust. Only runtimes that expose no peer address fall back to one shared bucket. The IP-based default key canonicalizes address spellings and groups IPv6 clients per `/64`; tune that with `ipv6Subnet` (since 1.3.7). Never write a `keyGenerator` that reads a raw client-supplied header: the attacker picks the value and gets a fresh bucket per request.
+
+A limiter registered **before** an auth guard counts that guard's rejections, whether the guard returns a `Response` or throws (as `bearerAuth()` does). When the budget runs out, the limiter's `429` replaces the auth error, so credential stuffing hits the limit even though no request ever reaches a handler.
+
+## 2. `combine` primitives, `every` / `some` / `except` [#2-combine-primitives-every-some-except]
+
+Declarative composition for your `Hooks` bundles. Use them to package curated security stacks as a single value and drop the fragile `if (...) await next()` chains.
+
+```ts
+import {
+  App,
+  every, some, except,
+  requestId, bearerAuth, rateLimit, timingSafeEqual,
+} from "@daloyjs/core";
+
+const adminStack = every(
+  requestId(),
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  rateLimit({ windowMs: 60_000, max: 30, groupId: "admin" }),
+);
+
+const app = new App();
+
+// Mount one curated bundle:
+app.use(adminStack);
+
+// "Auth except the public endpoints":
+app.use(except(
+  ["/health", "/openapi.json", "/docs/**"],
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }),
+));
+
+// "Any one of these proofs of identity is enough":
+app.use(some(
+  bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.PUBLIC_API_TOKEN!) }),
+  // session-cookie middleware, API-key middleware, ...
+));
+```
+
+- `every(...layers)` runs every bundle in order across every lifecycle phase. Forwards CORS / CSRF / session security markers so boot-time guards still see them on the composed bundle.
+- `some(...layers)` runs each layer's auth gate in order until one passes. When every candidate uses `preBody` (as the built-in `bearerAuth()`, `basicAuth()`, `jwk()`, and `clientCertAuth()` now do), selection happens before body I/O. Mixed stacks defer to `beforeHandle`. A returned `Response` is treated as a denial, the next layer gets a turn. The first failure wins when every layer rejects, so place the auth scheme whose `WWW-Authenticate` challenge you want clients to see first.
+- `except(when, hooks)` skips the wrapped bundle's `preBody` and `beforeHandle` gates for matching paths (`/health`, `/public/**`, `/v1/*/meta`) or for any request where the supplied predicate returns `true`. Its `onRequest`, `afterHandle`, `onSend`, and `onResponse` phases still run, so shared concerns wired through those phases keep working.
+
+<blockquote><strong>Perimeter guards run on unmatched requests too.</strong>{" "}<code>beforeHandle</code> guards registered with{" "}<code>app.use(...)</code>{", "}such as <code>rateLimit()</code>{", "}<code>ipRestriction()</code>{", "}<code>csrf()</code>{", "}and your own WAF bundles, also run on the cold dispatch path: a request that matches no route (<code>404</code>), hits a registered path with the wrong method and gets <code>405</code>{", "}or arrives as an <code>OPTIONS</code> preflight. Without this, an attacker could flood random paths to slip past a{" "}<code>rateLimit()</code> that an operator reasonably expects to cover every request. Two consequences worth knowing:</blockquote>
+
+- A flood of `404`s is now throttled / IP-fenced like traffic to a real route.
+- When auth is installed globally (e.g. `app.use(except(exempt, bearerAuth(...)))`), an unauthenticated request to an *unmatched* path is rejected with `401` rather than `404`. This is intentional route-enumeration resistance: the perimeter answers the same way whether or not the route exists. Per-route hooks are unaffected, and no handler is ever reached. Need public unknown paths to stay plain `404`s instead? Avoid global `app.use()` auth for that surface. Use route/group-scoped hooks for auth and reserve `App({ hooks })` `onRequest` for checks that should truly run before routing.
+
+## 3. `ipRestriction()`: CIDR allow / deny [#3-iprestriction-cidr-allow-deny]
+
+Block or allow requests by source IP or CIDR range. Pairs naturally with `trustProxyHeaders: true` behind a trusted proxy so the matched address is the real client, not your load balancer. Supports IPv4, IPv6, and IPv4-mapped IPv6 (`::ffff:a.b.c.d`). `deny` always wins over `allow`.
+
+```ts
+import { App, ipRestriction } from "@daloyjs/core";
+
+const app = new App({ env: "production", trustProxy: true });
+
+app.use(ipRestriction({
+  allow: ["10.0.0.0/8", "192.168.1.0/24", "::1"],
+  deny:  ["10.6.6.0/24"],
+  trustProxyHeaders: true,
+}));
+
+// Rejected requests:
+//   HTTP/1.1 403 Forbidden
+//   content-type: application/problem+json
+//   { "title": "Forbidden", "detail": "IP address not permitted" }
+```
+
+Invalid IP literals, invalid CIDR prefixes, and calls with neither an `allow` nor `deny` list throw at construction time, catching bugs that would otherwise hide until production traffic hits. By default the helper fails closed because Web-standard requests do not expose the peer address. Supply `resolveIp` if your adapter exposes connection metadata or if you sit behind a CDN that sends the real client through a custom header such as `cf-connecting-ip` or `true-client-ip`.
+
+## 4. `internal: true` + `app.inject()` [#4-internal-true-app-inject]
+
+Mark a route as `internal: true` and the public `app.fetch(...)` entry point returns `404`: existence cannot be probed. The same route runs normally through `app.inject(request)`, which is meant for cron jobs, admin scripts, and integration tests. Internal routes are also excluded from generated OpenAPI by default. Pass `includeInternal: true` to `generateOpenAPI()` (imported from the `@daloyjs/core/openapi` subpath) for private admin SDK generation. The framework also filters `Allow` headers so a probe with a different method stays a clean `404` rather than a leaky `405`.
+
+<BranchDiagram title="Two entry points, one internal route" source={{
+          eyebrow: "route",
+          label: "internal: true route",
+          detail: "/__admin/reindex",
+        }} branches={[
+          {
+            eyebrow: "public",
+            label: "app.fetch()",
+            detail: "404, existence cannot be probed",
+            tone: "danger",
+          },
+          {
+            eyebrow: "in-process",
+            label: "app.inject()",
+            detail: "runs normally, 204",
+            tone: "success",
+          },
+        ]} caption="The public adapter returns 404 for an internal route so its existence stays hidden, while cron jobs, admin scripts, and tests reach it through app.inject(). Internal routes are also excluded from generated OpenAPI by default." />
+
+```ts
+import { App } from "@daloyjs/core";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const app = new App();
+
+app.post(
+  "/__admin/reindex",
+  {
+    internal: true,
+    responses: { 204: { description: "Started" } },
+  },
+  () => ({ status: 204 }),
+);
+
+// Public adapter - 404
+await app.fetch(new Request("http://app/__admin/reindex", { method: "POST" }));
+
+// In-process / cron / tests - 204
+await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
+
+// Public spec - internal routes omitted
+const publicSpec = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+});
+
+// Private admin SDK generation - internal routes included
+const adminSpec = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+  includeInternal: true,
+});
+```
+
+## Opt-out
+
+Every primitive in this slice is additive. Nothing changes unless you call the helper. The earlier secure-defaults master opt-out flag still applies if you ever need to disable secure defaults in a development sandbox:
+
+```ts
+const app = new App({ env: "development", secureDefaults: false });
+```

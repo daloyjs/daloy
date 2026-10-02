@@ -1,0 +1,116 @@
+---
+title: IP allow/deny lists
+description: "Enforce network-layer access control with ipRestriction(): IPv4/IPv6/CIDR allow- and deny-lists that fail closed by default, with explicit opt-in for trusted proxy headers. The static counterpart to ipReputation() and geoBlock()."
+keywords:
+  - DaloyJS ipRestriction
+  - IP allow list
+  - CIDR deny list
+  - network access control
+  - trusted proxy IP
+  - TypeScript IP filtering
+---
+
+# IP allow/deny lists
+
+<blockquote>IP restrictions evaluate the deny list first, then the allow list. If the middleware cannot resolve a client address, it rejects the request.</blockquote>
+
+`ipRestriction()` enforces network-layer access control using IPv4 / IPv6 / CIDR allow- and deny-lists. It is the *static* counterpart to `ipReputation()` (dynamic abuse feeds) and `geoBlock()` (country-level compliance). On reject it throws a `ForbiddenError`, which DaloyJS renders as RFC 9457 `application/problem+json` with HTTP `403`.
+
+## Fails closed by default
+
+Web-standard `Request` objects do not expose the peer address, so DaloyJS **fails closed**: unless you tell it how to resolve the client IP, every request is rejected. You opt in either by providing a `resolveIp` function (reads adapter connection metadata) or by enabling `trustProxyHeaders` behind a proxy chain you control.
+
+Proxy-header resolution is spoof-resistant: the client IP is read from the **rightmost** `X-Forwarded-For` entry (the one your immediate proxy actually appended), so an attacker-prepended left entry cannot bypass an allow-list or dodge a deny. Behind a multi-hop chain (CDN → LB → app), declare the hop count with `trustedHops` (e.g. `trustedHops: 2`; `trustProxyHeaders: true` is exactly `1`). When the origin itself can be reached (misconfigured firewall, leaked origin IP), set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)). With no proxy in front and no peer verification, forwarded-header trust is attacker-controlled by definition.
+
+## Quick start
+
+```ts
+import { App, ipRestriction, readRemoteAddress } from "@daloyjs/core";
+
+const app = new App({ trustProxy: true });
+
+app.use(ipRestriction({
+  allow: ["10.0.0.0/8", "::1"],
+  deny: ["10.6.6.0/24"],
+  trustProxyHeaders: true,
+}));
+```
+
+At least one of `allow` or `deny` must be provided. Passing neither throws at construction time.
+
+## How matching works
+
+<FlowDiagram title="Resolve then match (fail closed)" steps={[
+          {
+            eyebrow: "ingress",
+            label: "Request",
+            detail: "resolveIp / trustProxyHeaders",
+          },
+          {
+            eyebrow: "no IP",
+            label: "Cannot resolve client IP",
+            detail: "fail closed to 403 ForbiddenError",
+            tone: "danger",
+          },
+          {
+            eyebrow: "deny first",
+            label: "Matches a deny range?",
+            detail: "deny wins, even over allow to 403",
+            tone: "danger",
+          },
+          {
+            eyebrow: "allow whitelist",
+            label: "Outside the allow list?",
+            detail: "not whitelisted to 403",
+            tone: "danger",
+          },
+          {
+            eyebrow: "permitted",
+            label: "Allowed",
+            detail: "request proceeds",
+            tone: "success",
+          },
+        ]} caption="A request must first resolve to a client IP or it is rejected. Deny ranges are checked first and always win, then the allow list acts as a whitelist. Anything that is not explicitly permitted is refused with a 403." />
+
+- Deny wins. When both lists are supplied, the matcher runs deny-first then allow-otherwise. A deny match always loses to nothing: even an explicit allow-list entry cannot override a deny, matching the principle of least privilege.
+- Allow is a whitelist. When `allow` is set, any peer whose address does not match an entry is rejected with `403`.
+- Deny-only. With only a `deny` list, everything is permitted except the listed ranges.
+
+## Resolving the client IP
+
+Behind a trusted proxy chain, set `trustProxyHeaders: true` or (preferred when the origin can be reached directly) `trustedProxies` to read `X-Forwarded-For` / `X-Real-IP`. This defaults to off because those headers are client-spoofable unless every request reaches DaloyJS through infrastructure you control. Pair it with `new App({ trustProxy: true })` in production.
+
+```ts
+import { readRemoteAddress } from "@daloyjs/core";
+
+// Direct (no proxy): read the IP from adapter connection metadata.
+app.use(ipRestriction({
+  allow: ["203.0.113.0/24"],
+  resolveIp: (ctx) => readRemoteAddress(ctx),
+}));
+
+// Behind a CDN/load balancer you control; verify the peer when origin is reachable:
+const app = new App({ trustProxy: true });
+app.use(ipRestriction({
+  deny: ["192.0.2.0/24"],
+  trustedProxies: ["10.0.0.0/8"],
+}));
+```
+
+## Customizing the rejection
+
+Override the response body with `message`. Keep it generic: echoing the client IP back can leak proxy topology to attackers, so the default message deliberately does not include it.
+
+```ts
+app.use(ipRestriction({
+  allow: ["10.0.0.0/8"],
+  resolveIp: (ctx) => readRemoteAddress(ctx),
+  message: "Access denied from your network.",
+}));
+```
+
+## When to reach for it
+
+- Internal admin surfaces reachable only from a VPN or office CIDR range.
+- Partner allow-lists where a fixed set of source ranges may call your API.
+- Hard blocks on a handful of known-bad ranges while keeping a broad allow-list. For evolving threat data, layer `ipReputation()` on top.

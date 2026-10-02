@@ -1,0 +1,151 @@
+---
+title: Use Turso (libSQL) with DaloyJS
+description: Connect a DaloyJS API to Turso, a distributed SQLite-compatible database, using @libsql/client. Works on Node.js, Bun, Deno, and Cloudflare Workers over HTTP.
+keywords:
+  - Turso DaloyJS
+  - libSQL
+  - "@libsql/client"
+  - edge SQLite
+  - Turso Drizzle
+  - embedded replicas
+---
+
+# Use Turso (libSQL) with DaloyJS
+
+[Turso](https://turso.tech) is a distributed database built on [libSQL](https://github.com/tursodatabase/libsql) (a fork of SQLite). The `@libsql/client` driver speaks HTTP and WebSocket, so the same DaloyJS app works on Node, Bun, Deno, and Cloudflare Workers.
+
+<BranchDiagram title="One client, two connection modes" source={{
+          eyebrow: "@libsql/client",
+          label: "createClient(...)",
+          detail: "HTTP and WebSocket",
+        }} branches={[
+          {
+            eyebrow: "node / bun",
+            label: "Embedded replica",
+            detail:
+              "url: file:local.db + syncUrl · local reads, writes to primary",
+            tone: "success",
+          },
+          {
+            eyebrow: "workers / edge",
+            label: "Remote HTTP client",
+            detail: "url + authToken · no embedded replicas",
+          },
+        ]} caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers." />
+
+## 1. Provision
+
+Create a database via the Turso CLI or dashboard, then grab the URL and auth token. Set them as `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+
+## 2. Install
+
+```ts
+pnpm add @libsql/client
+```
+
+## 3. Create a Turso plugin
+
+```ts
+// src/db/turso.ts
+import { createClient, type Client } from "@libsql/client";
+import type { App } from "@daloyjs/core";
+
+export const db: Client = createClient({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+export const tursoPlugin = {
+  name: "turso",
+  async register(app: App) {
+    app.decorate("db", db);
+    app.onClose(async () => {
+      db.close();
+    });
+  },
+};
+```
+
+## 4. Augment app state
+
+Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/turso.ts (same module as the plugin above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Client;
+  }
+}
+```
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import { tursoPlugin } from "./db/turso.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.register(tursoPlugin);
+
+const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
+
+app.get(
+  "/todos",
+  {
+    operationId: "listTodos",
+    responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
+  },
+  async ({ state }) => {
+    const result = await state.db.execute("select id, title, done from todos");
+    const rows = result.rows.map((r) => ({
+      id: Number(r.id),
+      title: String(r.title),
+      done: Boolean(r.done),
+    }));
+    return { status: 200, body: rows };
+  },
+);
+```
+
+## Embedded replicas (Node, Bun)
+
+For ultra-low-latency reads, use an embedded replica that syncs with the primary in the background. Writes still go to the primary. Reads are local.
+
+```ts
+import { createClient } from "@libsql/client";
+
+export const db = createClient({
+  url: "file:local.db",
+  syncUrl: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+  syncInterval: 60,
+});
+```
+
+## Cloudflare Workers [#cloudflare-workers-vercel]
+
+Use the standard HTTP client (no embedded replicas in Workers). Pass `env.TURSO_DATABASE_URL` instead of `process.env`.
+
+## With Drizzle ORM
+
+```ts
+pnpm add drizzle-orm
+// src/db/drizzle.ts
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
+
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+export const db = drizzle({ client });
+```
+
+## With Prisma
+
+Prisma supports Turso through the [libSQL Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/turso) in preview. Use Drizzle if you want a stable, production-ready setup today.
+
+See also [Cloudflare D1](/docs/databases/cloudflare-d1) for a SQLite-style option that's bundled into Workers, or the [database hosting overview](/docs/databases).

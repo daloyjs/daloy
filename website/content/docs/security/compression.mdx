@@ -1,0 +1,168 @@
+---
+title: Compression middleware
+description: Daloy adds portable response compression with CompressionStream, BREACH-aware skip rules, safe cache headers, and ETag handling.
+keywords:
+  - compression middleware
+  - CompressionStream
+  - BREACH guard
+  - Vary Accept-Encoding
+  - weak ETag
+  - secureDefaults
+---
+
+# Compression middleware
+
+<blockquote>Compression reduces response size, but it can expose secrets through response-length differences. The middleware skips sensitive and small responses by default to limit BREACH-style attacks.</blockquote>
+
+Daloy ships a focused compression slice: a first-party `compression()` middleware that uses the web-standard `CompressionStream` API instead of a Node-only compression package.
+
+<UseCaseGuide featureName="Compression middleware" recommendation="Use compression when serving large text-based responses (HTML, JSON, SVG) directly to clients without an intermediate CDN or reverse proxy doing it for you. Do not compress small responses or payloads that are already compressed (like images or PDFs)." whenToUse={[
+          "Serving large, text-heavy responses (HTML, JSON, XML, SVG) over 1KB in size.",
+          "Direct-to-origin API traffic that bypasses caching CDNs or API gateways.",
+          "Deploying to serverless environments (like AWS Lambda, Deno Deploy, or Cloudflare Workers) that do not compress origin responses by default.",
+        ]} whenNotToUse={[
+          "When a CDN (such as Cloudflare, Fastly, or Vercel Edge) or reverse proxy (NGINX) fronting the app is already configured to compress responses (doing it in the application wastefully consumes CPU).",
+          "For response payloads under 1KB, where compression overhead makes the response larger or yields negligible gains.",
+          "For binary or pre-compressed content types (PNG, JPEG, PDF, ZIP, WOFF2), which are already optimized.",
+        ]} />
+
+```ts
+import { App, compression } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+app.use(compression());
+```
+
+## What it compresses
+
+The middleware negotiates `br`, `gzip`, and `deflate` from the request `Accept-Encoding` header and the runtime codecs available through `CompressionStream`. Runtime support is probed once and cached. If the platform has no supported codec, the middleware becomes a silent no-op instead of breaking older runtimes.
+
+The default `minimumSize` is `1024` bytes. Small responses are left alone, and Daloy also checks the compressed byte length after encoding. If compression made the payload larger, the original response is kept.
+
+## Memory bound for large responses [#memory-bound]
+
+Compressing a response means buffering its bytes in memory first. To keep a single large (or unknown-and-growing) response from forcing unbounded heap growth, the middleware only compresses bodies up to `maxCompressibleBytes`, which defaults to `1_048_576` (1 MiB). Anything larger is sent **uncompressed** rather than buffered. When a response declares a `Content-Length` above the cap it is skipped immediately, without buffering a single byte. Streamed responses are read up to the cap and released untouched if they exceed it.
+
+This is a deliberate trade-off. It spends bandwidth and latency on large responses to protect the origin's memory. Large responses are usually already-compressed media (skipped anyway) or belong behind a CDN. If you serve large, highly compressible payloads from the origin and can afford the heap, raise the cap:
+
+```ts
+app.use(
+  compression({
+    // Compress bodies up to 8 MiB; larger responses stream uncompressed.
+    maxCompressibleBytes: 8 * 1024 * 1024,
+  }),
+);
+```
+
+`maxCompressibleBytes` must be a positive integer no larger than `2**31 - 1`, and must be greater than or equal to `minimumSize`; violating either is refused at construction.
+
+## Application vs. CDN or reverse proxy [#application-vs-cdn-or-proxy]
+
+A response only needs to be compressed once. Choose the layer closest to the client that reliably supports the encodings and content types you need:
+
+- No CDN or reverse-proxy compression: register `compression()` globally. Daloy's skip rules still decide whether each individual response should be compressed.
+- CDN or reverse proxy already compresses responses: let that layer handle compression so the application does not spend CPU compressing the same traffic at the origin.
+
+Do not assume every hosting platform enables compression automatically. Send a request with `Accept-Encoding: br, gzip` and check the response for `Content-Encoding`. If some traffic can bypass the CDN or proxy, decide whether those direct origin responses also need application-level compression.
+
+## Security skip rules
+
+Compression can become an oracle when secrets and attacker-controlled bytes share the same compressed response. Daloy keeps those guards built in rather than asking every app to remember the same list.
+
+<FlowDiagram title="BREACH-aware skip decision" steps={[
+          {
+            eyebrow: "onSend",
+            label: "Response ready",
+            detail: "negotiate br / gzip / deflate",
+          },
+          {
+            eyebrow: "secrets",
+            label: "Set-Cookie / Authorization / session cookie?",
+            detail: "skip, send identity",
+            tone: "danger",
+          },
+          {
+            eyebrow: "not worth it",
+            label: "Below minimumSize or already encoded?",
+            detail: "skip, keep original",
+            tone: "muted",
+          },
+          {
+            eyebrow: "safe",
+            label: "Compress the body",
+            detail: "GET / HEAD, 2xx, text-like content",
+            tone: "success",
+          },
+        ]} caption="Responses that mix secrets with attacker-influenced bytes (Set-Cookie, Authorization, session/CSRF cookies) are never compressed, which closes the BREACH oracle. Tiny, already-encoded, or already-compressed payloads are skipped too. Vary: Accept-Encoding is still added either way." />
+
+- Skips responses with `Set-Cookie`.
+- Skips requests with `Authorization`.
+- Skips requests carrying session, CSRF, XSRF, `__Host-`, or `__Secure-` cookies.
+- Skips any response that already has `Content-Encoding`.
+- Skips non-`GET` / non-`HEAD` requests and non-2xx responses.
+- Skips already-compressed content types such as images, video, audio, archives, fonts, WebAssembly, and PDFs. `image/svg+xml` is carved back in because it is XML text.
+- Skips live streams (since 1.3.7): `text/event-stream`, NDJSON (`application/x-ndjson`, `application/ndjson`), JSON Lines (`application/jsonl`, `application/x-jsonlines`), `application/json-seq`, and any response whose `Cache-Control` carries `no-transform`. Compressing these would buffer the stream and hold back every event until the cap or the end of the stream.
+
+The streaming skip means `sseResponse()` (which sets `cache-control: no-cache, no-transform`) and `ndjsonResponse()` work with a global `compression()` and no per-route opt-out. For your own streamed format, set `no-transform` to get the same pass-through:
+
+```ts
+app.use(compression());
+
+// Sent uncompressed: sseResponse() sets Cache-Control: no-transform.
+app.get("/events", eventsRoute, () => sseResponse(ticks()));
+
+// Your own stream: opt out with no-transform.
+app.get("/feed", feedRoute, () =>
+  new Response(feedStream(), {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+    },
+  }),
+);
+```
+
+## Cache and ETag behavior
+
+Every response that reaches `compression()` gets `Vary: Accept-Encoding` appended (de-duplicated against any existing `Vary` value), even when Daloy decides not to compress that specific response. That keeps downstream caches keyed by the negotiation surface from the first response onward, so a cache can't serve a gzipped body to a client that only advertised `identity`.
+
+If a compressed response already has a strong ETag such as `"abc"`, Daloy downgrades it to `W/"abc"`. The ETag was computed over the upstream body, not the compressed wire bytes, so a weak validator is the appropriate one, RFC 9110 §8.8.1 requires strong validators to be byte-equal to the representation on the wire, and the wire bytes change per encoding.
+
+## Interaction with `etag()`
+
+`compression()` and `etag()` are safe to combine in either order. Both run as `onSend` hooks:
+
+- If `etag()` runs first it sets a strong ETag over the uncompressed body. `compression()` then encodes the body and downgrades the strong ETag to weak so the validator stays consistent with what actually leaves the server.
+- If `compression()` runs first it encodes the body. `etag()` then hashes the already-compressed bytes, which is also valid, the strong tag still byte-matches the wire bytes the client receives.
+
+Either way, conditional `GET`s using `If-None-Match` stay correct across `br`, `gzip`, `deflate`, and `identity` clients because the `Vary: Accept-Encoding` header forces per-encoding cache keys. You don't have to manage the weak/strong downgrade yourself, even if you set `ETag` manually from a route handler, `compression()` performs the downgrade for you on the way out.
+
+`etag()` buffers a body to hash it, so it only tags bodies with a known size (since 1.3.7). Responses that are `text/event-stream` or `application/x-ndjson`, have no `Content-Length`, or declare a `Content-Length` above `maxBytes` (default `1_048_576`, 1 MiB) are sent untagged instead of buffered. `maxBytes` must be a non-negative finite number; anything else throws a `TypeError` at construction. Framework-serialized handler results always carry a `Content-Length` and are tagged. A raw `new Response(...)` or `Response.json(...)` has none, so set `content-length` on it if you want an ETag.
+
+```ts
+app.use(
+  etag({
+    // Tag bodies up to 4 MiB; larger or unknown-length bodies go out untagged.
+    maxBytes: 4 * 1024 * 1024,
+  }),
+);
+app.use(compression());
+```
+
+## No compression level knob
+
+`CompressionStream` uses the runtime default. Daloy refuses any `compressLevel` option at construction, including `6`, because exposing the knob invites expensive level-9 compression for tiny byte savings under load.
+
+```ts
+app.use(compression({
+  minimumSize: 2 * 1024,
+  encodings: ["gzip"],
+  authCookieNames: ["tenant-auth"],
+  excludeContentTypes: ["application/x-parquet"],
+}));
+```
+
+## Ordering
+
+Register `compression()` after middleware that may add `Set-Cookie`, `Content-Encoding`, or `ETag` headers. Daloy runs `onSend` hooks in registration order, so the compression hook should see the final response headers before it decides whether to encode the body.

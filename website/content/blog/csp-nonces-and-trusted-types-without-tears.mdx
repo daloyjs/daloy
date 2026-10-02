@@ -1,0 +1,401 @@
+---
+title: CSP Nonces and Trusted Types Without Tears
+description: "A practical tour of secureHeaders({ contentSecurityPolicy: { nonce: true, trustedTypes: { policies: [...] } } }), how ctx.state.cspNonce flows into a server-rendered template, why the nonce now lands on all four script/style directives, and how to roll out Trusted Types in report-only mode first without setting your weekend on fire."
+date: 2026-05-24
+readingTime: 12 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work, currently writing TypeScript from Norway. Has at some point shipped a CSP that broke the login page. We don't talk about it.
+badges:
+  - Security
+  - Deep dive
+keywords:
+  - CSP nonce DaloyJS
+  - secureHeaders contentSecurityPolicy
+  - Trusted Types rollout
+  - require-trusted-types-for
+  - script-src-elem nonce
+  - style-src-elem nonce
+  - Content-Security-Policy-Report-Only
+  - ctx.state.cspNonce
+footerLinks:
+  - label: Read the security docs
+    href: /docs/security
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+export const NONCE_BASIC = `// src/app.ts, turn on per-request CSP nonces
+import { App, secureHeaders } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      nonce: true,
+      directives: {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "script-src-elem": "'self'",
+        "style-src": "'self'",
+        "style-src-elem": "'self'",
+        "img-src": "'self' data:",
+        "connect-src": "'self'",
+        "frame-ancestors": "'none'",
+        "base-uri": "'none'",
+        "object-src": "'none'",
+      },
+    },
+  }),
+);
+
+// On every request:
+//   1. A fresh 128-bit base64url nonce is generated
+//   2. It is stashed on ctx.state.cspNonce for your templates
+//   3. 'nonce-<value>' is appended to script-src, script-src-elem,
+//      style-src, and style-src-elem - but only because those
+//      directives are declared above. The nonce never appears in a
+//      directive you didn't ask for.`;
+
+export const FOUR_DIRECTIVES = `// What the response header looks like in DevTools:
+//
+// content-security-policy:
+//   default-src 'self';
+//   script-src 'self' 'nonce-Yz3kQ2vV7uO9k_o5cQk1zw';
+//   script-src-elem 'self' 'nonce-Yz3kQ2vV7uO9k_o5cQk1zw';
+//   style-src 'self' 'nonce-Yz3kQ2vV7uO9k_o5cQk1zw';
+//   style-src-elem 'self' 'nonce-Yz3kQ2vV7uO9k_o5cQk1zw';
+//   img-src 'self' data:;
+//   connect-src 'self';
+//   frame-ancestors 'none';
+//   base-uri 'none';
+//   object-src 'none'
+//
+// One nonce, four directives. The browser uses script-src-elem and
+// style-src-elem for <script src="..."> / <link rel="stylesheet"> tags
+// and falls back to script-src / style-src for inline. We append to all
+// four so a single nonce attribute on <script nonce> or <style nonce>
+// just works regardless of which directive the browser consults.`;
+
+export const SSR_TEMPLATE = `// src/routes/home.ts, pipe the nonce into the rendered HTML
+import { app } from "../app.ts";
+
+app.route({
+  method: "GET",
+  path: "/",
+  operationId: "home",
+  responses: { 200: { description: "home" } },
+  handler: async ({ state }) => {
+    const nonce = state.cspNonce!; // populated by secureHeaders()
+    const html = renderHome(nonce);
+    return {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+      body: html,
+    };
+  },
+});
+
+function renderHome(nonce: string): string {
+  // No template lib for the demo. In real life this is the one place I
+  // happily reach for handlebars/eta/whatever - anywhere you'd write an
+  // inline <script> or <style>, attach nonce="\${nonce}".
+  return \`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello CSP</title>
+    <style nonce="\${nonce}">
+      body { font: 16px/1.5 system-ui; padding: 2rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Hello from a nonce-guarded page</h1>
+    <script nonce="\${nonce}">
+      // Inline scripts only run if the nonce matches. An XSS payload
+      // injected later cannot guess this nonce.
+      console.log("nonce was honored");
+    </script>
+  </body>
+</html>\`;
+}`;
+
+export const TRUSTED_TYPES_ENFORCED = `// src/app.ts, enforce Trusted Types alongside the nonce
+import { App, secureHeaders } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      nonce: true,
+      trustedTypes: {
+        // These are the only policy names allowed to call
+        // trustedTypes.createPolicy(...) in the browser.
+        policies: ["app-default", "dompurify"],
+      },
+      directives: {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "script-src-elem": "'self'",
+        "style-src": "'self'",
+        "style-src-elem": "'self'",
+        "frame-ancestors": "'none'",
+        "base-uri": "'none'",
+        "object-src": "'none'",
+      },
+    },
+  }),
+);
+
+// Emits, in addition to the nonce:
+//   require-trusted-types-for 'script';
+//   trusted-types app-default dompurify
+//
+// Now any innerHTML / outerHTML / document.write / new Function(...) /
+// setTimeout(string) call from JS throws unless the string was minted
+// by trustedTypes.createPolicy("app-default", {...}).createHTML(...).`;
+
+export const APP_DEFAULT_POLICY = `// apps/web/src/trusted-types.ts, the one place HTML becomes HTML
+import DOMPurify from "dompurify";
+
+// Required: browsers only let you create a policy whose name appears
+// in the trusted-types directive we just sent from the server.
+const sanitizer = window.trustedTypes!.createPolicy("app-default", {
+  createHTML(input: string) {
+    return DOMPurify.sanitize(input, { RETURN_TRUSTED_TYPE: true });
+  },
+  createScript() {
+    throw new Error("app-default does not mint scripts");
+  },
+  createScriptURL(url: string) {
+    const allowed = new URL(url, location.origin);
+    if (allowed.origin !== location.origin) {
+      throw new Error("app-default blocked cross-origin script URL: " + url);
+    }
+    return url;
+  },
+});
+
+export function setHtml(target: Element, html: string): void {
+  // Without Trusted Types this is a normal string and it works.
+  // With Trusted Types enforced, browsers reject the assignment unless
+  // the right-hand side is a TrustedHTML - which is what sanitizer.createHTML returns.
+  target.innerHTML = sanitizer.createHTML(html);
+}`;
+
+export const REPORT_ONLY_ROLLOUT = `// src/app.ts, roll out Trusted Types in report-only mode FIRST
+import { App, secureHeaders, type Hooks } from "@daloyjs/core";
+
+export const app = new App();
+
+// Step 1: keep your existing enforced CSP (with the nonce) exactly as it is.
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      nonce: true,
+      directives: {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "script-src-elem": "'self'",
+        "style-src": "'self'",
+        "style-src-elem": "'self'",
+        "frame-ancestors": "'none'",
+        "base-uri": "'none'",
+        "object-src": "'none'",
+        "report-uri": "/__csp-report",
+      },
+    },
+  }),
+);
+
+// Step 2: add a SECOND header - Content-Security-Policy-Report-Only - that
+// turns on Trusted Types in observe-only mode. Browsers will fire reports
+// to /__csp-report instead of breaking the page.
+const trustedTypesObserve: Hooks = {
+  onResponse(res) {
+    if (!res.headers.has("content-security-policy-report-only")) {
+      res.headers.set(
+        "content-security-policy-report-only",
+        "require-trusted-types-for 'script'; " +
+          "trusted-types app-default dompurify; " +
+          "report-uri /__csp-report",
+      );
+    }
+  },
+};
+app.use(trustedTypesObserve);
+
+// Step 3: a tiny endpoint to collect the violation reports.
+app.route({
+  method: "POST",
+  path: "/__csp-report",
+  operationId: "cspReport",
+  responses: { 204: { description: "noted" } },
+  handler: async ({ request, log }) => {
+    const report = await request.json().catch(() => null);
+    log.warn({ kind: "csp-violation", report }, "CSP violation report");
+    return { status: 204 };
+  },
+});`;
+
+export const PROMOTE_TO_ENFORCED = `// Step 4 (later, after the report stream is quiet), flip to enforced.
+// Move the trustedTypes block into the main secureHeaders() call, drop the
+// report-only middleware, keep the report-uri so genuine bypasses keep
+// telling you about themselves.
+
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      nonce: true,
+      trustedTypes: { policies: ["app-default", "dompurify"] },
+      directives: {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "script-src-elem": "'self'",
+        "style-src": "'self'",
+        "style-src-elem": "'self'",
+        "frame-ancestors": "'none'",
+        "base-uri": "'none'",
+        "object-src": "'none'",
+        "report-uri": "/__csp-report",
+      },
+    },
+  }),
+);`;
+
+export const COMMON_PITFALLS = `# Pitfalls I have stepped on so you don't have to:
+
+1. "My nonce isn't being added!"
+   You didn't declare script-src / style-src in your directives map.
+   The middleware only appends 'nonce-...' to directives that already
+   exist - that's intentional (no surprise directives) but it bites you
+   the first time. Add the four src directives.
+
+2. "It works in dev but not in prod."
+   Your dev server is using Vite/Webpack-dev-server with an inline
+   <style> or eval()-based HMR. Either disable HMR's inline styles in
+   dev, or scope secureHeaders() to non-dev environments via
+   process.env.NODE_ENV === "production".
+
+3. "TT broke our analytics snippet."
+   Of course it did. Wrap the snippet in its own policy
+   ("analytics") and add it to the policies array. Each vendor that
+   uses innerHTML gets its own narrow policy to contain its access.
+
+4. "Reports keep mentioning eval."
+   Trusted Types enforcement covers setTimeout(string), new Function,
+   document.write, innerHTML, outerHTML, and friends. Each one is a
+   one-line refactor; the report tells you exactly the file and line.
+
+5. "I added trustedTypes: true but nothing changed in the page."
+   Open DevTools -> Network -> Response Headers and check that
+   require-trusted-types-for 'script' is present. If not, your app is
+   probably returning early without going through the middleware
+   (a manual Response somewhere upstream). The middleware only sets the
+   header when one isn't already set, by design.`;
+
+Hi, Devlin again. Ten years of fullstack, currently writing TypeScript from a quiet desk in Norway, and today I want to talk about the security headers that everyone agrees are important and absolutely nobody enjoys configuring: **CSP with per-request nonces** and **Trusted Types**.
+
+I've set CSP up the bad way before. I shipped `script-src 'unsafe-inline'` in production for almost two years on one project because removing it required a real refactor and there was always "next quarter". What we shipped in `secureHeaders()` is an attempt to make the *good* way only slightly more typing than the bad way. The rollout takes four steps.
+
+## The 30-second mental model
+
+CSP nonces let inline scripts and styles run *only* if they carry a per-response random token that an XSS payload cannot guess. Trusted Types upgrades the browser's sink APIs (`innerHTML`, `setTimeout` with strings, `document.write`) so they refuse plain strings, anything dangerous has to come from a named, registered policy. Together they shrink the XSS attack surface from "anywhere in your bundle" to "the three lines in `trusted-types.ts` where you call `createPolicy`".
+
+## Step one: turn on the nonce
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="secureHeaders · nonce=true · 16 bytes · base64url">
+<CodeBlock language="ts" code={NONCE_BASIC} />
+</EditorFrame>
+
+Three things to notice. First, you pass the object form of `contentSecurityPolicy`: that's what tells the middleware to rebuild the CSP header per request instead of caching a static string. Second, `nonce: true` is the entire opt-in. The middleware generates a 128-bit base64url nonce using WebCrypto, stashes it on `ctx.state.cspNonce`, and appends `'nonce-<value>'` to your `script-src` and friends.
+
+Third, and this is the one that bit me the first time: the nonce is appended *only to directives you already declared*. If your config has no `style-src`, the middleware will *not* invent one for you. That's deliberate, secure headers should never silently broaden your policy, but it means you need to spell those directives out yourself if you want to use a nonce on them. Which leads us to…
+
+## Why the nonce now lands on four directives, not two
+
+In older CSP guides you'll see "just add the nonce to `script-src` and `style-src`". That was true in CSP 2. In CSP 3, the browser also consults `script-src-elem` and `style-src-elem` specifically for *element-based* loads, `<script src=...>` and `<link rel="stylesheet">`: and falls back to the older directives if they aren't present. The wrinkle is that if you declare both pairs and only nonce the non-`-elem` ones, the browser uses the more specific directive and ignores the nonce.
+
+So we append to all four. The result, viewed in DevTools, looks like this:
+
+<EditorFrame files={["chrome://devtools · Network · Headers"]} activeFile="chrome://devtools · Network · Headers" status="content-security-policy · one nonce · four directives">
+<CodeBlock language="bash" code={FOUR_DIRECTIVES} />
+</EditorFrame>
+
+One nonce attribute on your `<script>` or `<style>` tag works regardless of which directive the browser ends up consulting. You don't have to think about it again.
+
+## Step two: pipe the nonce into your template
+
+The middleware does its job. Your handler reads `ctx.state.cspNonce` and attaches it to every inline `<script>` and `<style>`. The shape of the handler is the same whether you're using a template engine or just template literals like this demo:
+
+<EditorFrame files={["src/routes/home.ts", "src/app.ts"]} activeFile="src/routes/home.ts" status="GET / · text/html · nonce honored in inline <style> and <script>">
+<CodeBlock language="ts" code={SSR_TEMPLATE} />
+</EditorFrame>
+
+If you forget the nonce, the browser silently blocks the tag as intended. You may still briefly hate yourself the first time a footer analytics snippet stops working. Open the console, you'll see a clean CSP violation message naming the directive. Add the nonce, refresh, done.
+
+## Step three: turn on Trusted Types: enforced
+
+CSP keeps XSS payloads from *running* as scripts. Trusted Types keeps them from being *injected as HTML* in the first place. The opt-in is one extra block:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="require-trusted-types-for 'script' · trusted-types app-default dompurify">
+<CodeBlock language="ts" code={TRUSTED_TYPES_ENFORCED} />
+</EditorFrame>
+
+On the browser side you create a policy with one of the names you just authorized. Anywhere in the app that touches `innerHTML` goes through the policy:
+
+<EditorFrame files={["apps/web/src/trusted-types.ts"]} activeFile="apps/web/src/trusted-types.ts" status="window.trustedTypes.createPolicy('app-default', ...)">
+<CodeBlock language="ts" code={APP_DEFAULT_POLICY} />
+</EditorFrame>
+
+The shape is intentional. You have *one* place where raw strings become trusted HTML. That one place gets aggressive review and a sanitizer. Every other call site in the codebase either uses that helper or gets caught by the browser at runtime. Auditing "where does HTML come from" goes from a grep across a monorepo to one file.
+
+## The hard part: rolling Trusted Types out without taking production down
+
+Enforcing `trustedTypes` on the first deployment will break many existing apps. Framework code, third-party widgets, and an ancient utility someone wrote in 2019 probably call `innerHTML` somewhere. Don't do that. Roll out in report-only mode first.
+
+The CSP spec gives us a beautiful escape hatch, a parallel header called `Content-Security-Policy-Report-Only`. The browser evaluates it exactly like the enforced policy, but instead of blocking violations it sends them to a `report-uri`. DaloyJS doesn't ship a built-in toggle for this (yet), but it's a six-line custom hook on top of the existing middleware:
+
+<RolloutStep step={1} title="Keep your enforced CSP exactly as-is" description="The nonce and the rest of the policy stay enforced. You do not weaken anything during the rollout, you add an observation layer on top." />
+
+<RolloutStep step={2} title="Add a second Content-Security-Policy-Report-Only header" description="Put only the Trusted Types directives in it. Browsers evaluate report-only headers independently, so a TT violation will be reported but the page still works." />
+
+<RolloutStep step={3} title="Collect the reports somewhere boring" description="A POST endpoint that logs to your existing logger. Read the report stream for a week. Each entry tells you the file, line, and which sink was used." />
+
+<RolloutStep step={4} title="Refactor each call site through a Trusted Types policy" description="One PR at a time. Watch the report rate drop. When it's flat for a few days, promote the policy to enforced." />
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="report-only · second header · POST /__csp-report collects reports">
+<CodeBlock language="ts" code={REPORT_ONLY_ROLLOUT} />
+</EditorFrame>
+
+And the flip to enforced, once the report stream is quiet, is mechanical, move the `trustedTypes` block into the main `secureHeaders()` call and delete the report-only hook:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="trustedTypes promoted to enforced · report-uri stays">
+<CodeBlock language="ts" code={PROMOTE_TO_ENFORCED} />
+</EditorFrame>
+
+I'd keep the `report-uri` on forever. Genuine attempts to bypass your policy, including legitimate-looking ones from a future engineer who didn't know about the policy, are now telemetry, not silent failures.
+
+## Pitfalls (a.k.a. the bugs I personally have shipped)
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="learn from my mistakes, not your incidents">
+<CodeBlock language="bash" code={COMMON_PITFALLS} />
+</EditorFrame>
+
+## A short sanity check on threat model
+
+CSP nonces and Trusted Types are XSS defenses, not magic. They do nothing for SSRF, nothing for SQL injection, nothing for an attacker who gets your `SESSION` cookie because `Secure` wasn't set on a staging environment. Use them *in addition to* the rest of the boring stuff, output encoding, prepared statements, sane cookie flags, not *instead of*.
+
+But once you have them on, you get a property that's very hard to get any other way: a future XSS bug in your codebase has to land specifically in the one file that calls `createPolicy` to be exploitable. That is a large blast-radius reduction for a config object and a one-time refactor.
+
+## Where to go next
+
+The full options surface for `secureHeaders()` is in the [security docs](/docs/security), which also show how this fits with CSRF, sessions, and the rest of the defenses. If you want to see the actual generator, it's a small file: open `src/middleware.ts` and search for `buildCspHeader`: it's about thirty lines.
+
+Thanks for reading. Now go grep your codebase for `.innerHTML =`. Whatever the number is, it's either smaller than you fear or much, much larger. Both outcomes are useful information.
+
+Devlin

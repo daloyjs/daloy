@@ -1,0 +1,174 @@
+---
+title: Runtime resilience and configuration
+description: Build resilient DaloyJS services with loadShedding(), app.cspReportRoute(), disconnectStatusCode, and boot-time configuration validation through defineConfig().
+keywords:
+  - DaloyJS loadShedding
+  - under-pressure
+  - CSP report-uri
+  - Reporting-Endpoints
+  - Report-To
+  - cspReportRoute
+  - disconnectStatusCode
+  - 499 client closed request
+  - defineConfig
+  - Standard Schema
+  - runtime resilience
+  - secureDefaults
+---
+
+# Runtime resilience and configuration
+
+<blockquote>This page covers load shedding with <code>503</code> and{" "}<code>Retry-After</code>, CSP violation reports, <code>499</code> client disconnects, and configuration validation at startup.</blockquote>
+
+Daloy provides four production safeguards for overloaded processes, security reporting, aborted requests, and invalid configuration. Each one is additive and opt-in (or, in the case of `disconnectStatusCode`, only changes the status code recorded for already-aborted requests):
+
+- `loadShedding()`: first-party event-loop pressure monitor that returns `503 Service Unavailable` + `Retry-After` when the process is overloaded.
+- `app.cspReportRoute()`: rate-limited POST receiver for CSP violation reports, plus `secureHeaders({ reportingEndpoints, reportTo })` wiring so a single line registers the endpoint and threads it back into the CSP header.
+- `disconnectStatusCode: 499` default, client-aborted requests record `499` instead of a `5xx`, so dashboards separate scraper aborts from real server failures.
+- `defineConfig({ schema, source })`: boot-time typed configuration validation through a Standard Schema (Zod / Valibot / ArkType / TypeBox), with aggregated error reporting.
+
+## 1. `loadShedding()`
+
+Drop-in middleware that samples event-loop delay, event-loop utilization, heap, and RSS through `node:perf_hooks`. When any configured threshold is breached, every incoming request is short-circuited with a structured `503 problem+json` carrying `Retry-After`. The sampler is `unref()`'d so it never pins the event loop, and the whole module is a silent no-op on runtimes without `node:perf_hooks` (Cloudflare Workers, Vercel, Fastly Compute) so the same line is portable.
+
+<FlowDiagram title="Shedding load under pressure" numbered steps={[
+          {
+            eyebrow: "sample",
+            label: "Pressure sampler",
+            detail: "loop delay, ELU, heap, RSS via perf_hooks",
+          },
+          {
+            eyebrow: "check",
+            label: "Threshold breached?",
+            detail: "any configured limit, or healthCheck reason",
+            tone: "accent",
+          },
+          {
+            eyebrow: "overloaded",
+            label: "Request shed",
+            detail: "503 problem+json + Retry-After",
+            tone: "danger",
+          },
+          {
+            eyebrow: "healthy",
+            label: "Request proceeds",
+            detail: "no threshold breached",
+            tone: "success",
+          },
+        ]} caption="While the process is under pressure every incoming request is short-circuited with a 503 and a Retry-After. The unref()'d sampler never pins the event loop, and the middleware is a no-op where node:perf_hooks is unavailable." />
+
+```ts
+import { App, loadShedding } from "@daloyjs/core";
+
+const app = new App();
+app.use(
+  loadShedding({
+    maxEventLoopDelayMs: 1_000,       // default 1s
+    maxEventLoopUtilization: 0.98,    // default 0.98
+    maxHeapUsedBytes: 512 * 1024 ** 2, // off by default
+    sampleIntervalMs: 1_000,          // default 1s; clamped to >= 100
+    retryAfterSeconds: 10,            // default 10
+    // Optional custom check; truthy reason string sheds the request.
+    healthCheck: async () => (db.isReady() ? undefined : "db.notReady"),
+  }),
+);
+```
+
+Defaults are off for the deployment-specific thresholds (heap, RSS) and conservative for everything else. Tighten them once you have real baselines from production.
+
+## 2. `app.cspReportRoute()` + `secureHeaders` reporting wiring [#2-app-cspreportroute-secureheaders-reporting-wiring]
+
+Registers a rate-limited `POST` receiver for browser CSP violation reports. Defaults: path `/__csp-report`, per-IP rate limit `60` requests / `60s`, body cap `8 KiB` (hard-capped at `64 KiB`), accepted content types `application/csp-report` and `application/reports+json`. `application/json` is refused with `415`.
+
+```ts
+import { App, secureHeaders } from "@daloyjs/core";
+
+const app = new App();
+
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+      },
+    },
+    // Modern Reporting-Endpoints header + legacy Report-To JSON.
+    reportingEndpoints: { csp: "/__csp-report" },
+    // CSP "report-to <group>" directive is appended automatically.
+    reportTo: "csp",
+  }),
+);
+
+app.cspReportRoute({
+  path: "/__csp-report",       // default
+  rateLimit: { limit: 60, windowMs: 60_000 }, // default; pass false to disable
+  maxBodyBytes: 8 * 1024,      // default
+  logCspReportBodies: false,   // production default; set true only after log review
+  // Optional structured sink; defaults to log.warn through the redacted logger.
+  onReport: (report, { ip, userAgent }) => {
+    const body = report as { "csp-report"?: { "blocked-uri"?: string } };
+    metrics.cspViolation.inc({ blockedUri: body["csp-report"]?.["blocked-uri"] });
+  },
+});
+```
+
+Bad content-types receive `415`, oversize payloads `413`, malformed JSON `400`, and rate-limited callers `429`. The default logger sink omits the parsed report body in production unless `logCspReportBodies: true` is set explicitly. CSP reports include violated URLs, and URLs are where PII likes to hide when nobody is looking. Sink errors are caught and logged at `error` through the pluggable redacted logger without breaking the `204` response.
+
+## 3. `disconnectStatusCode: 499` default
+
+When the client closes the connection before the response completes (the request `AbortSignal` fires), the dispatcher logs `{ event: "request.disconnected", status: 499 }` and returns an empty `499` response. Access-log dashboards and SLO alerts then cleanly separate client aborts (scrapers, aborted fetches, WAF-blocked retries) from real `5xx` failures.
+
+```ts
+import { App } from "@daloyjs/core";
+
+// Default: 499 (Nginx convention for "client closed request").
+const app = new App();
+
+// Override with any integer in [400, 499], or 0 to disable the rewrite.
+const legacy = new App({ disconnectStatusCode: 0 });
+
+// Out-of-range values refuse-at-construction:
+//   new App({ disconnectStatusCode: 200 })  // throws
+//   new App({ disconnectStatusCode: 500 })  // throws
+```
+
+Cannot be silenced to a `2xx` or escalated to a `5xx`: the value is pinned to the `[400, 499]` range (or `0` to keep whatever status the handler produced).
+
+## 4. `defineConfig({ schema, source })` [#4-defineconfig]
+
+Boot-time helper that validates the app's runtime configuration through a Standard Schema (Zod / Valibot / ArkType / TypeBox). Closes the "we shipped to production with `JWT_SECRET=undefined` because the env var wasn't set on the new cluster" class of bugs at the framework boundary, not at every middleware that consumes the secret.
+
+```ts
+import { defineConfig, ConfigValidationError } from "@daloyjs/core";
+import { z } from "zod";
+
+const ConfigSchema = z.object({
+  PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+  JWT_SECRET: z.string().min(32),
+  DATABASE_URL: z.url(),
+  NODE_ENV: z.enum(["development", "test", "production"]),
+});
+
+try {
+  // Sources: "env" | { kind: "env", env }
+  //        | { kind: "file", path, parse? }
+  //        | { kind: "object", data }
+  //        | { kind: "custom", resolve }
+  const config = await defineConfig({
+    schema: ConfigSchema,
+    source: "env",
+  });
+  // config is fully typed: { PORT: number, JWT_SECRET: string, ... }
+  startServer(config);
+} catch (err) {
+  if (err instanceof ConfigValidationError) {
+    // Every offending key is listed in err.issues, and a single
+    // problem-shaped summary was already written to process.stderr.
+    process.exit(1);
+  }
+  throw err;
+}
+```
+
+`defineConfig` reports **every** offending key in one pass (not only the first one) so a cold-start deploy fixes a misconfigured cluster on the first try. Suppress the stderr summary with `{ stderr: false }` if you want to handle the error structurally yourself.

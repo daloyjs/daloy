@@ -1,0 +1,184 @@
+---
+title: Send email from DaloyJS with Mailgun
+description: Send transactional email from a DaloyJS API using Sinch Mailgun's mailgun.js SDK. Includes API key setup, the mg.messages.create interface, EU region support, and edge-runtime configuration.
+keywords:
+  - DaloyJS Mailgun
+  - mailgun.js
+  - Mailgun Node SDK
+  - Mailgun EU region
+  - Mailgun Cloudflare Workers
+---
+
+# Send email from DaloyJS with Mailgun
+
+[Mailgun](https://www.mailgun.com) (now Sinch Mailgun) offers high-volume transactional and bulk email, address validation, and routing. This guide uses the official [`mailgun.js`](https://github.com/mailgun/mailgun.js) SDK.
+
+<SequenceDiagram title="Send through the mailgun.js SDK" participants={["Route handler", "mg client", "Mailgun API", "Webhooks"]} steps={[
+          {
+            from: "Route handler",
+            to: "mg client",
+            label: "mg.messages.create(DOMAIN, { from, to, subject })",
+            detail: "client keyed with MAILGUN_API_KEY",
+            kind: "request",
+          },
+          {
+            from: "mg client",
+            to: "Mailgun API",
+            label: "POST /v3/{domain}/messages",
+            detail:
+              "US api.mailgun.net or EU api.eu.mailgun.net (fixed per domain)",
+            kind: "request",
+          },
+          {
+            from: "Mailgun API",
+            to: "Route handler",
+            label: "{ id, message }",
+            detail: "return { id } on success",
+            kind: "response",
+          },
+          {
+            from: "Mailgun API",
+            to: "Webhooks",
+            label: "delivery, bounce, complaint events",
+            detail: "verify HMAC-SHA256(timestamp + token) before trusting",
+            kind: "async",
+          },
+        ]} caption="The region is fixed per domain (US or EU), set url accordingly. On edge runtimes pass useFetch: true so the SDK uses native fetch. Webhook payloads are HMAC-signed, verify them before acting." />
+
+## 1. Provision
+
+1. Add and verify your sending domain under **Sending -\> Domains -\> Add new domain**. Add the SPF/DKIM TXT records and the MX records Mailgun lists.
+2. Choose your **region**: `https://api.mailgun.net` (US, default) or `https://api.eu.mailgun.net` (EU). The region is fixed per domain.
+3. Create a **Sending API key** from **API Security** and store it as `MAILGUN_API_KEY`.
+
+## 2. Install
+
+```ts
+pnpm add mailgun.js form-data
+```
+
+`form-data` is the multipart implementation Mailgun expects on Node.
+
+## 3. Environment variables
+
+```ts
+# .env
+MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+MAILGUN_DOMAIN=mg.acme.example.com
+MAILGUN_FROM="Acme <no-reply@mg.acme.example.com>"
+# Optional: use EU
+# MAILGUN_URL=https://api.eu.mailgun.net
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/mailgun.ts
+import Mailgun from "mailgun.js";
+import FormData from "form-data";
+import type { App } from "@daloyjs/core";
+
+const mailgun = new Mailgun(FormData);
+const mg = mailgun.client({
+  username: "api",
+  key: process.env.MAILGUN_API_KEY!,
+  url: process.env.MAILGUN_URL, // omit for the default US endpoint
+});
+
+const DOMAIN = process.env.MAILGUN_DOMAIN!;
+
+export const mailgunPlugin = {
+  name: "mailgun",
+  register(app: App) {
+    app.decorate("email", {
+      async send({ to, subject, text, html }) {
+        const res = await mg.messages.create(DOMAIN, {
+          from: process.env.MAILGUN_FROM!,
+          to: [to],
+          subject,
+          text,
+          html,
+        });
+        return { id: res.id ?? "" };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    email: {
+      send(msg: {
+        to: string;
+        subject: string;
+        text?: string;
+        html?: string;
+      }): Promise<{ id: string }>;
+    };
+  }
+}
+```
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { mailgunPlugin } from "./plugins/mailgun.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 10 }));
+app.register(mailgunPlugin);
+
+app.post(
+  "/invites",
+  {
+    operationId: "sendInvite",
+    request: {
+      body: z.object({
+        to: z.email(),
+        inviter: z.string().min(1).max(80),
+      }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const { id } = await state.email.send({
+      to: body.to,
+      subject: `${body.inviter} invited you to Acme`,
+      text: `${body.inviter} invited you. Join: https://acme.example.com/join`,
+    });
+    return { status: 202, body: { id } };
+  },
+);
+```
+
+## Templates
+
+Create a stored template in **Sending -\> Templates** with [Handlebars](https://handlebarsjs.com/) syntax, then reference it by name and pass variables as a JSON string:
+
+```ts
+await mg.messages.create(DOMAIN, {
+  from: process.env.MAILGUN_FROM!,
+  to: [to],
+  subject: "Welcome",
+  template: "welcome",
+  "h:X-Mailgun-Variables": JSON.stringify({ name: "Devlin" }),
+});
+```
+
+## Runtimes
+
+<ul>
+<li>Node / Bun / AWS Lambda{": "}works with the configuration above.</li>
+<li>Cloudflare Workers{": "}pass <code>useFetch: true</code> so the SDK uses the platform's native <code>fetch</code> instead of{" "}<code>request</code> (which depends on Node's HTTP module):<CodeBlock code={"const mg = mailgun.client({\n  username: \"api\",\n  key: process.env.MAILGUN_API_KEY!,\n  url: process.env.MAILGUN_URL,\n  useFetch: true,\n});"} />When <code>useFetch</code> is enabled, you can also drop the{" "}<code>form-data</code> dependency in favour of the global{" "}<code>FormData</code>.</li>
+</ul>
+
+## Webhooks
+
+Mailgun signs webhook payloads with HMAC-SHA256. When you accept delivery, bounce, or complaint events, verify `signature.signature` against `timestamp + token` using your webhook signing key before trusting the body.
+
+See also [AWS SES](/docs/email/aws-ses), [Resend](/docs/email/resend), and the [email integrations overview](/docs/email).

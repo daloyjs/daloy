@@ -1,0 +1,191 @@
+---
+title: Send email from DaloyJS with Resend
+description: Send transactional email from a DaloyJS API using Resend's official Node SDK. Includes API key setup, the resend.emails.send interface, React Email templates, and edge runtime support.
+keywords:
+  - DaloyJS Resend
+  - Resend Node SDK
+  - React Email DaloyJS
+  - resend.emails.send
+  - edge email DaloyJS
+---
+
+# Send email from DaloyJS with Resend
+
+[Resend](https://resend.com) is an email API with first-class TypeScript types, edge-runtime support, and tight integration with [React Email](https://react.email) templates. It's an excellent default for new DaloyJS projects.
+
+<SequenceDiagram title="Send through the resend SDK" participants={["Route handler", "Resend SDK", "Resend API", "Webhooks"]} steps={[
+          {
+            from: "Route handler",
+            to: "Resend SDK",
+            label: "resend.emails.send({ from, to, subject })",
+            detail: "uses the standard fetch API (edge-friendly)",
+            kind: "request",
+          },
+          {
+            from: "Resend SDK",
+            to: "Resend API",
+            label: "HTTPS request",
+            detail: "Bearer RESEND_API_KEY",
+            kind: "request",
+          },
+          {
+            from: "Resend API",
+            to: "Route handler",
+            label: "{ data, error }",
+            detail: "throw on error, else return { id: data.id }",
+            kind: "response",
+          },
+          {
+            from: "Resend API",
+            to: "Webhooks",
+            label: "delivered, bounced, complained events",
+            detail: "verify the signature before trusting payloads",
+            kind: "async",
+          },
+        ]} caption="resend.emails.send() runs on the standard fetch API, so it works on edge runtimes too. The SDK returns { data, error } rather than throwing, so handle the error branch and return data.id on success." />
+
+## 1. Provision
+
+1. Sign up at [resend.com](https://resend.com) and add a sending **domain** under **Domains**. Add the SPF, DKIM, and DMARC DNS records Resend lists, then click *Verify*.
+2. Create an **API key** under **API Keys**. Use a “Sending access” key scoped to that domain.
+
+## 2. Install
+
+```ts
+pnpm add resend
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxx
+RESEND_FROM="Acme <no-reply@acme.example.com>"
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/resend.ts
+import { Resend } from "resend";
+import type { App } from "@daloyjs/core";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export const resendPlugin = {
+  name: "resend",
+  register(app: App) {
+    app.decorate("email", {
+      async send({ to, subject, text, html }) {
+        const { data, error } = await resend.emails.send({
+          from: process.env.RESEND_FROM!,
+          to,
+          subject,
+          text,
+          html,
+        });
+        if (error) throw new Error(error.message);
+        return { id: data?.id ?? "" };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    email: {
+      send(msg: {
+        to: string;
+        subject: string;
+        text?: string;
+        html?: string;
+      }): Promise<{ id: string }>;
+    };
+  }
+}
+```
+
+Resend SDK methods return `{ data, error }` rather than throwing, handle the `error` branch and surface it through the [DaloyJS error helpers](/docs/errors).
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { resendPlugin } from "./plugins/resend.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 10 }));
+app.register(resendPlugin);
+
+app.post(
+  "/magic-link",
+  {
+    operationId: "sendMagicLink",
+    request: {
+      body: z.object({ email: z.email() }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const link = await issueMagicLink(body.email); // your own logic
+    const { id } = await state.email.send({
+      to: body.email,
+      subject: "Your sign-in link",
+      text: `Sign in: ${link}`,
+      html: `<p>Sign in: <a href="${link}">${link}</a></p>`,
+    });
+    return { status: 202, body: { id } };
+  },
+);
+
+async function issueMagicLink(_email: string) {
+  return "https://acme.example.com/auth/callback?token=...";
+}
+```
+
+## React Email templates
+
+Resend reads the `react` field and renders it to HTML for you, so you can ship type-safe email templates as React components:
+
+```ts
+pnpm add @react-email/components react react-dom
+```
+
+```ts
+// emails/welcome.tsx
+import { Html, Button, Heading, Text } from "@react-email/components";
+
+export default function Welcome({ name }: { name: string }) {
+  return (
+    <Html>
+      <Heading>Welcome, {name}!</Heading>
+      <Text>Thanks for joining Acme.</Text>
+      <Button href="https://acme.example.com/start">Get started</Button>
+    </Html>
+  );
+}
+
+// in the handler
+import Welcome from "../../emails/welcome.tsx";
+
+await resend.emails.send({
+  from: process.env.RESEND_FROM!,
+  to,
+  subject: "Welcome to Acme",
+  react: Welcome({ name: "Devlin" }),
+});
+```
+
+## Batch sending
+
+Use `resend.batch.send([...])` to enqueue up to 100 messages in a single API call, handy for fan-out notifications without queueing infrastructure.
+
+## Runtimes
+
+The `resend` SDK uses the standard `fetch` API, so it runs on Node 18+, Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare Workers without adapters. Pair it with the [edge adapters](/docs/adapters) shipped by DaloyJS.
+
+See also [Postmark](/docs/email/postmark), [SendGrid](/docs/email/sendgrid), and the [email integrations overview](/docs/email).

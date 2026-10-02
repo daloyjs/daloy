@@ -1,0 +1,204 @@
+---
+title: GeoIP / geo-blocking
+description: "Allow or deny traffic by country with geoBlock(): bring your own MaxMind reader or read an edge country header (CF-IPCountry, CloudFront-Viewer-Country, x-vercel-ip-country). No bundled GeoIP database, zero runtime dependencies, fail-closed allow-lists."
+keywords:
+  - GeoIP
+  - geo-blocking
+  - geoBlock
+  - country block
+  - MaxMind
+  - CF-IPCountry
+  - ISO 3166
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# GeoIP / geo-blocking
+
+DaloyJS ships `geoBlock()`, a country allow/deny middleware that maps the client IP to a country and rejects (or logs) traffic from countries you don't serve. It is the compliance/abuse counterpart to `ipRestriction()` and `ipReputation()`.
+
+- No bundled database: Daloy ships no GeoIP data and adds no runtime dependency. You supply the IP -\> country mapping (a MaxMind reader, an `ip2location` reader, your own table) *or* read a country header injected by your edge.
+- Two strategies, pick one: `lookupCountry(ip)` when you own the lookup, or `resolveCountry(ctx)` when an upstream already attached the country.
+- Fail-closed allow-lists: when an `allow` list is configured, an *unknown* country is rejected by default (it's not on the list). Deny-only configurations fail open. Both are overridable with `allowUnknownCountry`.
+- Reuses trusted-proxy IP resolution: the same spoof-resistant `X-Forwarded-For` / `X-Real-IP` handling (off by default, opt in with `trustProxyHeaders`) as the other network guards. The client IP is read from the **rightmost** XFF entry (the one your immediate proxy appended), never an attacker-prepended left entry. Multi-hop chains declare their length with `trustedHops`.
+
+<UseCaseGuide featureName="Geo-blocking middleware (geoBlock)" recommendation="Use geoBlock when you need region-specific compliance, licensing enforcement, or region-targeted threat mitigation inside your application logic. Prefer configuring geo-blocking at the CDN edge (Cloudflare/Fastly) if you want to block traffic before it hits your server resources." whenToUse={[
+          "Enforcing compliance with local laws, trade embargoes, or licensing/distribution agreements (e.g. video streaming regions).",
+          "Targeting region-specific spam, abuse, or scanning activity by blocking traffic from countries where you have no business presence.",
+          "Reading edge headers (like CF-IPCountry or x-vercel-ip-country) to quickly restrict access with near-zero latency.",
+        ]} whenNotToUse={[
+          "When your CDN or DNS provider (Cloudflare, CloudFront, Route 53) can block requests or route traffic more efficiently at the edge (saving bandwidth and origin compute).",
+          "For generic public APIs where global accessibility is expected and IP addresses frequently migrate across regions.",
+          "When you do not have a reliable upstream country-header or a regularly updated local GeoIP database (outdated lookups block legitimate users).",
+        ]} />
+
+<FlowDiagram title="Country decision" steps={[
+          {
+            label: "Resolve country",
+            detail: "lookupCountry(ip) or resolveCountry(ctx) header",
+            eyebrow: "request",
+          },
+          {
+            label: "On deny list?",
+            detail: "a deny match always wins (least privilege)",
+            tone: "danger",
+          },
+          {
+            label: "Allow list set + not listed?",
+            detail: "only listed countries pass",
+            tone: "danger",
+          },
+          {
+            label: "Unknown country?",
+            detail: "allow-list -> blocked (fail closed). Deny-only -> allowed",
+            tone: "accent",
+          },
+          {
+            label: "Permitted -> handler",
+            detail: "country stamped on ctx.state.geo",
+            tone: "success",
+          },
+        ]} caption="Deny is evaluated first, then the allow-list gate. An unresolved country fails closed when an allow-list is configured and fails open for deny-only setups, both overridable with allowUnknownCountry. A blocked request returns 403 without echoing the country." />
+
+## Strategy 1: bring your own IP -\> country lookup [#strategy-1-bring-your-own-ip-country-lookup]
+
+Use any GeoIP reader as an operator dependency. Daloy resolves the client IP and hands it to `lookupCountry`. Return an ISO 3166-1 alpha-2 code (or nothing when the IP can't be mapped).
+
+```ts
+import { createApp } from "@daloyjs/core";
+import { geoBlock } from "@daloyjs/core";
+import maxmind, { type CountryResponse } from "maxmind"; // your dependency, not Daloy's
+
+const app = createApp();
+
+const reader = await maxmind.open<CountryResponse>("./GeoLite2-Country.mmdb");
+
+app.use(
+  geoBlock({
+    // Block sanctioned/embargoed regions, allow everyone else.
+    deny: ["KP", "IR", "SY", "CU"],
+    // Only trust X-Forwarded-For when a proxy you control sets it.
+    trustProxyHeaders: true,
+    lookupCountry: (ip) => reader.get(ip)?.country?.iso_code,
+  }),
+);
+```
+
+## Strategy 2: read an edge-injected country header
+
+If your app runs behind a CDN or platform that already geolocates the request, skip the IP lookup entirely and read the header. No proxy-trust configuration is needed because you are not parsing `X-Forwarded-For` yourself.
+
+```ts
+app.use(
+  geoBlock({
+    // Allow-list: only these countries may reach the app.
+    allow: ["US", "CA", "GB", "DE", "FR"],
+    resolveCountry: (ctx) => ctx.request.headers.get("cf-ipcountry"),
+  }),
+);
+```
+
+## Deployment-platform country headers
+
+Most edges expose the resolved country as a request header, which makes `resolveCountry` a one-liner. Common values:
+
+```ts
+// Cloudflare (Workers / proxied):      CF-IPCountry
+geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("cf-ipcountry") });
+
+// AWS CloudFront:                       CloudFront-Viewer-Country
+geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("cloudfront-viewer-country") });
+
+// Vercel:                               x-vercel-ip-country
+geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("x-vercel-ip-country") });
+
+// Fastly (configured VCL):              Fastly-Geo-Country / a header you set
+geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-country") });
+```
+
+On platforms that do *not* inject a country header (a bare Node / Bun / Deno deployment, or a VPS), use **Strategy 1** with a local MaxMind database and `trustProxyHeaders` matched to your proxy chain. Cloudflare's `CF-IPCountry` can also be `XX` (unknown) or `T1` (Tor). Those are treated as an unknown country unless you list them explicitly.
+
+## Allow-list vs. deny-list semantics
+
+- deny: listed countries are always rejected. A deny match wins over an allow match (least privilege).
+- allow: when non-empty, only listed countries pass. Everything else (including an unresolved country) is rejected.
+- both: deny is evaluated first, then the allow-list gate.
+
+Country codes are case-insensitive and validated at construction, so a typo like `"USA"` throws immediately rather than silently never matching.
+
+## Unknown countries
+
+When the country can't be resolved (no IP, no mapping, empty header), the default is:
+
+- allow-list configured -\> *blocked* (fail closed).
+- deny-only -\> *allowed* (fail open).
+
+Override either way with `allowUnknownCountry`.
+
+### When the forwarded client IP cannot be resolved [#unresolved-client-ip]
+
+With the built-in forwarded-IP resolver (`trustProxyHeaders`, `trustedHops`, or `trustedProxies`), a request can arrive without a usable client IP: the peer is not one of your trusted proxies, or the `X-Forwarded-For` chain is missing or shorter than `trustedHops`. That usually means someone skipped your CDN and hit the origin directly. `onUnresolvedIp` (since 1.3.7) decides what happens:
+
+- `"peer"` (default): look up the immediate TCP peer address instead. The peer cannot be spoofed, so a client in a denied country cannot pass just by bypassing the CDN. A peer-derived country can only **block**, never allow: if it would be allowed, the request is still treated as an unknown country (the peer may be your own proxy, whose country says nothing about the client), so allow-lists stay fail-closed.
+- `"unknown"`: treat the country as unknown and let `allowUnknownCountry` decide (deny-only configs let it through). This was the behaviour before 1.3.7.
+
+On platforms with no socket peer the country is unknown either way. The option is ignored when you supply `resolveCountry` or a custom `resolveIp`. The cleanest fix is still to declare `trustedProxies` and make the origin unreachable except through your proxy.
+
+```ts
+app.use(
+  geoBlock({
+    deny: ["KP", "IR"],
+    trustedProxies: ["10.0.0.0/8"], // your load balancer range
+    lookupCountry: (ip) => reader.get(ip)?.country?.iso_code,
+    // default "peer": a direct-to-origin request is geolocated by its socket peer
+    onUnresolvedIp: "peer",
+  }),
+);
+```
+
+## Monitoring before enforcing
+
+Roll out safely with `mode: "log"`: requests are never blocked, but `onBlock` fires for every would-be block so you can measure impact first.
+
+```ts
+app.use(
+  geoBlock({
+    allow: ["US", "CA"],
+    mode: "log", // observe only, nothing is blocked yet
+    resolveCountry: (c) => c.request.headers.get("cf-ipcountry"),
+    onBlock: (d) => {
+      // d.reason: "denied_country" | "not_in_allowlist" | "unknown_country"
+      console.warn("geo would-block", d.reason, d.country, d.ip);
+    },
+  }),
+);
+```
+
+## Reading the country downstream
+
+For allowed requests, the resolved country is stamped on `ctx.state.geo` (rename with `stateKey`), so handlers can localise or audit without a second lookup.
+
+```ts
+app.get(
+  "/pricing",
+  {
+    operationId: "pricing",
+    responses: { 200: { description: "ok" } },
+  },
+  (ctx) => {
+    const country = (ctx.state.geo as { country?: string } | undefined)?.country;
+    return { status: 200 as const, body: { currency: country === "GB" ? "GBP" : "USD" } };
+  },
+);
+```
+
+## Rejection response
+
+A blocked request throws `ForbiddenError`, rendered as RFC 9457 `application/problem+json` with HTTP `403` and `Cache-Control: no-store`. The default message (`"Access from your region is not permitted"`) is configurable via `message` and deliberately does not echo the country or IP back to the client.
+
+## Security notes
+
+- Geo-blocking is a **compliance / abuse-reduction** tool, not an authentication control. VPNs and proxies defeat it. Pair it with real auth.
+- Only set `trustProxyHeaders` when every request reaches Daloy through a proxy chain you control. Otherwise `X-Forwarded-For` is attacker-spoofable. If the origin can be reached directly, pin the proxies down with `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
+- Keep your GeoIP database current. Stale data misclassifies reassigned ranges.

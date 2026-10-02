@@ -1,0 +1,146 @@
+---
+title: Email integrations for DaloyJS
+description: Send transactional and marketing email from a DaloyJS API using AWS SES, SendGrid, Resend, Postmark, Mailgun, or Mailtrap. Compares runtime support, SDK style, and best-fit use cases.
+keywords:
+  - DaloyJS email
+  - transactional email Node.js
+  - AWS SES DaloyJS
+  - SendGrid DaloyJS
+  - Resend DaloyJS
+  - Postmark DaloyJS
+  - Mailgun DaloyJS
+  - Mailtrap DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Email integrations
+
+DaloyJS doesn't ship its own email transport. Send mail by registering a small [plugin](/docs/plugins) that decorates `app.state` with a provider client, then call it from your route handlers. The pages in this section show how to wire up the six most common transactional email providers using their official Node SDKs.
+
+<BranchDiagram title="One EmailSender, six providers" source={{
+          eyebrow: "your app",
+          label: "EmailSender interface",
+          detail: "send(msg): Promise<{ id }>",
+        }} branches={[
+          {
+            eyebrow: "AWS",
+            label: "AWS SES (SESv2)",
+            detail: "@aws-sdk/client-sesv2",
+          },
+          { eyebrow: "Twilio", label: "SendGrid", detail: "@sendgrid/mail" },
+          { eyebrow: "edge-ready", label: "Resend", detail: "resend" },
+          { eyebrow: "inbox-first", label: "Postmark", detail: "postmark" },
+          { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
+          { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
+        ]} caption="A plugin decorates app.state with a provider client behind a shared EmailSender contract. Route handlers call state.email.send() without depending on which provider is wired in." />
+
+## Supported providers
+
+- [AWS SES (SESv2)](/docs/email/aws-ses): pay-as-you-go SMTP/HTTP at AWS scale via `@aws-sdk/client-sesv2`. Best fit when you already run on AWS or need the cheapest per-message price.
+- [SendGrid](/docs/email/sendgrid): Twilio's established sender via `@sendgrid/mail`. Good for high-volume marketing plus transactional.
+- [Resend](/docs/email/resend): email API via the `resend` SDK. React Email templates and edge-runtime support.
+- [Postmark](/docs/email/postmark): transactional-first delivery via the `postmark` SDK. Known for high inbox placement.
+- [Mailgun](/docs/email/mailgun): Sinch-backed sender via `mailgun.js`. Strong validation, routing, and EU/US regions.
+- [Mailtrap](/docs/email/mailtrap): sandbox + production sending via the `mailtrap` SDK. Switch between a test inbox and live sending with a single flag.
+
+## Runtime compatibility at a glance
+
+Most provider SDKs are HTTPS-based and work on every runtime DaloyJS targets, but a few depend on Node-only APIs (filesystem, TCP, AWS Signature V4 with NodeHttpHandler) and won't run on Cloudflare Workers without adjustments.
+
+| Provider | Node / Bun / Deno | Cloudflare Workers | AWS Lambda |
+| --- | --- | --- | --- |
+| AWS SES (SESv2) | Yes | With `fetch` handler & static creds | Yes (IAM role) |
+| SendGrid | Yes | Use Web API via fetch (SDK is Node-oriented) | Yes |
+| Resend | Yes | Yes | Yes |
+| Postmark | Yes | Call REST via fetch (SDK uses axios) | Yes |
+| Mailgun | Yes | Yes (enable `useFetch: true` in v12.1+) | Yes |
+| Mailtrap | Yes | Call REST via fetch (SDK uses Node features) | Yes |
+
+## Common pattern
+
+Every guide in this section follows the same three steps: install the SDK, register a DaloyJS plugin that puts the client on `app.state`, then call it inside a validated route handler. The plugin shape is intentionally tiny so you can swap providers without touching business logic:
+
+<FlowDiagram title="Wire it up once" numbered steps={[
+          {
+            eyebrow: "step 1",
+            label: "Install the SDK",
+            detail: "pnpm add <provider-sdk>",
+          },
+          {
+            eyebrow: "step 2",
+            label: "Register the plugin",
+            detail: 'app.decorate("email", sender)',
+            tone: "accent",
+          },
+          {
+            eyebrow: "step 3",
+            label: "Call from a route",
+            detail: "state.email.send(msg)",
+            tone: "success",
+          },
+        ]} caption="Every guide in this section follows the same three steps. The plugin puts the client on app.state, then validated route handlers send through it." />
+
+```ts
+// src/plugins/email.ts
+import type { App } from "@daloyjs/core";
+
+export interface EmailMessage {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+}
+
+export interface EmailSender {
+  send(msg: EmailMessage): Promise<{ id: string }>;
+}
+
+export function emailPlugin(sender: EmailSender) {
+  return {
+    name: "email",
+    register(app: App) {
+      app.decorate("email", sender);
+    },
+  };
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    email: EmailSender;
+  }
+}
+```
+
+Each provider page implements `EmailSender` with the official SDK so the rest of your app stays provider-agnostic.
+
+## Security checklist
+
+- Keep API keys in environment variables. Never commit them. Use AWS IAM roles on Lambda and platform-managed secrets on Vercel, Cloudflare, Fly, and Render.
+- Verify your sending domain. Add SPF, DKIM, and DMARC records before going live. Every provider here rejects unverified senders in production.
+- Validate inputs and reject CRLF in header fields. Treat `to`, `subject`, display names, `reply_to`, and any custom header value as untrusted. Use [DaloyJS validation](/docs/validation) with `z.email()` for addresses and reject `\r` / `\n` in every other header-bound string. This is the classic SMTP / email header injection vector (Snyk's 2022 write-up [Avoiding SMTP Injection](https://snyk.io/blog/avoiding-smtp-injection/) documents library-level CVEs that were fixed upstream, but the application-level rule still applies whenever you forward user input into mail headers). A reusable schema looks like:
+
+```ts
+// src/schemas/email.ts
+import { z } from "zod";
+
+// Reject CR, LF, NUL - the SMTP / email header injection trio.
+const headerSafe = z
+  .string()
+  .max(998) // RFC 5322 line length
+  .regex(/^[^\r\n\u0000]+$/, "CRLF / NUL not allowed in header fields");
+
+export const SendEmailBody = z
+  .object({
+    to: z.email(),
+    subject: headerSafe,
+    fromName: headerSafe.optional(),
+    replyTo: z.email().optional(),
+    text: z.string().max(50_000),
+  })
+  .strict();
+```
+
+- Prefer HTTPS provider SDKs over raw SMTP libraries. The six providers documented here all speak HTTPS+JSON, so the CRLF-in-SMTP-command class of bug (`smtp-client`, `smtp-channel`, `aiosmtplib` `source_address`) doesn't reach the wire. If you must use a raw SMTP client, validate every field, including hostname and source address, with the schema above.
+- Rate-limit the send route. Use the built-in [rateLimit middleware](/docs/security) (or the [Redis store](/docs/security/rate-limit-redis)) on any endpoint that triggers email so abuse can't drive your bill or reputation down.
+- Verify provider webhooks. If you process bounces, complaints, or opens, verify the signature on every incoming webhook before trusting its payload.

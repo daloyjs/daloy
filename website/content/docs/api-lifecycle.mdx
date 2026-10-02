@@ -1,0 +1,165 @@
+---
+title: API lifecycle & breaking changes
+description: Deprecate and sunset DaloyJS routes with Deprecation and RFC 8594 Sunset headers, then catch breaking API changes in CI with diffOpenAPI, the daloy diff CLI, and the verify:breaking-changes gate.
+keywords:
+  - API versioning
+  - breaking change detection
+  - OpenAPI diff
+  - RFC 8594
+  - RFC 9745
+  - Deprecation header
+  - Sunset header
+  - deprecated route
+  - DaloyJS API lifecycle
+sitemap:
+  priority: 0.8
+---
+
+# API lifecycle & breaking changes
+
+Because every DaloyJS endpoint is a single source of truth, the framework can answer two questions that usually need extra tooling: *"how do I tell consumers an endpoint is going away?"* and *"did this change break my published API?"* The first is solved with a route-level deprecation lifecycle. The second is solved with an OpenAPI diff you can run in CI.
+
+If you are deciding how to run `/api/v1` and `/api/v2` side by side before retiring the older contract, start with the [API versioning guide](/docs/api-versioning).
+
+<FlowDiagram title="Route deprecation lifecycle" caption="A route moves through these states. deprecated: true announces the intent and adds the Deprecation header. A sunset date adds the Sunset header and a hard removal target. Only then do you delete the route. diffOpenAPI catches the final step if a consumer still depends on it." steps={[
+          { label: "Active", detail: "no extra headers", tone: "success" },
+          { label: "deprecated: true", detail: "Deprecation: true header" },
+          { label: "sunset: <date>", detail: "Sunset: <IMF-fixdate> header" },
+          {
+            label: "Removed",
+            detail: "route deleted after the sunset",
+            tone: "danger",
+          },
+        ]} />
+
+## Deprecating a route
+
+Set `deprecated: true` on a route to mark it in the OpenAPI document (the operation gets `deprecated: true`) and to emit a `Deprecation: true` response header on every response from that route.
+
+```ts
+app.get(
+  "/v1/reports",
+  {
+    deprecated: true,
+    responses: { 200: { description: "OK" } },
+  },
+  () => ({ status: 200, body: { ok: true } }),
+);
+
+// Response headers:
+//   Deprecation: true
+```
+
+## Scheduling a sunset date
+
+Add a `sunset` date to announce *when* the route will be removed. It accepts an ISO-8601 string, any string `new Date(...)` can parse, or a `Date`. A route with a `sunset` is implicitly deprecated, so you don't need to set both.
+
+```ts
+app.get(
+  "/v1/reports",
+  {
+    sunset: "2026-12-31T00:00:00Z",
+    responses: { 200: { description: "OK" } },
+  },
+  () => ({ status: 200, body: { ok: true } }),
+);
+
+// Response headers:
+//   Deprecation: true
+//   Sunset: Thu, 31 Dec 2026 00:00:00 GMT
+```
+
+The RFC 8594 `Sunset` value is normalized to an IMF-fixdate (HTTP date) once, at route registration time, so a typo fails fast instead of silently shipping a malformed header. The OpenAPI operation also carries the normalized value as an `x-sunset` vendor extension. If your handler sets its own `Deprecation` or `Sunset` header, the framework never overwrites it. That lets teams emit a date-valued RFC 9745 `Deprecation` header when they need that stricter form.
+
+## Detecting breaking changes
+
+`diffOpenAPI(baseline, current)` compares two OpenAPI 3.x documents and classifies every difference as **breaking** (a consumer relying on the baseline could now fail) or **non-breaking** (additive or informational). It is pure and dependency-free, so it runs anywhere you can read two JSON files.
+
+```ts
+import { diffOpenAPI, hasBreakingChanges } from "@daloyjs/core";
+// or the focused entry point:
+// import { diffOpenAPI } from "@daloyjs/core/openapi-diff";
+
+const result = diffOpenAPI(publishedSpec, currentSpec);
+// result.breaking:    OpenAPIChange[]
+// result.nonBreaking: OpenAPIChange[]
+
+if (hasBreakingChanges(publishedSpec, currentSpec)) {
+  throw new Error("This change breaks the published API contract.");
+}
+```
+
+The diff flags these as breaking:
+
+- a path or operation (HTTP method) present in the baseline is removed.
+- a documented response status code is removed from an operation.
+- a new `required` parameter is added to an existing operation.
+- an existing optional parameter becomes `required`.
+- an operation's request body becomes required when it was not.
+
+New paths, operations, response codes, and optional parameters, parameter removals, a newly `deprecated` operation, and an `info.version` bump are all reported as non-breaking.
+
+## The daloy diff CLI
+
+The same engine ships as a CLI command so you can gate any two spec files without writing code. It prints the classified changes and exits `1` when a breaking change is found.
+
+```bash
+# Compare the last published spec against the freshly generated one
+daloy diff openapi.published.json openapi.json
+
+# Machine-readable output for CI
+daloy diff --json openapi.published.json openapi.json
+```
+
+## Wiring it into CI
+
+Commit your published spec as a baseline (e.g. `generated/openapi.baseline.json`) and run the `verify:breaking-changes` gate. It compares the baseline against the freshly generated `generated/openapi.json` and fails the build on any breaking change. When no baseline exists yet the gate is a no-op, so you can adopt it incrementally.
+
+<FlowDiagram title="Breaking-change CI gate" numbered caption="The same diff engine the library exposes runs as a CI gate. A breaking change fails the build (exit 1). Additive changes pass. With no committed baseline the gate is a no-op, so adoption is incremental." steps={[
+          { label: "pnpm gen", detail: "regenerate generated/openapi.json" },
+          { label: "baseline", detail: "generated/openapi.baseline.json" },
+          {
+            label: "diffOpenAPI",
+            detail: "classify every change",
+            tone: "accent",
+          },
+          { label: "breaking?", detail: "fail CI ⟋ pass build" },
+        ]} />
+
+```bash
+pnpm gen                      # regenerate generated/openapi.json
+pnpm verify:breaking-changes  # fail CI if the published contract is broken
+```
+
+## This site runs the same policy
+
+The HTTP APIs on `daloyjs.dev` itself follow the rules above, so you can watch the headers on a live origin instead of trusting a code sample. Majors live in the URL path (`/api/v1`), every response echoes `API-Version`, and the unversioned `/api` alias permanently redirects to the current major with RFC 5829 `rel="successor-version"` and `rel="latest-version"` link relations.
+
+Send `API-Version: 1` to pin the major you were built against. A value this origin does not serve is a `400 unsupported_api_version` problem+json rather than a silent switch to a different shape, so an agent written for a future major fails loudly.
+
+<FlowDiagram title="Where the policy is published" caption="One source of truth in lib/site-deprecation.ts feeds all four surfaces, so the headers, the catalog, and the spec cannot drift apart." steps={[
+          { label: "Response headers", detail: "Deprecation, Sunset, Link" },
+          { label: "GET /api/v1", detail: "versioning.surfaces[]" },
+          {
+            label: "GET /openapi.json",
+            detail: "info.x-api-lifecycle",
+            tone: "accent",
+          },
+          { label: "This page", detail: "the prose version", tone: "success" },
+        ]} />
+
+A surface on the way out carries the machine signals from the start of its retirement. Those include an RFC 9745 `Deprecation` date, a `rel="deprecation"` link back to this page, and a `rel="successor-version"` pointer to the replacement. The legacy `/docs-md/*` Markdown handler is the live example. An RFC 8594 `Sunset` date is added only when a retirement is actually scheduled, and never less than 180 days ahead.
+
+```bash
+curl -sI https://daloyjs.dev/docs-md/routing | grep -iE 'deprecation|link'
+# Deprecation: @1787443200
+# Link: <https://daloyjs.dev/docs/api-lifecycle>; rel="deprecation"; type="text/html",
+#       </md>; rel="successor-version", </api/v1>; rel="latest-version"
+
+curl -s https://daloyjs.dev/api/v1 | jq .versioning.surfaces
+curl -s https://daloyjs.dev/openapi.json | jq '.info["x-api-lifecycle"]'
+```
+
+Rate limits are published the same way. Every response from these APIs carries the IETF `RateLimit` and `RateLimit-Policy` fields, and a `429` adds `Retry-After` alongside an RFC 9457 problem body, so an agent can self-throttle from the response instead of backing off blindly. See [the middleware reference](/docs/api-reference/middleware) for the `rateLimit()` middleware that does this in your own app.
+
+See also [OpenAPI generation](/docs/openapi) for how the spec is produced and [typed clients](/docs/typed-client) for how consumers pick up the contract.

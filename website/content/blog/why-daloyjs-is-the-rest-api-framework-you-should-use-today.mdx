@@ -1,0 +1,89 @@
+---
+title: Why DaloyJS Is the REST API Framework You Should Use Today
+description: Security guardrails are part of the 2026 baseline. This is the blunt case for a REST framework that ships secure defaults instead of a plugin shopping list.
+date: 2026-06-21
+readingTime: 7 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Filipino developer in Norway, still suspicious of frameworks that make security sound like an optional weekend hobby.
+badges:
+  - Security
+  - REST APIs
+keywords:
+  - DaloyJS REST API framework
+  - secure by default framework
+  - TypeScript REST API security
+  - pnpm supply chain hardening
+  - zero runtime dependencies
+---
+
+In 2026, shipping a backend without security guardrails is negligent. Attackers now have LLMs helping them scan CI pipelines, manifests, network config, and package trees at a speed that used to require a team and a lot of caffeine. The bad news is obvious. The worse news is that many developers are still shipping APIs like it is 2018 and good vibes count as a threat model.
+
+That is the context where DaloyJS makes sense. It is a TypeScript REST framework that assumes most people will not read a 300-item security checklist before lunch. Instead of making the safe path a scavenger hunt through middleware docs, it bakes the boring but necessary protections into the framework itself.
+
+## Routing leaves the hard parts to you
+
+Around each route, production still needs a long list of defensive controls. Body limits, timeout handling, secure headers, safe parsing, path traversal rejection, timing-safe comparisons, and a supply chain that is not one typo away from sadness. Most frameworks let you add those one by one. In real projects, under deadline, that translates to maybe later. Then maybe never.
+
+DaloyJS takes the opposite stance: if the framework knows a safe default, it should ship it. That is a much better bet for the era of AI-generated boilerplate and accidental production deployments.
+
+## What you get on the first route
+
+Every route definition inherits protections that usually show up as separate packages in other stacks. None is novel on its own. Their value is being present before the first incident report.
+
+- Body-size limits to stop easy memory abuse.
+- Prototype-pollution-safe JSON parsing.
+- Path traversal guards that reject suspicious segments.
+- Request timeouts so hung handlers do not camp forever.
+- Secure headers without a separate helmet-shaped shopping trip.
+- Timing-safe comparison helpers for tokens and secrets.
+
+```ts
+app.route({
+  method: "POST",
+  path: "/login",
+  operationId: "login",
+  request: {
+    body: z.object({ email: z.email(), password: z.string() })
+  },
+  responses: {
+    200: { description: "OK", body: z.object({ token: z.string() }) },
+    401: { description: "Unauthorized" },
+  },
+  handler: async ({ body }) => {
+    const user = await db.users.findByEmail(body.email);
+    if (!user || !timingSafeEqual(user.passwordHash, hash(body.password))) {
+      return { status: 401, body: { error: "Invalid credentials" } };
+    }
+    return { status: 200, body: { token: createToken(user) } };
+  }
+});
+```
+
+The validation, error surface, and a chunk of the hardening story are already attached to that ordinary route definition. I like boring code when the boring code survives contact with the public internet.
+
+## Supply chain hardening should not be extra credit
+
+DaloyJS also extends the secure-by-default mindset past the request path. The scaffold leans on pnpm defaults that make supply chain attacks materially harder to land. These defaults block a large number of avoidable supply-chain problems.
+
+```ini
+ignore-scripts=true
+minimum-release-age=1440
+verify-store-integrity=true
+```
+
+\`ignore-scripts=true\` closes the door on a whole class of lifecycle script nonsense. \`minimum-release-age=1440\` gives the ecosystem a day to notice when a freshly published package turns out to be a small crime scene. \`verify-store-integrity=true\` makes sure the bits you install are the bits you meant to install. That is better than explaining to your manager why an innocent \`pnpm install\` had opinions about crypto wallets.
+
+## Zero runtime dependencies matters
+
+One property that matters more than it looks: the core keeps a zero-runtime-dependency posture. That reduces the transitive tree, the audit surface, and the number of maintainers you are trusting by accident. In a world where one compromised maintainer account can cause a very bad week for a lot of strangers, smaller trees reduce risk.
+
+## The baseline changed
+
+The useful part is what the framework refuses to leave optional. DaloyJS removes security chores that teams forget under deadline pressure. For a REST API in 2026, those controls belong in the baseline.
+
+If you want the deeper background on the default protections, start with [Secure by Default](/blog/secure-by-default). If you want the origin story, [the launch story](/blog/the-flow-i-wished-i-had) is where the sleep deprivation becomes autobiographical.
+
+<div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">
+<p className="text-sm leading-7 text-muted-foreground"><span className="font-semibold text-foreground">About the author:</span>{" "}{"Filipino developer in Norway, still suspicious of frameworks that make security sound like an optional weekend hobby."}</p>
+</div>

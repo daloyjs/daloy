@@ -1,0 +1,172 @@
+---
+title: Bot / User-Agent management
+description: "Block empty or known-abusive User-Agent strings and verify declared crawlers (Googlebot/Bingbot) with reverse-DNS + forward-confirm using botGuard(): the in-app equivalent of Nginx/WAF bot rules. Opt-in, allowlist-friendly, zero runtime dependencies."
+keywords:
+  - bot management
+  - user-agent
+  - botGuard
+  - Googlebot verification
+  - reverse DNS
+  - WAF
+  - crawler
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Bot / User-Agent management
+
+DaloyJS ships `botGuard()`, the in-app equivalent of the bot rules Nginx, Cloudflare, and other WAFs run at the edge, but inside the app where the framework already owns request parsing and client-IP resolution. It does three opt-in jobs:
+
+- Block empty / missing `User-Agent` (a common signature of crude scrapers and vulnerability scanners, on by default).
+- Block known-abusive `User-Agent` strings (your own substrings or `RegExp`s).
+- Verify declared crawlers: when a request *claims* to be Googlebot or Bingbot, confirm it via reverse-DNS + forward-confirm (the method Google and Bing themselves document) so a spoofed `User-Agent` can't impersonate a trusted crawler.
+
+Every check is opt-in and allowlist-friendly, and the middleware is dependency-free and runtime-portable.
+
+<UseCaseGuide featureName="Bot Guard (botGuard)" recommendation="Use botGuard to block simple automated scrapers, headless tools, or spoofed search crawlers at the application layer. Avoid using it as a replacement for commercial Edge WAFs when dealing with high-volume DDoS or sophisticated scraping operations." whenToUse={[
+          "Blocking basic automated scripts, vulnerability scanners, and web scrapers that send requests with empty or generic User-Agents.",
+          "Verifying legitimate search engine crawlers (Googlebot, Bingbot) to prevent attackers from spoofing search engine traffic.",
+          "Protecting content-heavy endpoints (documentation, blogs, product catalogs) from being harvested by unauthorized scraper bots.",
+        ]} whenNotToUse={[
+          "When edge-level protections (e.g. Cloudflare Bot Management) are already active and configured to block automated traffic before it reaches your origins.",
+          "For endpoints that are designed to be consumed by headless API integrations or developers running custom command-line scripts (e.g. curl, postman).",
+          "If DNS resolution is slow or restricted in your runtime (the DNS lookup needed to verify Googlebot/Bingbot can add latency to those requests).",
+        ]} />
+
+<FlowDiagram title="Decision order" steps={[
+          {
+            label: "On allowUserAgents?",
+            detail: "consulted first. Bypasses every other rule",
+            eyebrow: "allowlist",
+            tone: "success",
+          },
+          {
+            label: "Empty / missing UA?",
+            detail: "blockEmptyUserAgent (on by default) -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Matches blockedUserAgents?",
+            detail: "substring or RegExp -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Claims a verified crawler?",
+            detail:
+              "reverse-DNS + forward-confirm. Spoofed / unverifiable -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Allowed -> handler",
+            detail: "log mode never blocks. Only fires onBlock",
+            tone: "success",
+          },
+        ]} caption="The allowlist wins first. After that an empty User-Agent, a blocked pattern, or a crawler that fails reverse-DNS plus forward-confirm is rejected with a 403 by default, so a spoofed Googlebot cannot impersonate a trusted crawler." />
+
+## Quick start
+
+```ts
+import { createApp } from "@daloyjs/core";
+import { botGuard, WELL_KNOWN_BOTS } from "@daloyjs/core";
+
+const app = createApp();
+
+app.use(
+  botGuard({
+    trustProxyHeaders: true, // needed to read the client IP for crawler checks
+    blockedUserAgents: [/sqlmap/i, /nikto/i, "masscan"],
+    verifiedBots: WELL_KNOWN_BOTS, // a spoofed Googlebot/Bingbot -> 403
+  }),
+);
+```
+
+Mount it with `app.use()` so it runs in `beforeHandle` before your handlers. A blocked request is rejected with `403 Forbidden` RFC 9457 problem+json. Crawler verification resolves the client IP from the **rightmost** `X-Forwarded-For` entry (the one your immediate proxy appended), so an attacker-prepended left entry cannot impersonate a verified crawler's address. Multi-hop chains declare their length with `trustedHops`. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is believed (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
+
+## Blocking empty & abusive User-Agents [#blocking-empty-and-abusive-user-agents]
+
+`blockEmptyUserAgent` defaults to `true`. A plain string in `blockedUserAgents` matches case-insensitively as a substring. A `RegExp` is tested as-is.
+
+```ts
+app.use(
+  botGuard({
+    blockEmptyUserAgent: true,
+    blockedUserAgents: ["masscan", "zgrab", /\bnmap\b/i],
+  }),
+);
+```
+
+## Allowlist wins
+
+`allowUserAgents` is consulted first and bypasses **every** other rule (including empty-UA blocking and crawler verification), handy for your own monitoring agents or a partner's integration.
+
+```ts
+app.use(
+  botGuard({
+    blockedUserAgents: ["curl"],
+    allowUserAgents: ["MyUptimeBot/1.0", /internal-scanner/i],
+  }),
+);
+```
+
+## Verifying declared crawlers
+
+Spoofing `User-Agent: Googlebot` is trivial. The only reliable check is the one Google and Bing publish: reverse-DNS the client IP, make sure the PTR hostname is on an official domain, then forward-resolve that hostname back to the same IP. `botGuard()` ships `GOOGLEBOT` and `BINGBOT` rules (bundled as `WELL_KNOWN_BOTS`) and you can add your own:
+
+```ts
+import { botGuard, GOOGLEBOT } from "@daloyjs/core";
+
+app.use(
+  botGuard({
+    trustProxyHeaders: true,
+    verifiedBots: [
+      GOOGLEBOT,
+      {
+        name: "MyPartnerCrawler",
+        userAgent: /partnercrawler/i,
+        // Leading dot enforces a subdomain boundary so evil-partner.com
+        // cannot satisfy .partner.example.
+        domains: [".partner.example"],
+      },
+    ],
+  }),
+);
+```
+
+Because `verifiedBots` needs the client IP, the middleware **refuses to construct** unless you supply `resolveIp` or set `trustProxyHeaders`. A request that claims to be a crawler but can't be verified (no client IP, or a DNS failure) is blocked by default (`blockUnverifiableBots`, the secure-by-default posture). Set it to `false` to fail open. Verification results are cached per IP (default 1 h via `cacheTtlMs`) so DNS stays off the hot path.
+
+## Monitor mode & callbacks [#monitor-mode-and-callbacks]
+
+Roll it out safely with `mode: "log"`: nothing is blocked, but every match fires `onBlock` so you can measure impact before enforcing.
+
+```ts
+app.use(
+  botGuard({
+    mode: "log",
+    trustProxyHeaders: true,
+    verifiedBots: WELL_KNOWN_BOTS,
+    onBlock: (event) =>
+      log.warn(
+        { reason: event.reason, ua: event.userAgent, ip: event.ip, bot: event.botName },
+        "botGuard match",
+      ),
+  }),
+);
+```
+
+The `reason` is one of `"empty-user-agent"`, `"blocked-user-agent"`, `"spoofed-bot"`, or `"unverifiable-bot"`.
+
+## Custom DNS resolver
+
+The default resolver lazily imports `node:dns/promises`. On a runtime without it (Workers, Deno without `--allow-net`) or in tests, supply your own `BotResolver`:
+
+```ts
+import type { BotResolver } from "@daloyjs/core/bot-guard";
+
+const resolver: BotResolver = {
+  reverse: (ip) => myDns.reverse(ip),
+  forward: (hostname) => myDns.resolve(hostname),
+};
+
+app.use(botGuard({ trustProxyHeaders: true, verifiedBots: WELL_KNOWN_BOTS, resolver }));
+```

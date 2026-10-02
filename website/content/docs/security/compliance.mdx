@@ -1,0 +1,273 @@
+---
+title: Compliance posture (SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2, EU CRA, DORA, UK CSR Bill)
+description: How DaloyJS's built-in security primitives map to the technical controls expected by the major cloud-compliance frameworks, including DORA (EU Regulation 2022/2554) and the UK Cyber Security and Resilience Bill. The framework can't certify your deployment, but it can stop you from failing the easy audit findings.
+keywords:
+  - DaloyJS compliance
+  - SOC 2 Node.js framework
+  - ISO 27001 Annex A controls
+  - HIPAA technical safeguards
+  - GDPR Article 32
+  - PCI-DSS v4 software controls
+  - NIS2 Article 21
+  - EU CRA
+  - DORA Regulation 2022/2554
+  - DORA technical requirements
+  - ICT third-party risk
+  - UK Cyber Security and Resilience Bill
+  - NCSC CAF
+---
+
+# Compliance posture
+
+<blockquote>This page maps DaloyJS controls to SOC 2, ISO 27001, HIPAA, GDPR, PCI, NIS2, and DORA requirements. Use it as evidence guidance, then confirm the final scope with your auditor or legal team.</blockquote>
+
+DaloyJS is a backend framework, not a managed service, so it cannot certify your deployment for SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2, DORA, or the UK Cyber Security and Resilience Bill on its own. What it *can* do is provide the technical controls each of those frameworks expects from the application layer so that the controls live in source code where they are reviewed, tested, and version-pinned, rather than in a checklist that drifts away from production.
+
+This page maps DaloyJS's built-in primitives to the control families auditors actually ask about. The mapping is informational, not a legal opinion: organizational controls (employee training, vendor management, physical security, access reviews) remain the operator's responsibility.
+
+## Shared technical controls
+
+Most frameworks ask for the same handful of application-layer controls under different names. DaloyJS ships them by default.
+
+<LayerStack title="The application-layer controls auditors keep asking about" flow="down" layers={[
+          {
+            title: "Transport & headers",
+            detail: "secure-by-default HTTP boundary",
+            tone: "accent",
+            items: ["secureHeaders()", "HSTS", "CSP nonce"],
+          },
+          {
+            title: "Authn, authz & crypto",
+            detail: "identity tied to every request",
+            items: [
+              "session()",
+              "bearerAuth()",
+              "JWT alg allowlist",
+              "timingSafeEqual",
+            ],
+          },
+          {
+            title: "Input validation & abuse control",
+            detail: "bad input rejected before the handler",
+            items: [
+              ".strict() schemas",
+              "safeJsonParse",
+              "rateLimit()",
+              "fetchGuard()",
+            ],
+          },
+          {
+            title: "Audit logging & supply chain",
+            detail: "evidence trail for the dossier",
+            tone: "success",
+            items: ["requestId + logs", "log redaction", "provenance", "SBOM"],
+          },
+        ]} caption="The same four control families show up in SOC 2, ISO 27001, HIPAA, GDPR, PCI, NIS2, DORA, and the UK CSR Bill under different names. The table below maps each framework's clause to the DaloyJS primitive that satisfies it." />
+
+| Control family | DaloyJS primitive | Where to read more |
+| --- | --- | --- |
+| Secure transport & secure headers | `secureHeaders()` (HSTS, CSP, COOP, CORP, X-Frame, no-sniff, Referrer-Policy). | [Secure-by-default](/docs/security/secure-defaults) |
+| Authentication & session integrity | Signed-cookie `session()` with key rotation; first-party JWT/JWK helpers; `bearerAuth()`. | [Sessions](/docs/security/session), [Authentication](/docs/auth) |
+| Authorization at the route boundary | Per-route middleware composition; `ipRestriction()` for admin slices; auth-slice pattern for internal endpoints. Object-level checks (BOLA / IDOR) stay in the application's ownership rules; the framework carries the authenticated principal into the handler so those checks can run against the record being touched. | [Secure admin panels](/docs/security/admin-panels), [Auth slice](/docs/security/auth-slice), [Resource authorization](/docs/security/resource-authorization) |
+| Input validation & injection defense | Zod/Valibot schemas on every body, query, and param; router rejects`..` and `//`; `safeJsonParse` strips prototype-pollution keys; SQL/command-injection guards documented for ORMs and shells. | [SQL injection](/docs/security/sql-injection), [Command injection](/docs/security/command-injection) |
+| CSRF & cross-origin policy | `csrf()` with double-submit cookie or Fetch Metadata; explicit `cors()` allowlist (no `*` with credentials). | [CSRF protection](/docs/security/csrf) |
+| Rate limiting & abuse control | In-memory `rateLimit()` for single-instance; Redis-backed limiter for multi-instance; load shedding; login-throttle pattern for auth endpoints. | [Rate limit (Redis)](/docs/security/rate-limit-redis), [WebSocket + login throttle](/docs/security/websocket-login-throttle) |
+| SSRF / outbound network controls | `fetchGuard()` blocks private IPs, link-local, metadata-service ranges, non-http(s) schemes, and credentials in the URL (`credentials-in-url`). On Node, `pinDns` defaults to `true` for `http:` so the validated IP is pinned for the socket (reduces DNS-rebinding TOCTOU on that path). | [SSRF guard (fetchGuard)](/docs/security/fetch-guard) |
+| Resource-exhaustion DoS | Streamed body reads with hard caps; `requestTimeoutMs`; compression bomb protection; multipart limits. | [Runtime protections](/docs/security/runtime-protections), [Compression](/docs/security/compression) |
+| Audit logging & PII handling | Structured logger with request-id correlation; default key redaction (`DEFAULT_REDACT_KEYS`) for known secret/PII keys; JWT-like and opaque-token value scrubbing; `sanitizeUrlForLog` (`SENSITIVE_URL_QUERY_KEYS`) strips secret-bearing query params and userinfo from request URLs bound into log records; opt-in redaction for application-specific fields. | [Logging](/docs/logging), [Tracing](/docs/tracing) |
+| Cryptography | `hashing` helpers, timing-safe secret comparison, first-party JWT/JWK with algorithm allow-listing (no `alg: none`), HMAC webhook verification with algorithm-prefix parsing. | [Secure-by-default](/docs/security/secure-defaults) |
+| Software supply chain | Zero runtime deps; npm provenance (`--provenance`); SBOM published per release; `create-daloy` ships `ignore-scripts=true` and `minimum-release-age`; CI is SHA-pinned and `harden-runner`-gated. | [Supply-chain security](/docs/security/supply-chain) |
+| Vulnerability handling SLA | Published CVSS-keyed patch SLA (48h critical, 7d high, 30d medium, 90d low) with GHSA evidence trail. | [SECURITY.md](https://github.com/daloyjs/daloy/blob/main/SECURITY.md) |
+
+## SOC 2 (Trust Services Criteria, 2017 with 2022 points of focus)
+
+SOC 2 maps to the Trust Services Criteria. DaloyJS contributes mostly to the **Security (Common Criteria)** category and partially to Availability and Confidentiality. Privacy and Processing Integrity also get coverage when you turn the schemas into binding contracts.
+
+- CC6.1 / CC6.6: logical access & boundary protection. Use `secureHeaders()`, `cors()`, `session()`, `bearerAuth()`, and `ipRestriction()` on admin routes.
+- CC6.7: data in transit. HSTS via `secureHeaders()`; TLS termination is the platform's responsibility.
+- CC6.8: protection against malicious software. Supply-chain hardening (no runtime deps, provenance, SBOM, `ignore-scripts`, SHA-pinned actions, lockfile-source verification).
+- CC7.1 / CC7.2: monitoring & anomaly detection. Structured JSON logs with request-id correlation; Server-Timing for latency monitoring; OpenTelemetry integration documented under [Tracing](/docs/tracing).
+- CC7.4: incident response. Published `SECURITY.md`, GHSA evidence pattern, and CVSS-keyed patch SLA.
+- A1.2: availability. Rate limiting, load shedding, request timeouts, body-size caps, graceful shutdown hooks.
+
+## ISO/IEC 27001:2022 (Annex A) [#iso-iec-27001-2022-annex-a]
+
+Picking the 2022 revision (rather than 2013/2017) is the safer call for new certifications, because it adds explicit controls for secure coding, threat intelligence, web filtering, and configuration management that DaloyJS already covers out of the box. The mapping below is the short version your auditor can use as evidence for the application-layer controls.
+
+- A.5.7 Threat intelligence: OpenSSF Scorecard, OSV-Scanner, CodeQL, Dependabot, and the published GHSA advisory flow feed the framework's own intel loop; downstream apps inherit the same signals through `create-daloy --with-ci`.
+- A.5.23 Information security for use of cloud services: runtime-parity audits keep behavior identical across Node, Bun, Deno, and Cloudflare Workers so the cloud provider is a deployment choice, not a security trade-off.
+- A.5.30 ICT readiness for business continuity: graceful shutdown, health endpoints, and lifecycle hooks (see [Lifecycle & health](/docs/security/lifecycle-health)).
+- A.8.7 Protection against malware: supply-chain controls listed above.
+- A.8.8 Management of technical vulnerabilities: the SLA table in SECURITY.md, GHSA flow, OpenSSF Scorecard, CodeQL, Dependabot.
+- A.8.9 Configuration management: secure defaults are enforced at boot ([secureDefaults enforcement](/docs/security/secure-defaults-enforcement)), not only documented.
+- A.8.15 Logging: structured logger, request-id correlation, PII redaction.
+- A.8.16 Monitoring activities: Server-Timing headers, OpenTelemetry spans, and the structured-log pipeline give downstream SIEM/observability tools the signals they need; rate-limit rejections, schema-validation failures, and JWT rejections all surface as discrete log events with a stable request-id.
+- A.8.23 Web filtering: `fetchGuard()` enforces an egress allow-list pattern from inside the app.
+- A.8.24 Use of cryptography: algorithm allow-listing on JWT/JWK; HMAC with algorithm-prefix parsing; timing-safe comparisons.
+- A.8.25 Secure development lifecycle: `create-daloy --with-ci` ships CodeQL, Scorecard, zizmor, Dependabot, CODEOWNERS, and a `SECURITY.md` template.
+- A.8.26 Application security requirements: input validation through Zod/Valibot; OpenAPI contract enforcement before any handler runs.
+- A.8.28 Secure coding: documented patterns for SQL injection, command injection, SSRF, CSRF, prototype pollution.
+- A.8.32 Change management: SHA-pinned GitHub Actions (verified by `verify:actions-pinned`), a 24h `minimum-release-age` cooldown on dependencies, provenance-signed npm publishes, and the verify-\* CI gates listed in `AGENTS.md` make every framework change an auditable, reviewable event.
+
+## HIPAA Security Rule (45 CFR § 164.312) [#hipaa-security-rule-45-cfr-164-312]
+
+HIPAA cares about Protected Health Information (PHI) handled by Covered Entities and Business Associates. DaloyJS contributes to the *Technical Safeguards*:
+
+- § 164.312(a) Access Control: unique user identification via session/JWT subject claim; automatic logoff via session TTL; encryption at the cookie layer with signed and rotated keys.
+- § 164.312(b) Audit Controls: structured logs with request-id, route, status, latency, and user-id (when authenticated) so a downstream log pipeline can satisfy retention and tamper-evidence requirements (those still need to be configured at the log sink).
+- § 164.312(c) Integrity: HMAC for webhook payloads; signed sessions; ETag/Last-Modified for optimistic concurrency on PHI mutations.
+- § 164.312(d) Person or Entity Authentication: first-party authentication helpers; tested integrations with AWS Cognito, Microsoft Entra ID, Auth0, Okta, and Clerk.
+- § 164.312(e) Transmission Security: HSTS and secure cookies by default; the actual TLS terminator (load balancer, CDN, platform) is out of the framework's scope.
+- Practical PHI hygiene. Add field-level redaction in the logger for any field that carries PHI; do not log request bodies on PHI routes; keep the `session()` cookie `httpOnly` and `sameSite` (default behavior).
+
+## GDPR (Regulation 2016/679) [#gdpr-regulation-2016-679]
+
+GDPR is risk-based. Article 32 (“security of processing”) and Article 25 (“data protection by design and by default”) are where the framework helps most.
+
+- Article 5(1)(f) integrity & confidentiality: secure headers, signed sessions, schema-validated inputs, structured logs with redaction.
+- Article 25 data protection by design and by default: secure-by-default body limits, request timeouts, content-type allow-listing, and CSRF/cors defaults; the auditor sees that the insecure paths are *opt-in*, not the other way around.
+- Article 30 records of processing: OpenAPI is generated from the routes themselves, which gives a machine-readable inventory of every endpoint that touches personal data. Pair it with a tagging convention (e.g. `x-daloy-data-classes: ["email", "ip"]`) so the same spec answers ROPA questions.
+- Article 32 security of processing: the “Shared technical controls” table above is the short answer for the application layer; pseudonymization, encryption at rest, and key management still live at the data store.
+- Article 33 breach notification (within 72 hours): the request-id and structured-log primitives make it possible to reconstruct affected sessions; the published CVSS-keyed patch SLA lets controllers describe the “measures taken” section of their breach notification with real numbers rather than aspirations.
+- Logging PII responsibly. The logger's default redaction (`DEFAULT_REDACT_KEYS` via `createLogger({ redact })`) already masks well-known secret keys (passwords, tokens, API keys). Request URLs written by the framework go through `sanitizeUrlForLog` so OAuth codes, access tokens, and signed-URL signatures in query strings do not land in durable logs under the field name `url`. Extend the redaction list for application-specific PII fields and never log raw request bodies on routes that process personal data.
+
+## PCI-DSS v4.0 (software-side controls) [#pci-dss-v4-0-software-side-controls]
+
+DaloyJS's payments documentation already calls out the SAQ scope consequences of touching a Primary Account Number (PAN) directly. The framework helps with the software-side requirements of v4.0:
+
+- Req 2 secure configurations: secure-by-default headers, content-type allow-listing, and the boot guards that fail-closed on insecure config.
+- Req 4 strong cryptography in transit: HSTS via `secureHeaders()`.
+- Req 6.2 secure software development: schema-validated inputs, prototype-pollution-safe JSON parsing, header sanitization, path-traversal-safe router, prepared-statement guidance for every ORM in [SQL injection](/docs/security/sql-injection).
+- Req 6.3 manage vulnerabilities: SECURITY.md SLA, GHSA evidence, dependency-graph monitoring.
+- Req 6.4 protect public-facing web applications: CSRF, secure headers, rate limiting, request-id correlation.
+- Req 8 strong authentication: first-party session/JWT helpers with algorithm allow-listing.
+- Req 10 log and monitor: structured logs with per-request correlation IDs; the retention and tamper-evidence obligations live at the log sink.
+- SAQ scope. The strongest control here is *not seeing the PAN at all*. The payments docs (Stripe, Braintree, Authorize.Net, Square) document the redirect, hosted checkout, and hosted-fields patterns that keep you in SAQ-A or SAQ-A-EP rather than SAQ-D.
+
+## NIS2 (Directive (EU) 2022/2555) and the EU CRA [#nis2-directive-eu-2022-2555-and-the-eu-cra]
+
+NIS2 Article 21 lists the cybersecurity risk-management measures essential and important entities must adopt. The Cyber Resilience Act adds analogous obligations on the vendor side. Both increasingly show up as upstream patch-SLA clauses in procurement.
+
+### Are you in scope? (NIS2 self-assessment)
+
+DaloyJS itself is open-source framework software and is not a regulated entity. NIS2 obligations attach to the operator running the service, not to the framework author. So the first question for any team building on Daloy is whether the directive applies to *them*. Aikido's [“NIS2: Who is affected?”](https://www.aikido.dev/blog/nis2-who-is-affected) write-up summarizes the sector and size tests; the checklist below is the operator-friendly version, oriented around the workloads people actually build with this framework.
+
+You are likely in scope if **all three** of the following are true:
+
+1. You operate in the EU. NIS2 applies to entities providing services *in* the Union, even when the entity itself is established outside the EU (Article 26 establishment rules apply for cloud, data centers, CDN, managed services, MSSPs, online marketplaces, online search, social networks, and DNS providers).
+2. Your sector is named in Annex I or Annex II. *Annex I (essential, “high criticality”)* covers energy, transport, banking, financial market infrastructure, health, drinking water, waste water, digital infrastructure (IXPs, DNS, TLDs, cloud computing, data center services, CDN, trust services, electronic communications), ICT service management (B2B, including MSPs and MSSPs), and public administration. *Annex II (important, “other critical”)* covers postal & courier, waste management, manufacture and distribution of chemicals, food production/processing/distribution, manufacturing (medical devices, computers/electronics, electrical equipment, machinery, motor vehicles, other transport equipment), digital providers (online marketplaces, online search engines, social networks), and research organisations.
+3. You meet the size threshold (medium-sized or larger per the EU 2003/361 SME definition): **≥ 50 staff** or **\> €10 million** annual turnover *or* balance sheet. Smaller entities can also be pulled in regardless of size when they are a sole provider in a member state, when a disruption would have a significant impact on public safety / security / health, when they are a qualified trust service provider, TLD name registry, DNS service provider, or public electronic communications provider, or when the member state has designated them as critical under Article 2(2). Public administration entities are in scope under separate Article 2(2)(f) rules.
+
+The two tiers carry different penalty caps and supervisory regimes: **essential entities** face up to **€10 M or 2% of global annual turnover** (whichever is higher) and ex-ante supervision; **important entities** face up to **€7 M or 1.4% of global annual turnover** and ex-post supervision. Article 20 also makes **management bodies personally accountable** for approving the risk-management measures and undergoing cybersecurity training. That is the clause that has been generating the most attention, because the responsibility cannot be delegated to the security team. Member-state transposition deadline was **17 October 2024**; most member states have since published national laws with their own registration and reporting portals (the national CSIRT and the single-entry point under Article 23(4)).
+
+If you concluded you are in scope, the Article 21 measure list below plus the EU CRA evidence pack further down are what you point your own auditor at for the framework layer. Most workloads built on Daloy land in Annex I “digital infrastructure” (cloud / data center / CDN), Annex I “ICT service management” (MSP / MSSP), or Annex II “digital providers” (online marketplace / search / social network). The technical controls in this page were built specifically so a team in those sectors does not have to reconstruct the framework-layer evidence from scratch.
+
+### Article 21 risk-management measures (framework-layer mapping)
+
+- Article 20 governance (management body approves the risk-management measures and undergoes cybersecurity training): an organizational obligation on the consumer (cannot be delegated to the security team). The framework layer makes the underlying evidence reviewable: every guardrail listed below lives in source and is enforced by `pnpm verify:*`, so the management body can be shown version-pinned, auditable proof rather than a slide deck.
+- Article 21(2)(a) policies on risk analysis and security of information systems: the secure-by-default baseline plus the boot-guard enforcement.
+- Article 21(2)(b) incident handling: SECURITY.md publishes the response targets, escalation contacts, and GHSA evidence format.
+- Article 21(2)(d) supply-chain security: npm provenance, SBOM, SHA-pinned third-party Actions, lockfile-source verification, `ignore-scripts` by default in scaffolded projects.
+- Article 21(2)(e) security in network and information systems acquisition, development, and maintenance: the CI bundle from `create-daloy --with-ci` turns CodeQL, Scorecard, zizmor, Dependabot, and CODEOWNERS on out of the box.
+- Article 21(2)(g) basic cyber hygiene practices: documented patterns for sessions, CSRF, SSRF, SQL/command injection, and admin-panel hardening; opinionated runtime protections.
+- Article 21(2)(h) use of cryptography: algorithm allow-listing, timing-safe comparisons, HMAC algorithm prefix parsing.
+- Article 23 incident reporting (24 h early warning, 72 h notification, 1-month final report to the national CSIRT or competent authority): this is the consumer's obligation, but the framework ships the technical substrate: per-request structured logs with correlated request IDs, OpenTelemetry-shaped spans, and plugin lifecycle hooks (rate-limit, auth-failure, SSRF-block, body-limit, timeout, `onShutdown`) suitable for feeding the regulator-facing notification pipeline within the statutory window.
+- EU CRA upstream patch SLA: the CVSS-keyed table in `SECURITY.md` is written specifically so downstream procurement can quote it verbatim.
+
+### EU Cyber Resilience Act (Regulation (EU) 2024/2847) [#eu-cyber-resilience-act-regulation-eu-2024-2847]
+
+The [Cyber Resilience Act](https://eur-lex.europa.eu/eli/reg/2024/2847/oj) places binding obligations on the manufacturer of any “product with digital elements” sold into the EU. DaloyJS itself is free open-source software (the CRA exempts non-commercial OSS development from manufacturer liability under Recital 16 / Article 3(18)), but a downstream commercial product that integrates `@daloyjs/core` inherits the obligation to demonstrate Annex I conformity for the integrated framework. The full requirement-by-requirement evidence pack lives in [`SECURITY.md → “EU Cyber Resilience Act mapping”`](https://github.com/daloyjs/daloy/blob/main/SECURITY.md#eu-cyber-resilience-act-cra-mapping); the table below is the operator-friendly summary.
+
+The two deadlines that matter for downstream consumers: **2026-09-11** (24-hour reporting of actively exploited vulnerabilities to ENISA and the national CSIRT, CRA Article 14) and **2027-12-11** (full Annex I conformity before a product may bear the CE mark, CRA Article 13). DaloyJS commits upstream to both.
+
+| CRA requirement | DaloyJS evidence |
+| --- | --- |
+| Annex I (1)(a), no known exploitable vulnerabilities on release | `pnpm audit --audit-level=high` in CI and pre-publish; daily `pnpm audit --prod` against `main`; zero runtime deps in `@daloyjs/core`. |
+| Annex I (1)(b), secure-by-default configuration | Body cap (1 MiB), 30 s request timeout, `secureHeaders()`, `fetchGuard()` default-denying SSRF against cloud-metadata IPs, prototype-pollution stripping in every parser, real `405`, problem+json 5xx detail redaction in production. Scaffolded projects inherit `ignore-scripts=true` + `minimum-release-age=1440`. |
+| Annex I (1)(c), security updates independent of feature updates | SemVer patch releases are reserved for security and regression fixes; consumers pinned with `^@daloyjs/core` get patches via `pnpm update` or Dependabot without code changes. |
+| Annex I (1)(d), authentication and access control | First-party `bearerAuth`, `basicAuth`, `jwk()` (PS256 / RS256 / ES256 / EdDSA, JWKS rotation with `kid` pinning), signed-cookie `session()`, `timingSafeEqual()`; the `pnpm verify:secret-comparisons` gate rejects every short-circuiting comparison against header-derived values. |
+| Annex I (1)(h), resilience against and mitigation of DoS attacks | Core body cap, per-handler timeouts, first-party `rateLimit()` with optional Redis store, `loadShedding()` for concurrency caps, multipart per-field byte cap. Network-layer DoS is the operator's WAF / CDN. |
+| Annex I (1)(j), limit attack surface and external interfaces | Tarball whitelist (`dist/` + `bin/` + `README.md`); no template engine, no string-eval, no shell helper in core; `pnpm verify:no-remote-exec` refuses `child_process` / `vm` / `eval` / `new Function` / remote dynamic `import()` in `src/**`. |
+| Annex I Part II (2)(1), SBOM in a commonly used, machine-readable format covering at least top-level dependencies | Every published tarball ships `dist/sbom.cdx.json` (CycloneDX 1.5) and `dist/sbom.spdx.json` (SPDX 2.3); generated by `scripts/generate-sbom.ts` and locked at release time by `pnpm verify:sbom`. |
+| Annex I Part II (2)(2), remediate vulnerabilities without delay | CVSS-keyed upstream patch SLA: **48 h** Critical, **7 d** High, **30 d** Medium, **90 d** Low, measured from triage. |
+| Annex I Part II (2)(4), public disclosure of fixed vulnerabilities | Every confirmed vulnerability is published as a [GitHub Security Advisory](https://github.com/daloyjs/daloy/security/advisories) with a CVE requested through GitHub's CNA, carrying the Discovered / Patch available / Fix deployed timestamps NIS2 and CRA conformity dossiers expect. |
+| Annex I Part II (2)(5), policy on coordinated vulnerability disclosure (CVD) | Discoverable at [`https://daloyjs.dev/.well-known/security.txt`](https://daloyjs.dev/.well-known/security.txt) (RFC 9116); points at the GitHub private-disclosure form and back at `SECURITY.md`. Disclosure rotation is named in `SECURITY-CONTACTS.md` and tested quarterly (audit-gated by `pnpm verify:governance-audits`). |
+| Annex I Part II (2)(7), secure update distribution | npm over HTTPS with `--provenance` Sigstore attestations bound to the `release.yml` workflow run on the Rekor transparency log; consumers can verify the provenance without trusting any vendor portal. |
+| Article 14, 24-hour reporting of actively exploited vulnerabilities to ENISA | From 2026-09-11 the maintainer rotation triages actively-exploited reports best-effort within 24 h and files the early-warning notification with ENISA via the Single Reporting Platform, followed by a 72 h CVSS / scope update, even when a patch is not yet available. See the [full Article 14 notification chain](https://github.com/daloyjs/daloy/blob/main/SECURITY.md#article-14--24-hour-reporting-of-actively-exploited-vulnerabilities-and-severe-incidents) in `SECURITY.md`. |
+| Article 13(8), declared support period (regulatory floor: 5 years) | DaloyJS commits to a **minimum 5-year security-update support period** for every stable major release line, measured from that line's first stable release. The `1.x` line reached its first stable release on **2026-08-03** (`1.0.0`), so it is security-supported until at least **2031-08-03**. The `0.x` line is end-of-life, superseded by `1.0.0`. |
+
+### Declared support periods
+
+These are the dates referenced by [SECURITY.md](https://github.com/daloyjs/daloy/blob/main/SECURITY.md#support-lifetime), restated here so a procurement reviewer can cite a page rather than a repository file. Security fixes land on the latest minor of a supported line; older minors are not patched in place.
+
+| Release line | First stable release | Security-supported until (minimum) |
+| --- | --- | --- |
+| `1.x` | 2026-08-03 (`1.0.0`) | **2031-08-03** |
+| `0.x` | — | End-of-life; superseded by `1.0.0` |
+
+*This mapping is informational and is not a legal opinion. A downstream conformity assessment for a CE-marked product remains the integrator's responsibility; the evidence above exists so the framework layer of that dossier does not have to be reconstructed from scratch.*
+
+## UK Cyber Security and Resilience Bill (CSR Bill)
+
+The UK government's [Cyber Security and Resilience Bill](https://www.gov.uk/government/publications/cyber-security-and-resilience-bill-policy-statement/cyber-security-and-resilience-bill-policy-statement) updates the UK's NIS Regulations 2018, brings managed service providers (MSPs) and certain digital service providers into scope, introduces supply-chain duties for operators of essential services (OES) and relevant digital service providers (RDSPs), and tightens incident reporting to a two-stage **24 h early warning** plus **72 h follow-up** aligned with EU NIS2. Technical and methodological requirements are expected to track the [NCSC Cyber Assessment Framework (CAF)](https://www.ncsc.gov.uk/collection/cyber-assessment-framework) Basic and Enhanced profiles.
+
+DaloyJS itself is open-source framework software (it is not an MSP, OES, RDSP, or designated critical supplier), but apps built on it routinely fall into scope. The table below maps each measure from the April 2025 policy statement to the DaloyJS primitives a regulated team can point at on day one. Because the CSR Bill is closely modeled on NIS2 Article 21, the EU CRA evidence above also carries over almost line-for-line.
+
+| CSR Bill measure / CAF principle | DaloyJS evidence |
+| --- | --- |
+| Measure 1.2: supply-chain security duties for OES / RDSPs and designated critical suppliers | Zero runtime dependencies in `@daloyjs/core` (enforced by `pnpm verify:no-runtime-deps`); npm provenance via Sigstore; CycloneDX SBOM published with every release; `verify:lockfile` refuses non-npm registry origins and known-bad `name@version` IOCs; SHA-pinned third-party GitHub Actions audited by `verify-actions-pinned`; scaffolded projects ship `ignore-scripts=true` + `minimum-release-age=1440` in `_npmrc` to shrink the install-time blast radius from compromised upstream suppliers. |
+| Measure 2.1: technical and methodological security requirements (NCSC CAF Basic / Enhanced) | **CAF B2 Identity & access control**: `bearerAuth()`, `basicAuth()`, signed-cookie `session()`, JWT with algorithm allow-listing, IP allowlists. **CAF B3 Data security**: `secureHeaders()` (HSTS, CSP nonce + Trusted Types, COOP, CORP), prod-mode RFC 9457 redaction. **CAF B4 System security**: `bodyLimitBytes`, `requestTimeoutMs`, `rateLimit()`, `fetchGuard()` default-deny SSRF, prototype-pollution-safe parsers, CRLF/NUL header rejection, `.strict()` schemas. **CAF B5 Resilient networks & systems**: graceful shutdown, load shedding, plugin lifecycle events. **CAF B6 Staff awareness & training** remains an organizational control. |
+| Measure 2.2: expanded incident reporting (24 h early warning + 72 h report, confidentiality / availability / integrity) | Per-request structured logs with correlated request IDs and Server-Timing; OpenTelemetry-shaped spans without taking a hard dependency on `@opentelemetry/api`; plugin lifecycle hooks (`onPluginInstalled`, `onShutdown`) suitable for wiring rate-limit / auth-failure / SSRF-block / body-limit / timeout events into the regulator + NCSC notification pipeline within the statutory window. |
+| Measure 2.2: transparency duty toward affected customers of a digital service | Coordinated vulnerability disclosure published at [`/.well-known/security.txt`](https://daloyjs.dev/.well-known/security.txt) (RFC 9116); every confirmed vulnerability published as a GitHub Security Advisory with Discovered / Patch available / Fix deployed timestamps; CVSS-keyed upstream patch SLAs in `SECURITY.md` a downstream RDSP can quote verbatim in their own customer notice. |
+| Cross-cutting: secure software development lifecycle expected of suppliers to OES / RDSPs | `create-daloy --with-ci` turns CodeQL, OSSF Scorecard, zizmor, Dependabot, gitleaks, and CODEOWNERS on out of the box; the repo's own `pnpm verify:*` bundle (parity, governance, routing-hardening, secret comparisons, no-remote-exec, no-registry-exfiltration, no-encoded-payloads, no-invisible-unicode, no-weak-random, no-unsafe-buffer, no-leaked-credentials, no-vulnerable-sandboxes, no-lifecycle-scripts, lockfile-sources, no-runtime-deps, dep-licenses, SBOM) gates every release. |
+| Cross-cutting: secure-by-default posture so the regulator's “appropriate and proportionate” test is met from the first deploy | All hardening above is on by default. Per project policy (see `AGENTS.md`), `secureHeaders`, `requestId`, `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, `fetchGuard`, JWT algorithm allowlists, timing-safe credential comparisons, schema `.strict()`, response-body validation, prod-mode error redaction, and the scaffolded `_gitignore` / `_npmrc` defaults must not be silently weakened. |
+
+*Status: the CSR Bill was outlined in the King's Speech 2024 and the policy statement was presented to Parliament in April 2025; duties will be set in secondary legislation and statutory instruments after Royal Assent. This mapping reflects the policy statement as published and will be updated when the Bill is enacted and the technical requirements (expected to track NCSC CAF) are codified.*
+
+## DORA (Regulation (EU) 2022/2554) [#dora-regulation-eu-2022-2554]
+
+The [Digital Operational Resilience Act](https://eur-lex.europa.eu/eli/reg/2022/2554/oj) has applied to EU financial entities and their ICT third-party service providers since **17 January 2025**. It is built on five pillars: ICT risk management (Chapter II), ICT-related incident management, classification, and reporting (Chapter III), digital operational resilience testing (Chapter IV), management of ICT third-party risk (Chapter V), and information-sharing arrangements (Chapter VI). The technical detail lives in the Commission's Regulatory Technical Standards, most notably [Delegated Regulation (EU) 2024/1774](https://eur-lex.europa.eu/eli/reg_del/2024/1774/oj) on ICT risk-management tools and [Delegated Regulation (EU) 2024/1773](https://eur-lex.europa.eu/eli/reg_del/2024/1773/oj) on subcontracting arrangements.
+
+DaloyJS itself is open-source framework software, not a regulated financial entity and not (on its own) a designated “critical ICT third-party service provider” under Article 31. But apps built on DaloyJS routinely *are* the ICT systems that DORA applies to, and the framework layer is something a financial-entity team or its ICT-TPP supplier must be able to point at during a Joint Examination Team review. Because DORA's technical control families overlap heavily with NIS2 Article 21 and the EU CRA Annex I, most of the evidence above carries over directly. The table below summarizes the DORA-specific framing.
+
+| DORA requirement | DaloyJS evidence |
+| --- | --- |
+| Article 6: sound, comprehensive, and well-documented ICT risk-management framework | Secure-by-default baseline (body cap, request timeout, `secureHeaders()`, `fetchGuard()`, JWT algorithm allow-listing, timing-safe credential comparisons, `.strict()` schemas, RFC 9457 problem+json with prod redaction) all live in source, are version-pinned, and are enforced by the `pnpm verify:*` bundle so the control evidence is reproducible at any commit. |
+| Article 8: identification of ICT-supported business functions and their dependencies | `openapi.json` is the canonical, generated inventory of every public route, its inputs, its response shape, and its auth requirements. Combined with the CycloneDX `dist/sbom.cdx.json` shipped in every release tarball, it gives auditors a machine-readable dependency map for the framework layer. |
+| Article 9: protection and prevention (including authentication, access control, cryptography, network segmentation) | First-party `bearerAuth`, `basicAuth`, signed-cookie `session()`, `jwk()` with algorithm allow-listing and JWKS rotation, `ipRestriction()`, `fetchGuard()` default-deny SSRF against cloud metadata IPs, HMAC algorithm prefix parsing, and the `verify:secret-comparisons` gate that rejects short-circuiting comparisons against header-derived values. |
+| Article 10: detection of anomalous activities and ICT-related incidents | Per-request structured logs with correlated request IDs and Server-Timing; OpenTelemetry-shaped spans without a hard dependency on `@opentelemetry/api`; plugin lifecycle hooks (rate-limit, auth-failure, SSRF-block, body-limit, timeout, `onShutdown`) that operators can wire into a SIEM or the financial-entity SOC pipeline. |
+| Article 11: response and recovery (business continuity, graceful degradation) | First-party graceful shutdown with in-flight request draining, `loadShedding()` for concurrency caps, `rateLimit()` with optional Redis store for shared counters across replicas, multi-runtime adapters (Node, Bun, Deno, Cloudflare Workers, Vercel) so the same app can fail over between platforms without rewrites. |
+| Article 17–19: ICT-related incident management, classification, and reporting (initial notification, intermediate report, final report) | Structured logs and lifecycle events are the technical substrate the financial entity needs to meet the regulatory timetable; `SECURITY.md` publishes the upstream framework response targets, the GHSA evidence pattern, and the rotation in `SECURITY-CONTACTS.md` (audit-gated by `pnpm verify:governance-audits`) so the financial entity's own incident submission can quote the framework layer verbatim. |
+| Article 24–25: digital operational resilience testing programme; testing of ICT tools and systems | CI runs on Node 24 (`node-version: 24` in `ci.yml` / `release.yml`; package `engines.node` is `^24 \|\| >=26`). Every change runs `pnpm typecheck`, `pnpm test`, `pnpm coverage` (90% lines / 90% functions on the tsx run), and `pnpm coverage:branches` (92% branches on compiled JS). Multi-runtime adapters are guarded by `verify:runtime-parity-audits` (not a Bun/Deno test matrix on every PR). The `verify:parity-audits`, `verify:routing-hardening-audits`, and `verify:governance-audits` gates are reproducible by any downstream resilience-testing programme. Bench harnesses under `bench/` give a baseline for performance regression testing. |
+| Article 28: general principles for sound management of ICT third-party risk (including the register of contractual arrangements in Article 28(3)) | Zero runtime dependencies in `@daloyjs/core` (enforced by `pnpm verify:no-runtime-deps`) keeps the third-party register short; CycloneDX + SPDX SBOMs shipped per release; `verify:lockfile` refuses non-npm registry origins and known-bad `name@version` IOCs; `verify:dep-licenses` blocks copyleft drift. The framework itself does not call any external network endpoint at startup or runtime. |
+| Article 30: key contractual provisions (security, incident reporting cooperation, audit rights, exit strategy) | Contractual / commercial terms are the financial entity's responsibility. The framework layer makes the underlying evidence feasible: npm provenance via Sigstore + Rekor transparency log lets the entity verify exactly which CI run built a given version without trusting a vendor portal; the published GHSA feed and CVSS-keyed SLA table give the cooperation timetable a regulator expects to see referenced. |
+| Annex II of RTS 2024/1774: ICT security policies, procedures, protocols, and tools (including secure configuration, vulnerability management, encryption, cryptographic-key management, identity and access management) | Per project policy (see `AGENTS.md`), `secureHeaders`, `requestId`, `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, `fetchGuard`, JWT algorithm allowlists, timing-safe credential comparisons, schema `.strict()`, response-body validation, prod-mode error redaction, and the scaffolded `_gitignore` / `_npmrc` defaults must not be silently weakened. Key material (JWKS, cookie keys) is rotated by configuration, not by code change. |
+| Article 45: arrangements for the exchange of cyber-threat information and intelligence | Every confirmed vulnerability is published as a [GitHub Security Advisory](https://github.com/daloyjs/daloy/security/advisories) with a CVE through GitHub's CNA, plus a coordinated disclosure entry-point at [`/.well-known/security.txt`](https://daloyjs.dev/.well-known/security.txt) (RFC 9116). Financial-sector ISACs (e.g. FS-ISAC) can subscribe to the GHSA feed directly. |
+
+*This mapping is informational and is not a legal opinion. DORA conformity for a regulated financial entity or for a designated critical ICT third-party service provider remains the operator's responsibility; the evidence above exists so the framework layer of that dossier does not have to be reconstructed from scratch. Critical ICT third-party service provider designation (Article 31) and the resulting Lead Overseer oversight regime are out of scope for an open-source framework.*
+
+## Operator responsibilities the framework cannot cover
+
+Be upfront about this when you talk to your auditor, because conflating application controls with platform or organizational controls is the fastest way to lose credibility:
+
+- TLS termination, key management, KMS/HSM choice live at your load balancer, CDN, or platform.
+- Encryption at rest, backup, disaster recovery live at the data store and infrastructure layer.
+- Identity provider, MFA enrollment, account recovery live at the IdP (Cognito, Entra ID, Auth0, Okta, Clerk). The framework consumes the resulting tokens; it does not run the IdP.
+- Log retention, immutability, SIEM forwarding live at the log sink. The framework emits the structured logs; how long they live and who can delete them is a pipeline concern.
+- Vendor management, employee training, access reviews, background checks, physical security are organizational controls. No framework can produce evidence for those.
+- Data-processing agreements, standard contractual clauses, transfer impact assessments are legal artifacts.
+
+## Suggested artifact pack for an audit
+
+1. The generated `openapi.json` as the canonical inventory of every public endpoint.
+2. The `sbom.json` emitted by `scripts/generate-sbom.ts` for the framework version you ship.
+3. Your own application's lockfile plus a recent `pnpm audit --prod` output.
+4. The release's npm provenance attestation (visible on the package page) and the matching GitHub Security Advisory entries.
+5. A short README mapping your routes to data classes (PII / PHI / cardholder data / none) so the auditor can verify the redaction configuration matches reality.
+
+## Further reading
+
+- [Secure-by-default](/docs/security/secure-defaults): what the core enforces without any opt-in.
+- [Supply-chain security](/docs/security/supply-chain): the controls behind the SOC 2 CC6.8 / ISO A.8.7 / NIS2 21(2)(d) rows above.
+- [SECURITY.md](https://github.com/daloyjs/daloy/blob/main/SECURITY.md): SLAs, GHSA evidence pattern, reporting flow.
+- [Aikido: cloud compliance frameworks overview](https://www.aikido.dev/blog/cloud-compliance-frameworks): broader background on the frameworks themselves.

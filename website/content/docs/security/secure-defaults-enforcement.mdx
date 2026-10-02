@@ -1,0 +1,166 @@
+---
+title: secureDefaults enforcement
+description: Daloy enforces secureDefaults master-flag acknowledgement, strong JWT HMAC secrets, consistent frame defenses, and hardware-backed 2FA for contributors with publish access.
+keywords:
+  - secureDefaults
+  - acknowledgeInsecureDefaults
+  - JWT weak secret
+  - HS256 32 bytes
+  - RFC 7518
+  - secureHeaders frame-ancestors
+  - clickjacking
+  - mandatory 2FA
+  - npm publish 2FA
+  - secure-by-default
+  - security enforcement
+---
+
+# secureDefaults enforcement
+
+<blockquote>Insecure settings require an explicit{" "}<code>acknowledgeInsecureDefaults: true</code> and produce a startup log. Some configurations, including JWT secrets shorter than 32 bytes, are rejected outright.</blockquote>
+
+Daloy applies these **cross-cutting security invariants** at construction time, request time, and release time. The checks are designed to keep an insecure local workaround from silently becoming a production default.
+
+## 1. `secureDefaults: false` master-flag enforcement
+
+The wholesale escape hatch for the entire secure-by-default surface now refuses-to-construct in production unless you also pass `acknowledgeInsecureDefaults: true`. This closes the well-documented "developer flipped the flag off while debugging and shipped to production" footgun by forcing an explicit two-step opt-in:
+
+<FlowDiagram title="Turning off secure defaults in production" numbered steps={[
+          {
+            eyebrow: "construct",
+            label: "new App({ env: 'production' })",
+            detail: "with secureDefaults: false",
+          },
+          {
+            eyebrow: "no ack",
+            label: "Refuses to construct",
+            detail: "acknowledgeInsecureDefaults missing",
+            tone: "danger",
+          },
+          {
+            eyebrow: "ack: true",
+            label: "Constructs, audit-logged",
+            detail: 'event: "secure_defaults.disabled"',
+            tone: "success",
+          },
+        ]} caption="Disabling the whole secure-by-default surface in production needs an explicit second flag. Even when acknowledged, a once-per-process error log enumerates every default that was turned off." />
+
+```ts
+// ❌ refuses-to-construct in production
+new App({ env: "production", secureDefaults: false });
+
+// ✅ explicit two-step opt-in (and you still get the audit log)
+new App({
+  env: "production",
+  secureDefaults: false,
+  acknowledgeInsecureDefaults: true,
+});
+```
+
+Any time the flag is off, a once-per-process `error` log is emitted with `event: "secure_defaults.disabled"` enumerating every default it disabled, so the blast radius is loud at boot even when the option was set deep in shared configuration:
+
+- auto `secureHeaders` install
+- cross-origin guard for state-changing requests
+- crash-on-unhandled-rejection (production)
+- first-request `X-Forwarded-*` / `trustProxy` guard
+- `session()` + state-changing route requires `csrf()` boot guard
+- weak session secret refuse-to-boot
+- `cors({ origin: '*' })` refuse-to-boot
+- anonymous stateful plugin refuse-to-boot
+
+Per-feature opt-outs (`secureHeaders: false`, `corsCrossOriginGuard: false`, `crashOnUnhandledRejection: false`, `trustProxy: false`, `csrf: "off"`) remain available without the production refusal, prefer those when you only need to disable one default rather than the whole surface. Tests can reset the audit-log latch via the exported `_resetInsecureDefaultsLogForTests()` helper, mirroring the existing `_resetCrashHandlersForTests` pattern.
+
+## 2. JWT HS-secret length refuse-to-construct (RFC 7518 §3.2) [#2-jwt-hs-secret-length-refuse-to-construct-rfc-7518-3-2]
+
+`createJwtSigner()` and `createJwtVerifier()` now refuse `Uint8Array` HS-shaped secrets shorter than **32 bytes** at construction time. RFC 7518 §3.2 sets the floor at the hash output size (32 bytes for HS256), and Daloy applies the same floor to HS384 and HS512 because a shorter key does not buy a stronger HMAC, it only reduces the effective entropy.
+
+```ts
+// ❌ refuses at construction
+createJwtSigner({
+  alg: "HS256",
+  key: new Uint8Array(16),        // 16 bytes - too short
+  maxLifetimeSeconds: 60,
+});
+// JwtError [weak_hs_secret]: jwt(): HS256 secret must be at least 32 bytes
+// (RFC 7518 §3.2); got 16.
+
+createJwtVerifier({
+  algorithms: ["HS384"],
+  key: new Uint8Array(20),        // 20 bytes - too short
+});
+// JwtError [weak_hs_secret]: jwt(): HS* secret must be at least 32 bytes
+// (RFC 7518 §3.2); got 20.
+
+// ✅ 32 bytes from a CSPRNG
+const key = new Uint8Array(32);
+crypto.getRandomValues(key);
+createJwtSigner({ alg: "HS256", key, maxLifetimeSeconds: 60 });
+```
+
+### 2a. JWT `crit` refusal and the verifier lifetime cap [#2a-jwt-crit-refusal-and-verifier-lifetime-cap]
+
+Two verification-side hardening rules close the asymmetries a live pentest against the 1.0.0 line surfaced. First, any token whose header carries `crit` is rejected outright: Daloy implements no JWS extensions, so RFC 7515 §4.1.11 requires refusal, and accepting the token would mean silently ignoring semantics the issuer marked critical. The signer refuses to *emit* `crit` for the same reason. Second, the signer-side `maxLifetimeSeconds` requirement now has a verifier-side counterpart: pass `maxLifetimeSeconds` to `createJwtVerifier()` and any token whose `exp - (iat ?? now)` exceeds it is rejected with `lifetime_exceeded`, so a misconfigured or compromised issuer sharing the key cannot mint a 100-year token your API accepts.
+
+```ts
+createJwtVerifier({
+  algorithms: ["HS256"],
+  key,
+  maxLifetimeSeconds: 3600, // reject tokens living longer than 1h
+});
+// JwtError [lifetime_exceeded]: token lifetime 3153600000s exceeds
+// verifier maxLifetimeSeconds 3600s.
+// JwtError [unsupported_crit]: token header carries 'crit' ...
+```
+
+## 3. `secureHeaders()` refuses dual framing-defense disable
+
+`secureHeaders()` ships two layered defenses against clickjacking: the `X-Frame-Options` header (legacy browsers) and a CSP `frame-ancestors` directive (modern spec). The helper now refuses to construct when *both* are disabled simultaneously, that combination silently re-opens the clickjacking surface the helper exists to close:
+
+```ts
+// ❌ refuses
+secureHeaders({
+  frameOptions: false,
+  contentSecurityPolicy: false,
+});
+// Error: secureHeaders(): refusing to construct with both frameOptions: false
+// AND no CSP frame-ancestors directive - that disables every clickjacking
+// defense the helper provides.
+
+// ❌ refuses (CSP string without frame-ancestors directive)
+secureHeaders({
+  frameOptions: false,
+  contentSecurityPolicy: "default-src 'self'",
+});
+
+// ✅ explicit frame-ancestors directive in the CSP carries the defense
+secureHeaders({
+  frameOptions: false,
+  contentSecurityPolicy: "default-src 'self'; frame-ancestors 'none'",
+});
+
+// ✅ directives-object form is also recognised
+secureHeaders({
+  frameOptions: false,
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": ["'self'"],
+      "frame-ancestors": ["'none'"],
+    },
+  },
+});
+```
+
+If you only want to disable one of the two defenses, keep the other one on, the helper's defaults already wire both layers, so the common case (no options passed) needs no changes.
+
+## 4. Mandatory hardware-backed 2FA for publish access
+
+Daloy's supply-chain posture now mandates **hardware-backed 2FA** for every contributor with publish access, documented in `SECURITY.md` as a release-checklist item:
+
+- GitHub organization level: `Settings -> Authentication security -> Require two-factor authentication` is enforced on the `@daloyjs` org; every account with write access must have a hardware-backed factor (passkey or security key, TOTP-only accounts are off-boarded).
+- npm registry level: `npm access 2fa-required` is set on `@daloyjs/core` and `create-daloy`; OIDC trusted publishing from the protected `npm-publish` environment means publishes themselves carry no long-lived token, but every maintainer who can approve the environment still needs hardware-backed 2FA on the registry account.
+- Off-boarding: when a maintainer leaves rotation, their org membership, publish grants, and granular tokens are revoked in the same change.
+- Release-checklist audit gate: before tagging a release the maintainer running the release verifies that every contributor who approved the `npm-publish` Environment for that release has 2FA enabled at both levels (the mandatory-2FA audit gate).
+
+## Related cross-cutting safeguards
+
+The same posture extends to shared helpers for cookie writes, client IP resolution, time-claim validation, and secret comparison; refusal of invalid `__Secure-` cookie configuration; `daloy doctor --audit-secrets`; the zero-runtime-dependency governance gate; and the timing-safe-comparison gate. Together these safeguards replace "the developer remembered to do it" with framework-level consistency.

@@ -1,0 +1,440 @@
+---
+title: "Secure by Default: The Defaults DaloyJS Ships So You Don't Have To Remember Them"
+description: A tour of the always-on defenses in the DaloyJS request path, bounded body reads, prototype-pollution-safe JSON, CRLF sanitization, path-traversal rejection, request timeouts, problem+json with prod redaction, plus the opt-in upgrades worth turning on today.
+date: 2026-05-20
+readingTime: 13 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work. Has read more pentest reports than feels emotionally healthy. Currently writing TypeScript from Norway.
+badges:
+  - Security
+  - Deep dive
+keywords:
+  - DaloyJS security
+  - secure by default
+  - Node.js security defaults
+  - prototype pollution
+  - CSP nonce
+  - Trusted Types
+  - CSRF double submit
+  - Fetch Metadata
+  - rate limit Redis
+  - problem+json RFC 9457
+footerLinks:
+  - label: Read the security docs
+    href: /docs/security
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+export const APP_CONSTRUCTOR = `// src/app.ts
+import { App } from "@daloyjs/core";
+
+// These two arguments are not optional middleware.
+// They are constructor arguments. They are on.
+export const app = new App({
+  bodyLimitBytes: 1 << 20,   // default: 1 MiB
+  requestTimeoutMs: 30_000,  // default: 30s, set 0 to disable
+  // production: process.env.NODE_ENV === "production" (auto-detected)
+});`;
+
+export const PROTO_POLLUTION = `// What a naïve JSON parser does with this body:
+//   { "__proto__": { "isAdmin": true } }
+//
+// ...is hand you a brand-new admin user, system-wide. Cool!
+// DaloyJS strips the dangerous keys in safeJsonParse() before
+// your handler ever sees the object.
+
+import { safeJsonParse } from "@daloyjs/core";
+
+const dangerous = '{ "user": "alice", "__proto__": { "isAdmin": true } }';
+const safe = safeJsonParse(dangerous) as { user: string };
+
+console.log(safe.user);                 // "alice"
+// @ts-expect-error - isAdmin never made it through the reviver
+console.log(({} as any).isAdmin);       // undefined`;
+
+export const SECURE_HEADERS = `// src/app.ts
+import { App, secureHeaders } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  secureHeaders({
+    // CSP with a per-request nonce - generated for every response.
+    contentSecurityPolicy: {
+      directives: {
+        "default-src": ["'self'"],
+        "img-src": ["'self'", "data:"],
+        "connect-src": ["'self'", "https://api.example.com"],
+        // 'self' + nonce; no 'unsafe-inline', no 'unsafe-eval'.
+      },
+      nonce: true,
+    },
+    // Lock down DOM sinks. Modern browsers will reject string-to-HTML
+    // assignments unless they come from a Trusted Types policy.
+    trustedTypes: { policies: ["default"] },
+  }),
+);
+
+// In your template / RSC:
+//   <script nonce={ctx.state.cspNonce}>...</script>`;
+
+export const CSRF_BOTH = `// src/app.ts
+import { App, csrf, session } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+
+app.use(
+  csrf({
+    // "double-submit" | "fetch-metadata" | "both"
+    strategy: "both",
+    // double-submit cookie defaults to "__Host-daloy.csrf"
+    // header defaults to "x-csrf-token"
+    allowedOrigins: ["https://app.example.com"],
+  }),
+);
+
+// In a route handler:
+app.route({
+  method: "GET",
+  path: "/csrf-token",
+  operationId: "getCsrfToken",
+  responses: { 200: { description: "Token" } },
+  handler: async ({ state }) => ({
+    status: 200,
+    body: { token: state.csrfToken },
+  }),
+});`;
+
+export const BASIC_AUTH = `// src/admin.ts
+import { basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Use timingSafeEqual - never raw string ===.
+app.use(
+  "/admin",
+  basicAuth({
+    realm: "admin",
+    verify: (user, pass) => {
+      const okUser = timingSafeEqual(user, process.env.ADMIN_USER!);
+      const okPass = timingSafeEqual(pass, process.env.ADMIN_PASS!);
+      // Always run both comparisons. Returning a user object stamps
+      // ctx.state.user; returning false sends 401 + WWW-Authenticate.
+      return okUser && okPass ? { sub: "admin" } : false;
+    },
+  }),
+);`;
+
+export const SESSION_EXAMPLE = `// src/app.ts
+import { App, session } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  session({
+    // Provide MORE than one to rotate signing keys without logging users out.
+    secret: [process.env.SESSION_SECRET_CURRENT!, process.env.SESSION_SECRET_PREVIOUS!],
+    // cookieName defaults to "__Host-daloy.sid" (HttpOnly, Secure, SameSite=Lax, Path=/)
+    ttlSeconds: 60 * 60 * 8, // 8 hours, rolling
+  }),
+);
+
+// In a handler:
+app.route({
+  method: "POST",
+  path: "/login",
+  operationId: "login",
+  responses: { 204: { description: "OK" } },
+  handler: async ({ state }) => {
+    state.session.set("uid", "user_42");
+    await state.session.regenerate(); // rotate sid on privilege change
+    return { status: 204 };
+  },
+});`;
+
+export const RATE_LIMIT_REDIS = `// src/app.ts
+import { App, rateLimit } from "@daloyjs/core";
+import {
+  redisRateLimitStore,
+  ioredisAdapter,
+} from "@daloyjs/core/rate-limit-redis";
+import Redis from "ioredis";
+
+const redis = new Redis(process.env.REDIS_URL!);
+
+export const app = new App();
+
+app.use(
+  rateLimit({
+    windowMs: 60_000,
+    max: 120,
+    trustProxyHeaders: true, // only with a sanitizing proxy in front!
+    store: redisRateLimitStore({
+      client: ioredisAdapter(redis),
+      keyPrefix: "myapp:rl:",
+      // fail-open by default; flip to fail-closed if you prefer:
+      // onError: () => "block",
+    }),
+  }),
+);`;
+
+Hi, I'm Devlin. Ten years of fullstack work, half of those spent reading pentest reports and often thinking, "we already *knew* that one". Most security incidents I've had a hand in cleaning up were not exotic. They were not a 0-day in a cryptography library. They were a body limit that nobody set, a JSON parser that happily accepted `__proto__`, a response timeout that didn't exist, or a stack trace cheerfully being shipped to an attacker as `application/json`.
+
+So when we sat down to design DaloyJS, we made a rule and stuck to it: the boring, well-understood defenses must be on by default. You should be able to type `new App()` with empty arguments and already be in a place where most of the OWASP "low effort, high impact" checklist is satisfied before you write a single route.
+
+This post is the tour. Part one is the always-on stuff, the defenses the framework enforces whether you remembered to ask for them or not. Part two is the opt-in upgrades that are worth turning on today, in five lines each. Coffee in Oslo is expensive, so I'll be quick.
+
+## The empty constructor is already a security policy
+
+Before we even tour the defenses individually, look at the smallest possible app and notice what's implicit:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="● src/app.ts, secure-by-default">
+<CodeBlock language="ts" code={APP_CONSTRUCTOR} />
+</EditorFrame>
+
+Two named arguments. The rest is invisible, and intentional. The framework is, at this point, already enforcing six different things for you. These controls run in the core request path.
+
+## Part 1: Always on, no flag required
+
+### 1. Bounded body reads
+
+<DefenseCard name="bodyLimitBytes" on="always" status="413 Payload Too Large" trigger="Default 1 MiB cap. Checked against Content-Length first (fail-fast), then enforced again while streaming bytes (defense-in-depth). No, you cannot trick it with a missing or lying Content-Length." />
+
+Body size limits are the most boring of all the boring defenses, which is exactly why so many production apps forget them. The classic version of this bug is "an attacker uploads a multi-gigabyte JSON body and your event loop falls over while V8 tries to parse it". Or even simpler: your memory bill goes up, silently, because nobody capped it.
+
+DaloyJS caps every body at `bodyLimitBytes` (default 1 MiB), and the response when you go over is an `application/problem+json` document, not a stack trace, not an HTML page, not a string with the literal word `undefined` in it:
+
+```http
+HTTP/1.1 413 Payload Too Large
+content-type: application/problem+json
+
+{
+  "type": "https://daloyjs.dev/errors/payload-too-large",
+  "title": "Payload Too Large",
+  "status": 413,
+  "detail": "Body exceeds 1048576 bytes",
+  "instance": "urn:request:01J9X8Q2..."
+}
+```
+
+### 2. Prototype-pollution-safe JSON
+
+<DefenseCard name="safeJsonParse()" on="always" status="400 on invalid JSON, dangerous keys silently stripped" trigger="A JSON reviver removes __proto__, constructor, and prototype from every nested object before your handler runs. Yes, even when the attacker hides it under five levels of arrays." />
+
+Prototype pollution is the bug that keeps making serious headlines, mostly because the JSON parser in most apps is the absolutely unmodified browser one, and the browser one does not care that `__proto__` is a magical key in JavaScript. DaloyJS installs a reviver in front of every JSON parse, and it strips the three keys you don't want walking into your object graph:
+
+<EditorFrame files={["src/security.ts", "scripts/proto-test.ts"]} activeFile="scripts/proto-test.ts" status="✓ node --test, 1 passing (proto-pollution blocked)">
+<CodeBlock language="ts" code={PROTO_POLLUTION} />
+</EditorFrame>
+
+If the body is malformed JSON, you get a generic `400 Bad Request` with the message `"Invalid JSON"`. You do not get a parser error message that describes your internal parser's mood. We don't give attackers free oracles.
+
+### 3. CRLF and header sanitization
+
+<DefenseCard name="sanitizeHeaderName / sanitizeHeaderValue" on="always" status="throws at middleware construction" trigger="CR, LF, and NUL bytes cannot enter a response header. The check runs when you build middleware like basicAuth(), csrf(), or session(), so injection attempts fail loudly at boot, not silently in prod." />
+
+Response-splitting attacks aren't the front page of OWASP anymore because frameworks finally started sanitizing headers, but only some frameworks, and only on some paths. We do it everywhere a header is constructed from configuration: cookie names, realms, paths, domains. If your config contains `\\r\\n` by accident, say, because a yaml file was pasted weird, your app refuses to start. That's a feature.
+
+### 4. Path-traversal rejection in the router
+
+<DefenseCard name="Router.find()" on="always" status="404 Not Found" trigger="Paths containing /../, trailing /.., or // are rejected before any handler runs. Static-file middlewares built on top of the router inherit this for free." />
+
+You can argue all day whether your framework should be normalizing paths or whether your reverse proxy should, but in practice both of you should, because you don't know which one of you is going to be misconfigured next quarter. We reject the obvious traversal shapes at routing time. It costs you nothing and removes a whole category of "oops, we served /etc/passwd" stories.
+
+### 5. Request timeouts
+
+<DefenseCard name="requestTimeoutMs" on="always" status="408 Request Timeout" trigger="Default 30s. Set 0 to disable (please don't). Handlers can read ctx.request.signal, a real AbortSignal, to cancel downstream fetches and DB queries cleanly." />
+
+The vast majority of slow-loris-shaped attacks aren't even attacks. They're a buggy mobile client on a 2G connection in a tunnel, holding open one of your sockets for nine minutes. A per-request timeout is a load-shedding tool first and a security tool second, and either way you want it on. Default is 30 seconds, which is generous enough for real work and tight enough that you won't accidentally exhaust a connection pool.
+
+### 6. problem+json with production redaction
+
+<DefenseCard name="problem+json (RFC 9457)" on="always" status="content-type: application/problem+json" trigger="All errors serialize to a stable, machine-readable shape: { type, title, status, detail?, instance? }. In production, the detail field is stripped from 5xx responses so stack traces do not leak." />
+
+Here's the same 500 from the same handler, dev versus prod, side by side. The difference is one environment variable:
+
+```bash
+# Same handler. Same crash. Different NODE_ENV.
+
+# NODE_ENV !== "production"
+{
+  "type": "about:blank",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "TypeError: Cannot read properties of undefined (reading 'id') at handler (src/routes/orders.ts:42:18)",
+  "instance": "urn:request:01J9..."
+}
+
+# NODE_ENV === "production"
+{
+  "type": "about:blank",
+  "title": "Internal Server Error",
+  "status": 500,
+  "instance": "urn:request:01J9..."
+}
+```
+
+The `instance` field is a request URN, which means your on-call engineer can grep for it in logs without the user ever being shown anything sensitive. The dev version keeps the stack because dev you wants to know. Prod you doesn't leak.
+
+## Part 2: Opt-in upgrades worth turning on today
+
+These stay out of the default constructor because each application needs its own policy. Every option takes one import and a few lines of configuration.
+
+### secureHeaders(): CSP nonce + Trusted Types
+
+<DefenseCard name="secureHeaders()" on="opt-in" status="adds CSP, HSTS, X-Frame-Options, COOP/CORP, Referrer-Policy, Permissions-Policy" trigger="Default CSP is default-src 'self'; frame-ancestors 'none'. Pass nonce: true to mint a per-request nonce, exposed as ctx.state.cspNonce. Trusted Types is one flag." />
+
+If your app renders any HTML at all, even one server-rendered template, even one error page, you want CSP, and you want it with a real nonce, not the `unsafe-inline` escape hatch that half the internet runs on. Here's how you get the strict version, with Trusted Types on top to harden DOM sinks against XSS:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="● CSP: strict · nonce: per-request · trusted-types: on">
+<CodeBlock language="ts" code={SECURE_HEADERS} />
+</EditorFrame>
+
+The nonce is generated using WebCrypto on every request, so the same code works on Node, Bun, Deno, and Workers without a polyfill. The first time I turned this on in a real app I found four scripts I didn't know were inline. That is what CSP is *for*.
+
+### csrf(): double-submit and Fetch-Metadata, together
+
+<DefenseCard name="csrf()" on="opt-in" status="403 Forbidden on failure" trigger="Three strategies: double-submit (cookie + header, timing-safe compared), fetch-metadata (Sec-Fetch-Site with Origin/Referer fallback), or both. Cookie defaults to __Host-daloy.csrf with SameSite=Lax + Secure." />
+
+CSRF is one of those topics where the "right" answer keeps moving. Five years ago it was "double-submit, please". Today modern browsers send `Sec-Fetch-Site` which lets you reject cross-origin writes without any token at all. The reasonable production answer is: do both, because legacy clients exist and defense-in-depth is free:
+
+<EditorFrame files={["src/app.ts", "src/routes/csrf.ts"]} activeFile="src/app.ts" status="csrf strategy=both · cookie=__Host-daloy.csrf">
+<CodeBlock language="ts" code={CSRF_BOTH} />
+</EditorFrame>
+
+The cookie name uses the `__Host-` prefix on purpose. It forces `Secure`, no `Domain=`, and `Path=/`: three rules that the browser enforces for you instead of trusting you to remember. We like making the browser do our job.
+
+### basicAuth(): when you just need a wall in front of /admin
+
+<DefenseCard name="basicAuth()" on="opt-in" status="401 + WWW-Authenticate" trigger="Bring your own verify() and use timingSafeEqual on both fields. Returning an object stamps ctx.state.user; returning false yields 401." />
+
+Not every internal endpoint deserves a full OAuth pipeline. Some of them just need a wall, the kind your reverse proxy used to provide. `basicAuth()` is for those:
+
+<EditorFrame files={["src/admin.ts"]} activeFile="src/admin.ts" status="401 unless both user and pass match (constant time)">
+<CodeBlock language="ts" code={BASIC_AUTH} />
+</EditorFrame>
+
+The order of operations and the comparison function both matter. Run both comparisons and use `timingSafeEqual`. A plain`===` comparison leaks timing information and is a bad habit to carry into more exposed credential checks.
+
+### session(), signed cookies, key rotation, GDPR-friendly defaults
+
+<DefenseCard name="session()" on="opt-in" status="cookie: __Host-daloy.sid · HttpOnly · Secure · SameSite=Lax" trigger="HMAC-SHA256 signed. Pass an array of secrets to rotate signing keys without logging users out. saveUninitialized defaults to false so no cookie is set until the session actually has data." />
+
+The session middleware has one parameter you must provide, a signing secret, and it accepts an array so you can rotate without a flag day. The default cookie shape is opinionated, in the way I wish more frameworks were:
+
+<EditorFrame files={["src/app.ts", "src/routes/login.ts"]} activeFile="src/app.ts" status="session: __Host-daloy.sid · rolling · 8h">
+<CodeBlock language="ts" code={SESSION_EXAMPLE} />
+</EditorFrame>
+
+Notice `state.session.regenerate()` on login. Rotating the session ID at any privilege boundary kills session fixation outright. The default in-memory store is fine for development; for production, swap in your Redis/KV store of choice through the same `SessionStore` interface.
+
+### rateLimit(): with a real Redis store for multi-instance apps
+
+<DefenseCard name="rateLimit() + redisRateLimitStore" on="opt-in" status="429 Too Many Requests + Retry-After" trigger="Standard X-RateLimit-* headers on every response. The Redis store uses an atomic Lua script for INCR + PEXPIRE so two instances cannot race past the limit. Fail-open by default, fail-closed if you prefer." />
+
+In-memory rate limits are a lie the moment you have two app instances behind a load balancer. The right move is a shared store, and the right shared store for "count things in a window" is Redis with atomic operations:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="rate-limit · store: redis · 120 req / 60s">
+<CodeBlock language="ts" code={RATE_LIMIT_REDIS} />
+</EditorFrame>
+
+Two details worth pausing on. First, `trustProxyHeaders` is `false` by default, because if you turn it on without a sanitizing proxy in front, an attacker can spoof `x-forwarded-for` and rate-limit themselves into invisibility. Second, the Redis adapter is *fail-open* by default: if Redis is down, requests are allowed through. That's the right choice for most apps (you don't want a Redis blip to take you offline), but you can flip it to fail-closed with one option if you'd rather block on uncertainty.
+
+## The defaults table, for the busy reader
+
+If you only remember one section of this post, remember this one.
+
+<div className="not-prose my-6 overflow-x-auto rounded-xl border">
+<table className="w-full text-sm">
+<thead className="bg-muted/60 text-left">
+<tr>
+<th className="px-4 py-3 font-medium">Defense</th>
+<th className="px-4 py-3 font-medium">State</th>
+<th className="px-4 py-3 font-medium">Default</th>
+<th className="px-4 py-3 font-medium">Failure</th>
+</tr>
+</thead>
+<tbody className="divide-y">
+<tr>
+<td className="px-4 py-2 font-mono">bodyLimitBytes</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">1 MiB</td>
+<td className="px-4 py-2 font-mono">413</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">safeJsonParse</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">strips \_\_proto\_\_/constructor/prototype</td>
+<td className="px-4 py-2 font-mono">400</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">header sanitization</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">no CR/LF/NUL in headers</td>
+<td className="px-4 py-2 font-mono">throws at boot</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">path traversal</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">rejects /../, /.., //</td>
+<td className="px-4 py-2 font-mono">404</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">requestTimeoutMs</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">30s</td>
+<td className="px-4 py-2 font-mono">408</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">problem+json</td>
+<td className="px-4 py-2">always on</td>
+<td className="px-4 py-2">5xx detail redacted in prod</td>
+<td className="px-4 py-2 font-mono">RFC 9457</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">secureHeaders()</td>
+<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">strict CSP + HSTS + COOP/CORP</td>
+<td className="px-4 py-2">-</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">csrf()</td>
+<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">double-submit, fetch-metadata, or both</td>
+<td className="px-4 py-2 font-mono">403</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">basicAuth()</td>
+<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">timing-safe verify callback</td>
+<td className="px-4 py-2 font-mono">401</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">session()</td>
+<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">\_\_Host- cookie, HMAC-SHA256, key rotation</td>
+<td className="px-4 py-2">-</td>
+</tr>
+<tr>
+<td className="px-4 py-2 font-mono">rateLimit() + Redis</td>
+<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">atomic Lua, fail-open</td>
+<td className="px-4 py-2 font-mono">429</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+## Limits
+
+None of this makes your app un-hackable. There is no constructor argument for "please make my business logic correct", and if there was, I'd have shipped one to my younger self by registered mail. What these defaults *do* get you is the comfort of knowing that the boring bugs, the ones we have collectively known about for fifteen years, the ones that show up on every pentest report under "Medium" because the auditor is tired, those are already handled. Your brain is free to spend its limited budget on the actually-hard parts of your product.
+
+If you want to go deeper, the [security docs](/docs/security) have the full surface area and the threat-model notes. And if you find a gap, please tell us, `SECURITY.md` in the repo has a real disclosure address, not a contact form that forwards to `/dev/null`.
+
+Thanks for reading. Now go set `NODE_ENV=production` in staging and watch your error responses get politely quiet.
+
+Devlin

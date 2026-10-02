@@ -1,0 +1,8 @@
+# Commits whose changes to docs/blog sources are not content updates, so they
+# must not move "Last updated" dates or sitemap <lastmod>. Same idea as git's
+# .git-blame-ignore-revs. One full SHA per line; comments start with #.
+#
+# Mechanical moves from app/docs/**/page.tsx to content/docs/**/*.mdx: the
+# page text did not change, so the real date is the old page.tsx's history.
+facc588c52043bc7337ba1eed1a953748b9f8229 # MDX pilot: tutorials to MDX
+# TODO(after committing the full MDX migration): add its SHA here.

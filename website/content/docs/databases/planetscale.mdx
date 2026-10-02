@@ -1,0 +1,177 @@
+---
+title: Use PlanetScale with DaloyJS
+description: Connect a DaloyJS API to PlanetScale MySQL using @planetscale/database, an HTTP driver that works on Cloudflare Workers, Node.js, Bun, and Deno.
+keywords:
+  - PlanetScale DaloyJS
+  - "@planetscale/database"
+  - PlanetScale Cloudflare Workers
+  - PlanetScale Vercel
+  - PlanetScale Drizzle
+  - PlanetScale branching
+---
+
+# Use PlanetScale with DaloyJS
+
+[PlanetScale](https://planetscale.com) is a managed MySQL host built around Vitess, branching, deploy requests, and a fetch-based HTTP driver. Because `@planetscale/database` uses plain `fetch`, it runs on every runtime DaloyJS supports, including Cloudflare Workers and Vercel. If you are using PlanetScale Postgres, follow the [Neon](/docs/databases/neon) driver pattern instead.
+
+<LayerStack title="One HTTP driver, every runtime" caption="Because @planetscale/database speaks plain fetch instead of a raw TCP socket, the same data-access code runs on every runtime DaloyJS targets, including Cloudflare Workers." layers={[
+          {
+            title: "DaloyJS route",
+            detail: "handler reads state.db",
+            tone: "accent",
+            items: ['app.decorate("db", db)', "db.execute(sql, params)"],
+          },
+          {
+            title: "@planetscale/database",
+            detail: "fetch-based HTTP driver",
+            items: ["Node", "Bun", "Deno", "Workers"],
+          },
+          {
+            title: "PlanetScale",
+            detail: "managed MySQL on Vitess",
+            tone: "muted",
+            items: ["branches", "deploy requests"],
+          },
+        ]} />
+
+## 1. Provision and grab credentials
+
+Create a database at [app.planetscale.com](https://app.planetscale.com), generate a password, and copy the host plus credentials. Set them as `DATABASE_HOST`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`.
+
+## 2. Install
+
+```ts
+pnpm add @planetscale/database
+```
+
+## 3. Create a PlanetScale plugin
+
+```ts
+// src/db/planetscale.ts
+    import { connect } from "@planetscale/database";
+import type { App } from "@daloyjs/core";
+
+    export const db = connect({
+  host: process.env.DATABASE_HOST!,
+  username: process.env.DATABASE_USERNAME!,
+  password: process.env.DATABASE_PASSWORD!,
+});
+    export type Db = typeof db;
+
+export const planetscalePlugin = {
+  name: "planetscale",
+  register(app: App) {
+    app.decorate("db", db);
+  },
+};
+```
+
+## 4. Augment app state
+
+Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/planetscale.ts (same module as the plugin above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Db;
+  }
+}
+```
+
+## 5. Use it in a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import { planetscalePlugin } from "./db/planetscale.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.register(planetscalePlugin);
+
+const UserSchema = z.object({ id: z.string(), email: z.email() });
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const result = await state.db.execute(
+      "select id, email from users where id = ? limit 1",
+      [params.id],
+    );
+    const row = result.rows[0] as { id: string; email: string } | undefined;
+    return row
+      ? { status: 200, body: row }
+      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+  },
+);
+```
+
+## Cloudflare Workers
+
+Construct the connection inside the worker handler so it picks up the binding from `env`, then call `app.fetch(req)`. If your app does not need worker bindings, you can export the standard [Cloudflare adapter](/docs/adapters) directly.
+
+```ts
+import { connect } from "@planetscale/database";
+
+export default {
+  async fetch(
+    req: Request,
+    env: { DATABASE_HOST: string; DATABASE_USERNAME: string; DATABASE_PASSWORD: string },
+  ) {
+    const db = connect({
+      host: env.DATABASE_HOST,
+      username: env.DATABASE_USERNAME,
+      password: env.DATABASE_PASSWORD,
+    });
+    app.decorate("db", db);
+    return app.fetch(req);
+  },
+};
+```
+
+## With Drizzle ORM
+
+```ts
+pnpm add drizzle-orm
+// src/db/drizzle.ts
+import { drizzle } from "drizzle-orm/planetscale-serverless";
+
+export const db = drizzle({
+  connection: {
+    host: process.env.DATABASE_HOST!,
+    username: process.env.DATABASE_USERNAME!,
+    password: process.env.DATABASE_PASSWORD!,
+  },
+});
+```
+
+## With Prisma
+
+Use the [PlanetScale Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/planetscale) (GA since Prisma `6.16.0`). PlanetScale disables foreign-key constraints by default on MySQL unless you enable them in database settings, so set `relationMode = "prisma"` in your `schema.prisma` when you are using the default no-FK mode, and point `DATABASE_URL` at the serverless host (`aws.connect.psdb.cloud`).
+
+```ts
+pnpm add @prisma/adapter-planetscale
+// src/db/prisma.ts
+import { PrismaClient } from "@prisma/client";
+import { PrismaPlanetScale } from "@prisma/adapter-planetscale";
+
+const adapter = new PrismaPlanetScale({ url: process.env.DATABASE_URL! });
+export const prisma = new PrismaClient({ adapter });
+```
+
+On Node.js versions older than 18 (no global `fetch`), install `undici` and pass `{ fetch: undiciFetch }` as a second option.
+
+## Branching & deploy requests [#branching-and-deploy-requests]
+
+PlanetScale's schema workflow uses branches and deploy requests rather than ad-hoc `ALTER TABLE`. Pair this with your CI: run migrations against a development branch, open a deploy request, and merge to `main`. The same Daloy app code works against any branch. Swap the host.
+
+See also [Neon](/docs/databases/neon), [Supabase](/docs/orm/supabase), and the [database hosting overview](/docs/databases).

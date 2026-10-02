@@ -1,0 +1,236 @@
+---
+title: Background Jobs After the HTTP Response
+description: A rolling deploy killed a welcome email I sent from POST /users. DaloyJS 1.3.0 adds a job queue so the HTTP handler can return and the email still goes out. Reach for Temporal, Inngest, or Eve if the function has to pause for hours and resume.
+date: 2026-08-28
+readingTime: 12 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+badges:
+  - Architecture
+  - Feature deep-dive
+keywords:
+  - background jobs TypeScript
+  - queue-agnostic job interface
+  - DaloyJS jobs
+  - job idempotency key
+  - cron vs queue
+  - at-least-once delivery
+  - JobStore SPI
+  - AKS worker pods
+  - serverless enqueue
+---
+
+## A rolling deploy ate the welcome email
+
+Some years ago I shipped a `POST /users` that sent the welcome email inline. SMTP sat in the handler, between the `INSERT` and the `201`. It worked in dev, in staging, and in production for months, until a routine rolling deploy terminated the pod in the 400 milliseconds between “user row committed” and “SMTP done”. No exception anywhere. The user existed. The email did not. I found out because a customer emailed support to ask where their welcome email was, which remains my least favorite monitoring system.
+
+```ts
+// Inline SMTP. A deploy can eat the email.
+app.post("/users", contract, async (ctx) => {
+  const user = await db.insertUser(ctx.body);
+  await sendWelcomeEmail(user.email); // inline: slow, and a deploy can eat it
+  return { status: 201 as const, body: user };
+});
+```
+
+A later job had the same shape. Eight replicas on AKS, a nightly invoice task implemented as an in-process timer. Eight pods, eight timers, eight copies of the same invoice email. The accountant noticed before we did.
+
+That week we shipped a database row that said “invoice run for date X” with a unique constraint, so only one pod could claim the slot. It worked. It was also the third time in my career I had hand-rolled that table. Every team I have been on eventually builds a slightly wrong job queue out of SQL and hope, and every one of those teams would rather have had the real thing.
+
+I was doing work that needed to outlive the HTTP request, or run exactly once across a fleet, inside a process that does not promise either of those things. An HTTP handler can answer a request. Sending mail, capturing a payment, or firing a nightly invoice from inside it still ties that work to a process that can die mid-flight.
+
+## What 1.3.0 ships
+
+The roadmap has named a queue-agnostic background-job interface for a while, and the Scheduler's own JSDoc already pointed at a queue that did not exist yet. The intended API was enqueue JSON, persist it behind a store interface, let a leased worker run it with retries, and keep durable backends outside the framework.
+
+DaloyJS 1.3.0 ships that. `createJobQueue`, `createJobWorker`, `MemoryJobStore`, and the `JobStore` SPI live at `@daloyjs/core/jobs`. `app.useJobs()` and `app.cronEnqueue()` sit on the `App`. `app.cron()` is untouched, nothing auto-starts, and the dependency count is still zero. The handler that used to send mail inline now looks like this:
+
+```ts
+import { createApp, MemoryJobStore, jobIdempotencyKey } from "@daloyjs/core";
+
+const app = createApp();
+
+app.useJobs({
+  store: new MemoryJobStore(), // production: your Redis/Postgres JobStore
+  handlers: {
+    "email.welcome": async ({ job, signal }) => {
+      const { to } = job.payload as { to: string };
+      await sendWelcomeEmail(to, { signal });
+    },
+  },
+  startWorker: true,
+});
+
+app.post("/users", contract, async (ctx) => {
+  const user = await db.insertUser(ctx.body); // commit first, then enqueue
+  await app.jobs!.enqueue({
+    name: "email.welcome",
+    payload: { to: user.email },
+    idempotencyKey: jobIdempotencyKey({
+      name: "email.welcome",
+      key: user.id, // a retried POST never double-sends
+    }),
+  });
+  return { status: 201 as const, body: user };
+});
+```
+
+The handler can return as soon as the row is committed and the job is enqueued. The job record lives in the store, so a rolling deploy can kill the HTTP pod and the email still goes out.
+
+I have also tried returning the 201 and letting the work trail behind on a `setTimeout`, a detached promise, or `ctx.waitUntil` on serverless. A deploy still eats the work, a 421 from SMTP disappears, a retried POST sends two emails, and you cannot tell whether the job ran without grep. Fire-and-forget is fine for metrics. For anything a user would miss, persist it.
+
+## Where a workflow engine still belongs
+
+Temporal, Inngest, Vercel Workflow, and Eve let a function checkpoint itself, sleep for seven days, wait for a human to click approve, and resume as if nothing happened. That combination of durable execution, deterministic replay, and parked workflows is the right tool for multi-step sagas with compensations and human-in-the-loop waits.
+
+Replay semantics also come with versioning rules, a sandbox, and a mental model that slowly takes over the codebase around it. For DaloyJS that would break three promises I am not willing to break: zero runtime dependencies, portability across Node, Bun, Deno, Workers, and Lambda, and a frozen 1.x API surface. I have been doing this long enough to know which boss fights to skip, and reimplementing deterministic replay is one of them.
+
+A Daloy job is `{ name, payload }` plus a store. If the same TypeScript function must pause for hours and resume, use Temporal, Inngest, or Eve, and keep DaloyJS as the HTTP API in front of it. That keeps the framework small enough to audit.
+
+## When a job is the right tool
+
+Jobs are for work that must survive the request, or the process. If the work fits in the request, do not enqueue.
+
+```text
+Does the client need the result to build the HTTP response?
+  YES -> do it in the handler (maybe resilientFetch). Not a job.
+  NO  -> would losing this work on process crash / deploy be unacceptable?
+          NO  -> in-process is fine (handler fire-and-forget or app.cron).
+          YES -> can it be one named function + JSON payload, retried as a whole?
+                  NO  -> workflow engine (Temporal / Inngest / Eve). Daloy stays the API.
+                  YES -> JOBS.
+```
+
+A job is worth it when the response can succeed before the side effect finishes (email, thumbnails, search indexing, analytics), when the side effect fails transiently and deserves backoff (SMTP 421, Stripe 429, a 503 from your model provider), when a deploy must not drop the work, and when a duplicate run is safe because you pass an idempotency key downstream. The list of things that should stay out of the queue:
+
+| Situation | Use instead |
+| --- | --- |
+| Result needed in the 200 body | The handler itself |
+| Client retries the same POST (payments) | [`idempotency()`](/docs/idempotency), or both layers |
+| Deliver this webhook before the response returns | `createWebhookSender()` |
+| Sweep this process's memory cache | `app.cron()` |
+| Human approval in two days, then resume | Temporal / Inngest / Eve |
+| Saga with compensations | Workflow engine, or explicit job chain plus your own compensation jobs |
+| Video files and other huge blobs | Blob URL in the payload (payloads cap at 64 KiB) |
+
+## Where the worker runs
+
+Enqueueing needs no timers, so it works on all the runtimes DaloyJS supports, including a 50ms Workers isolate. The worker is a poll loop, so it belongs wherever a long-lived process exists. The layouts I actually see:
+
+- **Tests and local dev.** `MemoryJobStore`, `worker.runOnce()`, fake timers. CI does not need Redis.
+- **One VPS, small production.** HTTP and worker in the same process (`startWorker: true`), but the store is Redis or Postgres so jobs survive the restart. Memory in production logs a loud warning. `strictProduction: true` refuses to boot.
+- **Kubernetes.** An `api` deployment that enqueues (`startWorker: false`) and a `worker` deployment that claims (`startWorker: true`, no public ingress). This is the AKS shape. N API pods behind Entra, M worker pods with egress to Redis/Postgres, SMTP, Stripe, and Azure OpenAI. The store adapter lives in your repo, not in core.
+- **Serverless API plus an always-on worker.** Vercel, Lambda, or Cloudflare handlers enqueue to a remote store. A Node container somewhere else runs the loop. Do not set `startWorker: true` on an isolate in v1.
+- **You already have SQS or Service Bus.** Implement `JobStore` over it (`put` is send, `claim` is receive with a visibility timeout, `complete` is delete, `fail` is native redrive). If your cloud consumer already drains the queue, DaloyJS is producer-only and the worker is optional.
+- **Multi-tenant SaaS.** Pass `ctx.state.tenant` explicitly and build keys with `jobIdempotencyKey({ tenant, name, key })`, so two tenants never collide on the same natural key.
+
+| Environment | Enqueue | Worker | Store |
+| --- | --- | --- | --- |
+| Unit tests | yes | `runOnce()` | Memory |
+| Single dev process | yes | optional in-process | Memory |
+| 1x Node VM, small prod | yes | in-process OK | Redis/Postgres |
+| Kubernetes, many pods | API pods | dedicated worker pods | Redis/Postgres |
+| Lambda / Workers | yes | separate Node service | remote only |
+| Cloud queue exists | `put` adapter | cloud consumer or Daloy worker | SQS/Service Bus adapter |
+
+Give the worker a chance to finish. `stop(graceMs)` waits for in-flight jobs, then aborts the stragglers' `AbortSignal` so they unwind and fail back to the queue for someone else to claim. On Kubernetes, set `terminationGracePeriodSeconds` above that grace period, or the kubelet will SIGKILL mid-heartbeat and you will rediscover how leases work at an inconvenient hour.
+
+## Recipes I actually use
+
+**Stripe webhook, answered in time.** Providers want a fast 2xx and will disable endpoints that time out. Verify the signature, enqueue, return 202. The heavy entitlement work happens in the worker, and Stripe's own retries collapse into one job because the event id is the key.
+
+```ts
+app.post("/webhooks/stripe", contract, async (ctx) => {
+  const event = verifyStripeSignature(ctx); // your existing check, first
+  await app.jobs!.enqueue({
+    name: "billing.stripe_event",
+    payload: { providerEventId: event.id, type: event.type }, // id, not the event body
+    idempotencyKey: jobIdempotencyKey({
+      name: "billing.stripe_event",
+      key: event.id,
+    }),
+  });
+  return { status: 202 as const, body: { received: true } };
+});
+```
+
+**Nightly reconciliation, once, cluster-wide.** This is the fix for the eight-invoice story. Keep the scheduler as the clock, but let the tick enqueue instead of execute. Every replica fires at 02:00. The derived key is identical on all of them, so eight ticks become one job.
+
+```ts
+app.cronEnqueue(
+  { name: "nightly-reconcile", cron: "0 2 * * *" },
+  { name: "ops.reconcile", payload: {} },
+);
+// Idempotency key per schedule slot: duplicate ticks collapse,
+// exactly one worker runs it, and a dead worker's lease just
+// requeues it somewhere else.
+```
+
+Sweeping *this* process's memory cache stays `app.cron()`. A job would run on one random worker and sweep the wrong process's cache, which is a polite way of doing nothing.
+
+**Payment capture off the request.** The order already returned 201. Capture runs as a job. The handler passes the same natural key to Stripe so a duplicate run is a no-op at the only place where duplicates cost money.
+
+```ts
+"payments.capture": async ({ job }) => {
+  const { orderId } = job.payload as { orderId: string };
+  const order = await db.getOrder(orderId);
+  if (!order) throw new JobFatalError("order vanished: " + orderId); // no retry
+  await stripe.paymentIntents.create(
+    { amount: order.totalCents, currency: order.currency, confirm: true },
+    { idempotencyKey: orderId }, // Stripe dedupes retries of THIS job
+  );
+},
+```
+
+Those are two different systems with the same value. The Daloy job key stops duplicate producers. The Stripe key stops duplicate charges. You need both. Setting them to the same natural id is the easiest way to never confuse them.
+
+**LLM work after the HTTP response.** A two-minute summarization cannot hold an API request, and on Workers it cannot even finish. Return 202 with the job id and let the client poll a status route you write. DaloyJS mounts no `/jobs` HTTP API, so the status route and its auth are yours.
+
+```ts
+app.post("/tickets/:id/summary", contract, async (ctx) => {
+  const { job } = await app.jobs!.enqueue({
+    name: "ai.summarize_ticket",
+    payload: { ticketId: ctx.params.id }, // the handler loads the text itself
+    maxAttempts: 3,
+    timeoutMs: 120_000,
+    idempotencyKey: jobIdempotencyKey({
+      name: "ai.summarize_ticket",
+      key: ctx.params.id,
+    }),
+  });
+  return { status: 202 as const, body: { jobId: job.id } };
+});
+// Handler: retry 429/5xx from Azure OpenAI; JobFatalError on a 400.
+```
+
+**Keep PDFs out of the payload.** Payloads cap at 64 KiB on purpose. Enqueue `{ blobUrl, ownerId, variant }` and let the handler pull the bytes from blob storage. That keeps the queue and the Redis bill small.
+
+## How this sits next to the rest of the framework
+
+- [`idempotency()`](/docs/idempotency) stops the retried POST from double-inserting the order. The job key stops the double email after the 201.
+- `createWebhookSender()` keeps its in-call retries for the common case. When delivery must outlive the day, call it *inside* a `webhook.deliver` job handler.
+- [`app.cron()`](/docs/scheduler) stays the right tool for process-local maintenance. `cronEnqueue` takes over the moment the tick's work is a global side effect.
+- `tenancy()` flows through explicitly. Jobs are not HTTP, so nothing reads the tenant for you.
+
+```ts
+await app.jobs!.enqueue({
+  name: "email.welcome",
+  payload: { to: user.email },
+  tenant: ctx.state.tenant, // copied onto the record for partitioning + logs
+  idempotencyKey: jobIdempotencyKey({
+    tenant: ctx.state.tenant,
+    name: "email.welcome",
+    key: user.id,
+  }),
+});
+```
+
+`fetchGuard()` still wraps any handler fetch to a URL a user could influence. A job that POSTs to a stored webhook URL has the same SSRF exposure as a request that does. The guard does not care which one it protects.
+
+## Delivery is at-least-once
+
+If the process dies after your handler succeeded but before the completion is persisted, the lease expires and another worker runs the handler again. That is the price of not losing work, and honest queues all pay it. Leases stay honest two ways. The worker heartbeats every `leaseMs / 3` automatically, and a long handler can call `ctx.heartbeat()` itself. If the lease is lost anyway, the handler's `AbortSignal` fires so it stops touching a job it no longer owns.
+
+The enqueue idempotency key collapses retried POSTs and eight cron replicas into one job. If a lease expires and a second worker runs the handler, your handler has to be idempotent, which usually means passing a key to the downstream API, as in the Stripe capture above. A `completed` status means the handler finished at least once. The Stripe key is what stops a second charge if the handler runs again. If your handler is not idempotent, the queue will find out at 3am and tell you through your accountant.
+
+The full tables, the status machine, the Redis adapter sketch, and all fourteen recipes are in [the jobs docs](/docs/jobs). `examples/jobs-basic.ts` shows dedupe and retries end to end. If you are new here, [/docs/getting-started](/docs/getting-started) is the front door.

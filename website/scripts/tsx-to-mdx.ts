@@ -25,6 +25,7 @@ import path from "node:path";
 
 import { parse } from "@babel/parser";
 import { compile } from "@mdx-js/mdx";
+import { parseHTML } from "linkedom";
 import GithubSlugger from "github-slugger";
 import remarkGfm from "remark-gfm";
 import { stringify as stringifyYaml } from "yaml";
@@ -33,7 +34,7 @@ type Node = { type: string; start?: number | null; end?: number | null; [key: st
 
 /** Components the MDX renderer provides globally, plus the imports that are safe to drop. */
 const PROVIDED = new Set([
-  "AuthRole", "AutoTypeTable", "BranchDiagram", "Callout", "Card", "Cards", "CodeBlock", "Diagram", "File", "Files",
+  "AuthRole", "AutoTypeTable", "BranchDiagram", "CoreVersion", "Callout", "Card", "Cards", "CodeBlock", "Diagram", "File", "Files",
   "FlowDiagram", "Folder", "IdpBoundary", "LayerStack", "Link", "PackageInstall", "SequenceDiagram", "SiteApiReference",
   "Step", "Steps", "TypeTable", "UseCaseGuide",
 ]);
@@ -44,11 +45,20 @@ const ENTITIES: Record<string, string> = {
   rarr: "→", larr: "←", hellip: "…", middot: "·", times: "×", copy: "©",
 };
 
+const ENTITY_DECODER = parseHTML("<!doctype html><html><body><p></p></body></html>").document.querySelector("p")!;
+
+/**
+ * Decode HTML character references (`&rsquo;`, `&#x2192;`, …) the way JSX
+ * does. Uses a real HTML parser so every named entity works, not a short list.
+ */
 function decodeEntities(text: string): string {
-  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, name: string) => {
+  if (!text.includes("&")) return text;
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);/gi, (match, name: string) => {
     if (name.startsWith("#x") || name.startsWith("#X")) return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
     if (name.startsWith("#")) return String.fromCodePoint(Number(name.slice(1)));
-    return ENTITIES[name] ?? match;
+    if (ENTITIES[name]) return ENTITIES[name]!;
+    ENTITY_DECODER.innerHTML = match;
+    return ENTITY_DECODER.textContent ?? match;
   });
 }
 
@@ -67,10 +77,29 @@ function jsxTextValue(raw: string): string {
 
 /** Backslash-escape characters that markdown or MDX would otherwise interpret. */
 function escapeMarkdown(text: string): string {
+  let out = "";
+  let cursor = 0;
+  for (const match of text.matchAll(AUTOLINK_LITERAL)) {
+    out += escapeMarkdownChars(text.slice(cursor, match.index)) + `{${JSON.stringify(match[0])}}`;
+    cursor = match.index! + match[0].length;
+  }
+  return out + escapeMarkdownChars(text.slice(cursor));
+}
+
+function escapeMarkdownChars(text: string): string {
   return text
-    .replace(/[\\`*_[\]<>{}]/g, (c) => `\\${c}`)
+    .replace(/[\\`*_[\]<>{}~]/g, (c) => `\\${c}`)
     .replace(/&(?=[a-z#][a-z0-9]*;)/gi, "\\&");
 }
+
+/**
+ * GFM "autolink literal" triggers: bare `http(s)://…`, `www.…`, and emails.
+ * Backslash escapes do not stop GFM from linking these, so they are emitted
+ * as JSX string expressions instead, which render the same characters and are
+ * never auto-linked.
+ */
+const AUTOLINK_LITERAL =
+  /(?:\b(?:https?|ftp):\/\/|\bwww\.)[^\s<]*[^\s<?!.,:*_~)"']|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
 
 /** Escape block-level markers that only matter at the start of a line. */
 function escapeBlockStart(line: string): string {
@@ -85,6 +114,25 @@ export class Converter {
   private readonly consts = new Map<string, { value: string | null; source: string }>();
   private readonly usedConsts = new Set<string>();
   private readonly slugger = new GithubSlugger();
+  /** Blog mode: the post's `POST` object (string fields), substituted inline. */
+  private post: Record<string, string> | null = null;
+  /**
+   * Blog mode: top-level helpers (functions, non-string consts they use) moved
+   * into a TSX module, `components/blog/<slug>.tsx`. PascalCase ones are
+   * passed to MDX as components; the rest are reached as `props.scope.<name>`.
+   */
+  private readonly moved = new Set<string>();
+  /** Source text of the moved declarations, in file order. */
+  readonly movedSources: string[] = [];
+  /** Import statements of the original page, for the moved module. */
+  readonly importSources: string[] = [];
+
+  /** `POST.<field>` → its string value in blog mode, otherwise null. */
+  private postValue(node: Node | null | undefined): string | null {
+    if (!this.post || !node || node.type !== "MemberExpression" || node.computed) return null;
+    if (node.object.type !== "Identifier" || node.object.name !== "POST") return null;
+    return this.post[node.property.name] ?? null;
+  }
 
   constructor(private readonly source: string, private readonly file: string) {}
 
@@ -98,6 +146,7 @@ export class Converter {
     if (node.type === "TemplateLiteral" && node.expressions.length === 0) return node.quasis[0].value.cooked;
     if (node.type === "JSXExpressionContainer") return this.stringValue(node.expression);
     if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") return this.stringValue(node.expression);
+    if (this.postValue(node) !== null) return this.postValue(node);
     if (node.type === "Identifier" && this.consts.get(node.name)?.value != null) return this.consts.get(node.name)!.value;
     return null;
   }
@@ -121,8 +170,8 @@ export class Converter {
     const visit = (value: any) => {
       if (!value || typeof value !== "object") return;
       if (Array.isArray(value)) return value.forEach(visit);
-      if (value.type === "Identifier" && this.consts.has(value.name)) this.usedConsts.add(value.name);
-      if (value.type === "JSXIdentifier" && /^[A-Z]/.test(value.name) && !PROVIDED.has(value.name)) {
+      if (value.type === "Identifier" && this.consts.has(value.name) && !this.moved.has(value.name)) this.usedConsts.add(value.name);
+      if (value.type === "JSXIdentifier" && /^[A-Z]/.test(value.name) && !PROVIDED.has(value.name) && !this.moved.has(value.name)) {
         throw new Unconvertible(`component <${value.name}> is not provided to MDX`);
       }
       for (const key of Object.keys(value)) {
@@ -138,7 +187,7 @@ export class Converter {
    * expressions and ESM are parsed as plain JavaScript.
    */
   private jsText(node: Node): string {
-    const cuts: Array<[number, number]> = [];
+    const cuts: Array<[number, number, string?]> = [];
     const visit = (value: any) => {
       if (!value || typeof value !== "object") return;
       if (Array.isArray(value)) return value.forEach(visit);
@@ -149,6 +198,18 @@ export class Converter {
       } else if (value.type === "TSTypeAnnotation" || value.type === "TSTypeParameterInstantiation") {
         cuts.push([value.start, value.end]);
         return;
+      } else if (this.postValue(value) !== null) {
+        // Blog mode: `POST.title` and friends become their literal values.
+        cuts.push([value.start, value.end, JSON.stringify(this.postValue(value))]);
+        return;
+      } else if (value.type === "Identifier" && this.moved.has(value.name) && !/^[A-Z]/.test(value.name)) {
+        // Blog mode: a moved helper function/const lives in the post's TSX
+        // module and is passed to MDX as props.scope.
+        cuts.push([value.start, value.end, `props.scope.${value.name}`]);
+        return;
+      } else if (this.post && value.type === "CallExpression" && value.callee.type === "Identifier" && value.callee.name === "cn") {
+        // Blog mode: MDX cannot import cn(); the renderer passes it as a prop.
+        cuts.push([value.callee.start, value.callee.end, "props.cn"]);
       }
       for (const key of Object.keys(value)) {
         if (key !== "loc" && key !== "extra") visit(value[key]);
@@ -157,23 +218,120 @@ export class Converter {
     visit(node);
     let out = "";
     let cursor = node.start ?? 0;
-    for (const [from, to] of cuts.sort((a, b) => a[0] - b[0])) {
+    for (const [from, to, replacement = ""] of cuts.sort((a, b) => a[0] - b[0])) {
       if (from < cursor) continue;
-      out += this.source.slice(cursor, from);
+      out += this.source.slice(cursor, from) + replacement;
       cursor = to;
     }
     return out + this.source.slice(cursor, node.end ?? 0);
   }
 
-  private verbatim(node: Node): string {
+  /** Tags that flow inline inside raw JSX (their text must stay on one line). */
+  private static readonly INLINE_TAGS = new Set([
+    "code", "strong", "b", "em", "i", "a", "Link", "br", "span", "kbd", "abbr", "sup", "sub", "small", "mark", "s", "u", "CoreVersion",
+  ]);
+
+  private isInlineContent(node: Node): boolean {
+    if (node.type === "JSXText") return node.value.trim() !== "";
+    if (node.type === "JSXExpressionContainer") return node.expression.type !== "JSXEmptyExpression";
+    return node.type === "JSXElement" && Converter.INLINE_TAGS.has(this.name(node));
+  }
+
+  /** Children rendered inline, on one line, with JSX whitespace semantics. */
+  private renderInlineChildren(children: Node[]): string {
+    return children
+      .map((child) => {
+        if (child.type === "JSXText") return escapeMarkdown(jsxTextValue(child.extra?.raw ?? child.value));
+        if (child.type === "JSXExpressionContainer") {
+          if (child.expression.type === "JSXEmptyExpression") return "";
+          // Same reason as attrText(): a multi-line static template child
+          // (e.g. <code>{`...`}</code> in a <pre>) would be re-indented by MDX.
+          const expr = child.expression;
+          if (expr.type === "TemplateLiteral" && expr.expressions.length === 0 && expr.quasis[0].value.cooked.includes("\n")) {
+            return `{${JSON.stringify(expr.quasis[0].value.cooked)}}`;
+          }
+          return this.jsText(child);
+        }
+        if (child.type === "JSXElement" || child.type === "JSXFragment") return this.renderJsxInline(child);
+        return this.jsText(child);
+      })
+      .join("");
+  }
+
+  /**
+   * Source for one JSX attribute. A static template literal value (typically a
+   * multi-line `code={`...`}`) is re-emitted as a single-line string literal
+   * with the identical value: inside a markdown text run MDX parses line by
+   * line, so a code line that looks like markdown would otherwise cut the
+   * expression short.
+   */
+  private attrText(attr: Node): string {
+    const value = attr.value;
+    if (
+      attr.type === "JSXAttribute" &&
+      value?.type === "JSXExpressionContainer" &&
+      value.expression.type === "TemplateLiteral" &&
+      value.expression.expressions.length === 0 &&
+      value.expression.quasis[0].value.cooked.includes("\n")
+    ) {
+      return `${this.text(attr.name)}={${JSON.stringify(value.expression.quasis[0].value.cooked)}}`;
+    }
+    return this.jsText(attr);
+  }
+
+  /**
+   * Opening/closing tags rebuilt from the AST with the attributes on one line.
+   * A tag that spans lines is unsafe inside markdown text: a continuation line
+   * starting with `>` (the end of a multi-line tag) reads as a blockquote.
+   * Each attribute keeps its own source text, so multi-line expression values
+   * (diagram step arrays, etc.) are preserved as written.
+   */
+  private tags(node: Node): { open: string; close: string } {
+    if (node.type === "JSXFragment") return { open: "<>", close: "</>" };
+    const opening = node.openingElement;
+    const name = this.text(opening.name);
+    const attributes = opening.attributes.map((attr: Node) => ` ${this.attrText(attr)}`).join("");
+    return {
+      open: `<${name}${attributes}${opening.selfClosing ? " />" : ">"}`,
+      close: node.closingElement ? `</${name}>` : "",
+    };
+  }
+
+  private renderJsxInline(node: Node): string {
+    const { open, close } = this.tags(node);
+    if (node.type === "JSXElement" && node.openingElement.selfClosing) return open;
+    return `${open}${this.renderInlineChildren(node.children)}${close}`;
+  }
+
+  /**
+   * Render raw JSX so MDX produces the same DOM as the original TSX. MDX parses
+   * text inside JSX as markdown, where a newline is a space and a text line is
+   * wrapped in <p>. So an element whose children include any text or inline
+   * element is written on a single line (JSX whitespace rules applied), and
+   * only purely structural children go on their own, indented lines.
+   */
+  private renderJsx(node: Node, indent: string): string {
+    if (node.type !== "JSXElement" && node.type !== "JSXFragment") return this.jsText(node);
+    const { open, close } = this.tags(node);
+    if (node.type === "JSXElement" && node.openingElement.selfClosing) return open;
+    const meaningful = node.children.filter((child: Node) => !(child.type === "JSXText" && child.value.trim() === ""));
+    if (meaningful.length === 0) return `${open}${close}`;
+    if (meaningful.some((child: Node) => this.isInlineContent(child))) {
+      return `${open}${this.renderInlineChildren(node.children)}${close}`;
+    }
+    // Children go on their own lines at column 0. Indenting them looks nicer
+    // but MDX strips that indent from every line of the child, including the
+    // lines of a multi-line code template literal.
+    const lines = meaningful.map((child: Node) => this.renderJsx(child, indent));
+    return [open, ...lines, close].join("\n");
+  }
+
+  private verbatim(node: Node, inline = false): string {
     this.collectIdentifiers(node);
-    const text = this.jsText(node);
-    // Dedent continuation lines by the element's own column so the JSX reads
-    // naturally at the top level of the MDX file.
-    const column: number = node.loc?.start?.column ?? 0;
-    if (column === 0 || !text.includes("\n")) return text;
-    const pattern = new RegExp(`\\n {1,${column}}`, "g");
-    return text.replace(pattern, "\n");
+    if (node.type === "JSXElement" || node.type === "JSXFragment") {
+      return inline ? this.renderJsxInline(node) : this.renderJsx(node, "");
+    }
+    return this.jsText(node);
   }
 
   private isBlank(node: Node): boolean {
@@ -185,7 +343,8 @@ export class Converter {
   inline(children: Node[]): string {
     let out = "";
     for (const child of children) out += this.inlineNode(child);
-    return out.replace(/\s+/g, " ");
+    // Collapse only the whitespace JSX collapses; \s would also eat U+00A0.
+    return out.replace(/[ \t\r\n]+/g, " ");
   }
 
   private plainText(children: Node[]): string {
@@ -214,15 +373,15 @@ export class Converter {
       if (node.expression.type === "JSXEmptyExpression") return "";
       const value = this.stringValue(node.expression);
       if (value !== null) return escapeMarkdown(value);
-      return this.verbatim(node);
+      return this.verbatim(node, true);
     }
-    if (node.type !== "JSXElement") return this.verbatim(node);
+    if (node.type !== "JSXElement") return this.verbatim(node, true);
 
     const name = this.name(node);
     const attrs = this.attrs(node);
     switch (name) {
       case "code": {
-        if (attrs.size > 0) return this.verbatim(node);
+        if (attrs.size > 0) return this.verbatim(node, true);
         const code = this.plainText(node.children);
         const fence = code.includes("`") ? "``" : "`";
         const pad = fence.length > 1 || code.startsWith("`") || code.endsWith("`") ? " " : "";
@@ -230,25 +389,25 @@ export class Converter {
       }
       case "strong":
       case "b":
-        return attrs.size > 0 ? this.verbatim(node) : this.wrap("**", this.inline(node.children));
+        return attrs.size > 0 ? this.verbatim(node, true) : this.wrap("**", this.inline(node.children));
       case "em":
       case "i":
-        return attrs.size > 0 ? this.verbatim(node) : this.wrap("*", this.inline(node.children));
+        return attrs.size > 0 ? this.verbatim(node, true) : this.wrap("*", this.inline(node.children));
       case "a":
       case "Link": {
         const href = this.stringValue(attrs.get("href"));
         const allowed = [...attrs.keys()].every((key) => ["href", "target", "rel"].includes(key));
-        if (!href || !allowed) return this.verbatim(node);
+        if (!href || !allowed) return this.verbatim(node, true);
         const external = /^https?:\/\//.test(href);
         // Internal <a> and target=_blank on internal links would change behavior; keep those verbatim.
-        if (!external && name === "a" && attrs.has("target")) return this.verbatim(node);
+        if (!external && name === "a" && attrs.has("target")) return this.verbatim(node, true);
         const label = this.inline(node.children).trim();
         return `[${label}](${href.replace(/[()\s]/g, (c) => encodeURIComponent(c))})`;
       }
       case "br":
         return "<br />";
       default:
-        return this.verbatim(node);
+        return this.verbatim(node, true);
     }
   }
 
@@ -257,7 +416,7 @@ export class Converter {
   private isInlineElement(node: Node): boolean {
     if (node.type === "JSXText" || node.type === "JSXExpressionContainer") return true;
     if (node.type !== "JSXElement") return false;
-    return ["code", "strong", "b", "em", "i", "a", "Link", "br", "span", "kbd", "abbr", "sup", "sub"].includes(this.name(node));
+    return ["code", "strong", "b", "em", "i", "a", "Link", "br", "span", "kbd", "abbr", "sup", "sub", "CoreVersion"].includes(this.name(node));
   }
 
   blocks(children: Node[], indent = ""): string[] {
@@ -307,6 +466,14 @@ export class Converter {
         if (item.type !== "JSXElement" || this.name(item) !== "li" || this.attrs(item).size > 0) {
           throw new Unconvertible("list child is not a plain <li>");
         }
+        // Markdown would make this a "loose" item and wrap the text in <p>;
+        // keep the whole list as JSX instead (nested lists stay tight, so
+        // they are fine).
+        const blockKids = item.children.filter(
+          (c: Node) => c.type === "JSXElement" && !this.isInlineContent(c) && !["ul", "ol"].includes(this.name(c)),
+        );
+        const hasBareInline = item.children.some((c: Node) => c.type !== "JSXElement" ? this.isInlineContent(c) : Converter.INLINE_TAGS.has(this.name(c)));
+        if (blockKids.length > 0 && hasBareInline) throw new Unconvertible("list item mixes inline text with block content");
         const marker = ordered ? `${index + 1}.` : "-";
         const pad = " ".repeat(marker.length + 1);
         const blocks = this.blocks(item.children, indent + pad);
@@ -325,6 +492,7 @@ export class Converter {
     const rows: string[][] = [];
     let headerCount = 0;
     const visitRow = (row: Node, header: boolean) => {
+      if (this.attrs(row).size > 0) throw new Unconvertible("table row with attributes (e.g. an anchor id)");
       const cells = row.children.filter((c: Node) => c.type === "JSXElement");
       rows.push(
         cells.map((cell: Node) => {
@@ -339,6 +507,7 @@ export class Converter {
     };
     for (const section of element.children.filter((c: Node) => c.type === "JSXElement")) {
       const name = this.name(section);
+      if (this.attrs(section).size > 0) throw new Unconvertible(`<${name}> with attributes`);
       if (name === "thead" || name === "tbody") {
         for (const row of section.children.filter((c: Node) => c.type === "JSXElement")) visitRow(row, name === "thead");
       } else if (name === "tr") {
@@ -367,9 +536,17 @@ export class Converter {
       const level = Number(name[1]);
       if (level === 1) return `# ${text}`;
       const plain = this.plainTextLoose(node.children);
-      const slug = this.slugger.slug(plain);
-      const marker = id && id !== slug ? ` [#${id}]` : "";
-      if (id && id !== slug) this.slugger.slug(id);
+      // Mirror remark-daloy exactly: it slugs the text when there is no
+      // marker, and reserves the marker id otherwise. Peek first so a heading
+      // that gets a marker does not also consume a numbered slug.
+      const peek = new GithubSlugger();
+      (peek as unknown as { occurrences: Record<string, number> }).occurrences = {
+        ...(this.slugger as unknown as { occurrences: Record<string, number> }).occurrences,
+      };
+      const expected = peek.slug(plain);
+      const needsMarker = Boolean(id) && id !== expected;
+      this.slugger.slug(needsMarker ? id! : plain);
+      const marker = needsMarker ? ` [#${id}]` : "";
       return `${"#".repeat(level)} ${text}${marker}`;
     }
 
@@ -390,6 +567,10 @@ export class Converter {
           return this.table(node);
         case "blockquote": {
           if (attrs.size > 0) return this.verbatim(node);
+          // A markdown `>` quote always wraps its text in <p>. When the
+          // original blockquote holds bare inline content, keep it as JSX so
+          // the DOM (and the prose styling) stays identical.
+          if (node.children.every((c: Node) => this.isBlank(c) || this.isInlineContent(c))) return this.verbatim(node);
           return this.blocks(node.children)
             .join("\n\n")
             .split("\n")
@@ -419,6 +600,174 @@ export class Converter {
       .trim();
   }
 
+  // ---------- blog post ----------
+
+  /**
+   * Convert a blog `page.tsx` (POST constant, badge header, prose body) into
+   * frontmatter plus an MDX body. The header, JSON-LD and byline are rendered
+   * by `BlogPostLayout` from the frontmatter, so only the prose body is kept.
+   */
+  convertBlog(): { mdx: string; slug: string } {
+    const ast = parse(this.source, { sourceType: "module", plugins: ["jsx", "typescript"] }) as unknown as Node;
+    let metadata: Node | null = null;
+    const helperDecls = new Map<string, Node>();
+    const typeDecls: string[] = [];
+    const constDecls = new Map<string, Node>();
+    let body: Node | null = null;
+    for (const statement of ast.program.body as Node[]) {
+      if (statement.type === "ImportDeclaration") {
+        // Imports go to the helper module (if any); MDX itself imports nothing.
+        this.importSources.push(this.text(statement));
+        continue;
+      }
+      const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+      if (declaration?.type === "TSTypeAliasDeclaration" || declaration?.type === "TSInterfaceDeclaration") {
+        typeDecls.push(this.text(declaration));
+        continue;
+      }
+      if (declaration?.type === "FunctionDeclaration") {
+        helperDecls.set(declaration.id.name, declaration);
+        continue;
+      }
+      if (declaration?.type === "VariableDeclaration") {
+        for (const decl of declaration.declarations) {
+          const name = decl.id.name;
+          if (name === "POST") {
+            this.post = Object.fromEntries(
+              decl.init.properties.map((prop: Node) => {
+                const value = this.stringValue(prop.value);
+                if (value === null) throw new Unconvertible(`POST.${prop.key.name} is not a static string`);
+                return [prop.key.name, value];
+              }),
+            );
+          } else if (name === "metadata") metadata = decl.init;
+          else if (name === "dateFormatter" || name === "jsonLd") continue;
+          else {
+            this.consts.set(name, { value: this.stringValue(decl.init), source: this.jsText(declaration) });
+            constDecls.set(name, declaration);
+          }
+        }
+        continue;
+      }
+      if (statement.type === "ExportDefaultDeclaration") {
+        const fn = statement.declaration;
+        if ((fn.body?.body ?? []).length > 1) throw new Unconvertible("default export has logic before return");
+        const ret = fn.body.body[0].argument;
+        body = ret.type === "ParenthesizedExpression" ? ret.expression : ret;
+        continue;
+      }
+      throw new Unconvertible(`unsupported top-level statement: ${statement.type}`);
+    }
+    if (!this.post) throw new Unconvertible("no POST constant");
+    if (!body) throw new Unconvertible("no default export");
+
+
+    const find = (node: Node, pred: (n: Node) => boolean): Node | null => {
+      if (!node || typeof node !== "object") return null;
+      if (node.type === "JSXElement" && pred(node)) return node;
+      for (const child of node.children ?? []) {
+        const hit = find(child, pred);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    const header = find(body, (n) => this.name(n) === "header");
+    const prose = find(body, (n) => /docs-prose/.test(this.text(n.openingElement)));
+    if (!header || !prose) throw new Unconvertible("post does not follow the header + docs-prose template");
+
+    // Move helper functions, plus every non-string const they (transitively)
+    // reference, into the post's TSX module. String consts stay in MDX
+    // (inlined into code fences), but are also copied when a helper needs them.
+    const references = (node: Node): Set<string> => {
+      const names = new Set<string>();
+      const visit = (value: any) => {
+        if (!value || typeof value !== "object") return;
+        if (Array.isArray(value)) return value.forEach(visit);
+        if ((value.type === "Identifier" || value.type === "JSXIdentifier") && typeof value.name === "string") names.add(value.name);
+        for (const key of Object.keys(value)) if (key !== "loc" && key !== "extra") visit(value[key]);
+      };
+      visit(node);
+      return names;
+    };
+    const queue = [...helperDecls.keys()];
+    const moveDecl = new Map<string, Node>();
+    while (queue.length) {
+      const name = queue.shift()!;
+      if (moveDecl.has(name)) continue;
+      const node = helperDecls.get(name) ?? constDecls.get(name);
+      if (!node) continue;
+      moveDecl.set(name, node);
+      for (const ref of references(node)) if ((helperDecls.has(ref) || constDecls.has(ref)) && !moveDecl.has(ref)) queue.push(ref);
+    }
+    // Non-string consts used only by the body move too, so MDX never needs
+    // JS objects that might reference helpers.
+    for (const [name, node] of constDecls) {
+      if (this.consts.get(name)?.value === null && !moveDecl.has(name)) {
+        const refs = references(prose);
+        if (refs.has(name)) moveDecl.set(name, node);
+      }
+    }
+    for (const [name, node] of [...moveDecl].sort((a, b) => (a[1].start ?? 0) - (b[1].start ?? 0))) {
+      this.moved.add(name);
+      this.movedSources.push(this.text(node));
+    }
+    if (this.movedSources.length) this.movedSources.unshift(...typeDecls);
+
+    const badges: Array<string | { label: string; variant: string }> = [];
+    const collectBadges = (node: Node) => {
+      if (node.type !== "JSXElement") return;
+      if (this.name(node) === "Badge") {
+        const label = this.plainTextLoose(node.children);
+        const variant = this.stringValue(this.attrs(node).get("variant")) ?? "default";
+        badges.push(variant === "outline" ? label : { label, variant });
+        return;
+      }
+      node.children.forEach(collectBadges);
+    };
+    collectBadges(header);
+
+    // The closing author card (if any): its links become frontmatter.
+    const footer = find(body, (n) => this.name(n) === "footer");
+    const footerLinks: Array<{ label: string; href: string }> = [];
+    const collectLinks = (node: Node) => {
+      if (node.type !== "JSXElement") return;
+      if (["Link", "a"].includes(this.name(node))) {
+        const href = this.stringValue(this.attrs(node).get("href"));
+        if (!href) throw new Unconvertible("footer link without a static href");
+        footerLinks.push({ label: this.plainTextLoose(node.children), href });
+        return;
+      }
+      node.children.forEach(collectLinks);
+    };
+    if (footer) collectLinks(footer);
+
+    const keywordsProp = (metadata?.arguments?.[0]?.properties ?? []).find((prop: Node) => (prop.key.name ?? prop.key.value) === "keywords");
+    const keywords = keywordsProp ? keywordsProp.value.elements.map((el: Node) => this.stringValue(el)) : [];
+
+    const { slug, title, description, date, readingTime, author, authorRole, authorBio } = this.post;
+    const frontmatter: Record<string, unknown> = { title, description, date, readingTime, author, authorRole };
+    if (authorBio) frontmatter.authorBio = authorBio;
+    frontmatter.badges = badges;
+    frontmatter.keywords = keywords;
+    if (footerLinks.length) frontmatter.footerLinks = footerLinks;
+
+    const blocks = this.blocks(prose.children);
+    const exports = [...this.usedConsts].map((name) => {
+      const declaration = this.consts.get(name)!.source;
+      return declaration.startsWith("export ") ? declaration : `export ${declaration}`;
+    });
+    const mdx = [
+      "---",
+      stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd(),
+      "---",
+      "",
+      ...(exports.length ? [exports.join("\n\n"), ""] : []),
+      blocks.join("\n\n"),
+      "",
+    ].join("\n");
+    return { mdx, slug: slug! };
+  }
+
   // ---------- page ----------
 
   convert(): { mdx: string; frontmatter: Record<string, unknown>; route: string } {
@@ -437,6 +786,8 @@ export class Converter {
         continue;
       }
       const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+      // Type-only declarations have no runtime meaning in MDX; drop them.
+      if (declaration?.type === "TSTypeAliasDeclaration" || declaration?.type === "TSInterfaceDeclaration") continue;
       if (declaration?.type === "VariableDeclaration") {
         for (const decl of declaration.declarations) {
           if (decl.id.name === "metadata") {
@@ -503,28 +854,113 @@ export class Converter {
   }
 }
 
+/** Directory of the per-post helper modules (`components/blog/<slug>.tsx`). */
+const BLOG_HELPERS_DIR = path.join("components", "blog");
+
+/**
+ * Write a post's moved helpers (components, functions, the consts they use)
+ * to `components/blog/<slug>.tsx`, verbatim and exported, with the page's
+ * imports. Skipped when the post has no helpers. Then refresh the registry.
+ */
+async function writeBlogHelperModule(slug: string, converter: Converter): Promise<void> {
+  const file = path.join(BLOG_HELPERS_DIR, `${slug}.tsx`);
+  if (converter.movedSources.length === 0) {
+    await rm(file, { force: true });
+  } else {
+    const exported = converter.movedSources.map((source) =>
+      /^(export\s|type\s|interface\s)/.test(source) ? source : `export ${source}`,
+    );
+    const used = (name: string) => exported.some((source) => new RegExp(`\\b${name}\\b`).test(source));
+    // Keep only the import specifiers the helpers actually use.
+    const imports = converter.importSources
+      .map((statement) => {
+        const parsed = parse(statement, { sourceType: "module", plugins: ["typescript"] }) as unknown as Node;
+        const decl = parsed.program.body[0];
+        const specs = decl.specifiers.filter((spec: Node) => used(spec.local.name));
+        if (specs.length === 0) return null;
+        const def = specs.find((spec: Node) => spec.type === "ImportDefaultSpecifier");
+        const named = specs.filter((spec: Node) => spec.type === "ImportSpecifier");
+        const typeOnly = decl.importKind === "type" ? "type " : "";
+        const parts = [
+          def ? def.local.name : "",
+          named.length
+            ? `{ ${named.map((spec: Node) => (spec.imported.name === spec.local.name ? spec.local.name : `${spec.imported.name} as ${spec.local.name}`)).join(", ")} }`
+            : "",
+        ].filter(Boolean);
+        return `import ${typeOnly}${parts.join(", ")} from "${decl.source.value}";`;
+      })
+      .filter(Boolean);
+    const header = [
+      "/**",
+      ` * Helpers for the blog post content/blog/${slug}.mdx, moved out of the`,
+      " * post's original page.tsx unchanged. Registered in components/blog/index.ts:",
+      " * PascalCase exports are MDX components, the rest are reached from the post",
+      " * as props.scope.<name>.",
+      " */",
+    ];
+    await mkdir(BLOG_HELPERS_DIR, { recursive: true });
+    await writeFile(file, [...header, ...imports, "", exported.join("\n\n"), ""].join("\n"));
+  }
+  await writeBlogHelperRegistry();
+}
+
+/** Regenerate components/blog/index.ts from the helper modules on disk. */
+async function writeBlogHelperRegistry(): Promise<void> {
+  const files = (await readdir(BLOG_HELPERS_DIR).catch(() => [] as string[]))
+    .filter((name) => name.endsWith(".tsx"))
+    .sort();
+  const ident = (slug: string) => `post_${slug.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const lines = [
+    "// Generated by scripts/tsx-to-mdx.ts: per-post helpers for blog MDX.",
+    "// Do not edit by hand; edit the helper module and keep this map in sync.",
+    ...files.map((name) => `import * as ${ident(name.replace(/\.tsx$/, ""))} from "./${name.replace(/\.tsx$/, "")}";`),
+    "",
+    "/** Blog post slug → that post's helper exports (components and functions). */",
+    "export const BLOG_POST_SCOPES: Record<string, Record<string, unknown>> = {",
+    ...files.map((name) => `  ${JSON.stringify(name.replace(/\.tsx$/, ""))}: ${ident(name.replace(/\.tsx$/, ""))},`),
+    "};",
+    "",
+  ];
+  await mkdir(BLOG_HELPERS_DIR, { recursive: true });
+  await writeFile(path.join(BLOG_HELPERS_DIR, "index.ts"), lines.join("\n"));
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const check = args.includes("--check");
+  const blog = args.includes("--blog");
   const files = args.filter((arg) => !arg.startsWith("--"));
   let failed = 0;
 
   for (const file of files) {
     const source = await readFile(file, "utf8");
     try {
-      const { mdx, route } = new Converter(source, file).convert();
+      const converter = new Converter(source, file);
+      const { mdx, route } = blog
+        ? (({ mdx, slug }) => ({ mdx, route: `/blog/${slug}` }))(converter.convertBlog())
+        : converter.convert();
       const body = mdx.replace(/^---\n[\s\S]*?\n---\n/, "");
       await compile(body, { remarkPlugins: [remarkGfm] });
-      const target = path.join("content", `${route.replace(/^\//, "")}.mdx`);
+      // "/docs" itself becomes content/docs/index.mdx; everything else maps
+      // 1:1 (a section index /docs/security -> content/docs/security.mdx).
+      const target =
+        route === "/docs" ? path.join("content", "docs", "index.mdx") : path.join("content", `${route.replace(/^\//, "")}.mdx`);
       if (check) {
         console.log(`# ${file} -> ${target}\n${mdx}`);
       } else {
         await mkdir(path.dirname(target), { recursive: true });
         await writeFile(target, mdx);
+        if (blog) await writeBlogHelperModule(route.slice("/blog/".length), converter);
         // Remove only the page file; keep sibling files (e.g. opengraph-image)
         // and drop the folder only when nothing else lives there.
         await rm(file);
         if ((await readdir(path.dirname(file))).length === 0) await rmdir(path.dirname(file));
+        // A section index converted before its children leaves the parent
+        // folder behind; sweep empty ancestors once the children go.
+        for (let dir = path.dirname(path.dirname(file)); dir.startsWith(path.join("app", blog ? "blog" : "docs", path.sep)); dir = path.dirname(dir)) {
+          if ((await readdir(dir)).length > 0) break;
+          await rmdir(dir);
+        }
         console.log(`converted ${file} -> ${target}`);
       }
     } catch (error) {

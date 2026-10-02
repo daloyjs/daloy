@@ -1,0 +1,319 @@
+---
+title: Accept payments with Adyen in DaloyJS
+description: Integrate Adyen's official @adyen/api-library Node SDK with a DaloyJS API. Covers the Sessions flow for Drop-in / Components, direct /payments calls, the live URL prefix, hmacValidator for Standard webhook notifications, and idempotency keys.
+keywords:
+  - DaloyJS Adyen
+  - "@adyen/api-library"
+  - Adyen Sessions flow
+  - hmacValidator
+  - Adyen Standard webhook HMAC
+---
+
+# Accept payments with Adyen in DaloyJS
+
+[Adyen](https://www.adyen.com/) is a single platform for cards, wallets, and local payment methods across Europe, the US, APAC, and LATAM. This guide uses the official [`@adyen/api-library`](https://github.com/Adyen/adyen-node-api-library) Node SDK (Checkout API **v71** as of v30.x) from a DaloyJS server, leans on the **Sessions** flow for the frontend, and verifies Standard webhook notifications with the bundled `hmacValidator`.
+
+## What you should know up front
+
+- Use Sessions, not `/payments` directly. The modern way to integrate Adyen Web Drop-in / Components is the [Sessions flow](https://docs.adyen.com/online-payments/build-your-integration/sessions-flow/), your server creates a session, the frontend hands it to Drop-in, and Adyen handles 3-D Secure 2, redirects, and payment-method-specific quirks for you. Direct `/payments` is still supported for server-to-server use cases.
+- Live needs a URL prefix. Production Checkout calls go through a merchant-specific endpoint. Set `liveEndpointUrlPrefix` on the `Client` for any API that requires it (Checkout, BinLookup, BalanceControl, Payout, Recurring). Forgetting this is the #1 cause of “works in test, 404 in live”.
+- Webhooks come signed. Each *NotificationRequestItem* carries an HMAC-SHA256 of selected fields in `additionalData.hmacSignature`. Verify with `hmacValidator.validateHMAC` and respond `[accepted]` within \~10 seconds, or Adyen marks it failed and retries.
+- Node 18+. Older runtimes are unsupported.
+- Amounts are minor units. EUR 10.00 -\> `{ currency: "EUR", value: 1000 }`. JPY 1000 -\> `value: 1000`. Get this wrong and you'll overcharge by 100×.
+
+## 1. Provision
+
+1. Create a [test account](https://docs.adyen.com/get-started-with-adyen#test-account) and a merchant account inside it.
+2. Generate an [API key](https://docs.adyen.com/development-resources/api-credentials) (Customer Area -\> Developers -\> API credentials) and grant it the *Checkout webservice* role.
+3. Configure a *Standard notification* webhook in Customer Area -\> Developers -\> Webhooks. Point it at your DaloyJS endpoint, choose JSON, generate an **HMAC key**, and enable Basic Auth.
+4. For production: note your `liveEndpointUrlPrefix` (Customer Area -\> Developers -\> API URLs, looks like `1797a841fbb37ca7-AdyenDemo`).
+
+## 2. Install
+
+```ts
+pnpm add @adyen/api-library
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+ADYEN_ENVIRONMENT=TEST                         # or LIVE
+ADYEN_API_KEY=AQE...replace_me
+ADYEN_MERCHANT_ACCOUNT=YourMerchantAccountName
+ADYEN_HMAC_KEY=hex_string_from_customer_area   # webhook signing key
+ADYEN_WEBHOOK_USER=adyen                       # Basic auth username
+ADYEN_WEBHOOK_PASSWORD=replace_me              # Basic auth password
+ADYEN_LIVE_URL_PREFIX=                         # required when ENVIRONMENT=LIVE
+ADYEN_CLIENT_KEY=test_...replace_me            # public key, ship to the browser
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/adyen.ts
+import { Client, CheckoutAPI, Types, hmacValidator } from "@adyen/api-library";
+import type { App } from "@daloyjs/core";
+
+const environment =
+  process.env.ADYEN_ENVIRONMENT === "LIVE" ? "LIVE" : "TEST";
+
+const client = new Client({
+  apiKey: process.env.ADYEN_API_KEY!,
+  environment,
+  ...(environment === "LIVE"
+    ? { liveEndpointUrlPrefix: process.env.ADYEN_LIVE_URL_PREFIX! }
+    : {}),
+});
+
+const checkout = new CheckoutAPI(client);
+const validator = new hmacValidator();
+
+export interface AdyenClient {
+  createSession(input: {
+    amount: { currency: string; value: number };
+    reference: string;
+    returnUrl: string;
+    countryCode?: string;
+    shopperReference?: string;
+    shopperEmail?: string;
+  }): Promise<Types.checkout.CreateCheckoutSessionResponse>;
+
+  getPaymentMethods(input: {
+    amount: { currency: string; value: number };
+    countryCode?: string;
+    channel?: "Web" | "iOS" | "Android";
+  }): Promise<Types.checkout.PaymentMethodsResponse>;
+
+  verifyWebhookItem(item: Types.notification.NotificationRequestItem): boolean;
+}
+
+export const adyenPlugin = {
+  name: "adyen",
+  register(app: App) {
+    const adyen: AdyenClient = {
+      createSession({ amount, reference, returnUrl, countryCode, shopperReference, shopperEmail }) {
+        return checkout.PaymentsApi.sessions({
+          merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+          amount,
+          reference,
+          returnUrl,
+          countryCode,
+          shopperReference,
+          shopperEmail,
+        });
+      },
+      getPaymentMethods({ amount, countryCode, channel }) {
+        return checkout.PaymentsApi.paymentMethods({
+          merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+          amount,
+          countryCode,
+          channel,
+        });
+      },
+      verifyWebhookItem(item) {
+        return validator.validateHMAC(item, process.env.ADYEN_HMAC_KEY!);
+      },
+    };
+    app.decorate("adyen", adyen);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    adyen: AdyenClient;
+  }
+}
+```
+
+`hmacValidator` is a class, instantiate it once. The same instance is safe to call concurrently.
+
+## 5. Create a session for Drop-in / Components [#5-create-a-session-for-drop-in-components]
+
+The frontend renders Adyen Web with the `id` and `sessionData` from this response. You never touch a PAN, and 3-D Secure 2 runs inside the Drop-in.
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { adyenPlugin } from "./plugins/adyen.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 30 }));
+app.register(adyenPlugin);
+
+app.post(
+  "/checkout/session",
+  {
+    operationId: "createAdyenSession",
+    request: {
+      body: z.object({
+        amount: z.object({
+          currency: z.string().length(3),
+          value: z.number().int().positive(),  // minor units
+        }),
+        reference: z.string().min(1).max(80),
+        countryCode: z.string().length(2).optional(),
+        shopperReference: z.string().max(80).optional(),
+        shopperEmail: z.email().optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "session created",
+        body: z.object({
+          id: z.string(),
+          sessionData: z.string(),
+          clientKey: z.string(),
+        }),
+      },
+    },
+  },
+  async ({ body, state }) => {
+    const session = await state.adyen.createSession({
+      ...body,
+      returnUrl: `${process.env.APP_URL}/checkout/return?ref=${encodeURIComponent(body.reference)}`,
+    });
+    return {
+      status: 201,
+      body: {
+        id: session.id!,
+        sessionData: session.sessionData!,
+        clientKey: process.env.ADYEN_CLIENT_KEY!,
+      },
+    };
+  },
+);
+```
+
+## 6. Standard webhook notifications
+
+<SequenceDiagram title="Webhook verification" participants={["Adyen", "DaloyJS route", "Your queue"]} steps={[
+          {
+            from: "Adyen",
+            to: "DaloyJS route",
+            label: "POST /webhooks/adyen",
+            detail: "Basic auth + notificationItems[]",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Check Basic auth, then validateHMAC per item",
+            detail: "additionalData.hmacSignature, HMAC-SHA256",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Adyen",
+            label: "401 on bad Basic auth or HMAC",
+            detail: "{ error: 'bad hmac' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Dedupe on pspReference, enqueue, ack [accepted]",
+            detail: "200 { notificationResponse: '[accepted]' } within ~10s",
+            kind: "async",
+          },
+        ]} caption="Check Basic auth, validate the per-item HMAC with hmacValidator, dedupe on pspReference + eventCode, then always answer 200 [accepted] and process AUTHORISATION asynchronously." />
+
+Adyen posts JSON like `{ "live": "false", "notificationItems": [{ "NotificationRequestItem": { ... } }] }`. Verify HMAC, ack *before* processing, then enqueue:
+
+```ts
+import { z } from "zod";
+import { timingSafeEqual } from "node:crypto";
+import type { Types } from "@adyen/api-library";
+
+function basicAuthOk(headerValue: string | null): boolean {
+  if (!headerValue?.startsWith("Basic ")) return false;
+  const expected =
+    "Basic " +
+    Buffer.from(`${process.env.ADYEN_WEBHOOK_USER}:${process.env.ADYEN_WEBHOOK_PASSWORD}`).toString("base64");
+  const a = Buffer.from(headerValue);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+app.post(
+  "/webhooks/adyen",
+  {
+    operationId: "adyenWebhook",
+    request: {
+      body: z.object({
+        live: z.string(),
+        notificationItems: z.array(
+          z.object({ NotificationRequestItem: z.any() }),
+        ),
+      }),
+    },
+    responses: {
+      200: { description: "ack", body: z.object({ notificationResponse: z.literal("[accepted]") }) },
+      401: { description: "unauthorized", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ body, request, state }) => {
+    if (!basicAuthOk(request.headers.get("authorization"))) {
+      return { status: 401, body: { error: "bad basic auth" } };
+    }
+
+    for (const wrapper of body.notificationItems) {
+      const item = wrapper.NotificationRequestItem as Types.notification.NotificationRequestItem;
+      if (!state.adyen.verifyWebhookItem(item)) {
+        return { status: 401, body: { error: "bad hmac" } };
+      }
+      // pspReference + eventCode + success makes a stable dedupe key.
+      const dedupe = `${item.pspReference}:${item.eventCode}:${item.success}`;
+      if (await seen(dedupe)) continue;
+      await enqueueAdyenEvent(item);
+    }
+
+    // Always 200 + [accepted] when HMAC + auth check pass; do the work async.
+    return { status: 200, body: { notificationResponse: "[accepted]" as const } };
+  },
+);
+```
+
+The event you care about most is `AUTHORISATION` with `success === "true"`. That is the canonical "the money is good" signal. The HTTP response from `/payments` or the Sessions success callback is only a hint. Webhooks are the source of truth.
+
+## 7. Modifications (capture, refund, cancel)
+
+```ts
+// Capture an authorisation (manual capture flow).
+await checkout.ModificationsApi.captureAuthorisedPayment(item.pspReference, {
+  merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+  amount: { currency: "EUR", value: 1000 },
+});
+
+// Refund a captured payment.
+await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
+  merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+  amount: { currency: "EUR", value: 1000 },
+});
+```
+
+Pass an [idempotency key](https://docs.adyen.com/development-resources/api-idempotency/) on writes you might retry, the SDK takes one via the second `IRequest.Options` argument:
+
+```ts
+await checkout.PaymentsApi.payments(req, {
+  idempotencyKey: `order:${orderId}`,
+});
+```
+
+## Runtimes
+
+The SDK uses Node's built-in `https` module out of the box. It runs on Node 18+ and works on classic Node serverless. For [edge runtimes](/docs/adapters) (Cloudflare Workers) you either swap in a fetch-based `HttpClient` via `new Client({ httpClient: { request(endpoint, json, config) { ... } } })` or POST directly to `https://checkout-test.adyen.com/v71/sessions` with `fetch`. The HMAC verification helper is pure JS and works anywhere.
+
+## Errors
+
+Adyen returns RFC-7807-shaped errors with `status`, `errorCode`, `message`, and `errorType`. The SDK throws `HttpClientException` with those fields on the `.error` object. Map them through [problem+json](/docs/errors) like other providers.
+
+## Modernisation notes
+
+- Sessions over `/payments` + `/payments/details`. The two-step Advanced flow still works, but Sessions is now the default in Adyen's own examples and removes a class of state-management bugs.
+- Use Web v5+ on the client. v5 expects a session response shape identical to what `PaymentsApi.sessions` returns. Older Drop-in versions required wiring up `onSubmit` / `onAdditionalDetails` callbacks by hand.
+- Don't roll your own HMAC. Adyen signs a specific colon-delimited subset of fields with a quirky escape rule. Let `hmacValidator` handle it.
+- Network tokens by default. When you tokenise with `storePaymentMethod: true` and reuse via `shopperInteraction: "ContAuth"`, Adyen will route through scheme tokens automatically, no extra code, lower decline rate.
+
+See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), [Authorize.Net guide](/docs/payments/authorize-net), and [problem+json errors](/docs/errors).

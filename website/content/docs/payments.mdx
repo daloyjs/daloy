@@ -1,0 +1,104 @@
+---
+title: Payment & commerce integrations for DaloyJS
+description: Accept payments and integrate commerce platforms from a DaloyJS API. Provider guides cover SDK choice, webhook verification, idempotency, and runtime support.
+keywords:
+  - DaloyJS payments
+  - Node.js payment integration
+  - Shopify DaloyJS
+  - ecommerce API Node
+  - payment webhooks
+sitemap:
+  priority: 0.8
+---
+
+# Payment & commerce integrations
+
+DaloyJS treats payment providers the same way it treats [email senders](/docs/email) and [database clients](/docs/orm): wrap the provider SDK in a small [plugin](/docs/plugins), attach it to `app.state`, and call it from validated route handlers. That keeps your business logic provider-agnostic so you can swap or A/B providers later.
+
+## Supported providers
+
+<BranchDiagram title="One abstraction, many gateways" source={{
+          label: "Your route handlers",
+          detail: "call state.<provider>",
+          eyebrow: "business logic",
+        }} branches={[
+          { label: "Stripe", detail: "stripe" },
+          { label: "Shopify", detail: "shopify-api-node" },
+          { label: "Braintree", detail: "braintree" },
+          { label: "Authorize.Net", detail: "authorizenet" },
+          { label: "Adyen", detail: "@adyen/api-library" },
+          { label: "Mollie", detail: "mollie-api-typescript" },
+          { label: "Tap / PayTabs", detail: "REST / paytabs_pt2" },
+          { label: "Razorpay", detail: "razorpay" },
+          { label: "Square", detail: "square" },
+        ]} caption="Each provider SDK lives behind a small plugin on app.state, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes." />
+
+- [Stripe](/docs/payments/stripe): create hosted Checkout Sessions, redirect with `@stripe/stripe-js`, verify `Stripe-Signature` webhooks over the raw body, and use idempotency keys with the official `stripe` Node SDK.
+- [Shopify](/docs/payments/shopify): read products, create orders, and handle Shopify webhooks via the community `shopify-api-node` SDK with the GraphQL Admin API.
+- [Braintree (PayPal)](/docs/payments/braintree): accept PayPal, cards, Venmo, Apple Pay, and Google Pay through one gateway using the official `braintree` Node SDK with signed webhooks.
+- [Authorize.Net](/docs/payments/authorize-net): charge cards, Apple Pay, and Google Pay via the official `authorizenet` SDK, plus HMAC-SHA512 webhook verification through the JSON Webhooks REST API.
+- [Adyen](/docs/payments/adyen): cards, wallets, and local payment methods via `@adyen/api-library` using the Sessions flow for Drop-in / Components and `hmacValidator` for Standard webhook notifications.
+- [Mollie](/docs/payments/mollie): European cards, iDEAL, Bancontact, SEPA, and Klarna via the new `mollie-api-typescript` SDK, with `SignatureValidator` for signed webhooks and async-iterable pagination.
+- [Tap Payments](/docs/payments/tap): GCC and MENA acquiring (KNET, Mada, Benefit, STC Pay, BenefitPay) via the REST Charges API with Bearer auth, hosted redirect flow, and `hashstring` HMAC webhook verification.
+- [PayTabs](/docs/payments/paytabs): MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet, cards, Apple Pay) via the official `paytabs_pt2` npm package, wrapped as a Promise-friendly plugin with HMAC-SHA256 IPN signature verification.
+- [Razorpay](/docs/payments/razorpay): UPI, cards, netbanking, and wallets for India via the official `razorpay` Node SDK using the Orders flow, `validatePaymentVerification` for the client callback, and `validateWebhookSignature` for IPN.
+- [Square](/docs/payments/square): unified online + in-person payments via the v40+ `square` TypeScript SDK, with BigInt money amounts, the Web Payments SDK token handoff, and `WebhooksHelper.verifySignature` over the raw body. Runs on Node, Vercel, Cloudflare Workers, Deno, and Bun.
+
+A direct PayPal Checkout guide will land here later. Each provider follows the same plugin shape so you can drop a new one into an existing application without rewriting routes.
+
+## What every payment integration needs
+
+- Server-side secrets only. Secret keys, webhook signing secrets, and OAuth access tokens belong in environment variables, never in the browser bundle or in a Next.js client component.
+- Webhook signature verification. Every provider signs its webhooks. Verify the signature on the raw request body *before* doing anything with the payload, DaloyJS exposes the unparsed body so HMAC checks work correctly.
+- Idempotency. Networks retry. Store the provider's event ID (or send an idempotency key on outbound requests) so duplicate deliveries don't double-charge or double-fulfill.
+- Rate limits. Most commerce APIs throttle aggressively. Wrap the provider client so retries and back-off live in one place, and lean on the built-in [rateLimit middleware](/docs/security) for your own endpoints.
+- Error mapping. Surface provider failures through [problem+json](/docs/errors) so clients (and [typed clients](/docs/typed-client)) see a consistent error shape.
+
+## Common plugin shape
+
+<FlowDiagram title="Plugin lifecycle" numbered steps={[
+          {
+            label: "Wrap the SDK",
+            detail: "new ProviderSDK(secrets)",
+            eyebrow: "plugin",
+          },
+          {
+            label: "Attach to state",
+            detail: "app.decorate(name, client)",
+            eyebrow: "register",
+          },
+          {
+            label: "Call from handlers",
+            detail: "state.<provider>.charge()",
+            eyebrow: "routes",
+            tone: "accent",
+          },
+          {
+            label: "Verify webhooks",
+            detail: "HMAC over raw body",
+            eyebrow: "callbacks",
+            tone: "success",
+          },
+        ]} caption="Every provider guide follows the same four steps, so dropping a new gateway into an existing app never touches your route code." />
+
+Each provider guide implements roughly the same interface on `app.state`:
+
+```ts
+// src/plugins/commerce.ts
+import type { App } from "@daloyjs/core";
+
+export interface CommerceClient {
+  // Read a product / order / customer.
+  read(kind: string, id: string): Promise<unknown>;
+  // Verify and parse a webhook from the provider.
+  verifyWebhook(headers: Headers, rawBody: Buffer): Promise<{ topic: string; payload: unknown }>;
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    commerce: CommerceClient;
+  }
+}
+```
+
+Provider pages keep the shape but specialise the method names where it makes the SDK nicer to read (for example, Shopify gets a `graphql()` passthrough so you can run typed GraphQL queries without leaving the plugin).

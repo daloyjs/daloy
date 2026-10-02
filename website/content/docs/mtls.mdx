@@ -1,0 +1,194 @@
+---
+title: mTLS / client-certificate auth
+description: "Authenticate clients by TLS certificate with clientCertAuth(): verified-chain enforcement, subject/issuer/fingerprint/SAN allow-lists, validity-window checks, native Node TLS, and trusted-proxy header parsing (Envoy XFCC, nginx). Zero runtime dependencies."
+keywords:
+  - mTLS
+  - mutual TLS
+  - client certificate authentication
+  - clientCertAuth
+  - zero trust
+  - service-to-service
+  - X-Forwarded-Client-Cert
+  - XFCC
+  - SPIFFE
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# mTLS / client-certificate auth
+
+DaloyJS ships `clientCertAuth()`, a middleware that authenticates a request by its **TLS client certificate**, the standard answer to “prove this internal call came from a trusted peer” in zero-trust / service-to-service deployments. It is dependency-free and runtime-portable, with two certificate sources:
+
+- Native TLS: when the runtime terminates TLS itself, the Node adapter reads the peer certificate off the socket and attaches it to the request (lazily, so plain requests pay nothing).
+- Forwarded by a trusted proxy: when TLS is terminated upstream (Envoy, nginx, HAProxy, Traefik, a cloud load balancer), the middleware parses the verified identity the proxy forwards in request headers (Envoy `X-Forwarded-Client-Cert` or operator-named structured headers).
+
+<SequenceDiagram title="Certificate verification" participants={["Peer", "TLS terminator", "clientCertAuth()", "Handler"]} steps={[
+          {
+            from: "Peer",
+            to: "TLS terminator",
+            kind: "request",
+            label: "TLS handshake presents client certificate",
+            detail:
+              "native socket, or forwarded by a trusted proxy (XFCC / structured headers)",
+          },
+          {
+            from: "TLS terminator",
+            to: "clientCertAuth()",
+            kind: "request",
+            label:
+              "Normalized ClientCertificate (subject, issuer, fingerprint, SANs, verified)",
+            detail: "read lazily. Plain requests pay nothing",
+          },
+          {
+            from: "clientCertAuth()",
+            to: "Peer",
+            kind: "note",
+            label:
+              "No certificate -> 401. Unverified / allow-list miss / expired -> 403",
+            detail: "403 never echoes which check failed",
+          },
+          {
+            from: "clientCertAuth()",
+            to: "Handler",
+            kind: "response",
+            label: "Verified + allow-listed -> proceed",
+            detail:
+              "ctx.state.clientCertificate stamped for downstream + audit",
+          },
+        ]} caption="The TLS layer verifies the chain. clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook in preBody. Anything that fails is rejected before request-body I/O or the handler." />
+
+## Quick start
+
+```ts
+import { createApp } from "@daloyjs/core";
+import { clientCertAuth } from "@daloyjs/core";
+
+const app = createApp();
+
+// Only peers whose certificate was issued by our internal CA and whose
+// SPIFFE ID is on the allow-list may reach these routes.
+app.use(
+  clientCertAuth({
+    allowIssuerCNs: ["acme-internal-ca"],
+    allowSANs: ["URI:spiffe://acme/svc-a"],
+  }),
+);
+
+app.post(
+  "/internal/charge",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  (ctx) => {
+    const cert = ctx.state.clientCertificate; // the accepted ClientCertificate
+    return { status: 200, body: { caller: cert.subjectCN } };
+  },
+);
+```
+
+On success the accepted [`ClientCertificate`](#the-clientcertificate) is stamped on `ctx.state.clientCertificate` (configurable via `stateKey`) for downstream handlers and audit logging.
+
+## Rejection semantics
+
+- No certificate presented → `401` `application/problem+json` with `Cache-Control: no-store`.
+- Unverified chain, failed allow-list, expired, or custom-rejected → `403` (the response never echoes certificate details, to avoid leaking which check failed).
+
+## Native TLS (Node)
+
+When the peer socket is a TLS socket presenting a client certificate, the Node adapter normalizes it (subject, issuer, fingerprint, SANs, validity window, and whether the chain was *verified*) and attaches it to the request. The read is deferred behind a lazy thunk, so only routes actually guarded by `clientCertAuth()` pay for it, and plain HTTP requests pay nothing. Run your Node server with `requestCert: true` and a configured CA so the runtime verifies the chain.
+
+```ts
+app.use(
+  clientCertAuth({
+    // requireVerified defaults to true: refuse any cert the TLS layer
+    // did not cryptographically verify against the configured CA.
+    allowFingerprints: [process.env.PEER_FINGERPRINT!],
+  }),
+);
+```
+
+## Behind a TLS-terminating proxy
+
+When a proxy terminates TLS, it forwards the verified client identity in request headers. Because those headers are spoofable by anything that can reach the app directly, the header path is opt-in: only enable it when the app is *exclusively* reachable through the terminating proxy.
+
+### Envoy (X-Forwarded-Client-Cert)
+
+Configure the terminator to verify the client certificate and strip incoming XFCC before writing its own value. Appending to untrusted input is not sufficient: the parser returns the first element, and its verified flag is a proxy assertion, not cryptographic verification. Neither a fingerprint allowlist nor a proxy-trust boolean authenticates this header. Restrict origin access to the terminator, or use native mTLS.
+
+```ts
+app.use(
+  clientCertAuth({
+    header: { format: "xfcc" }, // default header: x-forwarded-client-cert
+    allowSANs: ["URI:spiffe://acme/svc-a"],
+  }),
+);
+```
+
+### nginx / HAProxy / Traefik (structured headers) [#nginx-haproxy-traefik-structured-headers]
+
+For proxies that forward parsed fields in separate headers, name each header. The `verify` header lets the middleware require the proxy's own verification result (nginx `$ssl_client_verify === "SUCCESS"`):
+
+```ts
+app.use(
+  clientCertAuth({
+    header: {
+      format: "structured",
+      subjectDN: "x-ssl-client-s-dn",
+      issuerDN: "x-ssl-client-i-dn",
+      fingerprint: "x-ssl-client-fingerprint",
+      verify: "x-ssl-client-verify", // value must equal verifySuccessValue ("SUCCESS")
+    },
+    allowIssuerCNs: ["acme-internal-ca"],
+  }),
+);
+```
+
+<Callout type="warning" title="Structured headers need a verification header">
+<p>When you use <code>format: "structured"</code> without a{" "}<code>verify</code> header, the middleware has no proof the terminator actually validated the certificate chain. The subject / issuer / SAN headers alone could be spoofed by anything that reaches the app directly. It therefore treats such a certificate as{" "}<strong>unverified</strong>{", "}and the default <code>requireVerified: true</code> rejects the request with <code>403</code>{". "}Configure the <code>verify</code> header (as above) so the identity carries a validation result. Only if your proxy genuinely cannot forward one, and the app is reachable <em>exclusively</em>{" "}through it, set <code>requireVerified: false</code> to accept identity-only headers. Keep a strict <code>behindProxy</code> posture if you do.</p>
+</Callout>
+
+## Allow-lists & checks [#allow-lists-and-checks]
+
+- `requireVerified` (default `true`): refuse any certificate the TLS terminator did not verify.
+- `allowSubjectCNs` / `allowIssuerCNs`: exact CN match.
+- `allowFingerprints`: SHA-256 fingerprint match in **constant time** (colons/spaces and case are ignored, so a value copied from `openssl` works as-is).
+- `allowSANs`: at least one Subject Alternative Name must match (as `TYPE:value` like `URI:spiffe://acme/svc-a`, or as a bare value).
+- `checkValidity` (default `true`): reject certificates outside their `[notBefore, notAfter]` window when known (belt-and-braces for header-forwarded certs).
+- `verify(cert, ctx)`: a custom async hook run last. Returning `false` rejects with `403`.
+
+## The `ClientCertificate`
+
+Whatever the source, handlers receive one normalized shape:
+
+```ts
+interface ClientCertificate {
+  subjectDN?: string;        // "CN=svc-a,OU=payments,O=acme"
+  subjectCN?: string;        // "svc-a"
+  issuerDN?: string;
+  issuerCN?: string;
+  serialNumber?: string;
+  fingerprint256?: string;   // uppercase hex, no separators
+  subjectAltNames: string[]; // ["URI:spiffe://acme/svc-a", "DNS:svc-a.internal"]
+  notBefore?: Date;
+  notAfter?: Date;
+  verified: boolean;         // did the TLS terminator verify the chain?
+  pem?: string;              // when the proxy forwarded it (XFCC Cert=)
+}
+```
+
+The building blocks are exported from `@daloyjs/core/mtls` too: `parseForwardedClientCert()` (Envoy XFCC), `normalizePeerCertificate()` (Node `getPeerCertificate()` shape), and `setClientCertificate()` / `getClientCertificate()` for custom adapters.
+
+## Stored-response isolation
+
+An accepted certificate is also recorded as the caller identity (since 2.0.0). mTLS callers usually send no `Authorization` or `Cookie`, so without this a shared cache or idempotency store could not tell two allow-listed peers apart. [`responseCache()`](/docs/response-cache#credentials-fail-closed) therefore bypasses certificate-authenticated requests unless a `principal` names the peer or `cacheAuthenticatedRequests: { clientIdentity: true }` declares the response shareable, and [`idempotency()`](/docs/idempotency#security-notes) scopes keys per certificate by default.
+
+```ts
+app.use(clientCertAuth({ allowSubjectCNs: ["svc-a", "svc-b"] }));
+app.use(
+  responseCache({
+    // Cache per peer instead of bypassing.
+    principal: (ctx) => ctx.state.clientCertificate?.fingerprint256 ?? null,
+  }),
+);
+```

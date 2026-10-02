@@ -1,0 +1,398 @@
+---
+title: "File Uploads Without Framework Lock-In: Multipart in DaloyJS"
+description: "The fileField() and multipartObject() helpers: per-file size caps, MIME allowlists with wildcards, filename predicates, strict field validation, and OpenAPI binary schema emission, all while keeping the file as a Web standard File/Blob you can stream straight to S3, R2, or disk on any runtime."
+date: 2026-06-01
+readingTime: 12 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack, currently writing TypeScript from a desk in Norway. Has spilled enough megabytes of base64-encoded JPEGs into production logs to have strong feelings about how upload code should look.
+badges:
+  - Uploads
+  - Streams
+  - Web standards
+keywords:
+  - multipart file upload
+  - DaloyJS fileField
+  - multipartObject
+  - MIME allowlist
+  - stream upload S3
+  - Web File Blob
+  - OpenAPI binary schema
+  - Cloudflare Workers upload
+footerLinks:
+  - label: Read the docs
+    href: /docs
+  - label: Five-runtimes post
+    href: /blog/same-app-five-runtimes-verified
+  - label: More posts
+    href: /blog
+---
+
+export const PAIN = `# Symptoms that your upload code grew into a small framework of its own:
+#
+# - You wrote a "uploadHandler" wrapper that buffers the whole file into a
+#   Buffer, then re-emits it as a stream to S3. Memory usage during deploys
+#   tracks how many users hit "send" simultaneously.
+#
+# - Your MIME check is a regex against the filename extension. Someone
+#   uploaded "invoice.png.exe" and you only found out from a security audit.
+#
+# - The image-only endpoint accepts video/quicktime because nobody added
+#   the allowlist to the new route last quarter. Discovered when storage
+#   alerts fired at 02:13 on a Tuesday.
+#
+# - You ported the API to Cloudflare Workers and the entire upload
+#   subsystem broke because it relied on a Node-only multipart parser.`;
+
+export const BAD_OLD_WAY = `// The pattern most Node frameworks teach. It looks reasonable until
+// you try to run it on an edge runtime, or someone uploads a 4 GB MOV.
+import multer from "multer";
+import express from "express";
+
+const upload = multer({
+  dest: "/tmp/uploads",                       // disk! on a stateless deploy!
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) return cb(new Error("nope"));
+    cb(null, true);
+  },
+});
+
+const app = express();
+app.post("/avatars", upload.single("file"), async (req, res) => {
+  // req.file is a multer-shaped object. Not a standard Web File.
+  // To get it to S3 you fs.createReadStream(req.file.path) - disk roundtrip.
+  // To get it OUT of /tmp you remember to delete it (or you don't, and
+  // /tmp fills up on every cold start).
+});`;
+
+export const MULTIPART_OBJECT = `// src/routes/avatars.ts, the DaloyJS version.
+// Two helpers do all the work, both Standard Schema compatible.
+import { z } from "zod";
+import { App, fileField, multipartObject } from "@daloyjs/core";
+
+const AvatarUpload = multipartObject(
+  {
+    file: fileField({
+      maxBytes: 5 * 1024 * 1024,              // 5 MB hard cap
+      accept: ["image/png", "image/jpeg", "image/webp"],
+      filename: (name) => /\\.(png|jpe?g|webp)$/i.test(name),
+    }),
+    alt: z.string().min(1).max(140),         // <- non-file fields use Zod (or any
+                                             //   Standard-Schema-compatible lib)
+    isPrimary: z.coerce.boolean().default(false),
+  },
+  { strict: true },                          // reject unknown form fields
+);
+
+app.route({
+  method: "POST",
+  path: "/avatars",
+  operationId: "uploadAvatar",
+  tags: ["Avatars"],
+  request: { body: AvatarUpload },
+  responses: {
+    201: {
+      description: "Avatar uploaded",
+      body: z.object({ url: z.url() }),
+    },
+  },
+  handler: async ({ body }) => {
+    // body.file is a Web File / Blob - every runtime has it.
+    // body.alt is a string. body.isPrimary is a real boolean.
+    const url = await uploadToObjectStorage({
+      stream: body.file.stream(),            // <- streams. no buffer-the-world.
+      type:   body.file.type,
+      size:   body.file.size,
+      name:   body.file.name ?? "avatar",
+    });
+    return { status: 201, body: { url } };
+  },
+});`;
+
+export const VALIDATION_ERROR = `# Send a too-big WebP that's secretly a video disguised as one:
+curl -sS -X POST http://localhost:3000/avatars \\
+  -F file=@./vacation.mov;type=video/quicktime \\
+  -F alt="My profile picture" -F isPrimary=true | jq .
+
+# HTTP/1.1 422 Unprocessable Entity
+# Content-Type: application/problem+json
+{
+  "type":   "https://daloyjs.dev/errors/validation",
+  "title":  "Request validation failed",
+  "status": 422,
+  "detail": "Invalid body",
+  "errors": [
+    { "path": "file", "message": "File type \\"video/quicktime\\" not in accept list: image/png, image/jpeg, image/webp" },
+    { "path": "file", "message": "File name \\"vacation.mov\\" rejected by filename matcher" }
+  ]
+}
+# Zero handler code involved. The framework rejected the request before
+# a single byte hit your business logic. Memory-safe by construction.`;
+
+export const FILE_FIELD_OPTIONS = `// fileField(options), every knob, in one place.
+fileField({
+  maxBytes: 10 * 1024 * 1024,                // hard cap on file.size
+  accept:   ["image/*", "application/pdf"],  // exact or "type/*" wildcard
+  filename: (name) => name.length <= 200,    // your custom predicate
+  optional: true,                            // accept null/undefined as well
+  format:   "binary",                        // OpenAPI hint, default "binary"
+});
+
+// Wildcard matching is lower-cased before comparison, so:
+//   accept: ["IMAGE/PNG"]  ✓ matches image/png
+//   accept: ["image/*"]    ✓ matches image/jpeg, image/webp, image/svg+xml
+//   accept: ["*/*"]        ✓ matches anything (use sparingly; mostly for tests)`;
+
+export const MULTIPLE_FILES = `// For an array of files, wrap fileField() in your validator's array
+// helper. Standard Schema is the only contract - Zod, Valibot, ArkType
+// all work. Per-file rules still apply to every entry.
+import { z } from "zod";
+import { fileField, multipartObject } from "@daloyjs/core";
+
+const GalleryUpload = multipartObject({
+  // Browsers send <input type="file" multiple /> as a single field with
+  // multiple parts. Whatever runtime adapter you're on, FormData.getAll()
+  // gives you an array - and the framework hands it to your array schema.
+  images: z.array(
+    fileField({
+      maxBytes: 20 * 1024 * 1024,
+      accept: ["image/*"],
+    }),
+  ).min(1).max(50),
+  albumId: z.uuid(),
+});
+
+// In your handler:
+//   for (const img of body.images) {
+//     await uploadToObjectStorage({ stream: img.stream(), ... });
+//   }`;
+
+export const STREAMING = `// Streaming is the whole point. file.stream() returns a Web standard
+// ReadableStream - the same shape on Node, Bun, Deno, Cloudflare
+// and Workers. Pipe it to any compatible writer:
+
+// 1) Cloudflare R2 (Workers binding):
+await env.AVATARS.put(key, body.file.stream(), {
+  httpMetadata: { contentType: body.file.type },
+});
+
+// 2) AWS S3 v3 SDK on Node/Bun:
+import { Upload } from "@aws-sdk/lib-storage";
+await new Upload({
+  client: s3,
+  params: {
+    Bucket: "avatars",
+    Key: key,
+    Body: body.file.stream(),
+    ContentType: body.file.type,
+    ContentLength: body.file.size,
+  },
+}).done();
+
+// 3) Disk on a long-lived Node instance:
+import { Writable } from "node:stream";
+import { createWriteStream } from "node:fs";
+await body.file.stream().pipeTo(
+  Writable.toWeb(createWriteStream("/var/data/" + key)),
+);
+
+// 4) Forward to another service over HTTP - no buffering at all:
+await fetch(\`\${UPSTREAM}/store/\${key}\`, {
+  method: "PUT",
+  headers: { "content-type": body.file.type, "content-length": String(body.file.size) },
+  body: body.file.stream(),
+  // @ts-expect-error  half-duplex hint - Node 18+ needs this for streaming bodies
+  duplex: "half",
+});`;
+
+export const OPENAPI_OUTPUT = `// generated/openapi.json, what the spec looks like for the AvatarUpload route.
+// Notice the "multipart/form-data" content type and the "binary" format hint
+// on the file field. Every OpenAPI tool understands this shape.
+{
+  "paths": {
+    "/avatars": {
+      "post": {
+        "operationId": "uploadAvatar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file", "alt"],
+                "properties": {
+                  "file":      { "type": "string", "format": "binary" },
+                  "alt":       { "type": "string", "minLength": 1, "maxLength": 140 },
+                  "isPrimary": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+              },
+              "encoding": {
+                "file": { "contentType": "image/png, image/jpeg, image/webp" }
+              }
+            }
+          }
+        },
+        "responses": { "201": { /* ... */ } }
+      }
+    }
+  }
+}
+// In Scalar's /docs UI the "Try it" panel renders a real file picker.
+// In the Hey API generated SDK, uploadAvatar({ body: { file, alt, isPrimary } })
+// is typed against the browser File type. No surprise stringification.`;
+
+export const TEST_UPLOAD = `// tests/avatars.test.ts, test the upload end-to-end without a port.
+// FormData and File are part of Node 18+ (and every other modern runtime),
+// so this works in your existing node:test setup.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { buildApp } from "../src/build-app.ts";
+
+test("uploadAvatar accepts a PNG and returns a URL", async () => {
+  const app = buildApp();
+  const png = new File(
+    [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],         // a 4-byte "PNG"
+    "me.png",
+    { type: "image/png" },
+  );
+  const fd = new FormData();
+  fd.set("file", png);
+  fd.set("alt", "Me at the fjord");
+  fd.set("isPrimary", "true");
+
+  const res = await app.request("/avatars", { method: "POST", body: fd });
+  assert.equal(res.status, 201);
+  const body = await res.json();
+  assert.match(body.url, /^https?:\\/\\//);
+});
+
+test("uploadAvatar rejects a too-big or wrong-type file as RFC 9457 422", async () => {
+  const app = buildApp();
+  const oversize = new File([new Uint8Array(6 * 1024 * 1024)], "huge.png", { type: "image/png" });
+  const fd = new FormData();
+  fd.set("file", oversize);
+  fd.set("alt", "n/a");
+
+  const res = await app.request("/avatars", { method: "POST", body: fd });
+  assert.equal(res.status, 422);
+  assert.equal(res.headers.get("content-type"), "application/problem+json");
+});`;
+
+export const SECURITY_NOTES = `# A small checklist that has saved me from production-fire postmortems:
+
+# 1) Always set maxBytes per field. The framework's bodyLimitBytes is the
+#    OUTER limit on the whole request; fileField.maxBytes is per file.
+#    Both should be set. The smaller one wins for a single-file upload.
+
+# 2) Always set accept. "We'll figure it out later" is how you end up
+#    hosting random EXEs and DMGs for free. Make the allowlist
+#    aggressively narrow; expand only when you have a real use case.
+
+# 3) Use strict: true on multipartObject. Extra form fields are almost
+#    always a misconfigured frontend or an enumeration attempt.
+
+# 4) Trust file.type for routing decisions; DO NOT trust it as a security
+#    boundary. Run server-side magic-byte detection AFTER the upload if
+#    the file ends up rendered or executed. (For static-only uploads to
+#    a CDN bucket, the MIME allowlist is enough.)
+
+# 5) Stream. Never new Uint8Array(await file.arrayBuffer()) unless you're
+#    SURE the file is small. That line is the single biggest cause of
+#    "why does my Workers script run out of memory at 25 MB?" in the wild.
+
+# 6) Pick a deterministic key. file.name comes from the client. Use a
+#    crypto.randomUUID() and store the original name as metadata instead.`;
+
+Hi, Devlin. Ten years of fullstack, currently in Norway, currently nursing a strong opinion that file uploads should not be the part of your codebase that decides which runtime you can deploy to. And yet, for most of my career, it has been. A multer-shaped object here, a busboy stream there, a `/tmp/uploads` directory we're not allowed to talk about in serverless. You know the script.
+
+DaloyJS treats uploads the way the modern web platform does: you get back a `File` (which is a `Blob` with a `name`), which is the same shape on Node, Bun, Deno, and Cloudflare Workers. Two helpers, `fileField()` and `multipartObject()`: give you per-file size caps, MIME allowlists, filename predicates, strict field validation, and OpenAPI binary schemas, without ever stepping outside the standard. This post is the tour.
+
+## The pain you're here to fix
+
+<EditorFrame files={["status-quo.txt"]} activeFile="status-quo.txt" status="four classic upload sins · all preventable">
+<CodeBlock language="bash" code={PAIN} />
+</EditorFrame>
+
+## What most Node code looks like today
+
+<EditorFrame files={["express + multer"]} activeFile="express + multer" status="disk roundtrip · framework-specific shape · no edge runtime support">
+<CodeBlock language="ts" code={BAD_OLD_WAY} />
+</EditorFrame>
+
+Three structural problems live in that snippet: the file goes to disk (you have no disk on Workers), the shape `req.file` is a multer thing rather than a Web File, and the validation rules are scattered across a config object, a `fileFilter` callback, and a downstream `try/catch`. The DaloyJS version collapses all of it into one schema:
+
+## The two helpers, doing everything
+
+<EditorFrame files={["src/routes/avatars.ts"]} activeFile="src/routes/avatars.ts" status="multipartObject + fileField · streams everywhere · zero framework lock-in">
+<CodeBlock language="ts" code={MULTIPART_OBJECT} />
+</EditorFrame>
+
+Worth pointing at three things in that snippet:
+
+<CheckCard badge="1" title="File fields and form fields coexist"><code>fileField()</code> validates uploads; <code>z.string()</code>{", "}<code>z.coerce.boolean()</code>{", "}and anything else Standard-Schema-shaped validate text fields. One <code>multipartObject()</code> wraps both. You don't split your validation between "the upload library" and "the validation library".</CheckCard>
+
+<CheckCard badge="2" title="strict: true rejects unknown fields">Extra form fields are usually either a misconfigured frontend (silent bugs) or someone fishing for parser behaviour. Reject them. The framework returns RFC 9457 422 with a problem+json body, same shape as every other validation error in the app.</CheckCard>
+
+<CheckCard badge="3" title="body.file is a real Web File"><code>body.file</code> is a <code>Blob & {`{ name? }`}</code>{", "}which is the standard interop type. <code>file.stream()</code> is a{" "}<code>ReadableStream</code>. <code>file.arrayBuffer()</code> and{" "}<code>file.text()</code> work too if you really must. Same code path on every runtime.</CheckCard>
+
+## The validation error you get for free
+
+<EditorFrame files={["terminal · curl"]} activeFile="terminal · curl" status="application/problem+json · zero bytes through your handler">
+<CodeBlock language="bash" code={VALIDATION_ERROR} />
+</EditorFrame>
+
+Notice that the rejection happens *before* the handler runs. By the time your business logic gets called, the file has already passed its size cap and its MIME check. That's the difference between a memory exhaustion bug and a 422 response. For the long version of why that error shape is what it is, see the [RFC 9457 errors post](/blog/problem-details-done-right-rfc-9457-errors).
+
+## fileField(): every option, in one screen
+
+<EditorFrame files={["@daloyjs/core · multipart.ts"]} activeFile="@daloyjs/core · multipart.ts" status="five knobs · no hidden behavior">
+<CodeBlock language="ts" code={FILE_FIELD_OPTIONS} />
+</EditorFrame>
+
+## Arrays of files
+
+<EditorFrame files={["src/routes/gallery.ts"]} activeFile="src/routes/gallery.ts" status="wrap fileField in z.array() · per-file rules still apply">
+<CodeBlock language="ts" code={MULTIPLE_FILES} />
+</EditorFrame>
+
+## Streaming, on every runtime
+
+This is the bit that pays for the abstraction. Because `body.file` is a Web `Blob`, you get `file.stream()` for free, a `ReadableStream` with the exact same shape on Node, Bun, Deno, and Workers Edge. Four ways to use it, same handler code on all of them:
+
+<EditorFrame files={["src/storage.ts"]} activeFile="src/storage.ts" status="R2 · S3 · disk · upstream HTTP, same Web ReadableStream">
+<CodeBlock language="ts" code={STREAMING} />
+</EditorFrame>
+
+The runtime-portability story for uploads is the same story as for everything else in this stack, see the [five-runtimes verification post](/blog/same-app-five-runtimes-verified), but it's especially noticeable here because uploads are the one feature most Node frameworks accidentally pin you to Node for.
+
+## The OpenAPI shape this emits
+
+<EditorFrame files={["generated/openapi.json · /avatars"]} activeFile="generated/openapi.json · /avatars" status="multipart/form-data · type: string + format: binary · encoding.contentType">
+<CodeBlock language="json" code={OPENAPI_OUTPUT} />
+</EditorFrame>
+
+That means three nice things, automatically: the Scalar `/docs` UI shows a real file picker in the "Try it" panel. The Hey API generated SDK exposes a typed function whose `body.file` is a browser `File`; and any third-party tool that grok'd OpenAPI 3.1 (Postman, Bruno, Speakeasy) renders the upload correctly without help.
+
+## Testing without a server
+
+`FormData` and `File` are standard globals on Node 18+, Bun, and every other runtime DaloyJS ships an adapter for. Combine them with `app.request()` to test the entire upload path in-process, without opening a port or relying on a temporary directory:
+
+<EditorFrame files={["tests/avatars.test.ts"]} activeFile="tests/avatars.test.ts" status="node:test + FormData + app.request() · runs in milliseconds">
+<CodeBlock language="ts" code={TEST_UPLOAD} />
+</EditorFrame>
+
+## The production checklist
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="six rules · paste into your team's runbook">
+<CodeBlock language="bash" code={SECURITY_NOTES} />
+</EditorFrame>
+
+## Keep uploads portable
+
+File uploads stop being a special case the moment you commit to two things: validate the file the same way you validate any other field, and never leave the Web standard `File` shape. `fileField()` handles the first. The rest of the framework handles the second. You get streaming on every runtime, OpenAPI binary schemas without extra work, RFC 9457 problem+json on every rejection, and an in-process test path that doesn't require touching disk. The "upload subsystem" folder you keep meaning to refactor, you might not need it anymore.
+
+For more pieces in the same vein, [the middleware post](/blog/middleware-without-mystery-hooks-ordering-response-transformation) covers where to put auth around upload endpoints. The [secure-by-default](/blog/secure-by-default) post covers the body limits you get for free, and the rate-limit middleware you add in one line. The [bookstore tutorial](/blog/building-a-bookstore-api-with-daloyjs-from-scratch) is the broader starter walkthrough.
+
+Devlin

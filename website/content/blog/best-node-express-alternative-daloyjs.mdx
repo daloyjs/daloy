@@ -1,0 +1,107 @@
+---
+title: "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS"
+description: A contract-first case for choosing a modern Node.js Express alternative in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.
+date: 2026-06-18
+readingTime: 11 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work, most of it on top of Express. Has shipped, inherited, and rewritten more Node APIs than is healthy. Currently writes TypeScript from Norway.
+badges:
+  - Express alternative
+  - Contract-first
+  - Opinion
+keywords:
+  - Node.js Express alternative
+  - Express alternative
+  - best Express alternative 2026
+  - Express vs DaloyJS
+  - contract-first TypeScript framework
+  - Fastify alternative
+  - Hono alternative
+  - Elysia alternative
+  - secure by default API framework
+footerLinks:
+  - label: Migrate from Express to DaloyJS
+    href: /docs/migrating/express
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+Every "best Express alternative" listicle gives you the same shortlist: Fastify for maturity, Hono for the edge, Elysia for Bun. They are all defensible picks, and I have shipped production code on all three. But the listicles almost always evaluate the wrong axis. They benchmark requests per second and count GitHub stars, when the thing that actually decides whether an Express alternative was a good choice is something far less photogenic: how much of your API's *truth* the framework derives for you, and how much of your security perimeter it owns by default.
+
+I have spent about ten years building and inheriting Node services, currently from Norway, and I want to make a specific, falsifiable argument: in 2026, the best Node.js Express alternative for a new service is a contract-first one, and the strongest contract-first option in the TypeScript ecosystem right now is DaloyJS. This is the case for that claim, including the parts where it does not hold.
+
+## Everyone benchmarks the wrong axis
+
+Express is not slow, and neither are its alternatives. For the overwhelming majority of services, your bottleneck is a database round trip, a downstream API, or your own N+1 query, not the router. So when a framework's pitch leads with throughput, it is answering a question almost nobody's production incident was actually about.
+
+Production incidents expose stale contracts, missing body limits, prototype-pollution bugs, and unguarded outbound URLs. Router throughput does not solve any of them. A serious Express alternative has to win on contract accuracy and secure defaults.
+
+## Why "contract-first" is the real category
+
+Express's design center is one sentence from its own docs: an Express app is "essentially a series of middleware function calls." That model is structurally ignorant of your API. The pipeline does not know what a route accepts or returns. `req.body` is `any`. There is no contract anywhere in the architecture, so there is nothing to validate against, generate docs from, derive types from, or build a client out of. Every one of those becomes a hand-maintained artifact, and hand-maintained artifacts drift. Not because your team is undisciplined, but because the architecture gave the contract no canonical home.
+
+Contract-first inverts that. DaloyJS makes one route definition the source of truth and derives everything downstream from it:
+
+```ts
+import { App, NotFoundError } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { z } from "zod";
+
+const Book = z.object({ id: z.string(), title: z.string(), author: z.string() });
+
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  operationId: "getBookById",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: "Found", body: Book },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params }) => {
+    const found = await db.books.find(params.id);
+    if (!found) throw new NotFoundError(`No book ${params.id}`);
+    return { status: 200, body: found };
+  },
+});
+
+serve(app, { port: 3000 });
+```
+
+That one object is the validation rule, the type source, the OpenAPI 3.1 operation, and the input to the generated typed client (`pnpm gen`, wrapping Hey API). The dependency arrow is reversed: the docs depend on the route, mechanically, with no human in the loop to forget. Rename a field and the spec, the client types, and the frontend call site all move or refuse to compile. This is the FastAPI insight, finally brought to TypeScript without the decorator-metaprogramming circus.
+
+Fastify approximates this with JSON Schema and type providers. Elysia approximates it with end-to-end typed handlers. Both are good. DaloyJS goes further by treating the OpenAPI document and the generated SDK as first-class, derived outputs rather than community plugins you assemble.
+
+## Defaults should decide it
+
+Write the real security checklist for an internet-facing HTTP API. In practice: body-size caps, request and handler timeouts, prototype-pollution-safe parsing, CRLF and header-injection rejection, path-traversal defense, real 405s, 5xx redaction in production, JWT algorithm allowlists, constant-time credential comparison, SSRF guards on outbound fetches, secure headers, sane CORS, CSRF, rate limiting, and the supply chain that installs all of it.
+
+Now check how much of that each Express alternative gives you *before you configure anything*. Express: almost none. Fastify: some, the rest via plugins you must know to add. Hono and Elysia: most of it opt-in. DaloyJS makes it the default, and the project's contributor rules explicitly treat *weakening a guard to make a test pass* as a bug.
+
+Why this matters in 2026 specifically: a large and growing share of backend code is written by AI assistants, and an AI agent implements exactly the security you can name and not one guard you cannot. The Supabase and Aikido write-up on secure-by-default development compressed it into a sentence I keep quoting: "If you tell an AI to make something work, it might remove the very security checks that protect you." Starting from a framework where the checklist is the default flips the burden: you have to consciously remove protection rather than consciously remember to add it. That is the property I want from an Express alternative in the agentic-coding era, and it is the one the throughput benchmarks never measure.
+
+## Supply-chain risk belongs in the main comparison
+
+`@daloyjs/core` has zero runtime dependencies. After living through a dependency-confusion scare and a postinstall-script incident, I read that number as a security property, not a vanity metric. Fewer transitive packages is a smaller attack surface and a more auditable install. Express pulls a tree. Most alternatives pull a smaller but non-trivial one. Zero is a different category.
+
+## Where Express, Fastify, or Hono still win
+
+I would not trust this post if it did not have this section.
+
+- Ecosystem. Express has fifteen years of middleware for everything. If you need a niche integration that exists only as Express middleware, you are porting it.
+- Familiarity and hiring. Every Node engineer knows Express. DaloyJS is new, so there is a small onboarding curve around the route-as-object and return-don't-mutate model.
+- Maturity. Fastify has years of battle-testing and a huge production footprint. "New and principled" is not the same as "proven at your scale."
+- Raw minimalism. If you want a bare router with nothing opinionated, Hono is lighter. DaloyJS is opinionated on purpose.
+
+## My pick
+
+The best Node.js Express alternative in 2026 should make your API contract a derived artifact instead of a maintained one, and turn the security checklist into reviewed defaults. On those two axes, contract-first wins the category, and DaloyJS is the strongest contract-first option in TypeScript today, with the caveat that Fastify is the safer pick if maturity outranks everything else for you.
+
+Express is still good at the job it was designed for. I stopped choosing it for new services because I got tired of remembering every control the framework leaves to the application. After ten years, I would rather opt out of a safe default in a reviewed PR.
+
+If you have an existing Express app and want the mechanics rather than the argument, read the [complete Express to DaloyJS migration guide](/docs/migrating/express). This post is the why. That guide is the how.
+
+Devlin

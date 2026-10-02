@@ -10,7 +10,7 @@ export const REPO_BRANCH = "main";
 
 /** Per-route facts for the docs page chrome (edit link, last updated). */
 export type DocsPageMeta = {
-  /** Repo-relative source path, e.g. `website/app/docs/routing/page.tsx`. */
+  /** Repo-relative source path, e.g. `website/content/docs/routing.mdx`. */
   source: string | null;
   /** ISO date of the last commit that touched the source, when known. */
   lastModified?: string;

@@ -1,0 +1,84 @@
+---
+title: Database hosting & serverless data providers
+description: "Pick the right managed database host or embedded analytical engine for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, DuckDB, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers."
+keywords:
+  - DaloyJS database hosting
+  - serverless Postgres
+  - edge database
+  - Neon DaloyJS
+  - PlanetScale DaloyJS
+  - Turso DaloyJS
+  - DuckDB DaloyJS
+  - Cloudflare D1 DaloyJS
+  - Aurora DSQL DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Database hosting & serverless data providers
+
+DaloyJS doesn't ship a database. It runs on Node, Bun, Deno, Cloudflare Workers, AWS Lambda, Deno Deploy, and Fastly Compute, so the right database depends on which [adapter](/docs/adapters) you target.
+
+The pages in this section cover **where your data lives**: managed hosts and their drivers, separately from **how you query it** (see [ORMs](/docs/orm) and [ODMs](/docs/odm)). Most providers here pair with Drizzle or Prisma rather than replacing them.
+
+## Why this matters on edge runtimes
+
+Cloudflare Workers don't expose raw TCP sockets, so the classic `pg` or `mysql2` drivers will not connect directly. The providers below solve that by offering an **HTTP / WebSocket driver**, an **HTTP data API**, or a runtime-native binding. Pick a host whose driver matches the runtime you ship to.
+
+<LayerStack title="What sits between your handler and the data" flow="down" layers={[
+          {
+            title: "DaloyJS app on a runtime",
+            detail: "Same route code on any adapter",
+            items: ["Node", "Workers", "Lambda"],
+            tone: "accent",
+          },
+          {
+            title: "Driver style",
+            detail: "How the runtime reaches the database",
+            items: [
+              "HTTP / WebSocket",
+              "fetch data API",
+              "Workers binding",
+              "TCP (pg)",
+            ],
+          },
+          {
+            title: "Managed database host",
+            detail: "Where your data actually lives",
+            items: ["Neon", "PlanetScale", "Turso", "DuckDB", "D1"],
+            tone: "muted",
+          },
+        ]} caption="On edge runtimes only HTTP, fetch, or native bindings work. Raw TCP does not. The driver style is the layer that decides whether a host can run on Workers." />
+
+## Supported providers
+
+- [Neon](/docs/databases/neon): serverless Postgres with branching, scale-to-zero, and an HTTP/WebSocket driver (`@neondatabase/serverless`).
+- [PlanetScale](/docs/databases/planetscale): managed MySQL with Vitess, branching, deploy requests, and an HTTP driver (`@planetscale/database`).
+- [Supabase](/docs/orm/supabase): hosted Postgres plus auth, storage, and realtime via the fetch-based `@supabase/supabase-js`.
+- [Turso](/docs/databases/turso): distributed libSQL (SQLite fork) via `@libsql/client`. Works over HTTP for edge runtimes.
+- [DuckDB](/docs/databases/duckdb): embedded OLAP SQL engine for analytics, local files, Parquet, and ad hoc reporting inside Node.js services.
+- [Cloudflare D1](/docs/databases/cloudflare-d1): SQLite-compatible database bundled with Workers, accessed through a runtime binding (no network driver).
+- [AWS Aurora DSQL](/docs/databases/aurora-dsql): distributed PostgreSQL on AWS, ideal for the [Lambda adapter](/docs/adapters).
+
+## Runtime compatibility
+
+| Provider | Driver style | Node.js | Bun / Deno | Cloudflare Workers | AWS Lambda |
+| --- | --- | --- | --- | --- | --- |
+| Neon | HTTP & WebSocket | Yes | Yes | Yes | Yes |
+| PlanetScale | HTTP | Yes | Yes | Yes | Yes |
+| Supabase | fetch-based | Yes | Yes | Yes | Yes |
+| Turso (libSQL) | HTTP & WebSocket | Yes | Yes | Yes | Yes |
+| DuckDB | embedded native library | Yes | Limited | No | Yes |
+| Cloudflare D1 | Workers binding | No (local dev only) | No | Yes | No |
+| Aurora DSQL | TCP (pg) | Yes | Yes | No | Yes |
+
+## Choosing one
+
+- You target Cloudflare Workers exclusively: D1 (built-in) or Neon / PlanetScale / Turso over HTTP.
+- You want MySQL with database branching: PlanetScale.
+- You want auth + storage + realtime in one package: Supabase.
+- You're all-in on AWS with the Lambda adapter: Aurora DSQL or RDS Postgres via standard `pg`.
+- You need SQLite-style data close to users: Turso or D1.
+- You need embedded analytics over files or local data: DuckDB on Node.js or Lambda.
+
+Once you've picked a host, layer your query API on top: [Drizzle ORM](/docs/orm/drizzle) works with every provider above, and [Prisma](/docs/orm/prisma) works with most of them through Driver Adapters or standard Postgres/MySQL connectors.

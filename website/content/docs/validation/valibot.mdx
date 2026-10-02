@@ -1,0 +1,302 @@
+---
+title: Validation with Valibot
+description: Use Valibot as the request and response validator in DaloyJS. Modular, tree-shakeable schemas with full Standard Schema interop, type inference, and RFC 9457 problem+json errors.
+keywords:
+  - Valibot validation
+  - DaloyJS Valibot
+  - Standard Schema Valibot
+  - Valibot OpenAPI
+  - tree-shakeable validator
+---
+
+# Validation with Valibot
+
+[Valibot](https://valibot.dev/) is a modular, tree-shakeable schema library that ships as a collection of small functions instead of a chained builder. It implements [Standard Schema](https://github.com/standard-schema/standard-schema), so DaloyJS picks it up the same way it picks up Zod: no adapter, no wrapper, no extra runtime dependency in the framework.
+
+Valibot is developed in the open at [github.com/open-circle/valibot](https://github.com/open-circle/valibot) and published to npm as `valibot`: that's the package you install below.
+
+## Install
+
+```ts
+pnpm add @daloyjs/core valibot
+```
+
+## Why Valibot
+
+- Bundle size. You import only the validators you actually use, which matters on edge runtimes and in browser-shipped contracts.
+- Functional API. `v.pipe(v.string(), v.email())` instead of `z.email()`. Easier to compose, easier to lint.
+- Standard Schema native. Same handler types and the same problem+json error shape you get with Zod. DaloyJS does not care which one you picked.
+
+## What gets validated
+
+For each route you can declare schemas for:
+
+- `request.params`: decoded path parameters. They start as strings, so use `v.pipe(...)` with transforms when you need stronger shapes.
+- `request.query`: query string values. Repeated keys become arrays before validation.
+- `request.headers`: request headers as lower-case names.
+- `request.body`: parsed request bodies. The body is only read when declared.
+- `responses[status].body`: typed and validated responses.
+
+## A complete route
+
+```ts
+import { App } from "@daloyjs/core";
+import * as v from "valibot";
+
+const CreateOrder = v.object({
+  sku: v.pipe(v.string(), v.minLength(1)),
+  qty: v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
+});
+
+const Order = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  tenantId: v.string(),
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  dryRun: v.boolean(),
+});
+
+export const app = new App().post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    request: {
+      query: v.optional(
+        v.object({
+          dryRun: v.optional(
+            v.pipe(
+              v.union([v.literal("true"), v.literal("false")]),
+              v.transform((value) => value === "true"),
+            ),
+          ),
+        }),
+      ),
+      headers: v.object({
+        "x-tenant": v.pipe(v.string(), v.minLength(1)),
+      }),
+      body: CreateOrder,
+    },
+    responses: {
+      201: { description: "Created", body: Order },
+      422: { description: "Validation failed" },
+    },
+  },
+  async ({ query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: crypto.randomUUID(),
+        tenantId,
+        sku: body.sku,
+        qty: body.qty,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+`body` in the handler is inferred from `CreateOrder`. Returning anything that does not match `Order` is a TypeScript error, and DaloyJS also validates the response before serialization.
+
+## Params, query, and headers
+
+Path params, query values, headers, and urlencoded form values arrive as strings before schema validation. Drop a `v.transform` or one of the built-in `v.toNumber`, `v.toBoolean`, or `v.toDate` actions into the pipe to convert before further validation.
+
+<FlowDiagram title="Inside a v.pipe()" numbered steps={[
+          {
+            eyebrow: "from the URL",
+            label: "Raw string",
+            detail: '"?page=2"',
+            tone: "muted",
+          },
+          { label: "v.string()", detail: "assert it is a string" },
+          {
+            label: "v.transform(Number)",
+            detail: "coerce to a number",
+            tone: "accent",
+          },
+          {
+            label: "v.integer() · v.minValue(1)",
+            detail: "validate the result",
+          },
+          {
+            eyebrow: "in your handler",
+            label: "Typed value",
+            detail: "query.page: number",
+            tone: "success",
+          },
+        ]} caption="A pipe runs left to right: each action receives the previous output. Coerce first with v.transform, then validate the converted value, so query.page reaches your handler already typed as a number." />
+
+```ts
+import * as v from "valibot";
+
+const Params = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+});
+
+const Query = v.object({
+  // "?page=2" -> number
+  page: v.optional(v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1))),
+  // "?tag=foo&tag=bar" -> string[]
+  tag: v.optional(v.array(v.string()), []),
+});
+
+const Headers = v.object({
+  "x-request-id": v.optional(v.pipe(v.string(), v.uuid())),
+});
+
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBook",
+    request: { params: Params, query: Query, headers: Headers },
+    responses: {
+      200: { description: "OK", body: v.object({ id: v.string() }) },
+    },
+  },
+  async ({ params, query, headers }) => ({
+    status: 200,
+    body: { id: params.id },
+  }),
+);
+```
+
+## Body limits and content types
+
+When a route declares `request.body`, DaloyJS will also enforce:
+
+- Content-Length and streamed size against `app.bodyLimitBytes` -\> **413**.
+- Content-Type against the route's `accepts` list, or global `allowedContentTypes` if set -\> **415**.
+- Default accepted body types: `application/json`, `application/x-www-form-urlencoded`, and `multipart/form-data`.
+- Prototype-pollution-safe parsing for JSON, query strings, urlencoded forms, and multipart forms.
+
+JSON bodies validate as parsed JSON. Urlencoded bodies validate as an object built from `URLSearchParams`. Multipart bodies validate as an object built from `Request.formData()`. For a custom text media type, opt in with `accepts` and validate a `v.string()` body.
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: v.object({
+        email: v.pipe(v.string(), v.email()),
+        qty: v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: v.object({ ok: v.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## Response validation
+
+When a response schema is declared, DaloyJS validates the handler return before serializing it. Valibot object schemas return only declared keys by default, so the validated value also prevents undeclared fields from leaking to clients. Use `v.looseObject()` or `v.objectWithRest()` only when extra keys are part of the intended response contract.
+
+```ts
+const PublicUser = v.object({
+  id: v.string(),
+  email: v.pipe(v.string(), v.email()),
+});
+
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: {
+      200: { description: "Current user", body: PublicUser },
+    },
+  },
+  async () => ({
+    status: 200,
+    // passwordHash is stripped before serialization.
+    body: { id: "u_1", email: "dev@example.com", passwordHash: "secret" },
+  }),
+);
+```
+
+## Discriminated unions
+
+Use `v.variant` for tagged unions. DaloyJS emits a proper `discriminator` in the OpenAPI document so generated clients get narrowing for free.
+
+```ts
+import * as v from "valibot";
+
+const Event = v.variant("type", [
+  v.object({ type: v.literal("created"), id: v.string() }),
+  v.object({ type: v.literal("updated"), id: v.string(), fields: v.array(v.string()) }),
+  v.object({ type: v.literal("deleted"), id: v.string() }),
+]);
+
+app.post(
+  "/events",
+  {
+    operationId: "ingestEvent",
+    request: { body: Event },
+    responses: { 202: { description: "Accepted" } },
+  },
+  async ({ body }) => {
+    if (body.type === "updated") {
+      // body.fields is string[] here - narrowed by the discriminator.
+    }
+    return { status: 202, body: undefined };
+  },
+);
+```
+
+## Reusing types
+
+```ts
+import * as v from "valibot";
+
+const Book = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  title: v.string(),
+  author: v.string(),
+});
+
+export type Book = v.InferOutput<typeof Book>;
+export type BookInput = v.InferInput<typeof Book>;
+```
+
+`v.InferOutput` mirrors Zod's `z.infer`. Use `v.InferInput` when you have transforms and need the pre-parse shape, for example in a form library.
+
+## Errors
+
+Validation failures produce the same response as every other validator in DaloyJS: **422 Unprocessable Entity** as RFC 9457 problem+json, with an `errors` array of per-issue `path` and `message` records. You do not need to write an error handler. That is the framework's job.
+
+```ts
+{
+  "type": "https://daloyjs.dev/problems/validation",
+  "title": "Validation failed",
+  "status": 422,
+  "errors": [
+    { "path": ["qty"], "message": "Invalid type: Expected number but received string" }
+  ]
+}
+```
+
+## OpenAPI
+
+Valibot schemas are converted into JSON Schema by DaloyJS's OpenAPI generator the same way Zod schemas are. Run the CLI and your spec is in sync with the route definitions:
+
+```ts
+pnpm daloy openapi --out openapi.json
+```
+
+## Mixing validators
+
+Nothing stops you from using Valibot for one route and Zod for another in the same app. Both speak Standard Schema. That is useful when migrating a codebase incrementally, or when a shared package already exports its schemas in one library and you do not want to rewrite them.
+
+## See also
+
+- [Validation overview](/docs/validation): how validators plug in via Standard Schema.
+- [Validation with Zod](/docs/validation/zod): the chainable alternative.
+- [OpenAPI generation](/docs/openapi): how schemas become a spec.
+- [Errors & problem+json](/docs/errors): the error contract.

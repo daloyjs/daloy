@@ -1,0 +1,148 @@
+---
+title: Typed API clients
+description: Generate fully typed TypeScript clients from your DaloyJS OpenAPI spec with Hey API. Get end-to-end type safety between server and client with no drift.
+keywords:
+  - typed API client
+  - OpenAPI client TypeScript
+  - Hey API client
+  - end-to-end type safety
+  - ts-rest alternative
+  - ts-rest vs DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Typed clients
+
+DaloyJS ships **two** ways to call your API with full type-safety. Use whichever fits your consumer.
+
+## 1. In-process typed client (zero codegen)
+
+For TypeScript consumers in the same monorepo (tests, internal tools, Next.js server actions):
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string, fully typed
+}
+```
+
+The client is keyed by `operationId`, returns a discriminated union of `{status, body, headers}`, and infers everything from the route definition itself. No build step.
+
+### Path parameters
+
+Path params are substituted by whole segment, so `:id` never matches inside `:idx`, and each value is percent-encoded into its own segment. Since 1.3.7 a generated method throws a `TypeError`, before any request is sent, when a param is missing, empty, `.`, or `..`. URL parsing would resolve a dot segment (even as `%2E%2E`) and silently retarget the call, for example turning `DELETE /orgs/:org/members/..` into `DELETE /orgs/:org`. Wildcard routes (`*path`, or a bare `*` named `wildcard`) accept a `/`-separated value; every segment is encoded and checked the same way.
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="Compose route tuples instead of widening the App.">
+<p>Export route files with <code>defineRoute()</code> and register a literal tuple with <code>app.registerRoutes(\[...\])</code>{". "}Chained <code>route()</code> calls also work. Two things deliberately erase inference and collapse the client to a loose surface:</p>
+<ul>
+<li>Annotating the instance with a bare{" "}<code>const app: App = ...</code> (or returning <code>: App</code>{" "}from a factory). The widening annotation discards the accumulated routes, so let the type be inferred instead.</li>
+<li>Registering routes as separate statements on a previously-declared variable instead of returning the chained result or using{" "}<code>registerRoutes()</code>.</li>
+</ul>
+<p>The modular-monolith guide shows a multi-file composition with route tuples from several bounded contexts. Callback-style{" "}<code>group()</code> and plugin <code>register()</code> still provide runtime encapsulation, but their callbacks cannot widen the parent variable's TypeScript generic. Use route tuples as the typed-client composition boundary.</p>
+</Callout>
+
+## 2. Hey API SDK (cross-language, cross-repo, build-time)
+
+For consumers outside the monorepo or in other languages, generate a fully typed fetch SDK with [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
+
+<FlowDiagram title="Codegen pipeline" numbered caption="pnpm gen runs the whole chain: dump the spec from your routes, then let Hey API turn it into a typed fetch SDK. Re-run it whenever a route changes and the client stays in lockstep with the contract." steps={[
+          { label: "Routes", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "OpenAPI 3.1 spec on disk" },
+          { label: "openapi-ts", detail: "Hey API generator" },
+          { label: "Typed SDK", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "Consumer",
+            detail: "fully typed fetch calls",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# writes:
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## Using the generated SDK
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## Which one should I use?
+
+| Use case | Pick |
+| --- | --- |
+| Same-repo TypeScript caller (tests, internal tools) | `createInProcessClient` |
+| Web app / mobile RN bundle in a separate repo | Hey API SDK |
+| Non-TypeScript consumer (Python, Swift, Kotlin) | OpenAPI doc + their preferred generator |
+| Public SDK for third parties | Hey API SDK, published as its own package |
+
+## Coming from ts-rest?
+
+[ts-rest](https://ts-rest.com/) is a popular contract-first library that gives you end-to-end TypeScript types **without codegen** by sharing a contract (`initContract`) between an adapter-based server (Express, Fastify, NestJS, Next.js) and a fetch client (`initClient`). If you like that model, DaloyJS will feel familiar, with two differences.
+
+First, in DaloyJS the **route definition is the contract**, there is no separate contract object to keep in sync. The in-process `createClient` shown above gives the same zero-codegen, shared-types experience for same-repo TypeScript callers.
+
+Second, ts-rest's type safety is TypeScript-only and requires the client to import the contract. DaloyJS emits a first-class **OpenAPI 3.1** spec and a Hey API SDK from the same routes, so consumers that can't import your types (other repos, other languages, public SDKs) are covered too. In ts-rest, OpenAPI is an optional add-on (`@ts-rest/open-api`). DaloyJS is also the server and runtime itself, portable across Node, Bun, Deno, Cloudflare, and Vercel, rather than a typing layer mounted on a separate framework.
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| Contract source | Separate `initContract` object | The route definition itself |
+| Zero-codegen typed client | Yes (`initClient`, TypeScript only) | Yes (`createClient`, TypeScript only) |
+| Cross-language / cross-repo clients | OpenAPI add-on (`@ts-rest/open-api`) | OpenAPI 3.1 + Hey API SDK, first-class |
+| Server | Adapter on Express / Fastify / NestJS / Next.js | Built-in, runtime-portable |
+| Runtime validation | Standard Schema (Zod / Valibot / ArkType) | Standard Schema (Zod / Valibot / ArkType / TypeBox) |
+| Security defaults | Bring your own | Headers and body limits on by default; CSRF and rate limits one line away |
+
+Need a bigger contract to validate your generator output? Use the [large fake REST demo](/docs/tutorials/fake-rest-api) as the stress case instead of a minimal tutorial app.

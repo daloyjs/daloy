@@ -1,0 +1,159 @@
+---
+title: Per-route / per-client concurrency limits
+description: "Bound in-flight requests per route and per client with concurrencyLimit(), HAProxy maxconn/queue parity at the app layer: a semaphore, a bounded FIFO queue, and a fast 503. Complements maxConnections and loadShedding(). Zero runtime dependencies."
+keywords:
+  - concurrency limit
+  - concurrencyLimit
+  - maxconn
+  - request queue
+  - backpressure
+  - HAProxy
+  - load shedding
+  - "503"
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Per-route / per-client concurrency limits
+
+DaloyJS ships `concurrencyLimit()`: HAProxy `maxconn` + request-queue parity, but inside the app where the framework already owns routing and client identity. Where the Node adapter's `maxConnections` caps *sockets* at accept time and `loadShedding()` rejects traffic under *process* pressure, `concurrencyLimit()` bounds the number of requests **in flight through a given surface**.
+
+<UseCaseGuide featureName="Concurrency limit middleware" recommendation="Use concurrency limits to protect downstream resources (like databases or third-party APIs) and high-compute CPU operations from exhaustion under heavy load. Avoid limiting standard, lightweight I/O operations." whenToUse={[
+          "Gating resource-heavy tasks like PDF generation, video transcoding, or large-scale data processing.",
+          "Endpoints querying databases with small connection pools or calling rate-limited external services.",
+          "Shedding load under sudden traffic spikes to prioritize system stability over serving every client immediately.",
+        ]} whenNotToUse={[
+          "Standard lightweight, highly-scalable I/O endpoints (like returning a user profile or configuration metadata).",
+          "When autoscaling (such as Kubernetes KEDA or serverless scaling) is configured to handle the load dynamically.",
+          "Where client-side queuing or throttling is already implemented and sufficient.",
+        ]} />
+
+Each request:
+
+- tries to acquire a slot from a per-bucket semaphore (`maxConcurrent`);
+- if all slots are busy, waits in a bounded FIFO queue (`maxQueue`) for up to `queueTimeoutMs`;
+- is rejected with a fast `503 Service Unavailable` (+ `Retry-After`) once the queue is full or the wait times out;
+- releases its slot when the response is finalized: on success, error, and short-circuit paths alike, so a slot is never leaked. The release also runs as a per-request finalizer in the dispatcher's `finally` block, so the slot comes back even when another middleware's `onSend` or `onError` hook throws, and it is never released twice (since 1.3.7).
+
+<FlowDiagram title="Acquire, queue, or shed" steps={[
+          {
+            label: "Incoming request",
+            detail: "bucket key from scope: global / route / client / fn",
+            eyebrow: "request",
+          },
+          {
+            label: "Slot free?",
+            detail: "per-bucket semaphore (maxConcurrent)",
+            tone: "accent",
+          },
+          {
+            label: "Run handler",
+            detail: "slot released on success, error, and short-circuit",
+            tone: "success",
+          },
+          {
+            label: "Full -> wait in FIFO queue",
+            detail: "up to maxQueue, for up to queueTimeoutMs",
+          },
+          {
+            label: "Queue full / timed out -> shed",
+            detail: "503 + Retry-After. onReject(queue-full | queue-timeout)",
+            tone: "danger",
+          },
+        ]} caption="A request acquires a slot from the per-bucket semaphore, waits in a bounded FIFO queue if every slot is busy, and is shed with a fast 503 once the queue is full or the wait times out. The slot is always released when the response finalizes, so a slot is never leaked." />
+
+## Quick start
+
+```ts
+import { App, concurrencyLimit } from "@daloyjs/core";
+
+const app = new App();
+
+// At most 100 in flight per route, queue up to 50 more, wait at most 2s.
+app.use(concurrencyLimit({
+  maxConcurrent: 100,
+  maxQueue: 50,
+  queueTimeoutMs: 2000,
+  scope: "route",
+}));
+```
+
+## Scopes
+
+`scope` decides how the concurrency budget is partitioned:
+
+- `"global"` (default): one shared budget across the whole mount.
+- `"route"`: a separate budget per `method + matched route template` (`ctx.routePath`, for example `GET /reports/:id`), so one hot endpoint can't starve the others mounted under the same guard. Because the key is the template, not the concrete path, `/reports/1`, `/reports/2`, and `/reports/1/` all share one budget: varying a path parameter or a trailing slash cannot mint a fresh one (since 2.0.0). Requests that matched no route fall back to the concrete pathname.
+- `"client"`: a separate budget per client identity (requires `trustProxyHeaders`, `trustedHops`, `trustedProxies`, or a `keyGenerator`), so a heavy client can't consume everyone else's slots. The identity is the **rightmost** `X-Forwarded-For` entry (the one your proxy appended), so rotating spoofed left entries cannot hop buckets. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
+- a **function**: return a custom bucket key, or `undefined` to skip limiting for that request (fail-open).
+
+```ts
+// Per-client fairness behind a trusted proxy.
+// Prefer trustedProxies when the origin can be reached without the proxy.
+app.use(concurrencyLimit({
+  maxConcurrent: 10,
+  maxQueue: 20,
+  queueTimeoutMs: 1000,
+  scope: "client",
+  trustedProxies: ["10.0.0.0/8"],
+}));
+
+// Custom partition (e.g. per API tenant); undefined => unlimited.
+app.use(concurrencyLimit({
+  maxConcurrent: 50,
+  scope: (ctx) => ctx.state.tenantId as string | undefined,
+}));
+```
+
+## No queue vs. queue
+
+With the default `maxQueue: 0`, an overflowing request is rejected *immediately* with `503`, useful when you prefer fast failure over added latency. Set `maxQueue` to absorb short bursts, and pair it with `queueTimeoutMs` to bound tail latency so a waiting request doesn't hang indefinitely.
+
+```ts
+// Fail fast, no waiting.
+app.use(concurrencyLimit({ maxConcurrent: 200 }));
+
+// Absorb bursts, but never wait longer than 500ms.
+app.use(concurrencyLimit({
+  maxConcurrent: 200,
+  maxQueue: 100,
+  queueTimeoutMs: 500,
+}));
+```
+
+## Observability
+
+`onReject` fires whenever a request is turned away, with the bucket key, the reason (`"queue-full"` or `"queue-timeout"`), and the live active / queued counts:
+
+```ts
+app.use(concurrencyLimit({
+  maxConcurrent: 100,
+  maxQueue: 50,
+  queueTimeoutMs: 2000,
+  scope: "route",
+  onReject: ({ key, reason, active, queued }) => {
+    metrics.increment("concurrency.rejected", { key, reason });
+    logger.warn({ key, reason, active, queued }, "request shed by concurrencyLimit");
+  },
+}));
+```
+
+## Customizing the 503
+
+```ts
+app.use(concurrencyLimit({
+  maxConcurrent: 100,
+  retryAfterSeconds: 5,           // default 1; set 0 to omit the header
+  message: "Server is busy, please retry shortly.",
+}));
+```
+
+## How it complements the rest of the stack
+
+- `maxConnections` (Node adapter): rejects surplus *sockets* at accept time (L4 admission).
+- `loadShedding()` sheds traffic when the *process* is under pressure (event-loop delay, heap, RSS).
+- `concurrencyLimit()` bounds *in-flight requests* per route / client with queueing (L7 fairness + backpressure).
+- `rateLimit()` bounds *request rate* over time per client.
+
+They stack cleanly: admission cap -\> process shedding -\> concurrency fairness -\> rate limiting.

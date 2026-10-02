@@ -1,0 +1,108 @@
+---
+title: Fastly Compute adapter
+description: Deploy DaloyJS to Fastly Compute (JavaScript) using @fastly/js-compute and the fetch-event listener model.
+keywords:
+  - DaloyJS Fastly Compute
+  - "@fastly/js-compute"
+  - fastly.toml
+  - installFastlyListener
+  - fetch event listener
+---
+
+# Fastly Compute
+
+Fastly Compute (JavaScript) still uses the `fetch` event listener model rather than the modules-style default export you see on Cloudflare Workers. The DaloyJS adapter wraps that registration so you only call one function.
+
+<FlowDiagram title="Fastly Compute request path" steps={[
+          {
+            eyebrow: "platform",
+            label: "fetch event",
+            detail: "addEventListener('fetch', ...)",
+          },
+          {
+            eyebrow: "adapter",
+            label: "installFastlyListener(app)",
+            detail: "event.respondWith(app.fetch(...))",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          { eyebrow: "platform", label: "Response", tone: "success" },
+        ]} caption="Fastly Compute still uses the fetch-event listener model. installFastlyListener registers it for you and forwards event.request into app.fetch. Outbound fetch() calls must be declared as backends in fastly.toml." />
+
+## When to choose Fastly Compute
+
+- You already use Fastly's edge network and want REST API logic on the same plane.
+- You want WebAssembly-compiled JS (`js-compute-runtime`) for tight cold starts.
+- You're comfortable without `node:*` modules.
+
+## Install
+
+```bash
+pnpm add @daloyjs/core @fastly/js-compute
+pnpm add -D @fastly/cli
+```
+
+## Entrypoint
+
+```ts
+// src/index.ts
+/// <reference types="@fastly/js-compute" />
+import { installFastlyListener } from "@daloyjs/core/fastly";
+import { app } from "./server.js";
+
+installFastlyListener(app);
+```
+
+That helper is equivalent to:
+
+```ts
+addEventListener("fetch", (event) =>
+  event.respondWith(app.fetch(event.request))
+);
+```
+
+## fastly.toml [#fastly-toml]
+
+Fastly Compute requires `manifest_version = 3`. The `[scripts]` `build` command has to **bundle TypeScript to a single JS file first**, then run `js-compute-runtime` against that bundle, the runtime only accepts JavaScript input.
+
+```toml
+manifest_version = 3
+name = "my-api"
+language = "javascript"
+description = "DaloyJS on Fastly Compute"
+
+[scripts]
+# Bundle src/index.ts -> bin/index.js -> bin/main.wasm
+build = "esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=bin/index.js && js-compute-runtime bin/index.js bin/main.wasm"
+
+# Declare every outbound HTTP service your REST API calls as a backend.
+# Fastly Compute blocks arbitrary fetch() calls without a declared backend.
+[local_server]
+  [local_server.backends.auth-service]
+    url = "https://auth.internal.example.com"
+```
+
+Declared backends, KV stores, config stores, and secrets live under the same `[local_server.*]` /`[setup.*]` tables, see the [fastly.toml reference](https://www.fastly.com/documentation/reference/compute/fastly-toml/) for the full schema.
+
+## Deploy
+
+```bash
+pnpm fastly compute serve     # local dev
+pnpm fastly compute publish    # deploy
+```
+
+## Gotchas
+
+- No `node:*` modules. Avoid the Node session store, the Redis rate-limit store, and multipart helpers that depend on `node:stream`: use the fetch-based alternatives.
+- Every outbound HTTP call your REST API makes (to a database API, auth service, or third-party endpoint) must be declared as a **backend** in `fastly.toml`. Arbitrary `fetch("https://...")` calls fail at runtime without one.
+- KV stores, config stores, and secrets are also declared in `fastly.toml` under `[setup]`.
+
+## See also
+
+- [Adapters overview](/docs/adapters)
+- [Cloudflare Workers](/docs/adapters/cloudflare-workers), similar constraints, modules format.

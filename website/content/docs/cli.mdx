@@ -1,0 +1,185 @@
+---
+title: CLI, daloy inspect & daloy dev
+description: Use the daloy CLI to introspect routes, contract-test an app, dump OpenAPI 3.1, or start a watch-mode dev server on any DaloyJS project.
+keywords:
+  - daloy CLI
+  - daloy inspect
+  - daloy dev
+  - daloy doctor
+  - daloy diff
+  - DaloyJS routes
+  - OpenAPI dump
+  - contract tests CLI
+sitemap:
+  priority: 0.8
+---
+
+# CLI inspector
+
+`@daloyjs/core` ships a tiny `daloy` binary that loads your `App` instance and prints what is registered. It is the fastest way to answer questions like *"what routes does this service expose?"*, *"are any operationIds missing?"*, or *"give me the OpenAPI spec"* without starting a server.
+
+<BranchDiagram title="Load the App, emit anything" source={{
+          eyebrow: "loads your app",
+          label: "daloy inspect [entry]",
+          detail: "default export, app, or buildApp() / createApp()",
+        }} branches={[
+          {
+            eyebrow: "default",
+            label: "Human table",
+            detail: "method, path, operationId",
+          },
+          {
+            eyebrow: "--json",
+            label: "Machine-readable JSON",
+            detail: "route catalog",
+          },
+          {
+            eyebrow: "--openapi",
+            label: "OpenAPI 3.1 document",
+            detail: "add --yaml for YAML",
+          },
+          {
+            eyebrow: "--asyncapi",
+            label: "AsyncAPI 3.0 document",
+            detail: "app.ws() surfaces",
+          },
+          {
+            eyebrow: "--ai",
+            label: "AI/codegen dump",
+            detail: "schemas + meta.examples",
+          },
+          {
+            eyebrow: "--check",
+            label: "Contract suite",
+            detail: "exit 1 on errors",
+            tone: "danger",
+          },
+        ]} caption="One command loads your App instance without starting a server, then prints the registered routes in whatever shape you ask for." />
+
+## Quick start
+
+```bash
+pnpm exec daloy inspect             # also tries build-app/createApp-style factories
+pnpm exec daloy inspect ./src/server.ts
+pnpm exec daloy inspect --schemas
+pnpm exec daloy inspect --check        # exit 1 on contract errors
+pnpm exec daloy inspect --openapi > openapi.json
+pnpm exec daloy inspect --openapi --yaml > openapi.yaml
+pnpm exec daloy inspect --asyncapi > asyncapi.json
+pnpm exec daloy inspect --asyncapi --yaml > asyncapi.yaml
+pnpm exec daloy inspect --ai > routes.json
+pnpm exec daloy inspect --ai --yaml > routes.yaml      # ~30% fewer LLM tokens
+pnpm exec daloy inspect --tag Users
+pnpm exec daloy inspect --method post --json
+pnpm exec daloy doctor
+pnpm exec daloy diff openapi.published.json openapi.json
+```
+
+## Loading the App
+
+The entry file must export an `App` instance. The CLI accepts a default export, named `app` or `default_app` exports, a zero-argument `buildApp` or `createApp` factory, or any named export that is already an `App`:
+
+```ts
+import { App } from "@daloyjs/core";
+
+export const app = new App();
+app.route({ /* ... */ });
+
+// Or:
+// export default app;
+
+// Or:
+export function buildApp() {
+  const app = new App();
+  app.route({ /* ... */ });
+  return app;
+}
+```
+
+Without an explicit entry, `daloy inspect` tries `src/app.ts`, `src/app.js`, `src/build-app.ts`, `src/build-app.js`, `app.ts`, `app.js`, `build-app.ts`, and `build-app.js`. TypeScript entry files load directly. Node.js (22.18+) strips types natively. If the native load fails (older Node, non-erasable syntax such as enums, or extensionless relative imports), the CLI falls back to `tsx` when it is installed (`pnpm add -D tsx`).
+
+Point `inspect`, `doctor`, and `diff` at import-safe app construction files. Do not point them at files that call `serve(...)` as a module side effect. When redirecting JSON or YAML to a file, keep app-construction logs off stdout so the output stays parseable.
+
+## Flags
+
+- `--json`: emit a machine-readable JSON document instead of a human table.
+- `--check`: run the contract suite ([missing operationIds, duplicate operationIds, dead routes, body schemas on safe methods, invalid examples](/docs/testing)) and exit 1 on any error.
+- `--schemas`: add a `B/Q/P/H` column showing which of body, query, params, and headers schemas the route declares.
+- `--openapi`: print the OpenAPI 3.1 document.
+- `--asyncapi`: print the AsyncAPI 3.0 document for `app.ws()` WebSocket surfaces.
+- `--ai`: print an AI/codegen-friendly dump of the route catalog with JSON Schemas and any `meta.examples` you authored. See the [AI-friendly route metadata](/docs/ai-metadata) guide.
+- `--yaml` · `--format <json|yaml>`: emit `--openapi`, `--asyncapi`, or `--ai` output as YAML instead of JSON. YAML drops braces, commas, and most quotes, so the payload is typically \~30% smaller than the equivalent pretty-printed JSON, useful when pasting route metadata into an LLM system prompt where every token counts.
+- `--tag <tag>`: only show routes that declare this tag.
+- `--method <method>`: only show routes for this HTTP method.
+- `--runtime <node|bun|deno>`: force the runtime for `daloy dev`.
+- `--audit-secrets`: make `daloy doctor` scan matching environment variables for known-weak placeholders and short production secrets.
+- `--no-audit-defaults`: skip the default secure-defaults audit in `daloy doctor`.
+- `-h, --help` · `-v, --version`
+
+## `daloy dev`: watch-mode dev server
+
+`daloy dev [entry]` starts your app in the host runtime's native watch mode, no extra config, no extra dependency to install on Bun or Deno:
+
+```bash
+pnpm exec daloy dev                # auto-detects ./src/index.ts, ./src/main.ts, ...
+pnpm exec daloy dev ./src/server.ts
+```
+
+The exact command spawned depends on the runtime that hosts the CLI:
+
+- Node: `node --watch <entry>` (Node.js 22.18+ runs TypeScript entries natively via built-in type stripping, with no loader needed).
+- Bun: `bun --hot <entry>`.
+- Deno: `deno run --watch --allow-net --allow-env --allow-read <entry>`.
+
+Pass `--runtime <node|bun|deno>` to override runtime detection. This is required when running `daloy dev` from a `package.json` script on Bun or Deno, because the CLI binary's `#!/usr/bin/env node` shebang otherwise forces Node detection. The `bun-basic` template ships `"dev": "daloy dev --runtime bun"` for this reason.
+
+## `daloy doctor`: secure-defaults audit
+
+`daloy doctor [entry]` loads the same `App` as `inspect`, then audits the live configuration for secure-by-default regressions. It exits 1 when it finds an error-level issue, so it can guard CI or a container `HEALTHCHECK`:
+
+```bash
+pnpm exec daloy doctor
+pnpm exec daloy doctor ./src/app.ts --json
+pnpm exec daloy doctor --audit-secrets
+```
+
+Warning-level findings are advisory and exit 0. In JSON mode, `ok` is only true when there are no findings at all.
+
+## `daloy diff`: OpenAPI change gate
+
+`daloy diff <baseline> <current>` compares two OpenAPI 3.1 JSON files, reports added, removed, and changed operations, and exits 1 when it detects a breaking change:
+
+```bash
+pnpm exec daloy inspect --openapi > openapi.json
+pnpm exec daloy diff openapi.published.json openapi.json
+pnpm exec daloy diff --json openapi.published.json openapi.json
+```
+
+## CI usage
+
+`daloy inspect --check` is a drop-in replacement for the in-process `runContractTests` runner. Wire it into your pipeline to fail builds on dead routes, duplicate operationIds, and missing operationIds:
+
+```yaml
+- name: Contract checks
+  run: pnpm exec daloy inspect --check
+
+- name: OpenAPI compatibility
+  run: pnpm exec daloy diff openapi.published.json openapi.json
+```
+
+## Programmatic API
+
+The CLI is also exported as a function so you can wire it into custom scripts or your own binary:
+
+```ts
+import { runCli } from "@daloyjs/core/cli";
+
+const result = await runCli(process.argv.slice(2), {
+  stdout: (chunk) => process.stdout.write(chunk),
+  stderr: (chunk) => process.stderr.write(chunk),
+  importEntry: (specifier) => import(specifier),
+  version: "1.0.0",
+});
+
+process.exit(result.exitCode);
+```

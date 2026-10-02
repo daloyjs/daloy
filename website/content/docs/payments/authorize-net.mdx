@@ -1,0 +1,375 @@
+---
+title: Accept cards with Authorize.Net in DaloyJS
+description: Charge cards and verify webhooks with the official Authorize.Net Node SDK (authorizenet) from a DaloyJS API. Covers ApiContracts/ApiControllers, promisifying the callback API, Accept.js nonces, environment switching, and HMAC-SHA512 signature verification.
+keywords:
+  - DaloyJS Authorize.Net
+  - authorizenet npm
+  - ApiContracts ApiControllers
+  - Accept.js nonce server
+  - X-ANET-Signature HMAC-SHA512
+---
+
+# Accept cards with Authorize.Net in DaloyJS
+
+[Authorize.Net](https://www.authorize.net/) (a Visa / Cybersource brand) is one of the original US card gateways. This guide uses the official [`authorizenet`](https://github.com/AuthorizeNet/sdk-node) Node SDK to charge cards via the [Authorize.Net API](https://developer.authorize.net/api/reference/index.html), and the separate JSON Webhooks REST API to receive event notifications.
+
+## What you should know up front
+
+- It's a thin XML wrapper. Requests are built with `ApiContracts.*` classes and sent with `ApiControllers.*` controllers. There's no fluent client and no Promises by default, every controller exposes `.execute(callback)`. Wrap it with `util.promisify` for a sane async API.
+- Don't POST raw card numbers from a browser. Use [Accept.js](https://developer.authorize.net/api/reference/features/acceptjs.html) or [Accept Hosted](https://developer.authorize.net/api/reference/features/accept-hosted.html) on the client to tokenise the card into an `opaqueData` nonce. Sending raw PANs through your server puts you in full PCI-DSS SAQ-D scope.
+- Webhooks are a separate API. Subscribe and verify against `https://api.authorize.net/rest/v1/webhooks` (or the `apitest` host), the XML transactions SDK doesn't handle them. Signatures use HMAC-SHA512 with a dedicated *Signature Key*, **not** the Transaction Key.
+- Node 14+ & TLS 1.2. Anything older is rejected at the connection layer.
+
+## 1. Provision
+
+1. Create a [sandbox account](https://developer.authorize.net/hello_world/sandbox/) and copy your **API Login ID** and **Transaction Key** from *Account -\> Settings -\> Security Settings -\> API Credentials and Keys*.
+2. On the same screen, generate a **Signature Key**. You'll need this to verify webhook signatures.
+3. When you're ready for production, repeat with a live account and swap `endpoint.sandbox` for `endpoint.production`.
+
+## 2. Install
+
+```ts
+pnpm add authorizenet
+```
+
+The package ships its own TypeScript declarations, but they're hand-written and not exhaustive, expect to `as any` in a few spots when you reach for newer fields.
+
+## 3. Environment variables
+
+```ts
+# .env
+AUTHNET_ENVIRONMENT=sandbox          # or "production"
+AUTHNET_API_LOGIN_ID=use_your_api_login_id
+AUTHNET_TRANSACTION_KEY=use_your_transaction_key
+AUTHNET_SIGNATURE_KEY=use_your_signature_key   # hex string from the merchant interface
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/authorizenet.ts
+import { promisify } from "node:util";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  APIContracts as ApiContracts,
+  APIControllers as ApiControllers,
+  Constants as SDKConstants,
+} from "authorizenet";
+import type { App } from "@daloyjs/core";
+
+const endpoint =
+  process.env.AUTHNET_ENVIRONMENT === "production"
+    ? SDKConstants.endpoint.production
+    : SDKConstants.endpoint.sandbox;
+
+function merchantAuth() {
+  const auth = new ApiContracts.MerchantAuthenticationType();
+  auth.setName(process.env.AUTHNET_API_LOGIN_ID!);
+  auth.setTransactionKey(process.env.AUTHNET_TRANSACTION_KEY!);
+  return auth;
+}
+
+// Centralise the callback-to-promise wrapping in one place.
+function runController<TController extends { execute: (cb: () => void) => void; getResponse: () => unknown }>(
+  controller: TController,
+): Promise<unknown> {
+  controller.setEnvironment(endpoint);
+  return new Promise((resolve) => {
+    controller.execute(() => resolve(controller.getResponse()));
+  });
+}
+
+export interface AuthorizeNetClient {
+  chargeOpaqueData(input: {
+    amount: string;                 // "10.00" - string, two decimals.
+    dataDescriptor: string;         // e.g. "COMMON.ACCEPT.INAPP.PAYMENT"
+    dataValue: string;              // Accept.js nonce.
+    invoiceNumber?: string;
+    customerEmail?: string;
+    customerIp?: string;
+  }): Promise<{ transId: string; authCode: string; accountNumber: string }>;
+  verifyWebhook(headers: Headers, rawBody: Buffer): boolean;
+}
+
+function buildSaleRequest(input: Parameters<AuthorizeNetClient["chargeOpaqueData"]>[0]) {
+  const opaque = new ApiContracts.OpaqueDataType();
+  opaque.setDataDescriptor(input.dataDescriptor);
+  opaque.setDataValue(input.dataValue);
+
+  const payment = new ApiContracts.PaymentType();
+  payment.setOpaqueData(opaque);
+
+  const order = new ApiContracts.OrderType();
+  if (input.invoiceNumber) order.setInvoiceNumber(input.invoiceNumber);
+
+  const tx = new ApiContracts.TransactionRequestType();
+  tx.setTransactionType(ApiContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  tx.setPayment(payment);
+  tx.setAmount(input.amount);
+  tx.setOrder(order);
+  if (input.customerIp) tx.setCustomerIP(input.customerIp);
+  if (input.customerEmail) {
+    const customer = new ApiContracts.CustomerDataType();
+    customer.setEmail(input.customerEmail);
+    tx.setCustomer(customer);
+  }
+
+  const req = new ApiContracts.CreateTransactionRequest();
+  req.setMerchantAuthentication(merchantAuth());
+  req.setTransactionRequest(tx);
+  return req;
+}
+
+function verifyAuthorizeNetSignature(rawBody: Buffer, headerValue: string | null) {
+  if (!headerValue) return false;
+  // The header looks like "sha512=ABCDEF..." - strip the prefix if present.
+  const provided = headerValue.startsWith("sha512=")
+    ? headerValue.slice("sha512=".length)
+    : headerValue;
+  const computed = createHmac("sha512", process.env.AUTHNET_SIGNATURE_KEY!)
+    .update(rawBody)
+    .digest("hex")
+    .toUpperCase();
+  const a = Buffer.from(provided.toUpperCase(), "utf8");
+  const b = Buffer.from(computed, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export const authorizeNetPlugin = {
+  name: "authorizenet",
+  register(app: App) {
+    const client: AuthorizeNetClient = {
+      async chargeOpaqueData(input) {
+        const req = buildSaleRequest(input);
+        const controller = new ApiControllers.CreateTransactionController(req.getJSON());
+        const raw = (await runController(controller)) as Record<string, unknown>;
+        const response = new ApiContracts.CreateTransactionResponse(raw);
+
+        const messages = response.getMessages();
+        if (messages?.getResultCode() !== ApiContracts.MessageTypeEnum.OK) {
+          const first = messages?.getMessage()?.[0];
+          throw Object.assign(new Error(first?.getText() ?? "Authorize.Net request failed"), {
+            code: first?.getCode(),
+          });
+        }
+
+        const txResp = response.getTransactionResponse();
+        // responseCode "1" = approved. Anything else (2 declined, 3 error, 4 held) is a failure.
+        if (!txResp || txResp.getResponseCode() !== "1") {
+          const err = txResp?.getErrors()?.getError()?.[0];
+          throw Object.assign(new Error(err?.getErrorText() ?? "Transaction not approved"), {
+            code: err?.getErrorCode() ?? "DECLINED",
+            transId: txResp?.getTransId(),
+          });
+        }
+
+        return {
+          transId: txResp.getTransId(),
+          authCode: txResp.getAuthCode(),
+          accountNumber: txResp.getAccountNumber(),
+        };
+      },
+      verifyWebhook(headers, rawBody) {
+        return verifyAuthorizeNetSignature(rawBody, headers.get("x-anet-signature"));
+      },
+    };
+    app.decorate("authnet", client);
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    authnet: AuthorizeNetClient;
+  }
+}
+```
+
+Why `req.getJSON()`? The SDK builds an XML envelope internally, but the controllers want a serialised JSON snapshot of the request graph. It's an awkward shape, that's the SDK, not a typo.
+
+## 5. Charge an Accept.js nonce [#5-charge-an-accept-js-nonce]
+
+Your frontend obtains an `opaqueData` nonce with Accept.js (`dataDescriptor: "COMMON.ACCEPT.INAPP.PAYMENT"` for browser-side Accept, or `COMMON.APPLE.INAPP.PAYMENT` / `COMMON.GOOGLE.INAPP.PAYMENT` for wallets). Your server only ever sees the nonce, never the card number.
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { authorizeNetPlugin } from "./plugins/authorizenet.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 30 }));
+app.register(authorizeNetPlugin);
+
+app.post(
+  "/checkout",
+  {
+    operationId: "checkout",
+    request: {
+      body: z.object({
+        amount: z.string().regex(/^\d+\.\d{2}$/),
+        dataDescriptor: z.string().min(1),
+        dataValue: z.string().min(1),
+        invoiceNumber: z.string().max(20).optional(),
+        email: z.email().optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "approved",
+        body: z.object({
+          transId: z.string(),
+          authCode: z.string(),
+          last4: z.string(),
+        }),
+      },
+    },
+  },
+  async ({ body, request, state }) => {
+    const result = await state.authnet.chargeOpaqueData({
+      amount: body.amount,
+      dataDescriptor: body.dataDescriptor,
+      dataValue: body.dataValue,
+      invoiceNumber: body.invoiceNumber,
+      customerEmail: body.email,
+      customerIp: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+    });
+    return {
+      status: 201,
+      body: {
+        transId: result.transId,
+        authCode: result.authCode,
+        last4: result.accountNumber.replace(/^X+/, ""),
+      },
+    };
+  },
+);
+```
+
+Refunds, voids, and prior-auth captures all go through the same `CreateTransactionController` with a different `transactionType` (`refundTransaction`, `voidTransaction`, `priorAuthCaptureTransaction`) plus a `refTransId`. Reuse `runController` from the plugin and follow the same response shape.
+
+## 6. Subscribe to webhooks
+
+Webhooks aren't in the XML SDK. Use the REST API with HTTP Basic auth (API Login ID + Transaction Key), once per environment, usually as a script or admin endpoint, not on every boot:
+
+```ts
+const host =
+  process.env.AUTHNET_ENVIRONMENT === "production"
+    ? "https://api.authorize.net"
+    : "https://apitest.authorize.net";
+
+const basic = Buffer.from(
+  `${process.env.AUTHNET_API_LOGIN_ID}:${process.env.AUTHNET_TRANSACTION_KEY}`,
+).toString("base64");
+
+await fetch(`${host}/rest/v1/webhooks`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Basic ${basic}`,
+  },
+  body: JSON.stringify({
+    name: "Acme webhooks",
+    url: "https://api.acme.com/webhooks/authorizenet",
+    eventTypes: [
+      "net.authorize.payment.authcapture.created",
+      "net.authorize.payment.refund.created",
+      "net.authorize.payment.void.created",
+      "net.authorize.customer.subscription.expiring",
+    ],
+    status: "active",
+  }),
+});
+```
+
+## 7. Verify webhook deliveries
+
+<SequenceDiagram title="Webhook verification" participants={["Authorize.Net", "DaloyJS route", "Your queue"]} steps={[
+          {
+            from: "Authorize.Net",
+            to: "DaloyJS route",
+            label: "POST /webhooks/authorizenet",
+            detail: "X-ANET-Signature: sha512=... over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Recompute HMAC-SHA512 with the Signature Key",
+            detail: "timingSafeEqual vs the header digest",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Authorize.Net",
+            label: "401 when the digest does not match",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Dedupe on notificationId, then enqueue and ack",
+            detail: "200, fetch the full record async",
+            kind: "async",
+          },
+        ]} caption="Hash the raw bytes with the dedicated Signature Key before JSON.parse, reject mismatches with 401, dedupe on notificationId, then ack and fetch the full record in the background." />
+
+Authorize.Net signs each notification with HMAC-SHA512 over the raw body using the Signature Key, and sends the hex digest in the `X-ANET-Signature` header (often prefixed with `sha512=`). Hash bytes *before* JSON.parse:
+
+```ts
+import { z } from "zod";
+import { readBodyLimited } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/authorizenet",
+  {
+    operationId: "authorizenetWebhook",
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    // Keep webhook reads bounded and preserve the exact bytes Authorize.Net signed.
+    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
+    if (!state.authnet.verifyWebhook(request.headers, raw)) {
+      return { status: 401, body: { error: "invalid signature" } };
+    }
+
+    const event = JSON.parse(raw.toString("utf8")) as {
+      notificationId: string;
+      eventType: string;
+      eventDate: string;
+      webhookId: string;
+      payload: { entityName: "transaction" | "customerProfile" | "customerPaymentProfile" | "subscription"; id: string };
+    };
+
+    if (await seen(event.notificationId)) {
+      return { status: 200, body: { ok: true as const } };
+    }
+
+    // Webhook payloads are intentionally minimal. For the full record, call
+    // getTransactionDetailsRequest / getCustomerProfileRequest / ARBGetSubscriptionRequest.
+    await enqueueAuthnetEvent(event);
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+Ack fast. Authorize.Net retries failed deliveries 10 times, 3× at 3-minute intervals, 3× at 8-hour intervals, 4× at 48-hour intervals, and then marks the webhook inactive. Do the heavy work in a queue.
+
+## Errors & result objects [#errors-and-result-objects]
+
+There are two layers of failure. The outer `messages` block reports request-level errors (auth, schema, throttling). When that's OK, the inner `transactionResponse` still has a `responseCode` of `2` (decline), `3` (error), or `4` (held for review). The plugin above collapses both into thrown errors. Route them through [problem+json](/docs/errors).
+
+## Runtimes
+
+The SDK uses `axios` over Node's `https`, requires Node 14+ and TLS 1.2, and isn't designed for [Cloudflare Workers](/docs/adapters) or Vercel. On an edge runtime, POST JSON straight to `https://api.authorize.net/xml/v1/request.api` with `fetch` instead, the gateway accepts the same JSON envelope that the SDK builds.
+
+## Modernisation notes
+
+- Use `transHashSha2`, not `transHash`. The MD5-based `transHash` field is being phased out. Compare against `transHashSha2` if you echo a hash back for receipt-style verification.
+- Skip the `shopify-style` auto-retry config. The SDK has no built-in retry. If you need it, wrap `runController` with your own back-off on transient network errors only, never on declines.
+- Prefer Customer Profiles for repeat business. Vault the card into a customer payment profile on first charge, then bill subsequent transactions by `profile.customerProfileId` / `paymentProfileId` so you never touch the nonce twice.
+
+See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), and [problem+json errors](/docs/errors).

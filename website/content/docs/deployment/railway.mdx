@@ -1,0 +1,135 @@
+---
+title: Deploy to Railway
+description: Deploy DaloyJS to Railway. Railway auto-detects from package.json. Add an optional railway.json or railway.toml to pin the start command, health check, and pre-deploy migrations. Set TRUST_PROXY_HOPS=1 so the reverse-proxy guard accepts Railway's X-Forwarded-* headers instead of returning 500.
+keywords:
+  - Deploy DaloyJS to Railway
+  - railway.json
+  - railway.toml
+  - Railpack builder
+  - Railway healthcheckPath
+  - Railway TRUST_PROXY_HOPS
+  - Railway behindProxy hops
+  - Railway X-Forwarded-For 500
+  - Railway Scalar Try it CSP localhost
+  - PUBLIC_URL OpenAPI server URL
+---
+
+# Railway
+
+Railway auto-detects Node projects from `package.json`. A config file is **optional**. Add one only when you want to pin the start command, set a health check, run pre-deploy migrations, or switch to a Dockerfile-based build.
+
+## When to choose Railway
+
+- You want the lowest-config push-and-it-runs experience on Node.
+- You want managed Postgres, Redis, or MySQL in the same project.
+- You like environment-per-PR with usage-based billing.
+
+## Server entrypoint
+
+The scaffolded `create-daloy` templates already ship this as `src/index.ts` (the only file that opens a port). It builds the app from the pure `buildApp()` factory and starts the Node adapter:
+
+```ts
+// src/index.ts
+import { serve } from "@daloyjs/core/node";
+import { buildApp } from "./build-app.ts";
+
+const app = buildApp();
+serve(app, { port: Number(process.env.PORT ?? 3000) });
+```
+
+## railway.json [#railway-json]
+
+```json
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  },
+  "deploy": {
+    "startCommand": "node dist/index.js",
+    "preDeployCommand": ["pnpm run migrate"],
+    "healthcheckPath": "/healthz",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+
+Or, equivalently, `railway.toml`:
+
+```toml
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "node dist/index.js"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 300
+```
+
+## Deploy
+
+```bash
+pnpm dlx @railway/cli login
+pnpm dlx @railway/cli link
+pnpm dlx @railway/cli up
+```
+
+## Trust Railway's edge proxy [#trust-railway-and-apos-s-edge-proxy]
+
+Railway terminates TLS and proxies every request, adding `X-Forwarded-For` / `X-Forwarded-Proto` headers. In production DaloyJS **refuses to trust forwarded headers until you declare the proxy posture**: an app with no posture set returns `500 https://daloyjs.dev/errors/internal` on the first request that carries an `X-Forwarded-*` header (which, behind Railway, is every request). This is deliberate, a misconfigured proxy chain must not silently feed spoofable client IPs to rate-limiting, request-id propagation, and audit logs.
+
+Railway is exactly **one** proxy hop, so declare it. The scaffolded templates read `TRUST_PROXY_HOPS` into `behindProxy: { hops: 1 }`, so set the service variable:
+
+```bash
+pnpm dlx @railway/cli variables --set "TRUST_PROXY_HOPS=1"
+```
+
+<FlowDiagram title="Forwarded-header trust" numbered steps={[
+          {
+            label: "Client request",
+            detail: "to Railway edge",
+            eyebrow: "inbound",
+          },
+          {
+            label: "Railway edge proxy",
+            detail: "adds X-Forwarded-For / -Proto",
+          },
+          {
+            label: "Posture undeclared",
+            detail: "500 errors/internal",
+            tone: "danger",
+          },
+          {
+            label: "TRUST_PROXY_HOPS=1",
+            detail: "behindProxy: { hops: 1 }",
+            tone: "accent",
+          },
+          {
+            label: "Real client IP resolved",
+            detail: "right-most XFF entry",
+            tone: "success",
+          },
+        ]} caption="With no posture declared, DaloyJS returns 500 on the first forwarded request so spoofable IPs never reach rate-limiting or audit logs. Declaring one hop satisfies the guard and resolves the real client IP. Cloudflare in front of Railway is two hops." />
+
+Now DaloyJS reads the real client IP from the right-most `X-Forwarded-For` entry and rejects spoofed extra hops, the guard is satisfied rather than disabled. If you put Cloudflare (or another proxy) in front of Railway, that is two hops, set `TRUST_PROXY_HOPS=2`. See the [deployment overview](/docs/deployment) for the full posture matrix.
+
+## Public API URL
+
+The templates leave the OpenAPI `servers` list unset by default, so the Scalar *Try it* panel calls the **origin the docs are served from** (your Railway domain in production, `localhost` in dev). That keeps *Try it* within the `connect-src 'self'` CSP automatically, with no env var to set. Set `PUBLIC_URL` only if you want to pin an absolute base URL in the spec (for example, to generate a typed client against a fixed environment):
+
+```bash
+pnpm dlx @railway/cli variables --set "PUBLIC_URL=https://api.example.com"
+```
+
+## Gotchas
+
+- Don't override `PORT`. Railway injects it and the load balancer targets that port.
+- Set `TRUST_PROXY_HOPS=1` or every route returns `500` in production (see above). It is the single most common first-deploy surprise.
+- `healthcheckTimeout` is in seconds. Make it longer than your slowest legitimate startup.
+- Use `preDeployCommand` for migrations so schema changes run before traffic shifts.
+
+## See also
+
+- [Deployment overview](/docs/deployment)
+- [Node adapter](/docs/adapters/node)

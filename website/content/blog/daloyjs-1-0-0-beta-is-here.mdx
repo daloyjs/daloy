@@ -1,0 +1,76 @@
+---
+title: DaloyJS Is in Beta (and Nothing Broke, on Purpose)
+description: After a long public preview, DaloyJS enters beta. The key line in this changelog is that the runtime did not change. This post covers what the beta means, how to install it, and what we need from you before the stable release.
+date: 2026-06-21
+readingTime: 6 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Filipino developer in Norway who has shipped enough 'small' version bumps at 2am to respect the boring ones.
+badges:
+  - Release
+  - Beta
+keywords:
+  - DaloyJS beta
+  - DaloyJS release
+  - TypeScript REST API framework
+  - secure by default framework
+  - create-daloy
+---
+
+DaloyJS just crossed a line I have been nervous about for months. We tagged the beta. The framework that spent its whole life in public preview is now being tested as a stable foundation for production applications.
+
+The key line in this changelog is that the runtime did not change. The beta adds no middleware, adapter, or helper. If you used the final preview release yesterday, this is the same code with a braver version label.
+
+## Why the beta tag matters
+
+A stable API is a promise, and I finally felt ready to make this one. During preview the deal was simple and a little rude: public APIs could still move. That is normal for a young framework. You move fast, you rename things, you apologize in the changelog. It is also exhausting for anyone trying to build something real.
+
+The beta flips that deal. The public API is feature-complete and stable. From the stable release onward we follow SemVer like adults: minor releases do not introduce breaking changes, and deprecations get at least one minor cycle of warning before anything disappears. The beta is me saying I think we are ready, then handing it to you to prove me wrong before the stable release.
+
+## What changed during preview
+
+The work that earned a stable release happened across the entire public preview: the secure-by-default request path, the contract-first route that generates OpenAPI plus a typed client, the multi-runtime adapters, the supply-chain hardening, the SSRF guard, the auth and rate-limit and webhook pieces, all of it. Beta day starts the work of defending the shape that preview releases established.
+
+Your existing app still looks like this, because of course it does:
+
+```ts
+app.route({
+  method: "GET",
+  path: "/health",
+  operationId: "health",
+  responses: {
+    200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
+  },
+  handler: async () => ({ status: 200, body: { status: "ok" } }),
+});
+```
+
+## How to get it
+
+We published the beta to the `latest` tag on npm and to JSR, in lockstep across `@daloyjs/core`, `create-daloy`, and `@daloyjs/daloy`. So a plain install gets you the beta with no special incantation:
+
+```bash
+# Scaffold a fresh project on the beta
+pnpm create daloy@latest my-api
+
+# Or add the core to an existing project
+npm i @daloyjs/core
+pnpm add @daloyjs/core
+
+# npm works too
+npm i @daloyjs/core
+```
+
+Quick aside, because I almost did the clever thing here. The instinct with a beta is to hide it behind a `beta` dist-tag so that a normal `npm i` keeps handing people the last stable release. That is the responsible move when you have users who did not ask to be guinea pigs. We do not have that problem yet. We have the opposite problem: zero users to surprise, and a lot of people to win over. Parking the beta in a corner where nobody trips over it would have been the cautious choice and also the useless one. So it goes to `latest`. Come trip over it.
+
+## What I actually want from you
+
+A beta asks for evidence from real projects. The best possible outcome for the next few weeks is that someone builds a real thing on the beta and finds the rough edge I missed. File the bug. Tell me the API name that reads wrong. Show me the adapter that behaves differently than the docs claim. That is the entire point of shipping a beta instead of just tagging a stable release and praying.
+
+If you want the full picture before you dive in, the [case for using DaloyJS today](/blog/why-daloyjs-is-the-rest-api-framework-you-should-use-today) covers the why, and [Secure by Default](/blog/secure-by-default) covers the defenses you inherit on the very first route. Then go run `pnpm create daloy@latest` and report back.
+
+Tagging a beta, even a boring one, is the part of a project where it stops being a thing I am tinkering with and starts being a thing other people are allowed to depend on. Dependency is real now, and I want the production reports. Thanks for being early.
+
+<div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">
+<p className="text-sm leading-7 text-muted-foreground"><span className="font-semibold text-foreground">About the author:</span>{" "}{"Filipino developer in Norway who has shipped enough 'small' version bumps at 2am to respect the boring ones."}</p>
+</div>

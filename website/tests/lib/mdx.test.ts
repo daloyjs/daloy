@@ -102,8 +102,99 @@ test("converter keeps unknown JSX verbatim, strips TS, and exports referenced co
       </div>
       <FlowDiagram steps={STEPS} />`, 'import { FlowDiagram } from "@/components/diagram";\nimport Link from "next/link";\nimport type { Route } from "next";\nconst STEPS: string[] = ["a"];');
   assert.match(mdx, /^export const STEPS = \["a"\];$/m);
-  assert.match(mdx, /<div className="box">\n  <Link href=\{"\/docs\/a"\}>a<\/Link>\n<\/div>/);
+  // Inline content inside raw JSX stays on one line (JSX whitespace rules).
+  assert.match(mdx, /<div className="box"><Link href=\{"\/docs\/a"\}>a<\/Link><\/div>/);
   assert.match(mdx, /<FlowDiagram steps=\{STEPS\} \/>/);
+});
+
+test("raw JSX keeps JSX whitespace semantics under MDX (no stray spaces, no <p> wrappers)", async () => {
+  const mdx = convert(`
+      <div role="note">
+        <p>
+          Call <code>app.registerRoutes([...])</code>
+          {". "}Then 2 * 3 is _six_.
+        </p>
+        <p className="x">second</p>
+      </div>`);
+  // Structural children stay on their own lines...
+  assert.match(mdx, /^<div role="note">\n<p>/m);
+  // ...inline runs collapse exactly like JSX: no space before the period.
+  assert.match(mdx, /<p>Call <code>app\.registerRoutes\(\\\[\.\.\.\\\]\)<\/code>\{"\. "\}Then 2 \\\* 3 is \\_six\\_\.<\/p>/);
+  // And MDX renders it without adding paragraphs inside the <p>.
+  const js = String(await compile(mdx.replace(/^---[\s\S]*?---\n/, ""), { remarkPlugins: [remarkGfm] }));
+  assert.doesNotMatch(js, /_components\.p, \{\s*children: \[\s*"Call/);
+});
+
+test("multi-line opening tags inside inline runs are flattened so MDX cannot read them as blockquotes", async () => {
+  const mdx = convert(`
+      <div className="grid">
+        <Link
+          href="/docs/a"
+          className="card"
+        >
+          <span>A</span> first
+        </Link>
+      </div>`, 'import Link from "next/link";');
+  assert.match(mdx, /<Link href="\/docs\/a" className="card"><span>A<\/span> first<\/Link>/);
+  await compile(mdx.replace(/^---[\s\S]*?---\n/, ""), { remarkPlugins: [remarkGfm] });
+});
+
+test("blockquotes with bare inline content stay JSX; ones with paragraphs become markdown", () => {
+  const inline = convert(`
+      <blockquote>
+        Fail fast, see <code>defineConfig()</code>.
+      </blockquote>`);
+  assert.match(inline, /^<blockquote>Fail fast, see <code>defineConfig\(\)<\/code>\.<\/blockquote>$/m);
+  const blocks = convert(`
+      <blockquote>
+        <p>First.</p>
+        <p>Second.</p>
+      </blockquote>`);
+  assert.match(blocks, /^> First\.\n>\n> Second\.$/m);
+});
+
+test("regressions found by the full-migration DOM diff", async () => {
+  // Non-breaking spaces survive inline code.
+  assert.match(convert("<p>dynamic <code>IN&nbsp;(...)</code> arities</p>"), /`IN\u00a0\(\.\.\.\)`/);
+
+  // Bare URLs / emails stay plain text (no GFM autolink).
+  const plain = convert("<p>Open https://dashboard.example.com or www.example.com, or mail ops@example.com.</p>");
+  const plainJs = String(await compile(plain.replace(/^---[\s\S]*?---\n/, ""), { remarkPlugins: [remarkGfm] }));
+  assert.doesNotMatch(plainJs, /_components\.a\b/);
+
+  // A table row carrying an anchor id keeps it (table stays JSX).
+  const table = convert("<table><thead><tr><th>A</th></tr></thead><tbody><tr id=\"api3\"><td>x</td></tr></tbody></table>");
+  assert.match(table, /<tr id="api3">/);
+
+  // A list item mixing text with a block child is kept as JSX (no loose-list <p>).
+  const list = convert("<ul><li>Text first:<CodeBlock language=\"bash\" code={`a\n  b`} /></li></ul>");
+  assert.match(list, /^<ul>\n<li>Text first:<CodeBlock/m);
+
+  // Repeated headings: explicit ids and generated slugs line up with remark-daloy.
+  const headings = convert(`
+      <h3 id="why">Why</h3>
+      <h3 id="why-2">Why</h3>
+      <h3 id="why-3">Why</h3>`);
+  const js = String(await compile(headings.replace(/^---[\s\S]*?---\n/, ""), { remarkPlugins: [remarkGfm, remarkDaloy] }));
+  for (const id of ["why", "why-2", "why-3"]) assert.match(js, new RegExp(`id: "${id}"`));
+
+  // Multi-line code inside nested JSX keeps its exact value (and indentation),
+  // emitted as a one-line string so MDX cannot split it.
+  const nested = convert("<div className=\"x\"><div className=\"y\"><CodeBlock code={`a\n    indented`} /></div></div>");
+  assert.match(nested, /code=\{"a\\n    indented"\}/);
+  const pre = convert("<div className=\"x\"><pre><code>{`line\n   ├─ indented`}</code></pre></div>");
+  assert.match(pre, /<code>\{"line\\n   ├─ indented"\}<\/code>/);
+  // Bare URLs in text become string expressions: same characters, no link, no backslash.
+  assert.match(convert("<p>see https://x.example/a_b.</p>"), /see \{"https:\/\/x\.example\/a_b"\}\./);
+  const inList = convert("<ul><li>Pin it:<CodeBlock code={`import x from \"y\";\n- not a list\n# not a heading\n}`} /></li></ul>");
+  await compile(inList.replace(/^---[\s\S]*?---\n/, ""), { remarkPlugins: [remarkGfm] });
+});
+
+test("converter decodes every named HTML entity, not just a short list", () => {
+  const mdx = convert(`
+      <p>It&rsquo;s &ldquo;quoted&rdquo; &hellip; &rarr; &check; &amp; done</p>`);
+  assert.match(mdx, /It’s “quoted” … → ✓ & done/);
+  assert.doesNotMatch(mdx, /&rsquo;|&ldquo;/);
 });
 
 test("converter refuses pages with components MDX cannot provide", () => {

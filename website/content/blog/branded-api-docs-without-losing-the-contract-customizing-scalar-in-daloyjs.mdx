@@ -1,0 +1,359 @@
+---
+title: "Branded API Docs Without Losing the Contract: Customizing Scalar in DaloyJS"
+description: DaloyJS docs.scalar is a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. Because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company cannot drift away from the contract.
+date: 2026-06-07
+readingTime: 10 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack, currently typing this from a desk in Norway where the sun has been up since 03:42. Has personally shipped at least three custom-forked docs pages that served a six-month-old spec because nobody noticed the URL was hard-coded. Has feelings about this.
+badges:
+  - Docs UI
+  - OpenAPI
+  - DX
+keywords:
+  - Scalar API reference
+  - OpenAPI docs theming
+  - DaloyJS docs
+  - branded API docs
+  - custom CSS Scalar
+  - hide Try It button
+  - FastAPI ergonomics
+  - docs.scalar
+footerLinks:
+  - label: Read the OpenAPI docs
+    href: /docs/openapi
+  - label: daloy inspect post
+    href: /blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health
+  - label: More posts
+    href: /blog
+---
+
+export const PAIN = `# This started as a Slack thread, only lightly fictionalised:
+#
+# - Marketing:  "Can the /docs page use our brand colours? It looks like
+#                a stranger's house. We have a design system."
+# - PM:         "Can we hide the Try-It button on prod? An enterprise
+#                customer 'tested' DELETE /v1/accounts/:id last Tuesday."
+# - Security:   "And the favicon. It has to come from our CDN. CSP."
+# - You:        "Sure, I'll just fork the docs route."
+#
+# Six weeks later: there is a 200-line bespoke /docs handler that hard-codes
+# the spec URL. The spec URL is "/openapi-v1.json". The new route the team
+# shipped this morning is at "/openapi.json". Guess which one the docs page
+# is rendering.
+#
+# This is the part of the job that should not be a project.`;
+
+export const BEFORE = `// src/app.ts, before. Defaults are fine, but you cannot say "and also
+// hide the Try It button on prod" without leaving the constructor.
+import { App } from "@daloyjs/core";
+
+export const app = new App({
+  docs: "auto",  // mounts /docs and /openapi.json, generic Scalar theme.
+});`;
+
+export const AFTER = `// src/app.ts, after. docs.scalar accepts any JSON-serialisable
+// option the Scalar API reference understands.
+import { App } from "@daloyjs/core";
+
+export const app = new App({
+  docs: {
+    path: "/docs",
+    openapiPath: "/openapi.json",
+    ui: "scalar",
+    scalar: {
+      theme: "deepSpace",
+      layout: "modern",
+      hideTestRequestButton: process.env.NODE_ENV === "production",
+      hideClientButton: false,
+      hideDarkModeToggle: false,
+      showOperationId: true,
+      defaultOpenFirstTag: true,
+      favicon: "/static/brand/favicon.svg",
+      customCss: \`
+        :root {
+          --scalar-color-1: #0b1020;
+          --scalar-color-accent: #ff6a3d;
+          --scalar-font: "Inter", system-ui, sans-serif;
+        }
+      \`,
+    },
+  },
+});`;
+
+export const STRIP = `// src/docs.ts, what Daloy does at serialize time. (Excerpt; the real
+// code is in @daloyjs/core/src/docs.ts and the contract is enforced by
+// the ScalarReferenceConfiguration type.)
+//
+// Everything that points Scalar at a *different* spec is stripped here,
+// and 'url' is force-set to the live OpenAPI route the App is already
+// serving. No matter what you pass, the rendered docs page reads the
+// same spec your typed client and contract tests read.
+const STRIP_RUNTIME_FIELDS = [
+  "content",       // inline spec - would shadow the live route
+  "sources",       // multi-spec switcher - silently picks the wrong one
+  "spec",          // deprecated alias of content
+  "url",           // we ALWAYS set this ourselves
+  "plugins",       // functions - not JSON-serialisable
+  "fetch",         // function - not JSON-serialisable
+] as const;
+
+// And these are typed as 'never' so TypeScript catches you before you
+// even try. Functions can't ride along inside a data-* attribute, and
+// pretending they can would be a fun footgun:
+//
+//   onBeforeRequest?: never;
+//   generateOperationSlug?: never;
+//   redirect?: never;
+//   ...
+
+const safe = stripRuntimeFields(scalar);
+const finalConfig = { ...safe, url: openapiPath };  // <-- always wins
+const dataAttr = \` data-configuration='\${escapeHtml(JSON.stringify(finalConfig))}'\`;`;
+
+export const TYPESCRIPT_ERROR = `// You try to be clever. TypeScript stops you.
+export const app = new App({
+  docs: {
+    scalar: {
+      theme: "deepSpace",
+      onBeforeRequest: (req) => {           // <-- red squiggle here
+        req.headers.set("x-debug", "1");
+      },
+      sources: [                            // <-- and here
+        { url: "/openapi-experimental.json", title: "Beta" },
+      ],
+    },
+  },
+});
+
+// tsc says, with the patience of an older sibling:
+//
+//   Type '(req: Request) => void' is not assignable to type 'never'.
+//   Type '{ url: string; title: string; }[]' is not assignable to type 'never'.
+//
+// Translation: that field can't ride inside data-configuration. Use
+// scalarHtml({ configuration }) directly on a custom route if you need it.`;
+
+export const RENDERED = `<!-- The single line that lands in the browser. Yes, just one script tag
+     and one data attribute. Scalar's HTML API does the rest. -->
+<script
+  id="api-reference"
+  data-url="/openapi.json"
+  data-configuration='{"theme":"deepSpace","layout":"modern","hideTestRequestButton":true,"showOperationId":true,"defaultOpenFirstTag":true,"favicon":"/static/brand/favicon.svg","customCss":":root{--scalar-color-1:#0b1020;--scalar-color-accent:#ff6a3d;}","url":"/openapi.json"}'>
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>`;
+
+export const PER_ENV = `// One pattern I use a lot: dev gets all the toys, prod gets the brand
+// chrome and nothing dangerous. No NODE_ENV ifs inside the template,
+// no fork of the docs route. Just two configs.
+import { App, type ScalarReferenceConfiguration } from "@daloyjs/core";
+
+const isProd = process.env.NODE_ENV === "production";
+
+const scalar: ScalarReferenceConfiguration = isProd
+  ? {
+      theme: "deepSpace",
+      layout: "modern",
+      hideTestRequestButton: true,
+      hideClientButton: true,
+      showDeveloperTools: "never",
+      defaultOpenFirstTag: true,
+      customCss: brandCss,
+    }
+  : {
+      theme: "kepler",
+      layout: "modern",
+      showDeveloperTools: "always",
+      defaultOpenAllTags: true,
+      expandAllResponses: true,
+      persistAuth: true,
+    };
+
+export const app = new App({
+  docs: { ui: "scalar", scalar },
+});`;
+
+export const CUSTOM_ROUTE = `// You need a function-valued option (a plugin, an onBeforeRequest hook,
+// a custom slug generator). docs.scalar can't carry those - they're not
+// JSON-serialisable, and shoving a stringified function into a data-*
+// attribute is the kind of thing you read about in incident reviews.
+//
+// Drop the auto-mount and use scalarHtml() directly. Same generator,
+// same CSP, same nonce handling - just rendered by a route you control.
+import { App, scalarHtml, htmlResponse } from "@daloyjs/core";
+
+export const app = new App({ docs: false });
+
+app.get("/docs", {
+  acknowledgeNoResponseBodySchema: true,
+  responses: { 200: {} },
+}, (ctx) => {
+  // scalarHtml() takes the same configuration shape, but here you can
+  // also assemble the page yourself (extra <link>, an extra <script>
+  // that registers a Scalar plugin, etc).
+  const html = scalarHtml({
+    specUrl: "/openapi.json",
+    title: "Bookstore API",
+    scriptNonce: ctx.state.cspNonce,   // works with secureHeaders() CSP
+    configuration: {
+      theme: "deepSpace",
+      layout: "modern",
+      customCss: brandCss,
+    },
+  });
+  return htmlResponse(html, { scriptNonce: ctx.state.cspNonce });
+});`;
+
+export const TEST = `// tests/docs-scalar.test.ts, the regression test I copy into every
+// project. Two lines, catches the next intern who hard-codes a different
+// spec URL into the rendered HTML "just for debugging."
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { app } from "../src/app.ts";
+
+test("docs page renders Scalar with our brand config", async () => {
+  const res = await app.request("/docs");
+  const body = await res.text();
+
+  assert.equal(res.status, 200);
+  assert.match(body, /id="api-reference"/);
+  assert.match(body, /"theme":"deepSpace"/);
+  assert.match(body, /"hideTestRequestButton":true/);
+
+  // The important one. Daloy must force the live spec URL into the
+  // config payload, regardless of what we passed (or didn't pass).
+  assert.match(body, /"url":"\\/openapi\\.json"/);
+});`;
+
+export const CHECKLIST = `# A short checklist before you ship a branded /docs page.
+#
+# 1) Pick a theme. There are 12. "default", "deepSpace", "kepler",
+#    "moon", "saturn", "purple", "solarized", "laserwave", "alternate",
+#    "mars", "bluePlanet", "none". Audition them in dev; they're free.
+#
+# 2) hideTestRequestButton: true in production unless the docs are
+#    behind your internal SSO. The Try-It button is real fetch().
+#
+# 3) customCss is a string - keep it small. Two or three CSS vars
+#    (--scalar-color-1, --scalar-color-accent, --scalar-font) cover
+#    90% of brand work. Don't reimplement Tailwind in there.
+#
+# 4) Don't set 'url', 'content', 'sources', 'spec', 'plugins', or
+#    'fetch'. They're either stripped or typed as 'never'. The whole
+#    point is that the docs page reads the same spec your client does.
+#
+# 5) If you need a function-valued option, fall back to scalarHtml()
+#    on a route you control. Same CSP, same nonce, same generator.
+#
+# 6) Snapshot test the rendered page. Two assert.match() calls is
+#    enough to catch 'someone broke the brand config' for years.`;
+
+Hi, Devlin again. I want to talk about a small feature with a deceptively boring name: `docs.scalar`. It is one new option on the App constructor. It is also the difference between "our docs page looks like everyone else's docs page" and "our docs page looks like the rest of our product, and the Try-It button is off in prod, and the spec it's reading is still the live one."
+
+That last clause is the one I want you to remember. The whole reason this option exists in the shape it does is to give you theming without giving you a footgun.
+
+## This started as a Slack thread
+
+<EditorFrame files={["slack · #api-team"]} activeFile="slack · #api-team" status="ten years of this exact thread, every company, every framework">
+<CodeBlock language="bash" code={PAIN} />
+</EditorFrame>
+
+Generated docs eventually need the team's colours, a production switch for Try-It, and the right favicon. I have handled that by copying the framework's HTML into a two-hundred-line route with a hard-coded spec URL. I have also inherited that route two years later. Neither experience was fun.
+
+## Before and after
+
+<EditorFrame files={["src/app.ts · before"]} activeFile="src/app.ts · before" status="defaults only · no theming · no way to hide Try-It in prod">
+<CodeBlock language="ts" code={BEFORE} />
+</EditorFrame>
+
+<EditorFrame files={["src/app.ts · after"]} activeFile="src/app.ts · after" status="docs.scalar accepts the JSON-serialisable Scalar config · zero new files">
+<CodeBlock language="ts" code={AFTER} />
+</EditorFrame>
+
+The `docs.scalar` option takes any JSON-serialisable Scalar API reference configuration and forwards it into the page. Theme, layout, brand CSS, favicon, the Try-It toggle, sidebar density, "open the first tag by default": all the knobs Scalar already supports.
+
+## The options I actually reach for
+
+There are about forty fields on `ScalarReferenceConfiguration`. I'm not going to list all of them. The type ships with your IDE, and Scalar keeps the canonical reference. But these are the ones I set in almost every project, in roughly this order:
+
+<OptionCard name="theme" what="pick one of the twelve presets.">My usual two: <code>"deepSpace"</code> for prod (looks grown-up, ships with great defaults),{" "}<code>"kepler"</code> for staging (so you can tell at a glance which environment you're on). The free debugging hint is worth it.</OptionCard>
+
+<OptionCard name="customCss" what="a string of CSS that overrides Scalar tokens.">Keep it tiny. Two or three CSS variables (<code>--scalar-color-1</code>{", "}<code>--scalar-color-accent</code>{", "}<code>--scalar-font</code>) and you've matched your brand. The attribute is HTML-escaped for you, so quotes and angle brackets inside the CSS are safe.</OptionCard>
+
+<OptionCard name="hideTestRequestButton" what="kill the Try-It button. In prod. Always.">Unless your docs are behind internal SSO, the Try-It button performs real <code>fetch</code> calls against the live API. I've seen someone "test" <code>DELETE</code> against production once. It is a story I tell new hires.</OptionCard>
+
+<OptionCard name="layout" what={'"modern" or "classic", sidebar vs. accordion.'}><code>"modern"</code> for public consumer-facing docs,{" "}<code>"classic"</code> for internal docs where engineers want to skim a long page with <kbd>⌘F</kbd>{". "}Pick by audience, not by taste.</OptionCard>
+
+<OptionCard name="defaultOpenFirstTag" what="open the first tag group on load.">Saves a click. Pair with <code>defaultOpenAllTags: true</code> in dev so you can ctrl-F the whole API, and leave it off in prod so the page actually loads fast.</OptionCard>
+
+<OptionCard name="showDeveloperTools" what={'"always" | "localhost" | "never".'}>Set to <code>"never"</code> in prod. The dev tools panel is great when you're debugging the docs page itself, slightly confusing for an enterprise customer.</OptionCard>
+
+<OptionCard name="favicon" what="a URL string for the docs page favicon.">Use a path your CSP already allows, e.g.{" "}<code>/static/brand/favicon.svg</code> from your own origin. Don't hot-link a CDN you haven't added to{" "}<code>img-src</code>.</OptionCard>
+
+## The design decision: JSON only, and Daloy wins the URL fight
+
+Scalar's configuration object supports a lot of things. Some of them aren't safe to ship over an HTML data attribute, and some of them would let you accidentally point the docs page at a different spec than the one your typed client and contract tests are reading. Daloy takes a strong opinion on both.
+
+<EditorFrame files={["src/docs.ts · serialiser"]} activeFile="src/docs.ts · serialiser" status="strip runtime fields · force url=openapiPath · then JSON.stringify">
+<CodeBlock language="ts" code={STRIP} />
+</EditorFrame>
+
+Two things to notice. First, the fields that would change which spec the page reads (`content`, `sources`, `spec`, `url`) are stripped at serialise time and `url` is then re-set to whatever `openapiPath` your App is serving. You literally cannot ship a docs page that reads a stale or alternate spec. I know, because I tried.
+
+Second, the function-valued fields (`onBeforeRequest`, `plugins`, `generateOperationSlug`, friends) are typed as `never` in the public type. They can't ride along inside a data attribute (functions don't survive `JSON.stringify`), and pretending they can would be a footgun with great UX and terrible debuggability. TypeScript stops you up front:
+
+<EditorFrame files={["src/app.ts · with red squiggles"]} activeFile="src/app.ts · with red squiggles" status="tsc says no · earlier is better than at 03:00 in production">
+<CodeBlock language="ts" code={TYPESCRIPT_ERROR} />
+</EditorFrame>
+
+## What actually lands in the browser
+
+<EditorFrame files={["devtools · Elements · /docs"]} activeFile="devtools · Elements · /docs" status="one script tag · one data-configuration JSON blob · url always present, always live">
+<CodeBlock language="html" code={RENDERED} />
+</EditorFrame>
+
+That's the entire mechanism. Scalar's HTML API reads `data-configuration` at boot, merges it with anything you set via other data attributes, and renders. The reason this looks suspiciously simple is because it *is* suspiciously simple. The value of `docs.scalar` isn't in the rendering, it's in the contract we hold around what can and can't go in that JSON.
+
+## The pattern I copy into every project: per-env config
+
+<EditorFrame files={["src/app.ts · two configs, one constructor"]} activeFile="src/app.ts · two configs, one constructor" status="dev gets the toys · prod gets the brand chrome · no NODE_ENV ifs in templates">
+<CodeBlock language="ts" code={PER_ENV} />
+</EditorFrame>
+
+This is the smallest version of a pattern I've been writing for years in five different frameworks. Two objects, one ternary, zero forks of the docs route. The dev variant turns on every convenience (open everything, persist auth, dev tools always), the prod variant turns off everything that could surprise a customer and adds the brand stylesheet. Same App, same route, same spec.
+
+## The escape hatch: when JSON isn't enough
+
+About once a year I genuinely do want a Scalar plugin or a custom slug generator. Those are functions; they can't cross the JSON boundary. `docs.scalar` won't let me, and that's correct. But Daloy doesn't leave me stuck: the same generator that powers the auto-mount is exported as `scalarHtml()`, and I can mount my own route:
+
+<EditorFrame files={["src/app.ts · custom /docs route"]} activeFile="src/app.ts · custom /docs route" status="docs: false · scalarHtml({ configuration }) · same CSP, same nonce, full control">
+<CodeBlock language="ts" code={CUSTOM_ROUTE} />
+</EditorFrame>
+
+Now I own the route, but I'm still using the framework's HTML generator and the same CSP-friendly `htmlResponse()` helper. If you've already wired up [CSP nonces via secureHeaders()](/blog/csp-nonces-and-trusted-types-without-tears), the nonce flows through automatically. Pass `ctx.state.cspNonce` into both calls and the script tag is allow-listed.
+
+## The regression test I always write
+
+One thing I've learned the hard way: branded docs config is exactly the kind of thing that decays silently. Six months from now someone refactors the App, deletes the `scalar` block by accident, and nobody notices because the page still loads. Write the boring snapshot test once, never think about it again:
+
+<EditorFrame files={["tests/docs-scalar.test.ts"]} activeFile="tests/docs-scalar.test.ts" status="three asserts · catches brand-drift, Try-It-flag-drift, spec-URL-drift">
+<CodeBlock language="ts" code={TEST} />
+</EditorFrame>
+
+The last assertion pins the page's configuration block to carries the live spec URL, the same one your typed client, your contract tests, and your [daloy inspect](/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health) output all read. If anyone ever finds a way to make the docs page point somewhere else, this test fails first.
+
+## The shipping checklist
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="paste into your team's docs-PR template, walk away">
+<CodeBlock language="bash" code={CHECKLIST} />
+</EditorFrame>
+
+## Customize without forking
+
+This feature took the shape it did because I wanted FastAPI-style ergonomics for the docs page (one option, in the constructor, no second mental model) without the FastAPI-style outcome where a year later someone has forked the template and the docs are silently rendering last quarter's spec. JSON-only forces the API to stay declarative. Force-setting `url` means the prettiest `/docs` page in the company physically cannot lie to your customers about what the API does. Everything else is just themes.
+
+Install with `pnpm add @daloyjs/core`, or use `pnpm create daloy@latest` for a fresh scaffold. Then add five lines under `docs`, ship the brand audit, and go do something more interesting.
+
+Closest neighbors: the [OpenAPI 3.1 extras post](/blog/openapi-3-1-extras-webhooks-callbacks-discriminators) for what the underlying spec can express, the [contract-first post](/blog/contract-first-without-the-codegen-dance) for why "one source of truth" is the whole game, and the [CSP nonces post](/blog/csp-nonces-and-trusted-types-without-tears) if you're mounting a custom `/docs` route under a strict policy.
+
+Devlin

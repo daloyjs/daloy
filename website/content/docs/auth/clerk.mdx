@@ -1,0 +1,216 @@
+---
+title: Protect a DaloyJS API with Clerk
+description: Authenticate and authorize requests in a DaloyJS API with Clerk. Uses @clerk/backend authenticateRequest() to verify session, OAuth, and machine tokens, with organization and role-aware authorization.
+keywords:
+  - DaloyJS Clerk
+  - "@clerk/backend"
+  - authenticateRequest
+  - Clerk session token
+  - Clerk organizations
+---
+
+# Protect a DaloyJS API with Clerk
+
+[Clerk](https://clerk.com) is an auth platform that bundles user management, organizations, billing, and embeddable UI components. For a backend API, the [`@clerk/backend`](https://clerk.com/docs/reference/backend/overview) package exposes [`authenticateRequest()`](https://clerk.com/docs/reference/backend/authenticate-request), which takes a standard `Request` and returns an `Auth` object, a perfect fit for DaloyJS's Web-standard handlers.
+
+<SequenceDiagram title="Clerk session-token verification" participants={["Frontend SDK", "Clerk", "DaloyJS API"]} steps={[
+          {
+            from: "Frontend SDK",
+            to: "Clerk",
+            label: "User signs in. SDK gets a session token via getToken()",
+            kind: "async",
+          },
+          {
+            from: "Frontend SDK",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <session token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Clerk",
+            label: "authenticateRequest() verifies the token",
+            detail: "networkless when jwtKey is set. Otherwise calls Clerk",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "Check authorizedParties, then read userId, orgId, orgRole",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Frontend SDK",
+            label:
+              "Return protected data, or 401 when isAuthenticated is false",
+            kind: "response",
+          },
+        ]} caption="With CLERK_JWT_KEY set, authenticateRequest() verifies the token as a pure crypto check with no Clerk API call, which is ideal for edge runtimes. authorizedParties pins the origins allowed to call the API." />
+
+## 1. Set up your Clerk app
+
+1. Create an application in the [Clerk dashboard](https://dashboard.clerk.com). From **API Keys**, copy the **Publishable Key** and **Secret Key**. Optionally copy the **JWT Public Key (PEM)** for networkless verification.
+2. Your frontend (Clerk's React, Next.js, Expo, or vanilla JS SDK) obtains a session token via `getToken()` and sends it in the `Authorization: Bearer <token>` header to your DaloyJS API.
+3. For machine-to-machine calls, create an **M2M token** or use Clerk's OAuth applications and accept `oauth_token` / `m2m_token` in the verifier.
+
+## 2. Install
+
+```ts
+pnpm add @clerk/backend
+```
+
+## 3. Environment variables
+
+```ts
+# .env
+CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Optional - enables networkless JWT verification (no Clerk API call per request)
+# Get it from API Keys -> Show JWT public key -> PEM Public Key
+CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/clerk.ts
+import { createClerkClient } from "@clerk/backend";
+import { UnauthorizedError, type App, type Hooks } from "@daloyjs/core";
+
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY!,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+  jwtKey: process.env.CLERK_JWT_KEY, // optional: enables networkless verification
+});
+
+export interface Principal {
+  userId: string;
+  sessionId: string | null;
+  orgId: string | null;
+  orgRole: string | null;
+  tokenType: string;
+}
+
+export const clerkPlugin = {
+  name: "clerk",
+  register(app: App) {
+    app.decorate("clerk", clerk);
+  },
+};
+
+type ClerkTokenType = "session_token" | "oauth_token" | "m2m_token" | "api_key";
+
+export function requireClerkAuth(opts?: {
+  acceptsToken?: ClerkTokenType | ClerkTokenType[] | "any";
+  authorizedParties?: string[];
+}): Hooks {
+  const acceptsToken = opts?.acceptsToken ?? "session_token";
+  return {
+    preBody: async (ctx) => {
+      const result = await ctx.state.clerk.authenticateRequest(ctx.request, {
+        acceptsToken,
+        authorizedParties: opts?.authorizedParties,
+      });
+      if (!result.isAuthenticated) {
+        throw new UnauthorizedError(result.message ?? "Unauthorized");
+      }
+      const auth = result.toAuth();
+      ctx.state.principal = {
+        userId: (auth as { userId?: string }).userId ?? "",
+        sessionId: (auth as { sessionId?: string | null }).sessionId ?? null,
+        orgId: (auth as { orgId?: string | null }).orgId ?? null,
+        orgRole: (auth as { orgRole?: string | null }).orgRole ?? null,
+        tokenType: result.tokenType,
+      };
+      // continue
+    },
+  };
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    clerk: ReturnType<typeof createClerkClient>;
+    principal?: Principal;
+  }
+}
+```
+
+Setting **`authorizedParties`** is strongly recommended, it pins the origins allowed to make requests and protects against the subdomain-cookie-leaking attack described in Clerk's docs. Setting `jwtKey` turns verification into a pure crypto check (no network), which is ideal for edge runtimes.
+
+## 5. Guard a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { clerkPlugin, requireClerkAuth } from "./plugins/clerk.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.register(clerkPlugin);
+
+app.get(
+  "/me",
+  {
+    hooks: requireClerkAuth({ authorizedParties: ["https://acme.example.com"] }),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({
+          userId: z.string(),
+          orgId: z.string().nullable(),
+          orgRole: z.string().nullable(),
+        }),
+      },
+    },
+  },
+  ({ state }) => ({
+    status: 200,
+    body: {
+      userId: state.principal!.userId,
+      orgId: state.principal!.orgId,
+      orgRole: state.principal!.orgRole,
+    },
+  }),
+);
+```
+
+## Organizations & role checks [#organizations-and-role-checks]
+
+Clerk's `Auth` object includes the active `orgId`, `orgSlug`, `orgRole` (e.g. `org:admin`), and `orgPermissions`. Add a thin helper to require a role on top of `requireClerkAuth`:
+
+```ts
+import { every, ForbiddenError, type Hooks } from "@daloyjs/core";
+
+export function requireOrgRole(role: string): Hooks {
+  return {
+    preBody: (ctx) => {
+      if (ctx.state.principal?.orgRole !== role) {
+        throw new ForbiddenError(`Requires ${role}`);
+      }
+      // continue
+    },
+  };
+}
+
+// Usage:
+hooks: every(
+  requireClerkAuth(),
+  requireOrgRole("org:admin"),
+),
+```
+
+## Machine-to-machine authentication
+
+Set `acceptsToken` to `"m2m_token"`, `"oauth_token"`, or an array like `["session_token", "m2m_token"]` to accept multiple token kinds. The returned `tokenType` lets you branch your business logic per caller type.
+
+## Webhooks
+
+Clerk delivers user, organization, and session events via Svix-signed webhooks. Use `clerk.verifyWebhook(request)` to validate the signature before processing the payload, never trust an unverified webhook body.
+
+## Runtimes
+
+`@clerk/backend` is built on the Web `Request` and `fetch` APIs, so it runs everywhere DaloyJS does: Node.js, Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare Workers. Pair it with the [edge adapters](/docs/adapters).
+
+See also [Auth0](/docs/auth/auth0), [AWS Cognito](/docs/auth/aws-cognito), and the [auth integrations overview](/docs/auth).

@@ -1,0 +1,248 @@
+---
+title: Use Prisma with DaloyJS
+description: Connect DaloyJS to PostgreSQL, MySQL, or SQLite using Prisma. Schema-first models, migrations, and a typed client wired into your contract-first routes.
+keywords:
+  - Prisma DaloyJS
+  - Prisma TypeScript framework
+  - Prisma plugin
+  - Prisma transactions
+  - Prisma edge
+---
+
+# Use Prisma with DaloyJS
+
+[Prisma](https://www.prisma.io) is a schema-first ORM with first-class migrations and a generated, fully typed client. It pairs well with DaloyJS's [contract-first routes](/docs/routing): Zod validates the wire, Prisma validates the database.
+
+<FlowDiagram numbered title="One request through Prisma" caption="Zod validates the request before your handler runs, Prisma runs the typed query off state.db, and the result is checked against the response schema on the way out. Two validation layers guard the wire and the database." steps={[
+          {
+            eyebrow: "client",
+            label: "HTTP request",
+            detail: "GET /users/:id",
+          },
+          {
+            eyebrow: "zod",
+            label: "Validated input",
+            detail: "params.id is a uuid",
+            tone: "accent",
+          },
+          {
+            eyebrow: "prisma",
+            label: "Typed query",
+            detail: "state.db.user.findUnique(...)",
+          },
+          {
+            eyebrow: "response",
+            label: "Typed body",
+            detail: "200 UserSchema | 404",
+            tone: "success",
+          },
+        ]} />
+
+## 1. Install
+
+```ts
+pnpm add @prisma/client @prisma/adapter-pg dotenv
+pnpm add -D prisma
+pnpm prisma init --datasource-provider postgresql
+```
+
+## 2. Define your schema
+
+```ts
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+model User {
+  id    String @id @default(uuid())
+  email String @unique
+  name  String?
+}
+```
+
+```ts
+// prisma.config.ts
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: { path: "prisma/migrations" },
+  datasource: {
+    url: env("DATABASE_URL"),
+  },
+});
+```
+
+Prisma's current [`prisma-client`](https://www.prisma.io/docs/orm/prisma-schema/overview/generators#prisma-client) generator writes the client to the configured output path. Connection URLs live in `prisma.config.ts`, and application code imports `PrismaClient` from the generated path instead of `@prisma/client`.
+
+```ts
+pnpm prisma migrate dev --name init
+pnpm prisma generate
+```
+
+## 3. Create a Prisma plugin
+
+Instantiate one `PrismaClient` per process, decorate the app, and disconnect on shutdown.
+
+```ts
+// src/db/prisma.ts
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.ts";
+import type { App } from "@daloyjs/core";
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+export const prisma = new PrismaClient({
+  adapter,
+  log: process.env.NODE_ENV === "production" ? ["error"] : ["query", "error"],
+});
+
+export const prismaPlugin = {
+  name: "prisma",
+  async register(app: App) {
+    await prisma.$connect();
+    app.decorate("db", prisma);
+    app.onClose(async () => {
+      await prisma.$disconnect();
+    });
+  },
+};
+```
+
+## 4. Augment app state types
+
+Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/prisma.ts (same module as the plugin above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: PrismaClient;
+  }
+}
+```
+
+## 5. Wire the plugin and route
+
+**The route below demonstrates Prisma wiring, not ownership.** If a record is user-owned or tenant-owned, do not query by URL ID alone. Constrain the same query with the trusted principal and follow the [resource authorization guide](/docs/security/resource-authorization).
+
+```ts
+// src/server.ts
+import { z } from "zod";
+import { App, secureHeaders, requestId } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { prismaPlugin } from "./db/prisma.ts";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  name: z.string().nullable(),
+});
+
+const app = new App();
+app.use(requestId());
+app.use(secureHeaders());
+app.register(prismaPlugin);
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const user = await state.db.user.findUnique({ where: { id: params.id } });
+    return user
+      ? { status: 200, body: user }
+      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+  },
+);
+
+app.post(
+  "/users",
+  {
+    operationId: "createUser",
+    request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
+    responses: { 201: { description: "Created", body: UserSchema } },
+  },
+  async ({ body, state }) => ({
+    status: 201,
+    body: await state.db.user.create({ data: body }),
+  }),
+);
+
+await app.ready();
+serve(app, { port: 3000 });
+```
+
+## Transactions
+
+Use `$transaction` for atomic units of work. Throwing inside the callback rolls back. A successful return commits.
+
+```ts
+handler: async ({ body, state }) => {
+  const order = await state.db.$transaction(async (tx) => {
+    const created = await tx.order.create({ data: { sku: body.sku, qty: body.qty } });
+    await tx.inventory.update({
+      where: { sku: body.sku },
+      data: { stock: { decrement: body.qty } },
+    });
+    return created;
+  });
+  return { status: 201, body: order };
+}
+```
+
+## Edge runtimes
+
+For Cloudflare Workers, set the generated client runtime for your target and use the appropriate [Prisma Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/database-drivers) (Neon, PlanetScale, D1, etc.).
+
+```ts
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "deno" // use "workerd" for Cloudflare Workers
+}
+
+// src/db/prisma-edge.ts
+import { PrismaClient } from "../generated/prisma/client.ts";
+import { PrismaNeon } from "@prisma/adapter-neon";
+
+const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
+export const prisma = new PrismaClient({ adapter });
+```
+
+## Operator injection: validate your filter shapes
+
+Prisma always emits parameterized SQL, but the *filter object* you pass to `where` is interpreted by Prisma. If a field annotated as `string` arrives at runtime as an object like `{ "not": "" }`, Prisma treats it as an operator and an attacker can bypass equality checks, the “NoSQL-injection-in-Prisma” pattern [documented by Aikido](https://www.aikido.dev/blog/prisma-and-postgresql-vulnerable-to-nosql-injection). Daloy's contract-first routes neutralize this when you keep the request body typed with primitive Zod schemas (`z.string()`, `z.number()`, …) instead of `z.any()`, `z.unknown()`, or a pass-through `z.record()`. See [Security → SQL injection](/docs/security/sql-injection) for the full pattern and review-time rules.
+
+## Mapping errors to problem+json [#mapping-errors-to-problem-json]
+
+```ts
+import { Prisma } from "../generated/prisma/client.ts";
+import { HttpError } from "@daloyjs/core";
+
+try {
+  return await state.db.user.create({ data: body });
+} catch (err) {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    throw new HttpError(409, { title: "Email already in use" });
+  }
+  throw err;
+}
+```
+
+Continue with [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) for document databases.
+
+For serverless or edge deployments, see the [database hosting overview](/docs/databases): Prisma supports [Neon](/docs/databases/neon), [PlanetScale](/docs/databases/planetscale), and [Cloudflare D1](/docs/databases/cloudflare-d1) through Driver Adapters.

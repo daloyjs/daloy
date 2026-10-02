@@ -1,0 +1,96 @@
+---
+title: Deploy to Render
+description: "Deploy DaloyJS to Render as a Node web service. Current render.yaml Blueprint with runtime: node, healthCheckPath, and scaling."
+keywords:
+  - Deploy DaloyJS to Render
+  - render.yaml Blueprint
+  - Render Node service
+  - healthCheckPath
+  - Render autoscaling
+---
+
+# Render
+
+Render runs your Node REST API as a long-lived web service with platform-managed TLS, autoscaling, and PR previews. Use the [Node adapter](/docs/adapters/node) and let Render inject `PORT`.
+
+<FlowDiagram title="Blueprint deploy pipeline" numbered steps={[
+          {
+            label: "Push to repo",
+            detail: "render.yaml detected",
+            eyebrow: "git",
+          },
+          {
+            label: "buildCommand",
+            detail: "pnpm install && pnpm build",
+          },
+          {
+            label: "startCommand",
+            detail: "node dist/server.js",
+            tone: "accent",
+          },
+          {
+            label: "healthCheckPath + scaling",
+            detail: "/healthz, min/max instances",
+            tone: "success",
+          },
+        ]} caption="Render picks up render.yaml on every push, builds and starts the Node web service, then gates routing on a 2xx from healthCheckPath while autoscaling between your min and max instances." />
+
+## When to choose Render
+
+- You want a Heroku-like UX with modern autoscaling and per-second billing.
+- You want PR previews wired to your repo without extra CI config.
+- You want managed Postgres or Redis from the same dashboard.
+
+## Server entrypoint
+
+```ts
+// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.js";
+
+serve(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+});
+```
+
+## render.yaml [#render-yaml]
+
+Use `runtime: node`. The older `env: node` field is deprecated.
+
+```yaml
+services:
+  - name: my-api
+    type: web
+    runtime: node
+    plan: starter
+    buildCommand: pnpm install && pnpm build
+    startCommand: node dist/server.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+      targetCPUPercent: 60
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        sync: false
+```
+
+## Deploy
+
+Push to your repo. Render picks up `render.yaml` automatically. For the first deploy, create a Blueprint service from the dashboard.
+
+## Gotchas
+
+- Bind to `0.0.0.0`, not `localhost`, or Render can't route traffic to the container.
+- `healthCheckPath` must return 2xx within the timeout. Use the [lifecycle plugin](/docs/security/lifecycle-health)'s health endpoint.
+
+## See also
+
+- [Deployment overview](/docs/deployment)
+- [Node adapter](/docs/adapters/node)

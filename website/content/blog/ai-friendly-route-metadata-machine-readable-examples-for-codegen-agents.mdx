@@ -1,0 +1,489 @@
+---
+title: "AI-Friendly Route Metadata: Machine-Readable Examples for Codegen Agents"
+description: DaloyJS route metadata adds structured examples, extra description copy, and free-form x-* extensions, validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 plus sibling routes.json or routes.yaml dumps via daloy inspect --ai. It is additive, non-breaking, and built so codegen agents can write correct call sites on the first try.
+date: 2026-06-14
+readingTime: 11 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack, currently in Norway. Has watched a coding agent hallucinate a 3-field response body for an endpoint that returns 7, then ship the typed client. Now ships an examples block on every public route so the agent has nothing to invent.
+badges:
+  - Release
+  - OpenAPI 3.1
+  - Codegen Agents
+keywords:
+  - DaloyJS meta
+  - machine-readable OpenAPI examples
+  - daloy inspect --ai
+  - routes.json codegen
+  - Hey API examples
+  - LLM API context
+  - OpenAPI 3.1 x-extensions
+  - contract-first AI
+footerLinks:
+  - label: Read the docs
+    href: /docs/ai-metadata
+  - label: CLI inspector post
+    href: /blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health
+  - label: More posts
+    href: /blog
+---
+
+export const PAIN = `# Failure: the codegen agent guessed the contract.
+#
+# Prompt:  "write a fetch call that creates a book"
+#
+# What the agent shipped:
+#
+#   await fetch("/books", {
+#     method: "POST",
+#     headers: { "content-type": "application/json" },
+#     body: JSON.stringify({ name: "Dune" }),   // <- the field is 'title'
+#   });
+#   // Invented response:
+#   //   { bookId: string, name: string, createdAt: string }
+#   //
+#   // Actual response:
+#   //   { id: string, title: string }
+#
+# The OpenAPI document described the schema without a concrete
+# example. The agent inferred field names from "createBook", added a
+# plausible createdAt field, and produced a client whose runtime
+# behavior disagreed with its types. One example would have supplied
+# the real names and conventions.`;
+
+export const META_FIELD = `// The new optional 'meta' field on app.route(), in one place.
+//
+// Authored once, surfaced everywhere:
+//   - OpenAPI requestBody examples
+//   - OpenAPI response examples (per status code)
+//   - operation-level x-daloy-examples vendor extension
+//   - sibling routes.json via 'daloy inspect --ai'
+//   - validated against the route's Standard Schema at build time
+//
+// Existing routes keep working unchanged. meta is optional everywhere.
+
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App();
+
+const Book = z.object({
+  id: z.string(),
+  title: z.string(),
+}).strict();
+
+app.route({
+  method: "POST",
+  path: "/books",
+  operationId: "createBook",
+  tags: ["Books"],
+  request: { body: z.object({ title: z.string().min(1) }) },
+  responses: {
+    201: { description: "Created", body: Book },
+    400: { description: "Invalid" },
+  },
+  meta: {
+    description: "Create a book record.",
+    tags: ["AI"],
+    examples: {
+      happy: {
+        summary: "Standard create",
+        request:  { body: { title: "Dune" } },
+        response: { status: 201, body: { id: "1", title: "Dune" } },
+      },
+      missingTitle: {
+        summary: "Validation failure",
+        request:  { body: { title: "" } },
+        response: { status: 400 },
+      },
+    },
+    extensions: {
+      "x-codegen-hint": "books-table",
+    },
+  },
+  handler: async ({ body }) => ({
+    status: 201 as const,
+    body: { id: crypto.randomUUID(), title: body.title },
+  }),
+});`;
+
+export const BUILD_TIME_VALIDATION = `# What 'pnpm daloy inspect --check' does to every meta.examples block.
+#
+# For every named example on every route, Daloy validates:
+#
+#   request.params  -> against route.request.params  (when both exist)
+#   request.query   -> against route.request.query
+#   request.headers -> against route.request.headers
+#   request.body    -> against route.request.body
+#
+#   response.body   -> against route.responses[example.response.status].body
+#                     (unknown status code is itself an error)
+#
+# Any mismatch FAILS the contract run, which means:
+#
+#   - The OpenAPI doc never publishes a sample that does not match the
+#     schema. The codegen agent cannot be misled by a stale example
+#     because the example cannot survive a stale schema in CI.
+#
+#   - The example AND the schema are validated by the same gate.
+#     There is no "examples drift" surface to monitor; it is a build
+#     failure.
+#
+# CI gate (verbatim from the create-daloy template):
+#
+#   $ pnpm daloy inspect --check
+#   ✓ 14 routes
+#   ✓ 38 examples validated
+#   ✓ no contract issues
+#
+# Bad example, same gate:
+#
+#   $ pnpm daloy inspect --check
+#   ✗ POST /books · example 'happy' · response.body.id is required
+#   exit 1`;
+
+export const OPENAPI_OUT = `{
+  "paths": {
+    "/books": {
+      "post": {
+        "operationId": "createBook",
+        "tags": ["Books", "AI"],
+        "x-codegen-hint": "books-table",
+        "x-daloy-examples": {
+          "happy":        { "summary": "Standard create",     "...": "..." },
+          "missingTitle": { "summary": "Validation failure",  "...": "..." }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "title": { "type": "string" } } },
+              "examples": {
+                "happy":        { "summary": "Standard create",    "value": { "title": "Dune" } },
+                "missingTitle": { "summary": "Validation failure", "value": { "title": ""     } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Book" },
+                "examples": {
+                  "happy": { "summary": "Standard create", "value": { "id": "1", "title": "Dune" } }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid" }
+        }
+      }
+    }
+  }
+}`;
+
+export const INSPECT_AI_CMD = `# 'daloy inspect --ai' dumps the route catalog as a single document
+# with JSON Schema for every input + output and every meta.examples
+# entry. The format every codegen tool and LLM system-prompt
+# scratchpad needs.
+
+# Write to disk for Hey API / your codegen pipeline
+$ pnpm daloy inspect --ai > routes.json
+
+# Or emit YAML - typically ~30% smaller than the equivalent pretty JSON,
+# which matters when the file ends up inside an LLM context window.
+$ pnpm daloy inspect --ai --yaml > routes.yaml
+$ pnpm daloy inspect --ai --format yaml > routes.yaml
+
+# Pipe through jq to enumerate operationIds (JSON only)
+$ pnpm daloy inspect --ai --json | jq '.routes[].operationId'
+
+# Scope the dump with the usual filters
+$ pnpm daloy inspect --ai --tag Books
+$ pnpm daloy inspect --ai --method POST
+
+# What an LLM system prompt looks like with this file inlined:
+#   "You are writing TypeScript fetch calls for the Books API.
+#    The full route catalog and validated examples are below.
+#    Use the operationId for naming, and never invent field names
+#    that are not in the request/response JSON Schemas."
+#   <routes.yaml>`;
+
+export const ROUTES_JSON = `{
+  "daloy":       { "ai": 1 },
+  "generatedAt": "2026-05-19T12:00:00.000Z",
+  "routeCount":  1,
+  "routes": [
+    {
+      "method":      "POST",
+      "path":        "/books",
+      "operationId": "createBook",
+      "tags":        ["Books", "AI"],
+      "request":  { "body": { "type": "object", "properties": { "title": { "type": "string" } } } },
+      "responses": {
+        "201": { "description": "Created", "body": { "$ref": "#/schemas/Book" } },
+        "400": { "description": "Invalid" }
+      },
+      "examples": {
+        "happy": {
+          "summary":  "Standard create",
+          "request":  { "body": { "title": "Dune" } },
+          "response": { "status": 201, "body": { "id": "1", "title": "Dune" } }
+        }
+      },
+      "extensions": { "x-codegen-hint": "books-table" }
+    }
+  ]
+}`;
+
+export const ROUTES_YAML = `daloy:
+  ai: 1
+generatedAt: "2026-05-19T12:00:00.000Z"
+routeCount: 1
+routes:
+  - method: POST
+    path: /books
+    operationId: createBook
+    tags:
+      - Books
+      - AI
+    request:
+      body:
+        type: object
+        properties:
+          title: { type: string }
+        required:
+          - title
+    responses:
+      "201":
+        description: Created
+        body:
+          type: object
+          properties:
+            id:    { type: string }
+            title: { type: string }
+      "400":
+        description: Invalid
+    examples:
+      happy:
+        summary: Standard create
+        request:
+          body:
+            title: Dune
+        response:
+          status: 201
+          body:
+            id: "1"
+            title: Dune
+    extensions:
+      x-codegen-hint: books-table`;
+
+export const WHY_EXAMPLES = `# Schema and examples give codegen agents different signals.
+#
+# A schema defines the allowed payload shape. An example shows the
+# conventions used by a real payload.
+#
+#   schema  ->  type checker.        Catches structural errors.
+#   example ->  pattern matcher.     Catches semantic errors.
+#
+# The example { id: "1", title: "Dune" } tells the agent that this API
+# uses short opaque ids. Downstream call sites can copy that convention.
+#
+# The 'missingTitle' example also records which validation rule fires
+# on an empty string, so a generated form can add the correct guard
+# before a user reports the bug.
+#
+# x-codegen-hint: "books-table" carries project-specific conventions.
+# SDK builders, OpenAPI overlays, and prompt templates can read it.
+# Daloy preserves the value without interpreting it.`;
+
+export const SCOPE_NOTES = `# Scope of 'meta'.
+#
+# Supported:
+#   - Optional per-route. Existing routes need zero changes.
+#   - Validated examples for documentation and codegen.
+#   - Free-form extensions. Keys receive an 'x-' prefix when needed.
+#   - Identical OpenAPI output on Node, Bun, Deno, and Workers.
+#
+# Boundaries:
+#   - Examples stay in generated artifacts and never become handler
+#     responses.
+#   - Runtime mocks require a separate tool that reads routes.json or
+#     the OpenAPI document.
+#   - The route schema stays authoritative. An undeclared response
+#     status fails validation.
+#   - Any Standard Schema implementation works, including Zod,
+#     Valibot, ArkType, and TypeBox.
+#   - Authors add one optional field to the existing route() call.`;
+
+export const CARRYING_OVER = `# Adopting it on an existing route, in 6 lines.
+
+  app.route({
+    method: "GET",
+    path: "/books/:id",
+    operationId: "getBook",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "ok", body: Book },
+      404: { description: "not found" },
+    },
++   meta: {
++     examples: {
++       happy:    { request: { params: { id: "1" } },
++                   response: { status: 200, body: { id: "1", title: "Dune" } } },
++       notFound: { request: { params: { id: "missing" } },
++                   response: { status: 404 } },
++     },
++   },
+    handler: async (ctx) => { /* ... */ },
+  });
+
+# Run the contract gate. The build either passes or names the bad
+# example. Then 'pnpm gen' picks up the new examples on Hey API's
+# next codegen pass - your typed client gets enriched docstrings
+# for free.
+#
+$ pnpm daloy inspect --check
+$ pnpm gen`;
+
+export const WHY_THIS_HELPS = `# Concretely: what changes for the codegen agent.
+#
+# Before (schema only):
+#   Agent reads OpenAPI schema for POST /books.
+#   Agent picks plausible field names from operationId.
+#   Agent invents a 'createdAt' because every API has one.
+#   Agent ships a typed client whose runtime doesn't match its types.
+#   PR review catches it. Maybe.
+#
+# After (schema + validated examples + routes.json):
+#   Agent reads OpenAPI schema AND the example { title: "Dune" }.
+#   Agent uses the exact field name 'title'.
+#   Agent reads the validated response example and knows ids are
+#   short strings, not UUIDs, and there is NO 'createdAt' field.
+#   Agent writes the test using the 'missingTitle' example for the
+#   400 path, because that example told it which validation rule
+#   fires on empty input.
+#   PR review checks the handler, not the fetch call.
+#
+# This is the PR difference I see when the agent has routes.json
+# in its context.`;
+
+export const CHECKLIST = `# Pre-flight: is your route 'meta'-ready?
+#
+# 1) Every public route has at least one 'happy' example.
+#    [ ] request shape matches the schema
+#    [ ] response.status is a key in 'responses'
+#    [ ] 'pnpm daloy inspect --check' is green
+#
+# 2) State-changing routes also have at least one unhappy example.
+#    [ ] one 400/422 validation example
+#    [ ] one 401/403 if auth is required (no body needed)
+#    [ ] one 404 for resource-by-id routes
+#
+# 3) 'routes.json' is wired into a build artifact.
+#    [ ] pnpm script: "ai:dump": "daloy inspect --ai > routes.json"
+#    [ ] file is consumed by Hey API or an LLM system prompt
+#    [ ] CI re-runs the dump and fails on unchecked drift
+#
+# 4) The contract gate validates examples.
+#    [ ] CI runs 'pnpm daloy inspect --check' on every PR
+#    [ ] no skip flag exists in the project
+#
+# 5) Extensions are intentional, not noisy.
+#    [ ] every x-* key is documented in the README
+#    [ ] no x-* key duplicates an OpenAPI standard field`;
+
+Devlin here. DaloyJS adds one optional field to `app.route()` called `meta`. That single field carries structured *examples*, extra *description* copy, and a *free-form extensions* bag, all of it validated against your Standard Schema at build time and surfaced into the OpenAPI 3.1 document *and* a sibling `routes.json` via `daloy inspect --ai`. The whole feature is additive and non-breaking: every existing route keeps working with zero changes. The same command keeps its default JSON shape and supports `--yaml` / `--format yaml` for the same dump when the reader is a human or an LLM context window. This is the "AI-friendly route metadata" capability from the roadmap.
+
+## The failure mode this fixes
+
+<EditorFrame files={["incident.md"]} activeFile="incident.md" status="every codegen agent that ever read an OpenAPI doc · 0/10 stars">
+<CodeBlock language="bash" code={PAIN} />
+</EditorFrame>
+
+None of this is the agent's fault either. It read the schema. It picked the most plausible field names from the `operationId`. It invented a `createdAt` because that's what most APIs return. The schema was right but not *specific enough* to anchor the model to the real field names. One concrete example would have changed every decision downstream.
+
+## What route metadata adds
+
+<EditorFrame files={["src/build-app.ts"]} activeFile="src/build-app.ts" status="one new optional field on route() · everything else unchanged">
+<CodeBlock language="ts" code={META_FIELD} />
+</EditorFrame>
+
+<TierCard tier="meta.examples" size="OpenAPI requestBody/response examples · routes.json · validated in CI">Named record of{" "}<code>{`{ summary?, description?, request?: { params?, query?, headers?, body? }, response?: { status, body?, headers? } }`}</code>{" "}pairs. Every field is optional individually; pass only the parts you want documented. Both sides, request and response, are schema-checked at build time.</TierCard>
+
+<TierCard tier="meta.description / meta.tags" size="OpenAPI operation description + tags">Augment the route-level fields of the same name. Route-level values win when both are set; tags are de-duplicated and concatenated, so you can keep transport tags on the route and audience tags (<code>AI</code>{", "}<code>Public</code>{", "}<code>Internal</code>) on the meta block.</TierCard>
+
+<TierCard tier="meta.extensions" size="OpenAPI Operation Object x-* keys">Free-form bag emitted onto the OpenAPI operation. Keys without an{" "}<code>x-</code> prefix are prefixed automatically for spec compliance, so <code>codegen-hint</code> becomes{" "}<code>x-codegen-hint</code>{". "}Daloy does not interpret these, it preserves them so your downstream tooling can.</TierCard>
+
+## Build-time validation, not vibes-based docs
+
+<EditorFrame files={["ci.log"]} activeFile="ci.log" status="schema and examples validated by the same gate">
+<CodeBlock language="bash" code={BUILD_TIME_VALIDATION} />
+</EditorFrame>
+
+This property matters most. There is no "examples drift" surface to monitor, because a stale example fails the contract run before the OpenAPI doc is even published. The docs and the schema can never be out of sync with each other, because they are both gated by the same `pnpm daloy inspect --check` command, the one the scaffolded [CLI inspector](/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health) already runs in CI.
+
+## What lands in OpenAPI 3.1
+
+<EditorFrame files={["generated/openapi.json"]} activeFile="generated/openapi.json" status="Swagger UI, Scalar, and Hey API all read these without extra wiring">
+<CodeBlock language="json" code={OPENAPI_OUT} />
+</EditorFrame>
+
+The named examples land on every relevant slot of the OpenAPI 3.1 spec, `requestBody.content.*.examples`, `responses.*.content.*.examples`, and the operation-level `x-daloy-examples` vendor extension for tools that want the full structured shape including the response status code. That last one is why the docstrings on the [Hey API typed client](/docs/typed-client) start showing your real example values on the next `pnpm gen` run.
+
+## `daloy inspect --ai` dumps the whole catalog
+
+<EditorFrame files={["terminal"]} activeFile="terminal" status="flat JSON · no Daloy runtime coupling · feeds any codegen">
+<CodeBlock language="bash" code={INSPECT_AI_CMD} />
+</EditorFrame>
+
+<EditorFrame files={["routes.json"]} activeFile="routes.json" status="every route, every input schema, every output schema, every example">
+<CodeBlock language="json" code={ROUTES_JSON} />
+</EditorFrame>
+
+<EditorFrame files={["routes.yaml"]} activeFile="routes.yaml" status="same dump, ~30% fewer tokens · pass --yaml or --format yaml">
+<CodeBlock language="yaml" code={ROUTES_YAML} />
+</EditorFrame>
+
+The dump is intentionally a flat JSON file with no DaloyJS runtime coupling. Feed it to [Hey API codegen](/docs/typed-client) as a sibling artifact so the generated SDK's docstrings carry your examples. Drop it into an LLM system prompt for "write me a fetch call that hits the books endpoint". Or pipe it into your own Python / Go / Postman generator, every field is plain JSON.
+
+## Why "schema + examples" beats "schema alone"
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="schema -> type checker · example -> pattern matcher · different jobs">
+<CodeBlock language="bash" code={WHY_EXAMPLES} />
+</EditorFrame>
+
+## The scope, on purpose
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="docs + codegen aid · NOT a runtime mock · NOT a schema override">
+<CodeBlock language="bash" code={SCOPE_NOTES} />
+</EditorFrame>
+
+## Adopting it on an existing route
+
+<EditorFrame files={["src/build-app.ts (diff)"]} activeFile="src/build-app.ts (diff)" status="6 added lines · happy + unhappy example · contract gate stays green">
+<CodeBlock language="diff" code={CARRYING_OVER} />
+</EditorFrame>
+
+## Concretely, what changes for the agent
+
+<EditorFrame files={["before-vs-after.md"]} activeFile="before-vs-after.md" status="not theoretical · the diff I see in PRs where routes.json is in context">
+<CodeBlock language="bash" code={WHY_THIS_HELPS} />
+</EditorFrame>
+
+## The pre-flight checklist
+
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="five sections · paste into the README under 'Working with AI agents'">
+<CodeBlock language="bash" code={CHECKLIST} />
+</EditorFrame>
+
+## Keep examples beside the contract
+
+The whole point of contract-first is that *one* route definition becomes your validation, your types, your OpenAPI doc, your typed client, and your contract tests. With `meta`, that same single route definition also becomes the structured context a codegen agent needs to write the call site correctly on the first try, and the validator that refuses to let any of those artifacts drift apart in CI. This adds one optional field to the call you were already writing, without adding files, build steps, or a vendor-specific format.
+
+Route metadata and the YAML-friendly CLI flags are available now. New projects pick up the field and the YAML-friendly CLI flags automatically; existing projects can adopt them one route at a time without changing anything else.
+
+Closest neighbors: the [AI-friendly route metadata docs](/docs/ai-metadata) page for the full surface reference, the [CLI inspector post](/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health) for the contract gate that validates the examples, the [contract-first post](/blog/contract-first-without-the-codegen-dance) for how the typed client picks the examples up, and the [AGENTS.md + skills post](/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills) for the prose-side context that pairs with this machine-readable one.
+
+Devlin

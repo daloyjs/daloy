@@ -1,0 +1,326 @@
+---
+title: "CSRF in 2026: Why DaloyJS Ships Both Double-Submit and Fetch-Metadata"
+description: 'A short history of the double-submit cookie, the case for tokenless protection via Sec-Fetch-Site, when each one fails, and why strategy: "both" is the realistic default for apps that still have to serve a 2018 mobile browser somewhere.'
+date: 2026-05-23
+readingTime: 13 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Ten years of fullstack work. Has shipped at least one CSRF bug per year, on schedule, regardless of framework. Currently writes TypeScript from Norway.
+badges:
+  - Security
+  - Deep dive
+keywords:
+  - CSRF DaloyJS
+  - double-submit cookie
+  - Sec-Fetch-Site CSRF
+  - Fetch Metadata Request Headers
+  - csrf strategy both
+  - tokenless CSRF
+  - __Host- cookie prefix
+  - CSRF allowedOrigins
+footerLinks:
+  - label: Read the CSRF docs
+    href: /docs/security/csrf
+  - label: Browse the docs
+    href: /docs
+  - label: More posts
+    href: /blog
+---
+
+export const DOUBLE_SUBMIT_BASIC = `// src/app.ts, classic double-submit (the 2015 way, still works)
+import { App, csrf } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  csrf({
+    strategy: "double-submit",
+    // cookieName defaults to "__Host-daloy.csrf"
+    // headerName defaults to "x-csrf-token"
+  }),
+);
+
+// On safe methods (GET/HEAD/OPTIONS), the middleware ensures a fresh
+// token is on the response cookie if one isn't already on the request.
+// The token is also exposed on ctx.state.csrfToken for SSR templates.
+
+app.route({
+  method: "GET",
+  path: "/csrf",
+  operationId: "getCsrfToken",
+  responses: { 200: { description: "token" } },
+  handler: async ({ state }) => ({
+    status: 200,
+    body: { token: state.csrfToken },
+  }),
+});`;
+
+export const FRONTEND_USAGE = `// apps/web/lib/csrf-fetch.ts, one helper, every mutation goes through it.
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + name.replace(/[.$?*|{}()[\\]\\\\\\/+^]/g, "\\\\$&") + "=([^;]*)"),
+  );
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
+export async function csrfFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const method = (init.method ?? "GET").toUpperCase();
+  const isSafe = method === "GET" || method === "HEAD" || method === "OPTIONS";
+
+  const headers = new Headers(init.headers);
+  if (!isSafe) {
+    const token = readCookie("__Host-daloy.csrf");
+    if (token) headers.set("x-csrf-token", token);
+  }
+
+  return fetch(input, { ...init, headers, credentials: "include" });
+}`;
+
+export const FETCH_METADATA_BASIC = `// src/app.ts, fetch-metadata (the 2026 way, no token at all)
+import { App, csrf } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(
+  csrf({
+    strategy: "fetch-metadata",
+    // Tell the middleware which origins are allowed when a request arrives
+    // without Sec-Fetch-Site (legacy browsers) or with cross-site/same-site.
+    allowedOrigins: ["https://app.example.com"],
+  }),
+);
+
+// No cookie issued. No token to echo. The browser does the work.
+// Sec-Fetch-Site: same-origin | none  -> allow
+// Sec-Fetch-Site: same-site | cross-site -> must be in allowedOrigins
+// Sec-Fetch-Site missing                 -> Origin / Referer must be in allowedOrigins`;
+
+export const BOTH_STRATEGY = `// src/app.ts, defense-in-depth: require both
+import { App, csrf, session } from "@daloyjs/core";
+
+export const app = new App();
+
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+
+app.use(
+  csrf({
+    strategy: "both",
+    allowedOrigins: (origin) =>
+      origin === "https://app.example.com" ||
+      origin.endsWith(".previews.example.com"),
+    cookieOptions: {
+      sameSite: "Lax", // default; "Strict" if you don't need cross-tab logins
+      secure: true,    // default; required for __Host-
+      maxAgeSeconds: 60 * 60 * 8, // 8h instead of session cookie
+    },
+  }),
+);
+
+// On a mutating request both checks must pass:
+//   1) Sec-Fetch-Site (or Origin / Referer fallback) says it's safe
+//   2) The double-submit token in the header matches the cookie (timing-safe)`;
+
+export const FAILURE_MATRIX = `// What gets rejected, and how, under each strategy.
+// (All rejections are 403 Forbidden, RFC 9457 problem+json.)
+
+// strategy: "double-submit"
+//   POST /pay without x-csrf-token header     -> 403 (no token)
+//   POST /pay with header but no cookie        -> 403 (no cookie)
+//   POST /pay with mismatched header & cookie  -> 403 (timing-safe mismatch)
+//   GET  /pay from any origin                  -> allowed (safe method)
+
+// strategy: "fetch-metadata"
+//   POST /pay, Sec-Fetch-Site: same-origin     -> allowed
+//   POST /pay, Sec-Fetch-Site: none            -> allowed (e.g. address bar)
+//   POST /pay, Sec-Fetch-Site: cross-site, Origin allowlisted -> allowed
+//   POST /pay, Sec-Fetch-Site: cross-site, Origin not listed  -> 403
+//   POST /pay, no Sec-Fetch-Site (legacy), Origin or Referer allowlisted -> allowed
+//   POST /pay, all provenance headers missing -> 403
+
+// strategy: "both"
+//   POST /pay, fetch-metadata passes, double-submit fails -> 403
+//   POST /pay, double-submit passes, fetch-metadata fails -> 403
+//   POST /pay, both pass -> allowed`;
+
+export const CONSTRUCTION_TIME = `// These all throw at app boot, not at request time, not in prod under load.
+// You find out before your container reports "ready".
+
+csrf({ strategy: "tripple-submit" });
+// Error: csrf(): strategy must be "double-submit", "fetch-metadata", or "both".
+
+csrf({ cookieName: "csrf token" });
+// Error: csrf(): cookieName is not a valid cookie name.
+
+csrf({ cookieName: "csrf", cookieOptions: { sameSite: "lax" as never } });
+// Error: csrf(): cookieOptions.sameSite must be "Strict", "Lax", or "None".
+
+csrf({ cookieOptions: { path: "api" } });
+// Error: csrf(): cookieOptions.path must start with "/".
+
+csrf({ cookieOptions: { secure: false } });
+// Error: csrf(): "__Host-" cookie names require secure: true, path: "/", and no domain.
+
+csrf({ cookieOptions: { sameSite: "None", secure: false } });
+// Error: csrf(): cookieOptions.sameSite: "None" requires secure: true.`;
+
+Hi, I'm Devlin. Ten years of fullstack work. I have, at some point, written every CSRF bug a person can write. The classic `<img src="https://your-bank/transfer?amount=...">` from the early 2010s. The "we forgot to send the token from the new mobile app" from the mid 2010s. The "we set `SameSite=None` for the iframe and then forgot to set `Secure`" one from a year I don't want to name. So when the team sat down to decide what CSRF should look like in DaloyJS, my entire request was: please make it unsurprising.
+
+This post is the result. We ship two strategies, the classic *double-submit cookie* and the modern *Fetch-Metadata* check, and a third option, `strategy: "both"`, that runs both of them. I want to walk through why, when each one fails, and why "both" is the boring grown-up default for most production apps in 2026.
+
+## A two-minute history of CSRF defenses
+
+CSRF exists because the browser cheerfully attaches your cookies to any cross-origin request, including ones the attacker tricks your tab into making. The defense lineage roughly goes:
+
+1. Synchronizer tokens (2005-ish), server stamps a token into a hidden form field, server keeps it in session, compares on submit. Works, but requires server-side state and dies the moment you have a stateless API.
+2. Double-submit cookie (2010s), server sets a random token in a cookie, frontend echoes it back as a header (or hidden field). The browser's same-origin policy prevents an attacker page from reading the cookie, so the echo proves the request came from a page that *could* read it. Stateless, framework-friendly. This is what the JS world ran on for a decade.
+3. SameSite cookies (2017-2020), browsers started defaulting cookies to `SameSite=Lax`, which actually eliminates the most naive CSRF without any application code. Great, but partial: `Lax` still allows top-level `GET` navigations, and apps that need cross-site cookies (third-party widgets, SSO) have to opt out.
+4. Fetch Metadata Request Headers (2020+), the browser itself starts telling the server *where this request came from*, via `Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`. With one rule, "reject mutating requests whose `Sec-Fetch-Site` isn't `same-origin` or `none`", you can ditch the token entirely on modern browsers.
+
+All four defenses still exist in the wild. They are not mutually exclusive. They protect against slightly different threat models. That's why we ship two of them and let you run them together.
+
+## Strategy 1: double-submit, the way we've always done it
+
+Three lines. The middleware mints a 32-byte URL-safe token, sets it as `__Host-daloy.csrf`, and on any mutating method it requires the request to echo the same value in `x-csrf-token`. The comparison is timing-safe.
+
+<EditorFrame files={["src/app.ts", "src/routes/csrf.ts"]} activeFile="src/app.ts" status="csrf · double-submit · cookie=__Host-daloy.csrf">
+<CodeBlock language="ts" code={DOUBLE_SUBMIT_BASIC} />
+</EditorFrame>
+
+<StrategyCard name="double-submit cookie" tag='strategy: "double-submit"' good={[
+              "Browsers from before Sec-Fetch-Site shipped",
+              "Server-rendered forms (token in a hidden input)",
+              "iframes you don't control, as long as JS can read the cookie",
+              "Apps where every fetch already goes through one helper",
+            ]} bad={[
+              "Frontends that forget to set the header (this is the #1 bug)",
+              "JS-less workflows, no cookie reader, no echo",
+              "XSS, if an attacker can read your cookies, this falls",
+              "Cookieless API clients (mobile apps, server-to-server)",
+            ]} />
+
+The single most common bug with double-submit is forgetting to send the header from the frontend. That bug isn't actually a CSRF vulnerability, it just looks like one to users, who cheerfully report "the save button is broken" on a Friday afternoon. The fix is to centralize: one `csrfFetch()` helper, every mutation goes through it.
+
+<EditorFrame files={["apps/web/lib/csrf-fetch.ts"]} activeFile="apps/web/lib/csrf-fetch.ts" status="every POST/PUT/PATCH/DELETE goes through here">
+<CodeBlock language="ts" code={FRONTEND_USAGE} />
+</EditorFrame>
+
+## Strategy 2: fetch-metadata, the way browsers want to help
+
+Modern browsers send a `Sec-Fetch-Site` header that tells the server whether a request is same-origin or cross-site. The browser controls this forbidden request header, so an attacker page cannot forge it.
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="csrf · fetch-metadata · no cookie issued">
+<CodeBlock language="ts" code={FETCH_METADATA_BASIC} />
+</EditorFrame>
+
+<StrategyCard name="fetch-metadata" tag='strategy: "fetch-metadata"' good={[
+              "Any modern browser (Chrome 76+, Firefox 90+, Safari 16.4+)",
+              "Native fetch from SPAs / mobile webviews / Workers",
+              "Server-to-server clients you own (you set the allowlist)",
+              "JS-less server-rendered forms, yes, really; same-origin POST still says so",
+            ]} bad={[
+              "Cross-origin SSO redirects that go through your endpoint mid-flow",
+              "Truly legacy browsers (you fall back to Origin / Referer)",
+              "Server-to-server calls from clients you don't control (no Sec-Fetch-Site)",
+            ]} />
+
+There is a quirk in the spec that surprises everyone the first time, including me:
+
+```bash
+# A common surprise from the RFC:
+# Sec-Fetch-Site can be "none" - that's NOT a placeholder, it means
+# the request originated from a top-level browser action with no document
+# context (typing the URL into the address bar, clicking a bookmark, a
+# server-initiated redirect, etc.). It IS safe by definition.
+#
+# So this is the correct allow rule:
+#   Sec-Fetch-Site: "same-origin" -> allow
+#   Sec-Fetch-Site: "none"        -> allow
+#   anything else                  -> check the allowlist
+```
+
+We allow `same-origin` and `none`, fall back to `allowedOrigins` for everything else, and on legacy browsers (no `Sec-Fetch-Site` at all) we check `Origin` and then `Referer` against the same allowlist. That last step is the one that keeps your support engineer from getting paged about "my Android 9 device can't check out".
+
+## The allowedOrigins story
+
+`allowedOrigins` is the only configuration that matters once you pick fetch-metadata. It accepts a string array or a predicate, and it is used in three different places:
+
+- When `Sec-Fetch-Site` is `same-site` or `cross-site`: usually because of a subdomain or a user opening your site via a partner, we check the request's `Origin` against the allowlist.
+- When `Sec-Fetch-Site` is missing entirely (legacy browser, some embedded webviews), we check `Origin` first, and if that's also missing we fall back to the origin of the `Referer` URL.
+- Predicates are how you handle wildcards like preview deployments, where you can't enumerate origins ahead of time:
+
+```ts
+csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: (origin) =>
+    origin === "https://app.example.com" ||
+    origin.endsWith(".previews.example.com"),
+});
+```
+
+One rule for predicates: keep them *small* and *readable*. The instant your predicate looks like a regex engine, you have introduced a different CSRF vector, the one where a future engineer misreads it.
+
+## Strategy 3: both, the realistic production default
+
+Most apps I've shipped in the last three years have used both. The two strategies are *cheap* to run together, and they fail in different ways:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="csrf · both · fail-on-either">
+<CodeBlock language="ts" code={BOTH_STRATEGY} />
+</EditorFrame>
+
+Together they act as a 2-of-2: a CSRF attempt would need to (a) defeat the browser's `Sec-Fetch-Site` reporting *and* (b) read the `__Host-` cookie from your origin to mirror it back. The first is essentially "break the browser"; the second is "break the same-origin policy or already own your DOM". Either of those means you have considerably larger problems than CSRF.
+
+<StrategyCard name="both" tag='strategy: "both"' good={[
+              "Production apps with mixed-modernity clients",
+              "Multi-tenant subdomains with shared cookies",
+              "Apps that already have a csrfFetch helper, no cost to add",
+            ]} bad={[
+              "Pure server-to-server APIs with no browser involvement (use bearer auth instead)",
+              "Tiny demos where double-clicking 'send' is the entire frontend",
+            ]} />
+
+## When each one fails, in one screen
+
+This is the cheat sheet I keep in a comment at the top of the middleware setup, because I forget the exact rules every six months and I do not enjoy re-reading specs:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="cheat sheet · 403 = always RFC 9457 problem+json">
+<CodeBlock language="ts" code={FAILURE_MATRIX} />
+</EditorFrame>
+
+## Construction-time validation: find out at boot, not at 3am
+
+One of my favorite quiet features of the CSRF middleware is that most of the validation runs *when you call `csrf()`*, not when a request arrives. A typo in the strategy string, a cookie name with a space, a `__Host-` cookie without `secure: true`, a `SameSite=None` without `Secure`: every one of these throws at app boot, with a message that tells you exactly what to fix:
+
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="(each line throws synchronously at startup)">
+<CodeBlock language="ts" code={CONSTRUCTION_TIME} />
+</EditorFrame>
+
+This is one of those things you only appreciate after you've shipped a CSRF config bug to production and had it manifest as "every fifth user gets a 403 but only on Tuesdays". Failing at boot is the only acceptable failure mode for security middleware configuration. If it boots, it's configured.
+
+## Picking a strategy: the actually-short version
+
+```bash
+# When do you reach for which strategy?
+
+double-submit  ->  You serve any browser older than ~2020,
+                  OR you embed in iframes you don't control,
+                  OR you have JS that already sets a header anyway.
+
+fetch-metadata ->  Your client is a modern SPA, mobile webview,
+                  or a server-side fetch that you control.
+                  You don't want to teach the frontend to mint tokens.
+
+both           ->  Production app, mixed clients, no real cost.
+                  This is the default I reach for.
+```
+
+`strategy: "both"` is the safest default that doesn't cost anything extra, and the `__Host-` cookie prefix does half the security work for free. Set both, sleep better.
+
+## Limits
+
+CSRF, as a class, is mostly a solved problem in 2026, between `SameSite=Lax` defaults, Fetch-Metadata reporting, and double-submit being two lines away, the surviving bugs are almost always configuration bugs (a cookie set without `Secure`, an `allowedOrigins` that happens to match every preview deploy ever, a frontend that forgot to call the helper). What we tried to do with this middleware is make those configuration bugs throw at boot instead of leaking into production. The strategies themselves are well-trodden ground. The *fail fast* part is what I'm proudest of.
+
+If you want the full surface area, the [CSRF docs](/docs/security/csrf) have every option and an end-to-end example with a session. The [security overview](/docs/security) walks through how this fits with `secureHeaders()` and sessions.
+
+Thanks for reading. Now go look at your frontend's `fetch` helper and make sure every mutation actually goes through it. Don't ask me why I know to suggest that.
+
+Devlin

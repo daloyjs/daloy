@@ -1,0 +1,287 @@
+---
+title: Boot guards
+description: "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, shadow-security auth: routes, unauthenticated mcpRoutes() and a2aRoutes() endpoints, and unconfigured proxy / vendor client-IP headers. Learn each guard, how to opt out, and how to migrate."
+keywords:
+  - DaloyJS boot guards
+  - weak session secret
+  - cors wildcard production
+  - csrf required
+  - trustProxy unconfigured
+  - shadow security auth
+  - markAuthHook
+  - mcpRoutes auth
+  - a2aRoutes auth
+  - cf-connecting-ip
+  - secureDefaults
+---
+
+# Boot guards
+
+<blockquote>Boot guards stop the app when they find unsafe configuration, including credentialed wildcard CORS, weak session secrets, and missing proxy trust settings.</blockquote>
+
+Daloy ships the boot-guards slice of the secure-by-default initiative: refuse-to-boot / first-request guards that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers.
+
+Every guard is gated on the resolved environment being `production` (sources: `app({ env: "production" })`, then `app({ production: true })`, then `NODE_ENV === "production"`) so dev and CI workflows keep working with sample secrets and ad-hoc headers. The single master escape hatch `app({ secureDefaults: false })` disables every boot guard at once.
+
+<FlowDiagram title="Fail in the driveway, not the intersection" numbered steps={[
+          {
+            eyebrow: "startup",
+            label: "App boots in production",
+            detail: 'env: "production"',
+          },
+          {
+            eyebrow: "guards",
+            label: "Refuse-to-boot checks",
+            detail: "secret, cors '*', csrf, auth:, mcp, forwarded IP",
+            tone: "accent",
+          },
+          {
+            eyebrow: "misconfig",
+            label: "Refuses to start / first request 500",
+            detail: "loud error during startup",
+            tone: "danger",
+          },
+          {
+            eyebrow: "clean",
+            label: "Serves traffic",
+            detail: "all guards satisfied",
+            tone: "success",
+          },
+        ]} caption="In production each guard turns a common misconfiguration into a refuse-to-boot or first-request 500 instead of a silent vulnerability under load. Dev and CI keep working with sample secrets." />
+
+## 1. Weak session secret refuse-to-boot
+
+`app.use(session({ secret }))` now refuses to register in production when the secret is shorter than 32 UTF-8 bytes, matches a well-known placeholder (`"changeme"`, `"your-jwt-secret"`, `"it-is-very-secret"`, ...), or is a single repeated character (`"a".repeat(64)`, `"0".repeat(64)`). The check runs synchronously inside `app.use(...)` so the process exits during startup, not on first request.
+
+```ts
+import { App, session } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+// Throws at boot - secret is >= 16 chars, but < 32 bytes.
+app.use(session({ secret: "sixteen-chars-ok" }));
+
+// Also throws - known weak placeholder.
+app.use(session({ secret: "your-session-secret-for-production" }));
+
+// Generate one with: openssl rand -base64 48
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+```
+
+Third-party session implementations can opt into the same check by stamping `SESSION_HOOK_MARKER` and `SESSION_SECRETS_MARKER` on the returned `Hooks` object. The standalone helper `assertStrongSecret(secret, scope)` is also exported for use in your own boot code.
+
+## 2. `cors({ origin: "*" })` refuse-to-boot [#2-cors-refuse-to-boot]
+
+A wildcard CORS origin exposes every state-changing route cross-origin and is almost never what production wants. Daloy now refuses to register a `cors()` hook whose `origin` is `"*"` or an array containing `"*"` in production.
+
+```ts
+import { App, cors } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+// Throws at boot.
+app.use(cors({ origin: "*" }));
+
+// Use an explicit allowlist instead.
+app.use(cors({ origin: ["https://app.example.com"] }));
+
+// Or a predicate.
+app.use(cors({ origin: (o) => o.endsWith(".example.com") }));
+```
+
+## 3. `session()` + state-changing route without `csrf()` [#3-session-state-changing-route-without-csrf]
+
+When any route accepts `POST`, `PUT`, `PATCH`, or `DELETE` AND a `session()` hook is installed, a `csrf()` hook must also be installed. The check runs on first request (because route registration order is unknown until then) and the boot error is cached so every subsequent request rethrows the same failure until you fix the wiring.
+
+```ts
+import { App, session, csrf } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://app.example.com"] }));
+
+app.post("/items", {
+  // ...
+});
+```
+
+Non-browser apps (machine-to-machine APIs, webhook receivers behind bearer auth) can acknowledge that CSRF does not apply with `app({ csrf: "off" })`:
+
+```ts
+const app = new App({ env: "production", csrf: "off" });
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+// state-changing routes ok without csrf()
+```
+
+## 4. Spoofable client-IP headers with `trustProxy` unset return 500 [#4-x-forwarded-with-trustproxy-unset-returns-500]
+
+When `app({ trustProxy })` is not set and a request arrives carrying `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, or `X-Real-IP`, Daloy refuses to dispatch the request and returns a structured `500 problem+json`. The rate limiter, audit log, and request-id propagation would otherwise honour the attacker-supplied IP.
+
+The same refusal now covers the platform-specific client-IP headers `cf-connecting-ip` (Cloudflare), `fly-client-ip` (Fly.io), and `true-client-ip`. They are exactly as spoofable as `X-Forwarded-*` when the app is not actually running behind that platform's proxy, so an unconfigured app refuses them too rather than letting a client forge its source IP through a vendor header the operator never opted into.
+
+```ts
+// Pick exactly one in production:
+
+// (a) Running behind a trusted reverse proxy (nginx, ALB, Cloudflare):
+const app = new App({ env: "production", trustProxy: true });
+
+// (b) Direct-to-process - ignore forwarded headers:
+const app = new App({ env: "production", trustProxy: false });
+
+// (c) Disable every boot guard (escape hatch):
+const app = new App({ env: "production", secureDefaults: false });
+```
+
+The warning is logged at `warn` exactly once per process via a latch, so a flood of forged requests does not flood your logs.
+
+## 5. Route `auth:` declared but not enforced (shadow security) [#5-route-auth-declared-but-not-enforced]
+
+A route can declare `auth: { scheme, ... }` so the generated OpenAPI document advertises it as protected. Previously that declaration was documentation only: if no authentication hook actually ran, the route accepted unauthenticated requests while claiming to be protected, a “shadow security” footgun. Now, in production with `secureDefaults` on, the App refuses to boot when a route declares `auth:` but no authentication hook is present in its effective hook chain.
+
+The built-in auth middlewares (`bearerAuth`, `basicAuth`, `jwk`, `httpSignatureAuth`, `clientCertAuth`) satisfy the guard automatically. For a custom auth hook, or when authentication is actually enforced by an upstream gateway, wrap the hook with the exported `markAuthHook()` so the guard can see it.
+
+```ts
+import { App, bearerAuth, markAuthHook, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+// Built-in middleware satisfies the guard automatically.
+app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!) }));
+
+// A custom auth hook must be marked so the guard recognises it.
+app.use(
+  markAuthHook({
+    beforeHandle: (ctx) => {
+      if (!isAuthorized(ctx.request)) {
+        return { status: 401, body: { error: "unauthorized" } };
+      }
+    },
+  })
+);
+
+app.get(
+  "/me",
+  {
+    auth: { scheme: "bearer" }, // advertised as protected
+    responses: { 200: { description: "ok" } },
+  },
+  () => ({ status: 200, body: {} }),
+);
+```
+
+The exported `AUTH_HOOK_MARKER` symbol is the marker `markAuthHook()` stamps, in case you need to check for it yourself. Disable this guard along with the rest via `app({ secureDefaults: false })`.
+
+## 6. Unauthenticated `mcpRoutes()` endpoint [#6-unauthenticated-mcp-endpoint]
+
+MCP tools are model-controlled and side-effecting, so an unauthenticated MCP endpoint is a high-impact default. In production with `secureDefaults` on, the App refuses to boot when an `mcpRoutes()` `POST` endpoint has no authentication hook in its effective chain. Cover it with an auth middleware, or opt in to a genuinely public server with the new `mcpRoutes(path, handler, { public: true })` option (typed as `McpRoutesOptions`).
+
+```ts
+import { App, bearerAuth, createMcpHandler, mcpRoutes, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+const mcp = createMcpHandler({ serverInfo, tools });
+
+// (a) Authenticated MCP server - satisfies the guard.
+app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.MCP_TOKEN!) }));
+for (const route of mcpRoutes("/mcp", mcp)) {
+  app.route(route);
+}
+
+// (b) ...or an intentionally public MCP server.
+for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
+  app.route(route);
+}
+```
+
+Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `OPTIONS` (CORS preflight) are left unmarked so preflight stays credential-free. See the [MCP docs](/docs/mcp#security-checklist) for the full server setup.
+
+## 7. `responseCache()` mounted ahead of `tenancy()`
+
+`responseCache()` folds the resolved tenant into its cache key automatically, which is what keeps one tenant's cached response from being served to another (CWE-524). That only works if the tenant is already in `ctx.state` when the key is built, and both middlewares resolve in `beforeHandle`, in registration order. Mounted *before* `tenancy()`, the cache would key every tenant's response identically and leak silently, behind a perfectly ordinary-looking `x-cache: HIT`.
+
+In production with `secureDefaults` on, that ordering refuses to boot. The fix is registration order, not configuration:
+
+```ts
+import { App, responseCache, tenancy, tenantFromSubdomain } from "@daloyjs/core";
+
+// (a) WRONG - refuses to boot: the cache reads state before tenancy writes it.
+const bad = new App({ env: "production" });
+bad.use(responseCache({ ttlSeconds: 30 }));
+bad.use(tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }));
+
+// (b) RIGHT - tenancy first, so ctx.state.tenant exists when the key is built.
+const good = new App({ env: "production" });
+good.use(tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }));
+good.use(responseCache({ ttlSeconds: 30 }));
+
+// (c) Also right - tenancy as a global hook always runs first.
+const alsoGood = new App({
+  env: "production",
+  hooks: tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }),
+});
+alsoGood.use(responseCache({ ttlSeconds: 30 }));
+```
+
+See [cache key and cross-principal isolation](/docs/response-cache#cache-key-and-isolation) for the full keying model, including the `principal` option for cookie-authenticated routes.
+
+## 8. `responseCache()` / `idempotency()` mounted ahead of `rateLimit()` [#8-stored-response-mounted-ahead-of-a-request-budget]
+
+A cache hit and an idempotent replay are both returned from `beforeHandle`, and returning a response there ends the hook chain. `rateLimit()` and `loginThrottle()` enforce from that same phase, so a limiter mounted *behind* either one never counts the requests it serves. Measured before this guard existed: `rateLimit({ max: 2 })` admitted six of six requests behind a cache and behind a replay. The declared budget becomes unlimited for precisely the repeat traffic the limit was written for, and nothing in the response says so.
+
+This is the same hazard as guard 7, one phase later. The five network-identity gates (`geoBlock`, `ipRestriction`, `botGuard`, `autoBan`, `ipReputation`) were made immune by moving them to `preBody`, which always runs first. `rateLimit()` cannot follow them there, because its `keyGenerator` is caller-supplied and may read `ctx.state` that `session()` or an auth layer populates later. So the unsafe order is refused instead of silently reordered.
+
+```ts
+import { App, rateLimit, responseCache, idempotency } from "@daloyjs/core";
+
+// (a) WRONG - refuses to boot: cache hits never reach the limiter.
+const bad = new App({ env: "production" });
+bad.use(responseCache({ ttlSeconds: 30 }));
+bad.use(rateLimit({ windowMs: 60_000, max: 100 }));
+
+// (b) RIGHT - every request is counted before a stored response can answer it.
+const good = new App({ env: "production" });
+good.use(rateLimit({ windowMs: 60_000, max: 100 }));
+good.use(responseCache({ ttlSeconds: 30 }));
+
+// (c) Also right - the limiter as a global hook always runs first.
+const alsoGood = new App({
+  env: "production",
+  hooks: rateLimit({ windowMs: 60_000, max: 100 }),
+});
+alsoGood.use(idempotency({ ttlSeconds: 86_400 }));
+```
+
+Ordering the limiter first does mean cache hits and replays spend budget. That is the intended reading of a rate limit: the cap is on what a caller may ask for, not on what happened to be expensive to produce.
+
+## 9. Unauthenticated `a2aRoutes()` endpoint [#9-unauthenticated-a2a-endpoint]
+
+An A2A agent endpoint runs your `onMessage` handler for whichever peer agent calls it, so it gets the same rule as MCP. In production with `secureDefaults` on, the App refuses to boot when the `a2aRoutes()` JSON-RPC `POST` route has no authentication hook in its effective chain. The public Agent Card route is never checked: discovery has to work before a peer has credentials. In production, registration also throws if the card advertises a non-HTTPS endpoint on a non-loopback host.
+
+```ts
+import { App, a2aRoutes, bearerAuth, createA2aHandler, timingSafeEqual } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+const agent = createA2aHandler({ card, onMessage });
+
+// (a) Auth on the JSON-RPC route only - satisfies the guard, card stays public.
+const auth = bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.A2A_TOKEN!) });
+for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) {
+  app.route(route);
+}
+
+// (b) ...or an intentionally public, read-only agent.
+for (const route of a2aRoutes("/a2a", agent, { public: true })) {
+  app.route(route);
+}
+```
+
+See the [A2A docs](/docs/a2a#security-checklist) for the full agent setup.
+
+## Migration checklist
+
+- Audit every `session({ secret })` call, regenerate any secret shorter than 32 bytes with `openssl rand -base64 48`.
+- Replace `cors({ origin: "*" })` with an explicit allowlist or predicate.
+- Add `app.use(csrf(...))` next to `app.use(session(...))`, or pass `app({ csrf: "off" })` for non-browser-facing apps.
+- Pick a `trustProxy` posture explicitly for every production app. If you relied on `cf-connecting-ip`, `fly-client-ip`, or `true-client-ip`, set `trustProxy: true` now that those headers are refused too.
+- For every route that declares `auth:`, confirm a built-in auth middleware covers it, or wrap your custom hook with `markAuthHook(...)`.
+- Add an auth middleware in front of every `mcpRoutes()` endpoint, or pass `mcpRoutes(path, handler, { public: true })` for a deliberately public MCP server.

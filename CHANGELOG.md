@@ -19,6 +19,11 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Security
 
+- JWT verification now rejects non-canonical base64url segments (a trailing
+  character with its unused low bits set, or a `4n+1` length). Previously such
+  a segment decoded to the same bytes as the canonical one, so a signature
+  could be altered in its last character and still verify (signature
+  malleability). Tokens from any RFC 7515-conformant signer are unaffected.
 - `except()` now ignores trailing slashes exactly as the router does, and `*`
   matches one non-empty segment. Previously `except("/docs/*")` matched
   `/docs/` (and `/docs/.`, `/docs/x/..`), which the router dispatched to the

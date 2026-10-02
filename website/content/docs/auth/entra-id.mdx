@@ -1,0 +1,201 @@
+---
+title: Protect a DaloyJS API with Microsoft Entra ID (MSAL)
+description: Authenticate and authorize requests in a DaloyJS API with Microsoft Entra ID (formerly Azure AD). Verifies v2.0 access tokens with jose and the tenant's JWKS, and shows MSAL Node usage for downstream service calls.
+keywords:
+  - DaloyJS Entra ID
+  - DaloyJS Azure AD
+  - MSAL Node
+  - "@azure/msal-node"
+  - Entra ID JWT verification
+  - jose JWKS
+---
+
+# Protect a DaloyJS API with Microsoft Entra ID (MSAL)
+
+[Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/) (formerly Azure Active Directory) is Microsoft's enterprise identity platform. For a backend API, the job is to verify the v2.0 access token in the `Authorization` header against the tenant's public JWKS. The [`jose`](https://github.com/panva/jose) library is the modern, runtime-portable choice for that. Use [`@azure/msal-node`](https://github.com/AzureAD/microsoft-authentication-library-for-js/tree/dev/lib/msal-node) on top when your API needs to call *another* protected service (OAuth 2.0 on-behalf-of, client credentials, etc.).
+
+<SequenceDiagram title="Entra ID v2.0 access-token verification" participants={["Client app", "Entra ID", "DaloyJS API", "Tenant JWKS"]} steps={[
+          {
+            from: "Client app",
+            to: "Entra ID",
+            label: "User signs in. Entra ID mints a v2.0 access token (RS256)",
+            detail: "aud = api://my-daloy-api",
+            kind: "async",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <access token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Tenant JWKS",
+            label: "createRemoteJWKSet fetches signing keys (cached)",
+            detail: "GET /{tenantId}/discovery/v2.0/keys",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "jwtVerify checks issuer, audience, scp / roles",
+            detail: "iss = login.microsoftonline.com/{tenantId}/v2.0",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "Return protected data after requireAuth passes",
+            kind: "response",
+          },
+        ]} caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jose. Keys refresh automatically on a missing kid, so signing-key rollover needs no redeploy. Multi-tenant apps must also validate the tid claim against an allowlist." />
+
+## 1. Register the API in Entra ID
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com), go to **Entra ID -\> App registrations -\> New registration** and register your API app.
+2. Under **Expose an API**, set an **Application ID URI** (e.g. `api://my-daloy-api`) and add one or more **scopes** (e.g. `access_as_user`).
+3. Register your client app separately and grant it permission to the scope above. Note the **tenant ID** and the API app's **Application (client) ID**.
+4. The OIDC discovery document lives at `https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid-configuration` and references the JWKS at `https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys`.
+
+## 2. Install
+
+```ts
+pnpm add jose
+```
+
+Add `@azure/msal-node` as well only if the API itself needs to acquire downstream tokens (see below).
+
+## 3. Environment variables
+
+```ts
+# .env
+ENTRA_TENANT_ID=11111111-2222-3333-4444-555555555555
+ENTRA_API_AUDIENCE=api://my-daloy-api   # or the API app's client ID GUID
+ENTRA_REQUIRED_SCOPE=access_as_user
+```
+
+## 4. Plugin
+
+```ts
+// src/plugins/entra.ts
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import type { App } from "@daloyjs/core";
+
+const tenantId = process.env.ENTRA_TENANT_ID!;
+const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
+const audience = process.env.ENTRA_API_AUDIENCE!;
+
+const jwks = createRemoteJWKSet(
+  new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`),
+);
+
+export interface Principal {
+  sub: string;
+  oid?: string;
+  tid?: string;
+  scopes: string[];
+  roles: string[];
+  claims: JWTPayload;
+}
+
+export const entraPlugin = {
+  name: "entra",
+  register(app: App) {
+    app.decorate("verifier", {
+      async verify(token: string): Promise<Principal> {
+        const { payload } = await jwtVerify(token, jwks, {
+          issuer,
+          audience,
+          algorithms: ["RS256"],
+        });
+        const scp = typeof payload.scp === "string" ? payload.scp.split(" ") : [];
+        const roles = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
+        return {
+          sub: String(payload.sub),
+          oid: payload.oid as string | undefined,
+          tid: payload.tid as string | undefined,
+          scopes: scp,
+          roles,
+          claims: payload,
+        };
+      },
+    });
+  },
+};
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    verifier: { verify(token: string): Promise<Principal> };
+    principal?: Principal;
+  }
+}
+```
+
+`createRemoteJWKSet` caches keys in memory and refreshes on a missing `kid`, so key rollover is handled automatically.
+
+## 5. Guard a route
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders, rateLimit } from "@daloyjs/core";
+import { entraPlugin } from "./plugins/entra.ts";
+import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.register(entraPlugin);
+
+app.get(
+  "/me",
+  {
+    hooks: requireAuth(process.env.ENTRA_REQUIRED_SCOPE!),
+    responses: {
+      200: { description: "OK", body: z.object({ oid: z.string().optional(), tid: z.string().optional() }) },
+    },
+  },
+  ({ state }) => ({
+    status: 200,
+    body: { oid: state.principal!.oid, tid: state.principal!.tid },
+  }),
+);
+```
+
+**App roles vs delegated scopes:** app-only tokens (client-credentials flow) put granted roles in `roles` with no `scp` claim, while user-delegated tokens put granted scopes in `scp`. Inspect both in `requireAuth` if you support both shapes.
+
+## Acquiring downstream tokens with MSAL Node
+
+If your API needs to call Microsoft Graph or another protected service *on behalf of* the user, use MSAL Node's `ConfidentialClientApplication`:
+
+```ts
+pnpm add @azure/msal-node
+```
+
+```ts
+import { ConfidentialClientApplication } from "@azure/msal-node";
+
+const msal = new ConfidentialClientApplication({
+  auth: {
+    clientId: process.env.ENTRA_CLIENT_ID!,
+    authority: `https://login.microsoftonline.com/${process.env.ENTRA_TENANT_ID}`,
+    clientSecret: process.env.ENTRA_CLIENT_SECRET!, // or use a certificate
+  },
+});
+
+// On-behalf-of: exchange the incoming user token for a Graph token
+const result = await msal.acquireTokenOnBehalfOf({
+  oboAssertion: incomingUserAccessToken,
+  scopes: ["https://graph.microsoft.com/User.Read"],
+});
+console.log(result?.accessToken);
+```
+
+Prefer **certificates over client secrets** in production, and store credentials in Azure Key Vault or your platform's secret manager.
+
+## Notes
+
+- The `issuer` for v2.0 tokens is `https://login.microsoftonline.com/{tenantId}/v2.0`. Multi-tenant apps must validate the `tid` claim against an allowlist rather than relying on the issuer alone.
+- **Don't validate tokens you don't own.** Microsoft Graph tokens may not be JWTs and aren't meant to be inspected by your app.
+- Entra ID rotates signing keys regularly, never pin keys, always resolve them through the JWKS endpoint.
+
+See also [AWS Cognito](/docs/auth/aws-cognito), [Auth0](/docs/auth/auth0), and the [auth integrations overview](/docs/auth).

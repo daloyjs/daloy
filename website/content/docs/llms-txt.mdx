@@ -1,0 +1,160 @@
+---
+title: llms.txt for agent-readable docs
+description: "Ship a curated /llms.txt map so coding agents and LLM tools find DaloyJS docs without scraping HTML. Covers the v2 spec: link relations for discovery, both markdown URL forms, subpath coverage, and how daloyjs.dev generates its index from the same nav as the human docs UI."
+keywords:
+  - llms.txt
+  - llmstxt
+  - AI documentation
+  - agent-readable docs
+  - DaloyJS llms.txt
+  - markdown docs for LLMs
+  - robots.txt vs llms.txt
+  - llms.txt v2
+  - rel=describedby
+  - rel=alternate text/markdown
+  - MCP docs
+---
+
+# llms.txt for agent-readable docs
+
+`/llms.txt` is a proposed convention ([llmstxt.org](https://llmstxt.org/)) for a Markdown file at a well-known path that gives LLMs and coding agents a short, curated map of a site. The file is a token-efficient index with a project summary, the links that matter, and optional secondary material agents can skip when context is tight. It does not replace `sitemap.xml` and it is not a ranking signal.
+
+This page tracks **v2** of the proposal, published on 10 August 2026 and the first revision since the format appeared in 2024. The file skeleton did not change, so a valid v1 file is still a valid v2 file. What changed is everything *around* the file: [how agents discover it](https://llmstxt.org/changes.html), where markdown versions are allowed to live, and what a file in a subpath means. See [What changed in v2](/docs/llms-txt#v2) below.
+
+DaloyJS already ships one for the project site at [{"https://daloyjs.dev/llms.txt"}](https://daloyjs.dev/llms.txt). Every public page also negotiates Markdown on the canonical URL: send `Accept: text/markdown` and expect `Content-Type: text/markdown` plus `Vary: Accept`. Docs pages still have a Markdown sibling (append `.md` to the HTML URL). The index is generated from the same docs nav the human UI uses, so the map and the site cannot silently disagree about which pages exist.
+
+<BranchDiagram title="Four different agent surfaces" source={{
+          eyebrow: "your product",
+          label: "DaloyJS project",
+          detail: "repo + docs + API + tools",
+        }} branches={[
+          {
+            eyebrow: "edit time",
+            label: "AGENTS.md + skills",
+            detail: "local conventions in the repo",
+          },
+          {
+            eyebrow: "public docs",
+            label: "/llms.txt + .md pages",
+            detail: "curated map for inference-time readers",
+          },
+          {
+            eyebrow: "contract",
+            label: "OpenAPI + meta / inspect --ai",
+            detail: "machine API shape and examples",
+          },
+          {
+            eyebrow: "runtime",
+            label: "MCP tools",
+            detail: "authenticated actions agents call live",
+          },
+        ]} caption="llms.txt answers where to read. AGENTS.md answers how to edit. OpenAPI answers how to call HTTP. MCP answers which tools exist at runtime. Treat those as four separate jobs." />
+
+## What it is
+
+- **Is:** a curated Markdown index at `/llms.txt`, optionally paired with clean `.md` versions of linked pages.
+- **Is not:** a replacement for `robots.txt` (access policy for crawlers).
+- **Is not:** a replacement for `sitemap.xml` (exhaustive indexable URLs).
+- **Is not:** a guaranteed boost in ChatGPT or Google AI citations. Major model providers have not committed to treating it like `robots.txt`. Chrome Lighthouse includes an experimental agentic-browsing check that fails only on server errors for the path. A missing file is treated as not applicable.
+
+Use it so coding agents, IDE helpers, and research tools that *do* fetch the file spend tokens on your contract and auth docs instead of navigation chrome. Keep it honest: stale links train everything that reads them to ignore the map.
+
+## Spec shape
+
+The informal spec at llmstxt.org is Markdown with a fixed skeleton:
+
+1. **H1** with the project or site name (required).
+2. Optional **blockquote** summary that grounds the rest of the file.
+3. Optional free-form paragraphs (not headings) with more background.
+4. Zero or more **H2** sections. Each is a list of `- [title](url): optional note` entries.
+5. By convention an H2 named **Optional** for secondary links an agent can skip when it needs a shorter context. In v1 this heading was machine-readable: it told the context-expansion tool which links to omit. v2 dropped that tool, so `Optional` is now a hint to the reader rather than an instruction to a parser. It is still worth using, and still belongs last.
+
+```markdown
+# DaloyJS
+
+> Runtime-portable, contract-first TypeScript web framework with OpenAPI 3.1,
+> typed clients, and security-first defaults.
+
+Current release notes and package pins live on the homepage and CHANGELOG.
+
+## Docs
+
+- [Getting started](https://daloyjs.dev/docs/getting-started.md): first route and test
+- [Routing](https://daloyjs.dev/docs/routing.md): contract-first app.route shape
+- [MCP](https://daloyjs.dev/docs/mcp.md): runtime tool surface for agents
+
+## Project
+
+- [Docs MCP server](https://daloyjs.dev/mcp): search_docs / get_doc / list_docs
+- [npm @daloyjs/core](https://www.npmjs.com/package/@daloyjs/core): published package
+
+## Optional
+
+- [Blog](https://daloyjs.dev/blog): design write-ups and release posts
+```
+
+Prefer linking to Markdown when you have it. Put blog posts and historical material under `Optional`. Curate aggressively: a thousand-link index recreates the context-window problem the file exists to solve.
+
+## What changed in v2 [#v2]
+
+v1 told you what to put *in* the file but left the surrounding questions open. The spec now poses the one that mattered most: given a page, how does an agent find its markdown version, or the llms.txt file that covers it, without guessing? Five changes answer it.
+
+1. **Link relations for discovery.** The headline change. `rel="alternate" type="text/markdown"` points from a page to its markdown version, and `rel="describedby"` points to the llms.txt file covering it. Both can be HTML `<link>` elements or an HTTP `Link:` response header.
+2. **Two markdown URL forms.** v1 allowed only `.md` appended to the full page URL (`page.html.md`). Many publishing tools replace the extension instead (`page.md`), so v2 permits both. URLs without a file name append `index.html.md` or `index.md`.
+3. **Subpath coverage is defined.** v1 permitted files at subpaths without saying what they meant. v2 states it: a file covers the pages under its path, and where several apply the most specific one wins. So `/docs/llms.txt` covers everything in `/docs/`. This is what lets a project that controls only a path, such as a GitHub Pages site, participate properly.
+4. **The consumption model is stated.** v1 said nothing about how the file should be read and shipped an `llms_txt2ctx` tool that expanded it into one large context. v2 drops the tool and states the expectation instead: agents view or search the llms.txt, then follow the links they need. The file stays small. The detail lives behind the links.
+5. **`Optional` lost its mechanical meaning.** It existed to tell the expansion tool what to leave out. With the tool gone, the section remains a useful convention and nothing more.
+
+Nothing here invalidates an existing file. If you already publish a v1 llms.txt, adding the two link relations is the whole upgrade.
+
+## Link relations
+
+The header form is usually the better one to reach for. It works on non-HTML resources, including the markdown files themselves, and can be added in web-server or CDN configuration without touching a single template:
+
+```http
+Link: </docs/routing.md>; rel="alternate"; type="text/markdown",
+      </docs/llms.txt>; rel="describedby"
+```
+
+The equivalent in a page's `<head>`:
+
+```html
+<link rel="alternate" type="text/markdown" href="/docs/routing.md">
+<link rel="describedby" href="/docs/llms.txt">
+```
+
+Relative URLs are fine in both forms. Point `rel="describedby"` at the most specific llms.txt that covers the page. That is often a subpath file rather than the one at the site root.
+
+## How daloyjs.dev implements it [#daloyjs-dev]
+
+The site route `website/app/llms.txt/route.ts` builds the file at request time (cached for an hour):
+
+- Project links (homepage, docs [MCP server](/docs/mcp), GitHub, npm, JSR, `create-daloy`).
+- Every docs page from `getDocsSearchSections()`, grouped like the sidebar, with URLs pointing at the `.md` siblings.
+- Blog posts under the final `## Optional` section.
+
+Two more surfaces implement the v2 half. There is a second, narrower index at [/docs/llms.txt](https://daloyjs.dev/docs/llms.txt) covering the documentation only, built from the same `getDocsSearchSections()` call. And `website/proxy.ts` stamps the `Link:` header onto every response, so a docs page advertises its `.md` sibling and points at `/docs/llms.txt`, while the rest of the site points at the root `/llms.txt`. The matching `<link rel="alternate">` element comes from `buildMetadata()` in `website/lib/seo.ts`, so every docs page gets it without per-page wiring.
+
+Agents that prefer structured tools over page fetches can use `https://daloyjs.dev/mcp` ([MCP docs](/docs/mcp)) with `search_docs`, `get_doc`, and `list_docs`. The `llms.txt` file points at that endpoint so the two surfaces stay discoverable together.
+
+## For your own API or docs site [#for-your-api]
+
+`@daloyjs/core` does not force every API process to serve `/llms.txt`. That file belongs on the host that publishes human documentation (marketing site, docs portal, or static docs deploy). For a DaloyJS API you still give agents a short list of canonical machine surfaces:
+
+- OpenAPI from your app (see [OpenAPI generation](/docs/openapi)).
+- Validated route examples via [AI-friendly route metadata](/docs/ai-metadata) and `daloy inspect --ai`.
+- Optional dedicated [MCP server](/docs/mcp) for live tools.
+- In-repo `AGENTS.md` for agents that edit the codebase (the scaffolder ships one. See the scaffolder docs).
+
+If you publish a docs site, add `/llms.txt` there, keep `.md` siblings if you can, and regenerate the index from the same source of truth as your human nav so the map cannot rot alone.
+
+## Checklist
+
+- File is reachable at `https://<host>/llms.txt` with `text/plain` (or Markdown) and a 2xx status.
+- H1 + short summary describe the product in plain language.
+- Links are curated, described, and mostly point at Markdown or other low-chrome content.
+- `## Optional` is last when you include secondary material (a convention now. It is no longer a parser directive).
+- Pages advertise their markdown sibling with `rel="alternate" type="text/markdown"` and their index with `rel="describedby"`, as a `Link:` header, `<link>` elements, or both.
+- A file at a subpath covers the pages beneath it. If you publish `/docs/llms.txt`, point the docs pages' `describedby` at it rather than at the root file.
+- `robots.txt` still allows the bots you intend to read docs; blocking them makes the map unread.
+- Review the file when you add or remove docs routes (same cadence as nav updates).

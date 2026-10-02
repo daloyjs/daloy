@@ -1,0 +1,190 @@
+---
+title: Use DuckDB with DaloyJS
+description: Use DuckDB from a DaloyJS API for embedded OLAP analytics in Node.js. Covers @duckdb/node-api, plugin setup, parameterized SQL, JSON-safe result conversion, runtime limits, and security hardening.
+keywords:
+  - DuckDB DaloyJS
+  - "@duckdb/node-api"
+  - DuckDB Node API
+  - embedded OLAP
+  - Parquet analytics
+  - DuckDB security
+---
+
+# Use DuckDB with DaloyJS
+
+[DuckDB](https://duckdb.org) is an in-process OLAP database. Use it when your DaloyJS API needs to query local analytical data, Parquet files, CSV exports, or a small embedded reporting database without running a separate database server. It is not a replacement for Postgres or MySQL as the primary transactional database behind a multi-writer API.
+
+<BranchDiagram title="Where DuckDB fits" source={{
+          eyebrow: "daloy route",
+          label: "handler",
+          detail: "validated HTTP request",
+        }} branches={[
+          {
+            eyebrow: "good fit",
+            label: "Embedded analytics",
+            detail: "Parquet, CSV, local .duckdb files, reporting queries",
+            tone: "success",
+          },
+          {
+            eyebrow: "bad fit",
+            label: "Shared transactional store",
+            detail: "many app replicas writing the same primary data",
+            tone: "danger",
+          },
+        ]} caption="DuckDB runs inside the process. That makes it excellent for local analytics and data APIs, but not the right default for shared OLTP state across many API instances." />
+
+## 1. Install
+
+Use the modern Node client. The older `duckdb` package is not the client this guide targets.
+
+```ts
+pnpm add @duckdb/node-api
+```
+
+## 2. Create a DuckDB plugin
+
+Create one instance per process and connect during app startup. Use an in-memory database for transient analytics, or point DuckDB at a persisted file when the platform gives you durable disk.
+
+```ts
+// src/db/duckdb.ts
+import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import type { App } from "@daloyjs/core";
+
+export type DuckDbState = {
+  duckdb: DuckDBConnection;
+};
+
+export const duckDbPlugin = {
+  name: "duckdb",
+  async register(app: App) {
+    const path = process.env.DUCKDB_PATH ?? ":memory:";
+    const instance = await DuckDBInstance.fromCache(path);
+    const connection = await instance.connect();
+
+    app.decorate("duckdb", connection);
+    app.onClose(() => {
+      connection.closeSync();
+    });
+  },
+};
+```
+
+## 3. Augment app state
+
+Add the `declare module` block to the same module that creates the plugin, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.duckdb` degrades to `any`.
+
+```ts
+// src/db/duckdb.ts (same module as the plugin above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    duckdb: DuckDBConnection;
+  }
+}
+```
+
+## 4. Query from a route
+
+Keep SQL structure owned by the server and pass request values as parameters. Convert results to JSON-safe objects before returning them through a response schema.
+
+```ts
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import { duckDbPlugin } from "./db/duckdb.ts";
+
+const app = new App();
+app.use(secureHeaders());
+app.register(duckDbPlugin);
+
+const SalesSummary = z.object({
+  region: z.string(),
+  revenue: z.number(),
+});
+
+app.get(
+  "/analytics/sales",
+  {
+    operationId: "salesSummary",
+    request: { query: z.object({ region: z.string().min(1).optional() }) },
+    responses: {
+      200: { description: "ok", body: z.array(SalesSummary) },
+    },
+  },
+  async ({ query, state }) => {
+    const reader = await state.duckdb.runAndReadAll(
+      `select region, sum(revenue)::double as revenue
+       from read_parquet('data/sales/*.parquet')
+       where $region is null or region = $region
+       group by region
+       order by revenue desc`,
+      { region: query.region ?? null },
+    );
+
+    return {
+      status: 200,
+      body: SalesSummary.array().parse(reader.getRowObjectsJson()),
+    };
+  },
+);
+```
+
+## Runtime support
+
+| Runtime | Fit | Why |
+| --- | --- | --- |
+| Node.js | Recommended | `@duckdb/node-api` is a native Node client. |
+| Bun / Deno | Limited | Prefer Node unless you have tested the native package and deploy target yourself. |
+| Cloudflare Workers | No | Workers cannot load the native Node package. |
+| AWS Lambda / containers | Yes | Works when the native package matches the deployment platform and any persisted files live on durable storage. |
+
+## Use the right storage mode
+
+<FlowDiagram title="Storage choice" numbered steps={[
+          {
+            label: ":memory:",
+            detail: "scratch reports, tests, temp imports",
+            eyebrow: "ephemeral",
+          },
+          {
+            label: "file.duckdb",
+            detail: "single-process durable local database",
+          },
+          {
+            label: "Parquet / CSV",
+            detail: "data lake, exports, read-heavy analytics",
+            tone: "accent",
+          },
+          {
+            label: "Postgres / MySQL",
+            detail: "primary transactional app state",
+            tone: "success",
+          },
+        ]} caption="Use DuckDB for analytical reads and local processing. Keep primary multi-user writes in a transactional database unless you have a carefully controlled single-writer design." />
+
+## Security notes
+
+- Do not execute SQL text from users. DuckDB SQL can read files, access networks through extensions, and consume significant CPU or memory.
+- Use parameterized values when request data belongs in a query, as in the route above.
+- Disable external access for routes that only query in-memory tables or controlled data:
+
+```ts
+await state.duckdb.run("set enable_external_access = false");
+await state.duckdb.run("set allow_community_extensions = false");
+await state.duckdb.run("set lock_configuration = true");
+```
+
+- If you need file reads, restrict the directories and never pass a user supplied path directly into `read_csv`, `read_parquet`, `COPY`, or `ATTACH`.
+- For user-authored SQL, run DuckDB out of process with OS/container sandboxing and strict timeouts. A DaloyJS route should treat user-authored SQL like code execution, not like a search filter.
+
+## When to choose DuckDB
+
+- You need analytics over Parquet, CSV, JSON, or local snapshots.
+- You want an embedded reporting endpoint in a Node service without operating a warehouse.
+- You are building import/export, admin analytics, billing summaries, or offline data tools.
+
+## When not to choose it
+
+- You need many API replicas to write the same primary application data.
+- You deploy only to Cloudflare Workers. Use [Turso](/docs/databases/turso), [Cloudflare D1](/docs/databases/cloudflare-d1), or [Neon](/docs/databases/neon) instead.
+- You want row-level authorization enforced inside the database. Keep that in Postgres/Supabase or enforce it explicitly in application code.
+
+See also the [database hosting overview](/docs/databases), [Node adapter](/docs/adapters/node), and [DuckDB Node.js client docs](https://duckdb.org/docs/lts/clients/node_neo/overview).

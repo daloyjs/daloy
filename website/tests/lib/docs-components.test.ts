@@ -86,7 +86,33 @@ test("markdown export keeps code titles and skips alternate tab panels", () => {
 });
 
 test("sourceFileForRoute resolves docs pages and rejects unknown routes", () => {
-  assert.equal(sourceFileForRoute("/docs/routing"), "app/docs/routing/page.tsx");
-  assert.equal(sourceFileForRoute("/docs"), "app/docs/page.tsx");
+  assert.equal(sourceFileForRoute("/docs/routing"), "content/docs/routing.mdx");
+  // The docs root is content/docs/index.mdx, not its app/docs/page.tsx loader.
+  assert.equal(sourceFileForRoute("/docs"), "content/docs/index.mdx");
+  assert.equal(sourceFileForRoute("/docs/tutorials/bookstore"), "content/docs/tutorials/bookstore.mdx");
   assert.equal(sourceFileForRoute("/docs/does-not-exist"), null);
+});
+
+test("parseGitLog keeps the newest counted date per file and skips ignored commits", async () => {
+  const { parseGitLog, lastModifiedIso } = await import("../../lib/git-dates");
+  const log = [
+    "\0" + "a".repeat(40) + " 2026-10-01T10:00:00+02:00",
+    "website/content/docs/routing.mdx",
+    "website/app/docs/routing/page.tsx",
+    "",
+    "\0" + "b".repeat(40) + " 2026-09-20T09:00:00+02:00",
+    "website/app/docs/routing/page.tsx",
+    "",
+    "\0" + "c".repeat(40) + " 2026-09-01T09:00:00+02:00",
+    "website/content/docs/errors.mdx",
+  ].join("\n");
+  const dates = parseGitLog(log, "website/", new Set(["a".repeat(40)]));
+  // The mechanical move is ignored, so routing.mdx has no date of its own...
+  assert.equal(dates["content/docs/routing.mdx"], undefined);
+  assert.equal(dates["app/docs/routing/page.tsx"], "2026-09-20T09:00:00+02:00");
+  // ...and falls back to the page.tsx it was migrated from.
+  assert.equal(lastModifiedIso("/docs/routing", dates), "2026-09-20T09:00:00+02:00");
+  // Without the ignore entry the move date would win (the false freshness we avoid).
+  assert.equal(parseGitLog(log, "website/", new Set())["content/docs/routing.mdx"], "2026-10-01T10:00:00+02:00");
+  assert.equal(lastModifiedIso("/docs/does-not-exist", dates), undefined);
 });

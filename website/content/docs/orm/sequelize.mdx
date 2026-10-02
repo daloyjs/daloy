@@ -1,0 +1,202 @@
+---
+title: Use Sequelize with DaloyJS
+description: Connect DaloyJS to PostgreSQL, MySQL, MariaDB, MSSQL, or SQLite using Sequelize. Model-based queries, transactions, and a practical plugin setup for Node.js runtimes.
+keywords:
+  - Sequelize DaloyJS
+  - Sequelize TypeScript
+  - Sequelize transactions
+  - Sequelize Node.js
+  - Sequelize plugin
+---
+
+# Use Sequelize with DaloyJS
+
+[Sequelize](https://sequelize.org) is a mature ORM for SQL databases with model definitions, associations, transactions, and broad driver support. It is a strong fit when your team prefers an Active Record style API and deploys DaloyJS on Node.js.
+
+<FlowDiagram numbered title="One request through Sequelize" caption="Zod validates the request, the handler queries a Sequelize model off state.db, then the response schema checks the body on the way out (call toJSON() so the plain object matches the schema)." steps={[
+          {
+            eyebrow: "client",
+            label: "HTTP request",
+            detail: "GET /users/:id",
+          },
+          {
+            eyebrow: "zod",
+            label: "Validated input",
+            detail: "params.id is a uuid",
+            tone: "accent",
+          },
+          {
+            eyebrow: "sequelize",
+            label: "Model query",
+            detail: "state.db.User.findByPk(id)",
+          },
+          {
+            eyebrow: "response",
+            label: "Typed body",
+            detail: "user.toJSON() | 404",
+            tone: "success",
+          },
+        ]} />
+
+## 1. Install
+
+```ts
+pnpm add sequelize pg pg-hstore
+pnpm add -D @types/validator @types/node typescript
+```
+
+Swap the driver package if you target MySQL, MariaDB, MSSQL, or SQLite instead of Postgres.
+
+## 2. Define a model
+
+```ts
+// src/db/sequelize.ts
+import { Sequelize, DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize";
+
+export const sequelize = new Sequelize(process.env.DATABASE_URL!, {
+  dialect: "postgres",
+  logging: process.env.NODE_ENV === "production" ? false : console.log,
+});
+
+export class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
+  declare id: CreationOptional<string>;
+  declare email: string;
+  declare name: string | null;
+}
+
+User.init(
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: "User",
+    tableName: "users",
+    underscored: true,
+  }
+);
+```
+
+## 3. Create a Sequelize plugin
+
+```ts
+// src/db/plugin.ts
+import type { App } from "@daloyjs/core";
+import { sequelize, User } from "./sequelize.ts";
+
+export const db = { sequelize, User };
+
+export const sequelizePlugin = {
+  name: "sequelize",
+  async register(app: App) {
+    await sequelize.authenticate();
+    app.decorate("db", db);
+    app.onClose(async () => {
+      await sequelize.close();
+    });
+  },
+};
+```
+
+## 4. Augment app state types
+
+Add the `declare module` block to the same module that exports `db`, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts
+// src/db/plugin.ts (same module as the plugin above)
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: typeof db;
+  }
+}
+```
+
+## 5. Use it in routes
+
+```ts
+// src/server.ts
+import { z } from "zod";
+import { App, HttpError } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { sequelizePlugin } from "./db/plugin.ts";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  name: z.string().nullable(),
+});
+
+const app = new App();
+app.register(sequelizePlugin);
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const user = await state.db.User.findByPk(params.id);
+    if (!user) {
+      throw new HttpError(404, { title: "User not found" });
+    }
+    return { status: 200, body: user.toJSON() };
+  },
+);
+
+await app.ready();
+serve(app, { port: 3000 });
+```
+
+## Transactions
+
+Use managed transactions so DaloyJS can map one handler invocation to one atomic unit of work.
+
+```ts
+handler: async ({ body, state }) => {
+  const created = await state.db.sequelize.transaction(async (transaction) => {
+    const order = await state.db.Order.create(body, { transaction });
+    await state.db.Inventory.decrement("stock", {
+      by: body.qty,
+      where: { sku: body.sku },
+      transaction,
+    });
+    return order;
+  });
+
+  return { status: 201, body: created.toJSON() };
+}
+```
+
+## Migrations
+
+Sequelize supports migrations via the CLI, but many teams keep model definitions in TypeScript and run explicit migration files through `sequelize-cli` or Umzug. Keep that workflow outside your request path and initialize models before calling `app.ready()`.
+
+```ts
+pnpm add -D sequelize-cli
+pnpm sequelize-cli migration:generate --name create-users
+pnpm sequelize-cli db:migrate
+```
+
+## Runtime constraints
+
+Sequelize depends on Node-oriented drivers, so it is best on the Node.js adapter. For edge runtimes, prefer [Drizzle](/docs/orm/drizzle), [Prisma with Driver Adapters](/docs/orm/prisma), or [Supabase](/docs/orm/supabase).
+
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), or the [ODM overview](/docs/odm) if you are working with document databases.

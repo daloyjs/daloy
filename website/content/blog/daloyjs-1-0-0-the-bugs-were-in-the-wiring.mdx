@@ -1,0 +1,136 @@
+---
+title: DaloyJS 1.0.0 Is Out, and Almost Every Late Bug Was in the Wiring
+description: "The API is frozen and semver starts now. The interesting part of getting here: nine release candidates of live pentesting, where the findings were almost never inside a middleware. They were between two of them, in the order I told people to mount them."
+date: 2026-08-03
+readingTime: 9 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+badges:
+  - Release
+  - 1.0.0
+  - Security
+keywords:
+  - DaloyJS 1.0.0
+  - TypeScript API framework stable release
+  - middleware ordering bug
+  - responseCache rate limit bypass
+  - X-Forwarded-For spoofing
+  - hook phase preBody beforeHandle
+  - refuse to boot guard
+  - middleware composition security
+  - semver public API freeze
+  - idempotency Set-Cookie replay
+---
+
+DaloyJS 1.0.0 is published. The public API is frozen, semver applies from here, no 1.x minor changes the API, and deprecations get at least one minor cycle before anything disappears. `@daloyjs/core` and `create-daloy` are on npm, `@daloyjs/daloy` is on JSR, all at the same version, so a scaffolded project always pins a peer that actually exists. The 1.x line has a minimum 5-year security-update window, which for this release means August 2031.
+
+That is the announcement part. What I actually want to write about is what happened during the nine release candidates, because it changed how I test this thing.
+
+## I was looking in the wrong place
+
+The second half of the RC train was driven by live attacks against a real server instead of a plan. I booted the framework, pointed a harness at it over TCP, and worked through attack classes. My mental model going in was that bugs live inside modules. A parser mishandles an encoding. A comparison is not constant time. A regex misses a case. So that is where I looked.
+
+Almost nothing was there. Every high-severity finding in the last stretch was sitting between two modules that were each correct by themselves, and in most cases the wiring that produced it was the wiring my own documentation recommended.
+
+## This one made me put my coffee down
+
+DaloyJS has five middlewares that decide whether a request is allowed based on network identity: `geoBlock()`, `ipRestriction()`, `botGuard()`, `autoBan()`, and `ipReputation()`. They all enforced in the `beforeHandle` hook. So does `responseCache()`. When a cache hit returns a response from that hook, the hook chain ends.
+
+```ts
+// Both of these are correct on their own.
+// Together, in this order, the second one stops existing.
+const app = new App({ env: "production" });
+
+app.use(responseCache({ ttlSeconds: 30 }));   // answers from beforeHandle
+app.use(geoBlock({ deny: ["XX"] }));          // used to enforce in beforeHandle
+
+// Request 1 from an allowed country: 200, and the body gets cached.
+// Request 2 from a denied country: 200, the cached body, "x-cache: HIT".
+// The gate never ran. Nothing in the response says a gate was skipped.
+```
+
+A denied country got a 200 with the cached body. So did a deny-listed address, a blocked user agent, and a client that was actively banned. The only trace was an `x-cache: HIT`header that looks completely normal, because it is completely normal.
+
+The part I am not proud of: my own response-cache quick start mounts the cache first. Anybody following the docs built the vulnerable order. There was already a boot guard for a cache mounted ahead of `tenancy()`, so I had recognised this exact class of mistake before and fixed one instance of it without asking what else shared the shape.
+
+## Then the same shape ate the rate limiter
+
+After moving those five gates to `preBody`, which always runs before `beforeHandle`, I went looking for other pairs with the same phase collision. `rateLimit()` also enforces in `beforeHandle`.
+
+```ts
+// Same shape, different victim. rateLimit also enforces in beforeHandle.
+app.use(responseCache({ ttlSeconds: 30 }));
+app.use(rateLimit({ windowMs: 60_000, max: 2 }));
+
+// Six identical requests, max: 2.
+// I expected 200, 200, 429, 429, 429, 429.
+// I measured 200, 200, 200, 200, 200, 200.
+```
+
+A limiter behind a cache never counts the requests the cache serves. Same for `idempotency()`, which replays stored responses from the same hook. An operator writes `max: 2` and gets unlimited, on exactly the repeat traffic a rate limit exists to bound.
+
+I could not fix this the way I fixed the gates. Moving `rateLimit()` to `preBody` would break every caller-supplied `keyGenerator` that reads `ctx.state`, because `session()` and auth layers populate state later. I know that specifically because the phase move on the five gates broke their callbacks the same way and I had to add a typed context to catch it at compile time. So 1.0.0 refuses the ordering at boot instead.
+
+```ts
+// 1.0.0 refuses this at boot in production instead of letting it look fine.
+//
+// Route GET /products runs responseCache() before rateLimit() / loginThrottle()
+// in its effective hook chain. Both act from beforeHandle, so a cache hit or an
+// idempotent replay returns a response and ends the chain before the limiter
+// counts the request. Register rateLimit() first.
+
+// The fix is one line of ordering, which is the point of failing loudly.
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.use(responseCache({ ttlSeconds: 30 }));
+```
+
+## The header bug was my own bad habit
+
+Separate finding, same flavour of blind spot. Every middleware that keys on client IP read the leftmost `X-Forwarded-For` entry, which is the one slot in that header an attacker fully controls.
+
+```ts
+// A load balancer in append mode gives you this:
+//   X-Forwarded-For: <whatever the client sent>, <what the LB actually saw>
+//
+// So reading position zero reads the attacker.
+const client = xff.split(",")[0].trim();   // what I had
+
+// Rotate one spoofed left-hand entry per attempt and every failed login looks
+// like a brand new IP, so the strike counter never reaches maxStrikes. Or put
+// somebody else's address there and get them banned instead.
+
+// 1.0.0 counts hops from the right, the side your own proxies wrote:
+app.use(autoBan({ trustedHops: 2 }));  // CDN -> LB -> app
+```
+
+I have written `split(",")[0]` against that header in production services for years without thinking about it. Nine copies of it existed in this codebase, which is the real lesson: the same wrong line in nine places is nine chances to be wrong and nine separate fixes. The hop-aware helper now lives in one module and every middleware calls it.
+
+## A fix I shipped and then took back out
+
+One more, because it is the most useful thing I learned and it makes me look bad.
+
+Node answers `100 Continue` to anyone who sends `Expect: 100-continue`, including a request whose declared `Content-Length` is already over the body limit. So the server invites a body it is about to refuse. I added a check that rejected at header time by comparing `Content-Length` against `bodyLimitBytes`, wrote tests, watched them pass, shipped it.
+
+Then I tested a route with no request body schema. That limit is only enforced where a body gets parsed, so a route that never parses one never applies it. My check was refusing requests the framework would happily have served. And because only clients sending `Expect` took that path, the same request got a 413 from curl (which sends the header for large bodies) and a 200 from `fetch`. A transport hint was changing the answer.
+
+I reverted it. The version in 1.0.0 defers the interim `100` until the framework actually reaches for the body, so the trigger is the framework's own decision and both paths agree by construction rather than because I remembered to test both. My original tests passed the whole time, because I had only tested the case my fix was written for.
+
+## What I changed about how I test
+
+I stopped hunting per-module and started enumerating pairs. For every middleware I wrote down which hook phase it acts in and whether it can return a response early. That gives a small grid, and the dangerous cells are obvious once it is on paper: anything that answers early sitting in the same phase as, or ahead of, anything that enforces.
+
+That grid found the rate limiter bug in about twenty minutes after spending two days finding nothing on the per-module axis. It also told me which cells were already safe, which was worth knowing: `idempotency()` ahead of `bearerAuth()` is fine because its default scope partitions on the `Authorization` header, and `etag()` only acts in `onSend`, so it cannot preempt a gate at all.
+
+If you maintain anything with pluggable middleware, that exercise is cheap and I would do it before your next release. Write down the phases. Look at the pairs. The bug is probably not in your regex.
+
+## Getting it
+
+```bash
+pnpm create daloy@latest my-api
+# or add it to something existing
+pnpm add @daloyjs/core
+```
+
+Orders that used to fail silently now refuse to boot in production, so if you are upgrading from an early RC and your app stops starting, read the error. It names the route and the two middlewares and tells you which one to register first. That is the guard doing its job, and the fix is a line of reordering. The full list is on [boot guards](/docs/security/boot-guards), and every release candidate is written up in the [changelog](https://github.com/daloyjs/daloy/blob/main/CHANGELOG.md).
+
+One thing I owe and have not done: the advisory for the forwarded header issue is not filed yet. The bug is fixed and published with provenance since rc.7, so anybody on a current version is fine, but my own security policy says the disclosure process gets exercised before stable and it has not been. It is the one stabilisation criterion 1.0.0 shipped without, it is written down as open in the roadmap rather than checked off anyway, and it is the next thing I do.

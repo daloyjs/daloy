@@ -1,0 +1,243 @@
+---
+title: Getting started
+description: "Build your first DaloyJS application: declare a contract-first route, validate with Zod, generate OpenAPI, and serve responses on any supported runtime."
+keywords:
+  - DaloyJS quickstart
+  - first DaloyJS app
+  - TypeScript API tutorial
+  - Swagger UI
+  - Scalar API reference
+  - OpenAPI docs UI
+sitemap:
+  priority: 0.9
+---
+
+# Getting started
+
+Build a tiny DaloyJS server, hit it with the typed client, and inspect the OpenAPI spec, in five minutes.
+
+<FlowDiagram numbered title="Five minutes, five steps" steps={[
+          { label: "Scaffold", detail: "pnpm add @daloyjs/core zod" },
+          {
+            label: "Write a route",
+            detail: "app.get(path, contract, handler)",
+            tone: "accent",
+          },
+          { label: "Add OpenAPI & docs UI", detail: "docs: true" },
+          {
+            label: "Call the typed client",
+            detail: "createClient(app)",
+          },
+          {
+            label: "Generate a Hey API SDK",
+            detail: "pnpm exec openapi-ts",
+            tone: "success",
+          },
+        ]} caption="This guide goes from an empty folder to a typed SDK in five steps, each one builds on the route you declared in step two." />
+
+## 1. Scaffold
+
+```bash
+mkdir hello-daloy && cd hello-daloy
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node
+```
+
+```json
+// package.json, add these
+{
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  }
+}
+```
+
+Node.js runs TypeScript entrypoints directly via built-in type stripping (stable in Node 24+, available since 22.18), so local development needs no transpiler and no separate build step.
+
+We use `src/index.ts` and `--watch` here so the layout matches what [create-daloy](/docs/scaffolder) emits, copy/paste between this guide and a scaffolded project without renaming files.
+
+## 2. Write your first route
+
+```ts
+// src/index.ts
+import { z } from "zod";
+import { App, requestId, rateLimit } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+})
+  .use(requestId())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
+  .get(
+    "/greet/:name",
+    {
+      tags: ["Demo"],
+      request: { params: z.object({ name: z.string().min(1) }) },
+      responses: {
+        200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+      },
+    },
+    async ({ params }) => ({
+      status: 200,
+      body: { msg: `Hello, ${params.name}!` },
+    }),
+  );
+
+const { port } = serve(app, { port: 3000 });
+console.log(`listening on http://localhost:${port}`);
+```
+
+`secureHeaders()` is already auto-applied by `new App()`. Register it only when you want to replace the defaults.
+
+Prefer the colorized startup panel you get from `create-daloy` templates? Swap the plain `console.log` for `printStartupBanner()` from `@daloyjs/core/banner`: it renders a TTY-aware, ASCII-fallback boxed banner with your app name, URL, and any extra links (API docs, health check, etc.):
+
+```ts
+import { printStartupBanner } from "@daloyjs/core/banner";
+
+const { port } = serve(app, { port: 3000 });
+printStartupBanner({
+  name: "MyAPI",
+  version: "1.0.0",
+  url: `http://localhost:${port}`,
+  runtime: "Node.js",
+  links: [
+    { label: "API docs", url: `http://localhost:${port}/docs` },
+    { label: "OpenAPI JSON", url: `http://localhost:${port}/openapi.json` },
+    { label: "OpenAPI YAML", url: `http://localhost:${port}/openapi.yaml` },
+    { label: "Health", url: `http://localhost:${port}/healthz` },
+  ],
+});
+```
+
+```bash
+pnpm dev
+# in another shell
+curl http://localhost:3000/greet/world
+# -> {"msg":"Hello, world!"}
+```
+
+Don't want to spin up a real server? Every `App` exposes `app.request(input, init?)`, an in-process test client that takes a URL or `Request` and returns a `Response`, no network stack, no port, no second terminal. It's the same entrypoint the typed client and [testing guide](/docs/testing) use:
+
+```ts
+const res = await app.request("/greet/world");
+console.log(res.status, await res.json());
+// -> 200 { msg: "Hello, world!" }
+```
+
+## 3. Add OpenAPI & docs UI [#3-add-openapi-and-docs-ui]
+
+One line on the `App` constructor and DaloyJS auto-mounts `GET /openapi.json` + `GET /openapi.yaml` (the live spec in both formats) and `GET /docs` (a Scalar API reference UI) for you:
+
+```ts
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: "auto", // GET /docs, /openapi.json, /openapi.yaml outside production
+});
+```
+
+Open `http://localhost:3000/docs` for an interactive Scalar reference, `http://localhost:3000/openapi.json` for the raw JSON spec, or `http://localhost:3000/openapi.yaml` for the YAML spec.
+
+Set `openapi.info` (or the top-level `title`, `version`, and `description`) for a real service. If omitted, DaloyJS uses the portable `DaloyJS API` / `0.0.0` fallback. The core never reads a host manifest, so the same docs bundle works on Node, Bun, Deno, Workers, and Vercel.
+
+Prefer a factory call? `createApp(options)` is an exported alias of `new App(options)` with identical behaviour:
+
+```ts
+import { createApp } from "@daloyjs/core";
+
+const app = createApp({
+  docs: "auto", // use true to also publish the docs in production
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+});
+```
+
+### Prefer the classic Swagger UI?
+
+Scalar is the default because it's faster, prettier, and friendlier on mobile, but if your team is used to Swagger UI, or you have existing screenshots, runbooks, or muscle memory built around it, DaloyJS ships it out of the box. Flip the `ui` field on the object form of `docs` and you're back to the familiar green UI:
+
+```ts
+const app = new App({
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: {
+    ui: "swagger", // "scalar" (default) | "swagger" | "redoc"
+    path: "/docs", // optional, change if you want /reference, /api-docs, etc.
+  },
+});
+```
+
+Same URL (`GET /docs`), same live `/openapi.json` and `/openapi.yaml` endpoints, same CSP handling, only the rendered HTML changes. You can also keep both: leave the auto-mounted route on Scalar and expose a second Swagger route yourself with `swaggerUiHtml()` (see the [OpenAPI guide](/docs/openapi) for the manual recipe).
+
+Want a custom path? Use the object form: `docs: { ui: "swagger", path: "/reference" }`. Want it only in development? Use `docs: "auto"`: it skips the mount when `production: true`. Need full control? Set `docs: false` and mount your own routes with `generateOpenAPI()` and `swaggerUiHtml() / scalarHtml()`: see the [OpenAPI guide](/docs/openapi).
+
+Both `swaggerUiHtml()` and `scalarHtml()` load their default assets from the jsDelivr CDN, so a strict Content-Security-Policy must allow those assets or the docs UI can render blank. The auto-mounted route and `htmlResponse()` both add a compatible CSP automatically. If you build your own response, import `docsContentSecurityPolicy` from `@daloyjs/core/docs` and pass the result as the response header:
+
+```ts
+import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
+
+headers: { "content-security-policy": docsContentSecurityPolicy() }
+```
+
+## 4. Use the typed in-process client
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+
+const client = createInProcessClient(app);
+const r = await client.greet({ params: { name: "DaloyJS" } });
+//    ^? { status: 200; body: { msg: string } }
+console.log(r.status, r.body);
+```
+
+The client's methods are inferred from the app's route tuple. Chain registrations or compose exported `defineRoute()` contracts with `registerRoutes([...])`. Avoid widening the result to a bare `App` annotation, which deliberately erases that tuple.
+
+## 5. Generate a Hey API SDK
+
+For consumers outside the monorepo, generate a fully typed fetch SDK:
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+Keep the dev server from step two running, then write the live OpenAPI document to disk before you run the SDK generator:
+
+```bash
+mkdir -p generated
+curl http://localhost:3000/openapi.json -o generated/openapi.json
+pnpm exec openapi-ts
+```
+
+## Before you deploy
+
+`new App()` already turns on body limits, request timeouts, prototype-pollution-safe JSON, production 5xx redaction, and `secureHeaders()`. Rate-limit keys and budgets are a deployment decision, so `rateLimit()` stays explicit:
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// In-memory default: per process. Two replicas means N * max.
+```
+
+When you run more than one instance, plug in the [Redis rate-limit store](/docs/security/rate-limit-redis), otherwise each replica keeps its own counter.
+
+Authentication proves who called. It does not prove they may read this row. DaloyJS cannot default object-level authorization because it does not know your ownership model. Put the check in the handler or the query, and follow [resource authorization](/docs/security/resource-authorization), including the Alice-versus-Bob tests.
+
+## Next steps
+
+- [Routing](/docs/routing)
+- [Validation with Standard Schema](/docs/validation)
+- [Security guardrails and middleware](/docs/security)
+- [Tutorial: bookstore API](/docs/tutorials/bookstore)

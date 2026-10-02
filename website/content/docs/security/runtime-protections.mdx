@@ -1,0 +1,125 @@
+---
+title: Runtime protections
+description: The runtime guardrails that ship inside @daloyjs/core and apply at request time, regardless of your CI host, repo platform, or whether you use the generated GitHub Actions bundle.
+keywords:
+  - DaloyJS runtime security
+  - framework-level guardrails
+  - private GitLab Bitbucket Azure DevOps on-prem
+  - secure defaults
+  - portable protections
+  - CORS CSRF JWT secure headers defaults
+---
+
+# Runtime protections
+
+<blockquote>Runtime protections ship with the application and behave the same way on every adapter. CI controls protect the build and release path. These controls protect requests after deployment.</blockquote>
+
+These protections live inside `@daloyjs/core` and run at request time in your app process. They apply regardless of where you host the repo or which CI you use: **private GitHub, GitLab, Bitbucket, Azure DevOps, Gitea,** self-managed Jenkins, or on-prem runners. They are also unaffected by whether you keep or delete the optional GitHub Actions bundle from `create-daloy`.
+
+DaloyJS splits supply-chain and security posture into three independent layers. This page documents the first one.
+
+<LayerStack title="Three independent layers" flow="down" layers={[
+          {
+            title: "Runtime guardrails (this page)",
+            detail: "inside @daloyjs/core, every request, no CI host required",
+            tone: "success",
+            items: [
+              "safe CORS",
+              "safeJsonParse",
+              "bodyLimitBytes",
+              "requestTimeoutMs",
+              "secureHeaders()",
+            ],
+          },
+          {
+            title: "Install-time hardening",
+            detail: "pnpm scaffold .npmrc + verify:lockfile",
+            tone: "accent",
+            items: [
+              "ignore-scripts=true",
+              "minimum-release-age=1440",
+              "frozen lockfile",
+            ],
+          },
+          {
+            title: "CI / CD hardening",
+            detail: "GitHub Actions bundle only. Translate elsewhere",
+            tone: "muted",
+            items: ["SHA-pinned actions", "harden-runner", "permissions: {}"],
+          },
+        ]} caption="Only the top layer travels everywhere. It is baked into the framework and runs on every request no matter where you host the repo. The lower two layers depend on keeping the pnpm scaffold and the generated GitHub workflows." />
+
+## The three layers, side by side
+
+| Layer | Where it runs | Travels to GitLab / Bitbucket / Azure / on-prem? |
+| --- | --- | --- |
+| Runtime guardrails (this page) | Inside your app, every request. Lives in `@daloyjs/core`. | Yes. Always on. No CI host required. |
+| Install-time hardening | `.npmrc` in pnpm scaffolds, plus `pnpm verify:lockfile`. | Yes when you use pnpm. The hardened `.npmrc` ships in the project itself. |
+| CI / CD hardening | `.github/workflows/*.yml` from `create-daloy --with-ci`. | GitHub only (public or private repo / org). On other CIs you have to translate the rules yourself. |
+
+## Backend footguns handled by default [#backend-footguns-the-framework-handles-by-default]
+
+Every row below describes behavior that is on by default in a fresh DaloyJS app. You do not need to install a plugin, deploy on a specific CI, or open a particular file to get these.
+
+| Footgun | What DaloyJS does |
+| --- | --- |
+| Unsafe CORS defaults | Cross-origin state-changing requests are refused unless `cors()` explicitly allows the origin. No reflective `Access-Control-Allow-Origin: *` with credentials. |
+| Missing CSRF on stateful routes | Booting `session()` with mutating routes but without `csrf()` is refused at startup, not silently allowed. |
+| Weak session secrets | Short / low-entropy session secrets are refused at boot. Production requires a real secret. |
+| Missing secure response headers | `secureHeaders()` is auto-applied: HSTS, frame deny, no-sniff, strict referrer policy, baseline CSP. |
+| Prototype pollution via JSON bodies | `safeJsonParse` strips `__proto__`, `constructor`, and `prototype` keys before the value reaches your handler. |
+| Path traversal | Dot-segments (`.` / `..`) are resolved to a canonical path before route matching, and empty `//` segments are refused. Routes match exact strings, so there is no directory to escape into. |
+| Body-size abuse | Streamed reads with a hard cap (default 1 MiB). Oversize requests return `413` before they hit your handler. |
+| Hung handlers / slow-loris | `requestTimeoutMs` (default 30s) returns `408` and fires `ctx.request.signal` for cooperative teardown. The Node adapter sets socket-level timeouts. |
+| Header-count flood / HTTP/2 Bomb | `maxHeaderCount` (default 100) is a portable application-tier guard that returns `431 Request Header Fields Too Large` when a request exceeds the cap (e.g. via `app.fetch()` or runtimes without a native cap). The Node adapter also sets the native `server.maxHeadersCount` to the same value. Because Node's llhttp parser *silently truncates* headers past that cap instead of rejecting, the adapter additionally answers `431` for any HTTP request *or WebSocket upgrade* whose raw field count reaches the cap (usable default budget: 99 fields). Either way it is defence-in-depth. Apply the vendor HTTP/2 fix at any proxy that terminates HTTP/2. |
+| Bad reverse-proxy assumptions | `X-Forwarded-*` headers are never trusted by default. **In production**, a request carrying one while `trustProxy` / `behindProxy` is unconfigured is refused with a `500` (and a clear log line) so a spoofed source IP can't reach the rate limiter or audit log. Dev and CI relax this so you can test forwarded headers locally. Opt in via `behindProxy` (or `trustProxy: false` to ignore the headers). |
+| Auth response caching | `401`, `403`, and `429` automatically set `Cache-Control: no-store` so proxies and CDNs cannot reuse them. |
+| Duplicate dangerous headers | Duplicate `Host` and `Content-Length` are rejected at parse time to block request-smuggling shapes. |
+| Weak JWT secrets | `createJwtSigner()` refuses HS\* secrets shorter than the algorithm requires. |
+| Missing JWT expiry | Signing without an `exp` claim is refused, not defaulted to a forever token. |
+| Unsafe compression cases (BREACH) | `compression()` skips `Set-Cookie`, `Authorization`, session / CSRF cookie responses, and already-encoded content; downgrades strong ETags per RFC 9110. |
+| Unsafe file-upload assumptions | `multipartObject` + `fileField` enforce per-field size caps, MIME allowlists, and magic-byte checks. |
+| Leaky production errors | Production mode strips `detail` from `5xx` problem+json automatically. Stack traces never leak through the default error path. |
+| Unsupported content types | Routes with body schemas reject non-allowed content-types with `415`. |
+| Method confusion | Real `405` with `Allow` header instead of a misleading `404`. |
+| Header / response splitting | `sanitizeHeaderName` / `sanitizeHeaderValue` reject CRLF and NUL in header values. |
+
+## What this page does *not* cover
+
+The following protections only apply if you keep using the matching scaffolded bits:
+
+- Install-time hardening (blocked install scripts, 24h release-age cooldown, source-verified lockfile, zero-runtime-dep gate) applies when you use the pnpm scaffold and keep its `.npmrc` + `pnpm verify:lockfile` script.
+- CI / CD hardening (pinned actions, `harden-runner`, top-level `permissions: {}`, CODEOWNERS, Dependabot, CodeQL / Scorecard / zizmor) applies when you use the `create-daloy --with-ci` GitHub Actions bundle. On GitLab, Bitbucket, Azure DevOps, Jenkins, or on-prem runners you have to translate those rules into your CI's own configuration.
+- Branch protection, environment approvals, secret hygiene, runner isolation, and org policy are decisions of the host (GitHub / GitLab / Azure / Bitbucket / your own infra). DaloyJS cannot enforce them from inside your code.
+
+## What the generated GitHub Actions bundle does [#what-the-generated-github-actions-bundle-actually-does]
+
+If you scaffold with `create-daloy --with-ci` and **keep the generated workflows**, the YAML itself encodes these protections. They apply equally to public repos, private repos, and private organizations. Being private is not a substitute for any of them.
+
+- Top-level `permissions: {}` with least-privilege per-job permissions.
+- Third-party Actions pinned to a commit SHA (not a moving tag).
+- `actions/checkout` with `persist-credentials: false`.
+- `step-security/harden-runner` with egress policy on every job.
+- Lifecycle scripts disabled during CI installs (`--ignore-scripts` for npm/yarn, `ignore-scripts=true` in the scaffolded `.npmrc` for pnpm).
+- No shared Actions cache by default.
+- Dependabot config for npm + Actions ecosystems.
+- `CODEOWNERS` for security-sensitive files.
+- CodeQL, OpenSSF Scorecard, zizmor, and vulnerability-scan workflows where included.
+- Manual-only `deploy.yml` starter instead of automatic publish or deploy on push.
+
+This is **generated GitHub CI hardening**, not “default supply-chain protection everywhere”. If you delete the workflows, rewrite them, or use a different CI host, DaloyJS cannot give you these guarantees automatically.
+
+## Compression behavior matrix [#the-honest-matrix]
+
+Use this table to figure out which protections you actually get for a given setup.
+
+| User setup | What DaloyJS can protect |
+| --- | --- |
+| `create-daloy --with-ci` on GitHub (private or public repo / org) | Runtime guardrails + pnpm install-time hardening (if pnpm) + **full generated GitHub Actions starter protections**. |
+| `create-daloy` with pnpm, no CI bundle | Runtime guardrails + hardened install defaults via `.npmrc` and `pnpm verify:lockfile`. |
+| npm / yarn / bun users (no pnpm scaffold) | Runtime guardrails. CI install commands still benefit if you keep the generated workflows on GitHub. |
+| GitLab / Bitbucket / Azure DevOps / Jenkins / on-prem | Runtime guardrails and portable docs / patterns. **No GitHub Actions protections.** Translate the YAML rules into your CI's own configuration. |
+| User deletes or rewrites the generated workflows | Runtime guardrails only. DaloyJS cannot guarantee CI supply-chain posture once the workflows are gone. |
+| Branch protection, environment approvals, secret hygiene, runner isolation, egress policy, org settings, deploy-platform config | Out of scope. These are decisions of your repo host and deploy platform. DaloyJS cannot enforce them from inside your code. |
+
+See [Secure-by-default](/docs/security/secure-defaults), [Boot guards](/docs/security/boot-guards), and [Supply-chain security](/docs/security/supply-chain) for the full surface of each layer.

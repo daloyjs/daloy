@@ -1,0 +1,212 @@
+---
+title: Internal services & service meshes
+description: "Use preset: \"internal-service\" to right-size DaloyJS's secure-by-default posture for service-to-service deployments behind a service mesh, sidecar, or private network, without turning off the input, credential, parser, or SSRF guards that still apply inside the perimeter."
+keywords:
+  - internal-service preset
+  - service mesh
+  - service-to-service
+  - zero trust
+  - lateral movement
+  - private network
+  - Istio
+  - Linkerd
+  - sidecar
+  - topology-aware security
+  - secure-by-default
+  - intranet app security
+  - employee-only internal app
+  - enterprise internal tools
+  - CSRF behind firewall
+---
+
+# Internal services & service meshes
+
+<blockquote>The internal-service preset removes browser-specific controls from private service traffic. Input validation, identity checks, and the remaining runtime guardrails stay enabled.</blockquote>
+
+Most DaloyJS security defaults, body limits, request timeouts, JWT algorithm allowlists, `timingSafeEqual` credential checks, prototype-pollution-safe parsers, `fetchGuard()` SSRF defaults, schema strictness, RFC 9457 problem+json with prod-mode redaction, apply equally to a service running behind a service mesh as to one facing the public internet. A compromised neighbour, an SSRF in another pod, or a leaked internal token will exercise those guards identically.
+
+A small subset of defaults, however, only make sense at a *browser-facing* boundary: HSTS, CSP, X-Frame-Options, the cross-origin write guard, and the session+state-changing-route CSRF boot guard. When TLS is terminated by the mesh, there is no browser to read those headers, and no Origin header to compare. Forcing them on at the app layer adds noise without adding safety.
+
+For these deployments, use `preset: "internal-service"`. It turns off the topology-dependent guards and keeps everything else on.
+
+<BranchDiagram title="What the preset changes" source={{
+          label: 'preset: "internal-service"',
+          detail: "names the topology once",
+        }} branches={[
+          {
+            eyebrow: "turned off",
+            label: "secureHeaders auto-install",
+            detail: "HSTS / CSP / X-Frame-Options",
+            tone: "danger",
+          },
+          {
+            eyebrow: "turned off",
+            label: "corsCrossOriginGuard",
+            detail: "no browser Origin to compare",
+            tone: "danger",
+          },
+          {
+            eyebrow: "turned off",
+            label: "csrf boot guard",
+            detail: "callers use bearer / mTLS",
+            tone: "danger",
+          },
+          {
+            eyebrow: "kept on",
+            label: "bodyLimitBytes + requestTimeoutMs",
+            detail: "1 MiB / 30 s defaults",
+            tone: "success",
+          },
+          {
+            eyebrow: "kept on",
+            label: "fetchGuard() SSRF defaults",
+            detail: "still blocks 169.254.169.254",
+            tone: "success",
+          },
+          {
+            eyebrow: "kept on",
+            label: "JWT allowlist + timingSafeEqual",
+            detail: "prototype-pollution-safe parsers",
+            tone: "success",
+          },
+        ]} converge={{
+          label: "Boot audit log",
+          detail: 'event: "security.preset.applied"',
+        }} caption="The preset only disables the topology-dependent, browser-facing guards (top row). Every guard that protects the service from malformed input, confused dependencies, or compromised callers stays on. A one-time boot log names exactly what was disabled and what was kept." />
+
+## One line to switch posture
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  preset: "internal-service",
+  production: process.env.NODE_ENV === "production",
+});
+```
+
+Per-knob options you pass alongside the preset still win. If you want headers back on a single internal service that proxies to a browser, set `secureHeaders: {}` explicitly, the preset will not overwrite an explicit value.
+
+## What the preset turns OFF
+
+- `secureHeaders` auto-install, HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read them.
+- `corsCrossOriginGuard`, rejects state-changing requests carrying a cross-origin `Origin` header. Service-to-service callers do not send `Origin`.
+- `csrf` boot guard, refuses to start when `session()` is registered alongside a state-changing route without `csrf()`. Internal callers authenticate with bearer tokens or mTLS, not cookies.
+- unconfigured `X-Forwarded-*` guard, the first-request 500 when `trustProxy` / `behindProxy` is unset. The mesh terminates TLS and the immediate peer inside the mesh *is* the caller.
+
+## What the preset KEEPS on (non-negotiable)
+
+Everything that protects the service itself from malformed input, confused dependencies, compromised callers, or operational mistakes stays on. The preset does not weaken any of:
+
+- `bodyLimitBytes` (1 MiB default), `requestTimeoutMs` (30 s default)
+- JWT algorithm allowlist + `timingSafeEqual` credential comparison
+- Prototype-pollution-safe parsers + `isForbiddenObjectKey`
+- `fetchGuard()` SSRF defaults (still blocks `169.254.169.254`)
+- Weak session secret refuse-to-boot
+- `cors({ origin: '*' })` refuse-to-boot
+- Anonymous stateful plugin refuse-to-boot
+- RFC 9457 problem+json with prod-mode redaction
+- `stripServerHeaders` (removes `Server` and `X-Powered-By`)
+- Schema `.strict()` and response validation when enabled
+- `crashOnUnhandledRejection` (still on by default in production)
+
+## The threat model behind the preset
+
+"Behind a firewall" is a weaker guarantee than it used to be. Internal services are still reachable through SSRF from a compromised workload, leaked VPN access, accidentally-permissive ingress rules, dev tunnels, port-forwards, CI jobs, and other internal services gone bad. The Aikido / Supabase *Secure-by-Default Development* write-up puts the underlying risk plainly: "If you tell an AI to make something work, it might remove the very security checks that protect you."
+
+The preset is the answer to that risk for service-to-service deployments: **do not remove the guards, name the topology once, audit which guards stayed on, and keep everything else**. That is closer to the `config.force_ssl` / `SECURE_*` settings shape used by Rails and Django than to a master "disable everything" switch.
+
+## Boot audit log
+
+Whenever the preset is applied, the framework emits a one-time `info` log under `event: "security.preset.applied"` naming the preset, the guards that were disabled, the guards that stayed on, and the list of fields the caller overrode explicitly. Operators can grep for it in centralized logs without reading the app source.
+
+```json
+{
+  "event": "security.preset.applied",
+  "preset": "internal-service",
+  "disabled": [
+    "secureHeaders auto-install",
+    "corsCrossOriginGuard (state-changing cross-origin write rejection)",
+    "csrf boot guard (session() + state-changing route)",
+    "unconfigured X-Forwarded-* / trustProxy guard"
+  ],
+  "kept": [
+    "bodyLimitBytes (1 MiB default)",
+    "requestTimeoutMs (30 s default)",
+    "crashOnUnhandledRejection (production)",
+    "weak session secret refuse-to-boot",
+    "cors({ origin: '*' }) refuse-to-boot",
+    "anonymous stateful plugin refuse-to-boot",
+    "stripServerHeaders",
+    "RFC 9457 problem+json prod redaction",
+    "JWT algorithm allowlist + timingSafeEqual credential comparison",
+    "prototype-pollution-safe parsers + isForbiddenObjectKey",
+    "fetchGuard() SSRF defaults",
+    "schema .strict() + response validation when enabled"
+  ],
+  "userOverrode": []
+}
+```
+
+## Introspecting the live posture
+
+`app.getSecurityPosture()` returns a frozen snapshot of the resolved security configuration, useful for an internal `/__security` route, CI audits, or a custom dashboard:
+
+```ts
+app.get(
+  "/__security",
+  {
+    operationId: "securityPosture",
+    responses: {
+      200: { description: "Live security posture snapshot", body: z.any() },
+    },
+  },
+  async () => ({ status: 200, body: app.getSecurityPosture() }),
+);
+```
+
+## Employee-only internal apps are NOT this topology [#employee-only-internal-apps]
+
+<blockquote>A browser-facing internal app still receives requests from browsers, so it needs the browser security controls that a service mesh can omit. The raincoats (CSRF, secure headers, same-origin checks) stay on indoors, because the weather walks in with the people.</blockquote>
+
+A back-office tool, HR portal, or admin dashboard that only employees can reach, behind a VPN, firewall, or corporate proxy, is *browser-facing*, not service-to-service. The firewall stops outsiders from connecting to the server directly. It does nothing about what an employee's browser can be tricked into sending. That browser sits inside the perimeter and carries the corporate session cookie:
+
+- CSRF is the textbook intranet attack. An employee visits a malicious public site on a lunch break. That site fires a `POST` at `https://intranet.corp/transfer`. The browser is inside the network and attaches the session cookie, so the request lands. The firewall never sees anything wrong.
+- DNS rebinding and clickjacking cross the perimeter the same way: the victim's browser executes the attack from the inside.
+
+So the right posture for an employee-only browser app is the **default posture**, exactly what you get with no preset. A hypothetical `"intranet-app"` preset would flip nothing off; naming one would only imply a relaxation that must not happen. What distinguishes the intranet topology is *additive*, not subtractive:
+
+```ts
+import { App, ipRestriction, session, csrf, loginThrottle } from "@daloyjs/core";
+
+// Employee-only intranet app: default posture (NO preset), plus add-ons.
+const app = new App({
+  production: process.env.NODE_ENV === "production",
+  behindProxy: { hops: 1 }, // the corporate reverse proxy / TLS terminator
+});
+
+app.use(ipRestriction({ allow: ["10.0.0.0/8"] })); // corporate ranges only
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://intranet.corp"] }));
+app.use(loginThrottle()); // employees mistype passwords too
+```
+
+The three topologies side by side:
+
+| Topology | Who calls it | Posture |
+| --- | --- | --- |
+| Public app / API | Browsers and clients on the internet | Default (no preset) |
+| Employee-only internal app | Browsers on the corporate network | Default (no preset) + `ipRestriction()`, `session()` + `csrf()`, `behindProxy`, `loginThrottle()` |
+| Service-to-service / machine-to-machine | Other services (bearer, JWT, mTLS), never a browser | `preset: "internal-service"` |
+
+## When NOT to use the preset
+
+- The service is reachable from a browser, even indirectly (BFF pattern, admin UI, embedded widgets, or an [employee-only internal app](#employee-only-internal-apps)). Use the default posture and add `cors()` per route.
+- The service is exposed directly to the public internet without a mesh / WAF / TLS terminator in front. Use the default posture.
+- You only need to disable a single guard. Prefer the per-knob option (`secureHeaders: false`, `corsCrossOriginGuard: false`, `csrf: "off"`) so the rest of the posture stays explicit at the call site.
+
+## Related
+
+- [Secure-by-default](/docs/security/secure-defaults): the full list of defaults the framework ships.
+- [`secureDefaults` enforcement](/docs/security/secure-defaults-enforcement), the wholesale escape hatch (refuses-to-boot in production without explicit acknowledgement). Prefer the topology preset where possible.
+- [`fetchGuard()` SSRF defaults](/docs/security/fetch-guard), still active under the preset.

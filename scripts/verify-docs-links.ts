@@ -19,12 +19,16 @@
  *      or `route.ts` (route handlers such as the `/docs/llms.txt` subpath
  *      index are linkable routes too, they are just not pages).
  *   2. **Dangling nav entry** — a `docsNav` `href` with no backing page.
- *   3. **Dangling sitemap entry** — a `STATIC_PATHS` `/docs/...` path with no
- *      backing page.
- *   4. **Missing sitemap entry** — a real docs page absent from `sitemap.ts`
- *      (it would be invisible to search engines, defeating the SEO intent the
- *      sitemap header documents).
- *   5. **Nav / sitemap drift** — a nav `href` that is not also in the sitemap.
+ *   3. **Missing nav entry** — a real docs page that no `docsNav` item links
+ *      to. The sitemap, search, MCP and llms.txt pick up every page from
+ *      `content/docs` automatically, but the sidebar is still a curated list,
+ *      so a page missing from it is reachable only by URL.
+ *   4. **Hand-listed docs in the sitemap** — a `/docs` or `/blog/` path written
+ *      into `app/sitemap.ts`. Those entries are generated (docs from
+ *      `content/docs` frontmatter, posts from `BLOG_POSTS`), so a hand-written
+ *      one would be a duplicate URL.
+ *   5. (removed: nav/sitemap drift cannot happen now that the sitemap is
+ *      generated from the same content tree.)
  *   6. **Broken anchor** — a link to `/docs/page#fragment` whose target page
  *      contains no element with `id="fragment"`.
  *
@@ -55,16 +59,15 @@ const WEBSITE_APP = new URL("website/app/", REPO_ROOT);
 const DOCS_DIR = new URL("docs/", WEBSITE_APP);
 const CONTENT_DOCS_DIR = new URL("website/content/docs/", REPO_ROOT);
 const NAV_FILE = new URL("website/components/docs-nav.ts", REPO_ROOT);
-const SITEMAP_FILE = new URL("website/app/sitemap.ts", REPO_ROOT);
+const SITEMAP_FILE = new URL("website/lib/sitemap-entries.ts", REPO_ROOT);
 
 /** A single problem found during the scan. */
 export interface DocsLinkProblem {
   readonly kind:
     | "broken-link"
     | "dangling-nav"
-    | "dangling-sitemap"
-    | "missing-sitemap"
-    | "nav-sitemap-drift"
+    | "missing-nav"
+    | "sitemap-hand-listed"
     | "broken-anchor";
   readonly source: string;
   readonly target: string;
@@ -226,15 +229,6 @@ function extractNavHrefs(source: string): string[] {
   return out;
 }
 
-/** Pull every `path: "..."` value (the sitemap STATIC_PATHS shape). */
-function extractSitemapPaths(source: string): string[] {
-  const out: string[] = [];
-  const re = /path:\s*["'`]([^"'`]+)["'`]/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source))) out.push(m[1]!);
-  return out;
-}
-
 /** Collect every `id="..."` value declared in a page (anchor targets). */
 function extractElementIds(source: string): Set<string> {
   const out = new Set<string>();
@@ -276,6 +270,13 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
     const source = await readFile(file, "utf8");
     idsByRoute.set(route, extractMdxIds(source));
     sourceByPage.set(fileURLToPath(file), source);
+  }
+
+  // 1c. Blog posts (website/content/blog/*.mdx) are not docs routes, but their
+  // links into /docs must resolve too, so scan them as link sources only.
+  const CONTENT_BLOG_DIR = new URL("website/content/blog/", REPO_ROOT);
+  for (const file of await collectMdxFiles(CONTENT_BLOG_DIR)) {
+    sourceByPage.set(fileURLToPath(file), await readFile(file, "utf8"));
   }
 
   // Route handlers under `app/docs` (currently the `/docs/llms.txt` subpath
@@ -337,42 +338,29 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
     }
   }
 
-  // 4. Sitemap entries -> real pages; and pages -> sitemap.
-  const sitemapSource = await readFile(SITEMAP_FILE, "utf8");
-  const sitemapPaths = new Set(
-    extractSitemapPaths(sitemapSource)
-      .filter((p) => p.startsWith("/docs"))
-      .map(normalizeRoute),
-  );
-  for (const path of sitemapPaths) {
-    if (!routeSet.has(path)) {
+  // 4. Every docs page is reachable from the sidebar.
+  const navSet = new Set(navHrefs);
+  for (const route of [...routeSet].sort()) {
+    if (!navSet.has(route)) {
       problems.push({
-        kind: "dangling-sitemap",
-        source: rel(fileURLToPath(SITEMAP_FILE)),
-        target: path,
-        detail: `sitemap lists "${path}" but no page exists`,
-      });
-    }
-  }
-  for (const route of routeSet) {
-    if (!sitemapPaths.has(route)) {
-      problems.push({
-        kind: "missing-sitemap",
-        source: rel(fileURLToPath(SITEMAP_FILE)),
+        kind: "missing-nav",
+        source: rel(fileURLToPath(NAV_FILE)),
         target: route,
-        detail: `page "${route}" is missing from sitemap.ts (search engines won't see it)`,
+        detail: `page "${route}" exists but no docsNav item links to it`,
       });
     }
   }
 
-  // 5. Nav <-> sitemap drift (a navigable page should also be in the sitemap).
-  for (const href of navHrefs) {
-    if (routeSet.has(href) && !sitemapPaths.has(href)) {
+  // 5. The sitemap generates docs and blog entries; none may be hand-listed.
+  const sitemapSource = await readFile(SITEMAP_FILE, "utf8");
+  // Literal "..." paths only: the generator's own `/blog/${slug}` template is fine.
+  for (const [, path] of sitemapSource.matchAll(/path:\s*"([^"]+)"/g)) {
+    if (path.startsWith("/docs") || path.startsWith("/blog/")) {
       problems.push({
-        kind: "nav-sitemap-drift",
-        source: rel(fileURLToPath(NAV_FILE)),
-        target: href,
-        detail: `nav lists "${href}" but sitemap.ts does not`,
+        kind: "sitemap-hand-listed",
+        source: rel(fileURLToPath(SITEMAP_FILE)),
+        target: path,
+        detail: `"${path}" is hand-listed; docs and blog entries are generated in lib/sitemap-entries.ts`,
       });
     }
   }
@@ -384,7 +372,7 @@ async function main(): Promise<void> {
   const problems = await scanDocsLinks();
   if (problems.length === 0) {
     console.log(
-      "verify-docs-links: all docs links, nav entries, sitemap entries, and anchors resolve.",
+      "verify-docs-links: all docs links, nav entries and anchors resolve, and every page is in the nav.",
     );
     return;
   }

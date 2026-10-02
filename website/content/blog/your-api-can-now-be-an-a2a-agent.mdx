@@ -1,0 +1,167 @@
+---
+title: "Your API Can Now Be an Agent: A2A in DaloyJS 1.4.0"
+description: MCP lets an AI tool call your API. A2A lets another company's agent hand your service a job. DaloyJS 1.4.0 speaks A2A 1.0 with one onMessage function, and it deliberately does not guess what your agent should do.
+date: 2026-09-28
+readingTime: 9 min read
+author: Devlin Duldulao
+authorRole: software engineer & published book author
+authorBio: Filipino fullstack developer in Norway. Has spent around 12 years building APIs for humans, and is now slightly worried that the next person to call them will be a procurement agent with better manners than most humans.
+badges:
+  - A2A
+  - AI agents
+  - Release notes
+keywords:
+  - A2A protocol
+  - Agent2Agent
+  - A2A TypeScript
+  - A2A vs MCP
+  - Agent Card
+  - AI agent API
+  - agent to agent communication
+  - DaloyJS A2A
+  - TypeScript API framework AI agents
+---
+
+For the last year, the question in every backend meeting was some version of "can our AI coding assistant call our API?" DaloyJS answered that one with its built-in MCP server. Your API becomes a set of tools an AI client can use, with the same auth and validation as every other route.
+
+The next question arrived faster than I expected. It sounds like this: "a partner's procurement agent wants to send our service a job and get a result back. Can it?" That is not a tool call. That is one agent talking to another agent it does not share code, memory, or tools with. There is a protocol for exactly that, and as of 1.4.0, DaloyJS speaks it.
+
+## MCP and A2A are not rivals
+
+People keep asking which one wins. Neither, because they answer different questions. Pick by who is calling.
+
+<FlowDiagram title="Three faces of one service" steps={[
+              {
+                label: "Humans and SDKs",
+                detail: "OpenAPI + typed client",
+                tone: "default",
+              },
+              {
+                label: "AI tools",
+                detail: "MCP: your API as tools",
+                tone: "default",
+              },
+              {
+                label: "Other agents",
+                detail: "A2A: your service as a peer",
+                tone: "accent",
+              },
+              {
+                label: "One DaloyJS app",
+                detail: "same auth, same validation",
+                tone: "success",
+              },
+            ]} caption="MCP is agent to tool. A2A is agent to agent. OpenAPI is still how humans and generated clients find their way around. One service can offer all three." />
+
+If you only need an AI tool to read your inventory, you want MCP and you can stop reading here. If someone else's agent needs to hand your service a task, maybe a multi-step one that asks a follow-up question, you want A2A.
+
+## What it looks like
+
+You write one function. DaloyJS handles the rest: the public Agent Card at `/.well-known/agent-card.json`, the JSON-RPC endpoint, version negotiation, validation, error codes, and the auth guardrails.
+
+```ts
+import { App, a2aData, a2aRoutes, bearerAuth, createA2aHandler, timingSafeEqual } from "@daloyjs/core";
+
+const agent = createA2aHandler({
+  card: {
+    name: "inventory-agent",
+    description: "Answers stock questions for Acme products.",
+    version: "1.0.0",
+    url: "https://api.acme.example/a2a",
+    skills: [
+      {
+        id: "stock-lookup",
+        name: "Stock lookup",
+        description: "Units on hand for a SKU. Send { sku } as a data part.",
+        tags: ["inventory"],
+      },
+    ],
+    securitySchemes: { bearer: { httpAuthSecurityScheme: { scheme: "Bearer" } } },
+    securityRequirements: [{ schemes: { bearer: { list: [] } } }],
+  },
+  // You decide what a message means. DaloyJS does not guess.
+  onMessage: async ({ message }) => {
+    const input = message.parts.find((part) => part.data !== undefined)?.data as
+      | { sku?: string }
+      | undefined;
+    if (!input?.sku) return { status: "rejected", message: "Send { sku } as a data part." };
+    const units = await inventory.unitsFor(input.sku);
+    return { status: "completed", artifacts: [{ name: "stock", parts: [a2aData({ sku: input.sku, units })] }] };
+  },
+});
+
+const app = new App();
+const auth = bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.A2A_TOKEN!) });
+for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) app.route(route);
+```
+
+The `hooks` option puts auth on the JSON-RPC route only. The Agent Card stays public, because another agent has to read it to learn how to authenticate in the first place. Asking for a password before showing where the door is was never a great user experience, even for robots.
+
+## The decision I am happiest about: DaloyJS does not guess
+
+A2A has a concept called skills. Your Agent Card lists them: "stock lookup", "reserve items", and so on. So the obvious design is a skill router: a message comes in, the framework picks the matching skill, and calls your function.
+
+There is one small problem. A2A messages do not say which skill they are for. The spec calls skills "largely a descriptive concept". The protocol assumes the receiving agent reads the message, often in plain language, and works out what to do. A framework that guesses would need an LLM inside it, or a pile of keyword matching that will one day run "delete account" because someone wrote "account".
+
+So DaloyJS does not route. Your `onMessage` function gets a validated message and decides. If you want an LLM to interpret requests, call it from your handler, where you can see it, test it, and blame it. The framework stays a framework. It is not an agent runtime, and I think that is exactly what an API framework should be.
+
+## An AI told me the wrong protocol, very confidently
+
+Before building this, I asked an AI to research A2A and draft a plan. The plan was well structured, full of tables, and quietly written for the wrong version of the protocol.
+
+```ts
+// What an AI-generated plan confidently told me to implement:
+{ "method": "message/send", "params": { "message": { "parts": [{ "kind": "text", "text": "hi" }] } } }
+
+// What A2A 1.0 actually says on the wire:
+{ "method": "SendMessage", "params": { "message": { "role": "ROLE_USER", "parts": [{ "text": "hi" }] } } }
+```
+
+A2A 1.0 renamed the methods to `SendMessage`, `GetTask` and friends, dropped the `kind` field on parts, and moved the protocol version onto each interface in the Agent Card. The plan even had a note saying method names should be checked against the spec, and then used the old names on every page anyway. Very human behaviour, honestly.
+
+The lesson is the same one I keep relearning: an AI plan is a first draft, not a source of truth. DaloyJS is built against the actual 1.0 specification, and it is tested against the official A2A JavaScript SDK for discovery, direct replies, multi-turn tasks, `GetTask`, `ListTasks`, and error mapping. The old `message/send` names get a clean `Method not found`, not a half-working imitation.
+
+## Secure by default, like everything else
+
+An agent endpoint is a remote control for whatever your handler does, so it gets the same treatment as MCP:
+
+- **No auth, no boot.** In production, the app refuses to start if the A2A endpoint has no auth hook. A genuinely public agent has to say so with `{ public: true }`.
+- **The card cannot lie.** Streaming, push notifications, and the extended card are not implemented yet, so the card says `false` and those methods return the errors the spec requires. You cannot switch them on by accident.
+- **Tasks belong to someone.** With a task store, every task is scoped to the authenticated caller. Another caller's task is simply "not found", and an unresolved caller gets a 401 instead of landing in a shared bucket.
+- **HTTPS in production.** Registration fails if the card advertises a plain `http:` URL on a public host.
+- **The boring bits are on too:** body limits, strict UTF-8, prototype-pollution-safe parsing, an Origin check against DNS rebinding, and redacted internal errors.
+
+## Multi-turn tasks, when you need them
+
+Most agent calls are one question, one answer, and DaloyJS is stateless by default so it runs happily on serverless and edge. When your agent needs to ask a follow-up question, add a task store:
+
+```ts
+const agent = createA2aHandler({
+  card,
+  taskStore: memoryTaskStore(), // use a shared store on serverless
+  // Every task is scoped to this owner. No owner, no access: 401, not a shared bucket.
+  taskOwner: ({ state }) => (state.user as { sub?: string } | undefined)?.sub,
+  onMessage: ({ task, text }) => {
+    if (!task) return { status: "input-required", message: "Which SKU?" };
+    return { status: "completed", artifacts: [{ parts: [a2aData(lookup(text))] }] };
+  },
+});
+```
+
+The first message comes back as `input-required` with "Which SKU?". The other agent answers on the same task, and your handler sees the stored task and finishes the job. The built-in memory store is fine for one instance. On serverless, a follow-up can land on a different instance, so bring a shared store.
+
+## What it does not do (yet)
+
+I would rather ship a small thing that is honest than a big thing that is almost correct. So version one leaves out streaming, push notifications, the HTTP+JSON and gRPC bindings, and signed Agent Cards. They come when someone has work that outlives a single request, not because a method list looked incomplete.
+
+And no, I am not going to claim DaloyJS is the first TypeScript project with A2A. The official SDK and agent frameworks already have it. What I will claim is narrower and true: one DaloyJS app can be a REST API, an MCP server, and an A2A agent, with the same auth and validation, and no extra dependency.
+
+## Try it
+
+Update to `@daloyjs/core@1.4.0` and read the [A2A agent endpoint docs](/docs/a2a). If you already run the [MCP server](/docs/mcp), you know most of it already. Same shape, different caller. The procurement agent is probably polite. Make it authenticate anyway.
+
+**Update:** since 1.5.0, DaloyJS can also be the one asking. `createA2aClient()` lets your service hand work to other agents, with the same defaults as everything else: no credentials on discovery, and a card that points somewhere unexpected gets refused before your token goes anywhere. See [calling other agents](/docs/a2a#calling-other-agents).
+
+<div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">
+<p className="text-sm leading-7 text-muted-foreground"><span className="font-semibold text-foreground">About the author:</span>{" "}{"Filipino fullstack developer in Norway. Has spent around 12 years building APIs for humans, and is now slightly worried that the next person to call them will be a procurement agent with better manners than most humans."}</p>
+</div>

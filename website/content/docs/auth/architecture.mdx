@@ -1,0 +1,296 @@
+---
+title: "Auth architecture: where DaloyJS fits in OAuth2 & OpenID Connect"
+description: DaloyJS is a resource server and relying-party toolkit, not an identity provider. Learn when to use an OpenID Connect provider such as Auth0, Okta, Keycloak, or Zitadel, when an embedded session system such as Better Auth fits, and the two architectures we recommend.
+keywords:
+  - DaloyJS OAuth2
+  - DaloyJS OpenID Connect
+  - DaloyJS vs IdentityServer
+  - DaloyJS vs .NET
+  - resource server vs authorization server
+  - do I need Auth0 Okta Clerk
+  - self-hosted OIDC Keycloak Zitadel Ory
+  - embedded authentication Better Auth
+  - BFF pattern Node
+  - JWT verification edge
+sitemap:
+  priority: 0.8
+---
+
+# Auth architecture: where DaloyJS fits in OAuth2 & OpenID Connect
+
+This is the page to read before you wire up login. DaloyJS (like Hono, Express, Fastify, or ASP.NET Core) is a **web framework**. It is excellent at *verifying* and *enforcing* identity on each request, but it deliberately does **not** ship a login UI, a user database, or an OAuth2 authorization server. Those belong to an **identity provider (IdP)** that you bring to the table.
+
+## The short answer [#short-answer]
+
+- DaloyJS is a resource server (and a toolkit for building a relying party). It checks tokens. It does not issue them.
+- It is not an "IdentityServer". It cannot, on its own, do what Duende IdentityServer, Keycloak, or Auth0 do: run login pages, manage clients and consent, and mint tokens.
+- You need an identity and session system. For an OAuth2/OIDC architecture, use a standards-compliant managed or self-hosted IdP. For a first-party application that does not need an external token issuer, an embedded system such as Better Auth can own login and cookie sessions inside your DaloyJS deployment.
+- Do not build your own authorization server. Verify tokens from a vetted provider instead.
+
+<IdpBoundary featureName="a DaloyJS API" safe={[
+          <>
+            Verifying a token your provider issued, with <code>jwk()</code> or{" "}
+            <code>createJwtVerifier()</code>. Verification is always yours.
+          </>,
+          <>
+            Deciding what a verified caller may do: scopes, roles, tenant
+            checks, per-record ownership.
+          </>,
+          <>
+            Holding a browser session in a backend-for-frontend you own, after
+            the provider finished the login.
+          </>,
+          <>
+            Signing short-lived internal artifacts: service-to-service tokens,
+            download URLs, webhook payloads.
+          </>,
+        ]} delegate={[
+          <>
+            Storing passwords, running the reset flow, or implementing MFA and
+            recovery codes.
+          </>,
+          <>
+            Hosting a login or consent screen, or registering and managing
+            OAuth2 clients.
+          </>,
+          <>
+            Issuing user access and refresh tokens, and building rotation and
+            revocation for them.
+          </>,
+          <>
+            Publishing your own <code>/.well-known/jwks.json</code> or discovery
+            document.
+          </>,
+        ]} footer={
+          <>
+            None of the right-hand column is impossible. It is far larger and
+            far less forgiving than it looks, and every provider on this
+            page has already solved it, been audited on it, and been attacked on
+            it. Pick one from{" "}
+            <Link href="/docs/auth">Authentication &amp; authorization</Link>{" "}
+            and spend your time on the left-hand column instead.
+          </>
+        } />
+
+## The three OAuth2 / OpenID Connect roles [#roles]
+
+Every OAuth2 / OIDC deployment splits responsibilities across three roles. Confusion about "can DaloyJS do OAuth2?" almost always comes from collapsing these into one box.
+
+| Responsibility | OAuth2 / OIDC role | Who plays it | DaloyJS? |
+| --- | --- | --- | --- |
+| Owns login, consent, and clients. Mints and refreshes tokens. | **Authorization Server** / OpenID Provider (OP) | Auth0, Okta, Entra ID, Cognito, Keycloak, Zitadel, Ory… | No |
+| Accepts a token, verifies it, returns protected data | **Resource Server** | Your API | **Yes** |
+| Starts the login flow and holds the user's session | **Client** / Relying Party (RP) | Your SPA, mobile app, or a server-side BFF | **Yes** (building blocks) |
+
+<SequenceDiagram title="How the three roles interact" participants={[
+          "Client (RP)",
+          "Authorization Server (IdP)",
+          "Resource Server (DaloyJS)",
+        ]} steps={[
+          {
+            from: "Client (RP)",
+            to: "Authorization Server (IdP)",
+            label: "Start login (authorization-code + PKCE)",
+            detail: "user authenticates on the IdP's pages",
+            kind: "request",
+          },
+          {
+            from: "Authorization Server (IdP)",
+            to: "Client (RP)",
+            label: "Issue access token (a signed JWT)",
+            detail: "the IdP mints tokens. Nobody else does",
+            kind: "response",
+          },
+          {
+            from: "Client (RP)",
+            to: "Resource Server (DaloyJS)",
+            label: "Call the API with Authorization: Bearer <token>",
+            kind: "request",
+          },
+          {
+            from: "Resource Server (DaloyJS)",
+            to: "Authorization Server (IdP)",
+            label: "Fetch JWKS to verify the signature (cached)",
+            detail: "GET /.well-known/jwks.json",
+            kind: "async",
+          },
+          {
+            from: "Resource Server (DaloyJS)",
+            to: "Client (RP)",
+            label: "Return protected data after checking iss, aud & scopes",
+            kind: "response",
+          },
+        ]} caption="DaloyJS only ever plays the Resource Server: it verifies tokens and enforces scopes. Minting tokens and running the login UI stays with the Authorization Server (the IdP)." />
+
+## Where DaloyJS fits (and where it doesn't) [#where-daloy-fits]
+
+DaloyJS owns the **Resource Server** role outright, and it gives you everything you need to build the **Client / Relying Party** (the back-end-for-frontend, or BFF). What it does not do is play the **Authorization Server**: it will not render a login page, store passwords, run a consent screen, expose a `/.well-known/openid-configuration` discovery document, or issue access and refresh tokens to third-party clients. That is the IdP's job, and reimplementing it is exactly the kind of security-critical work you should not take on yourself.
+
+## DaloyJS vs .NET, ASP.NET Core, and Duende IdentityServer [#dotnet-comparison]
+
+A common question is "what is the difference between DaloyJS and .NET?" They are not the same kind of thing. **.NET** is a whole platform: a runtime (the CLR), a large standard library, and an ecosystem of first-party frameworks. **DaloyJS** is a single web framework that runs on JavaScript runtimes. The closest .NET analog to DaloyJS is **ASP.NET Core**, not ".NET" as a whole. And the identity pieces that ship in the .NET ecosystem (Duende IdentityServer, OpenIddict, ASP.NET Core Identity) have no built-in DaloyJS equivalent on purpose, you bring an external IdP.
+
+| Layer | .NET world | JavaScript / DaloyJS world |
+| --- | --- | --- |
+| Language & runtime | C# / F# on the CLR | TypeScript on Node, Bun, Deno, Workers, Vercel |
+| Standard library | .NET base class library (BCL) | The runtime's web-platform APIs (fetch, Web Crypto…) |
+| Web framework | ASP.NET Core (Minimal APIs, MVC) | **DaloyJS** (or Hono, Express, Fastify, Elysia) |
+| Token validation (resource server) | `Microsoft.AspNetCore.Authentication.JwtBearer` | `jwk()` / `createJwtVerifier()` / `bearerAuth()` |
+| Authorization server / login (issues tokens) | Duende IdentityServer, OpenIddict, ASP.NET Core Identity | A separate IdP (managed or self-hosted), no built-in equivalent |
+
+So yes: DaloyJS and Hono are frameworks, and on their own they cannot do what Duende IdentityServer does. IdentityServer *is* an authorization server. DaloyJS sits in front of your business logic and trusts the tokens an authorization server issues.
+
+## Do you need Auth0, Okta, or Clerk? [#do-you-need-a-provider]
+
+If your architecture uses OAuth2/OIDC bearer tokens, you need an OpenID Connect provider, but not one of those three brands specifically. Any provider that exposes standard JWKS and OIDC discovery works with the same DaloyJS verifier. Pick the operational model that fits your team:
+
+### Managed (fastest to ship) [#managed-providers]
+
+Someone else runs the IdP. You configure it. Good default for most teams.
+
+- [Auth0](/docs/auth/auth0), [Okta](/docs/auth/okta), [Clerk](/docs/auth/clerk), [Microsoft Entra ID](/docs/auth/entra-id), [AWS Cognito](/docs/auth/aws-cognito)
+- Google Identity, Stytch, WorkOS, Firebase Authentication, and others
+
+### Self-hosted open source (full control) [#self-hosted-providers]
+
+You operate the IdP yourself. Choose this for data residency, air-gapped environments, or cost control at scale.
+
+- [Keycloak](https://www.keycloak.org), [Zitadel](https://zitadel.com), [Ory (Hydra + Kratos)](https://www.ory.sh), [Authentik](https://goauthentik.io), [Logto](https://logto.io), [SuperTokens](https://supertokens.com), [Dex](https://dexidp.io)
+
+### Embedded authentication (same deployment) [#embedded-auth]
+
+[Better Auth](/docs/auth/better-auth) runs inside your application and can own first-party login plus cookie sessions without acting as an external OIDC provider. Its optional OIDC/OAuth provider plugins can add that role when your architecture genuinely needs it.
+
+Whatever you pick, treat building your own authorization server as a non-goal. Implementing OAuth2 / OIDC correctly (authorization-code + PKCE, token rotation, key management and rotation, consent, discovery, and the long tail of spec edge cases) is a large, high-risk surface that vetted IdPs already solve.
+
+## Recommended architecture 1: API as a resource server [#resource-server]
+
+This is the default and the most common shape. Your API trusts tokens issued by your IdP, verifies them on every request against the provider's JWKS, and authorizes per route by scope. It works identically across every runtime DaloyJS targets, including the edge.
+
+```ts
+import { App, requireScopes } from "@daloyjs/core";
+import { jwk } from "@daloyjs/core/jwk";
+
+const app = new App();
+
+// Verify every Bearer token against your IdP's JWKS. The same one line works
+// for Auth0, Okta, Entra ID, Cognito, Keycloak, Zitadel, Ory, and others
+// (JWT-based IdPs). Better Auth uses its own handler + getSession API instead.
+app.use(
+  jwk({
+    jwks: "https://login.example.com/.well-known/jwks.json",
+    algorithms: ["RS256", "ES256"], // asymmetric only; HS* is refused by design
+    issuer: "https://login.example.com/",
+    audience: "https://api.example.com",
+  }),
+);
+
+// Authorize per route by scope/permission.
+app.get(
+  "/orders",
+  {
+    hooks: requireScopes("orders:read"),
+    responses: { 200: { description: "ok" } },
+  },
+  () => ({ status: 200, body: { orders: [] } }),
+);
+```
+
+The `jwk()` middleware enforces an asymmetric-only algorithm allowlist (it refuses `HS*` to block the classic confused-deputy attack), checks `issuer` and `audience`, caches the JWKS, and sends `Cache-Control: no-store` on its `401` challenges. See [the auth slice](/docs/security/auth-slice) for the full behavior, and the per-provider guides for [Auth0](/docs/auth/auth0), [Okta](/docs/auth/okta), [Entra ID](/docs/auth/entra-id), [Cognito](/docs/auth/aws-cognito), [Clerk](/docs/auth/clerk), and [Better Auth](/docs/auth/better-auth).
+
+## Recommended architecture 2: browser app (the BFF pattern) [#bff]
+
+If a browser app needs users to log in, do **not** hold access or refresh tokens in JavaScript. Run a thin server-side **back-end-for-frontend** (BFF): it performs the authorization-code + PKCE flow with the IdP, keeps the resulting tokens in a signed, encrypted `session()` cookie, and exposes only same-origin endpoints to the browser. Protect every state-changing route with `csrf()` because the browser now authenticates with a cookie.
+
+```ts
+import { App, csrf } from "@daloyjs/core";
+import { session } from "@daloyjs/core";
+
+const app = new App();
+
+// Tokens from the IdP live here, server-side and encrypted, never in the browser.
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+
+// The browser authenticates with a cookie, so guard mutations against CSRF.
+app.use(csrf());
+
+// Your routes call upstream APIs with the access token stored in the session,
+// so the browser never sees it.
+```
+
+<SequenceDiagram title="BFF pattern: tokens never reach the browser" participants={[
+          "Browser",
+          "BFF (DaloyJS)",
+          "Authorization Server (IdP)",
+          "Upstream API",
+        ]} steps={[
+          {
+            from: "Browser",
+            to: "BFF (DaloyJS)",
+            label: "GET /login (same-origin)",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Authorization Server (IdP)",
+            label: "Authorization-code + PKCE flow",
+            detail: "exchange code for tokens server-side",
+            kind: "async",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Browser",
+            label: "Set signed, encrypted session cookie",
+            detail: "tokens stay server-side. The cookie holds only a session id",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "BFF (DaloyJS)",
+            label: "Call same-origin route (+ CSRF token)",
+            detail: "cookie auth -> csrf() guards the mutation",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Upstream API",
+            label: "Forward request with the stored access token",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Browser",
+            label: "Return data. The access token is never exposed",
+            kind: "response",
+          },
+        ]} caption="Because the browser now authenticates with a cookie, every state-changing route is protected with csrf(). Access and refresh tokens live only in the encrypted session, never in JavaScript." />
+
+The login/callback routes themselves drive the OIDC flow against your provider. See [sessions](/docs/security/session) and [CSRF](/docs/security/csrf) for the building blocks.
+
+## First-party building blocks [#building-blocks]
+
+| Helper | Import | Role it serves |
+| --- | --- | --- |
+| `jwk()` | `@daloyjs/core/jwk` | Verify asymmetric JWTs against a JWKS (resource server) |
+| `createJwtVerifier()` | `@daloyjs/core` | Lower-level JWT verification when you manage the keys |
+| `bearerAuth()` | `@daloyjs/core` | Validate opaque or custom Bearer tokens with your own hook |
+| `requireScopes()` | `@daloyjs/core` | Authorize a route by scope or permission |
+| `basicAuth()` | `@daloyjs/core` | HTTP Basic for simple internal cases |
+| `session()` | `@daloyjs/core` | Signed, encrypted cookie session for a BFF / relying party |
+| `csrf()` | `@daloyjs/core` | CSRF protection for cookie-authenticated, state-changing routes |
+| `createJwtSigner()` | `@daloyjs/core` | Mint your own JWTs for service-to-service or a tiny first-party issuer |
+
+## What we recommend [#recommendations]
+
+- Default to a resource server. Verify JWTs with `jwk()`, pin an asymmetric algorithm allowlist, enforce `issuer` + `audience`, and gate routes with `requireScopes()`.
+- Use the BFF pattern for browser logins. Run authorization-code + PKCE on the server, keep tokens in a `session()` cookie, never expose them to JavaScript, and protect mutations with `csrf()`.
+- Bring an IdP you do not operate unless you have a strong reason not to: managed for speed, self-hosted open source for control and data residency.
+- Never build your own authorization server.
+- Service-to-service / internal traffic: use `bearerAuth()` with a verified token, or `createJwtSigner()` + `jwk()` when both sides speak JWT. See the [internal-service preset](/docs/security/internal-service-preset).
+
+## Related
+
+- [Authentication & authorization overview](/docs/auth)
+- [Auth slice (jwk, verify hooks)](/docs/security/auth-slice)
+- [Sessions](/docs/security/session) and [CSRF](/docs/security/csrf)
+- [Where to use DaloyJS](/docs/where-to-use)

@@ -1,0 +1,131 @@
+---
+title: Deploy to Fly.io
+description: Deploy DaloyJS to Fly.io as a long-lived Node service. Current fly.toml schema with [http_service], string-valued auto_stop_machines, health checks, and concurrency limits.
+keywords:
+  - Deploy DaloyJS to Fly.io
+  - fly.toml http_service
+  - auto_stop_machines
+  - fly deploy
+  - flyctl
+  - Fly health checks
+---
+
+# Fly.io
+
+Fly runs your container as one or more **Machines**. Use the [Node adapter](/docs/adapters/node), ship a Dockerfile, and let `auto_stop_machines` scale you to zero when idle.
+
+<FlowDiagram title="fly deploy pipeline" numbered steps={[
+          {
+            label: "Dockerfile build",
+            detail: "distroless node:24 image",
+            eyebrow: "image",
+          },
+          {
+            label: "fly deploy",
+            detail: "ship image to Fly",
+          },
+          {
+            label: "Machines + health checks",
+            detail: "GET /healthz",
+            tone: "accent",
+          },
+          {
+            label: "auto_stop_machines",
+            detail: "scale to zero when idle",
+            tone: "success",
+          },
+        ]} caption="Fly runs the container as one or more Machines. Health checks against /healthz gate routing, and auto_stop_machines = stop scales you to zero when traffic drops." />
+
+## When to choose Fly
+
+- You want multiple regions cheaply, with anycast routing for free.
+- You want a single image that also runs on ECS or Kubernetes elsewhere.
+- You want raw TCP without a serverless workaround.
+
+## Server entrypoint
+
+Use the Node adapter and bind to the Fly-provided `PORT`:
+
+```ts
+// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.js";
+
+serve(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+});
+```
+
+## fly.toml [#fly-toml]
+
+`auto_stop_machines` takes a **string** (`"off"`, `"stop"`, or `"suspend"`) and not a boolean.
+
+```toml
+# fly.toml
+app = "my-daloy-api"
+primary_region = "fra"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[http_service.checks]]
+  interval = "10s"
+  timeout = "2s"
+  grace_period = "5s"
+  method = "GET"
+  path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+```
+
+## Dockerfile
+
+```docker
+FROM node:24-slim AS build
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+FROM gcr.io/distroless/nodejs24-debian12
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+USER nonroot
+EXPOSE 3000
+CMD ["dist/server.js"]
+```
+
+## Deploy
+
+```bash
+brew install flyctl
+fly launch --no-deploy
+fly secrets set SESSION_SECRET=...
+fly deploy
+```
+
+## Gotchas
+
+- Set `shutdownTimeoutMs` on the Node adapter to a value smaller than Fly's grace period so in-flight requests drain before the machine is killed.
+- Make sure `/healthz` is cheap. The [lifecycle plugin](/docs/security/lifecycle-health) ships a ready-made one.
+
+## See also
+
+- [Deployment overview](/docs/deployment)
+- [Node adapter](/docs/adapters/node)

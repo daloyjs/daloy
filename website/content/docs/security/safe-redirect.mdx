@@ -1,0 +1,144 @@
+---
+title: Open redirect protection
+description: "Refuse open-redirect inputs with safeRedirect(): validate every ?next= / ?returnTo= candidate against an explicit allowlist of internal paths and external origins before emitting a Location header. Strict, dependency-free defaults."
+keywords:
+  - DaloyJS safeRedirect
+  - open redirect
+  - unvalidated redirect
+  - Location header injection
+  - returnTo allowlist
+  - OWASP open redirect
+---
+
+# Open redirect protection
+
+<blockquote><code>safeRedirect()</code> accepts only destinations allowed by your policy. Rejected external or malformed targets use the configured fallback or throw an <code>OpenRedirectBlockedError</code>.</blockquote>
+
+Open redirects (OWASP "Unvalidated Redirects and Forwards", Aikido Top 10 #10) happen when an app blindly trusts a `?next=...` / `?returnTo=...` query parameter and emits a `Location` header pointing wherever the attacker wants, turning your trusted domain into a phishing launch pad. `safeRedirect()` validates every candidate URL against an explicit allowlist of internal paths and external origins **before** building the redirect response.
+
+<FlowDiagram title="Validate before redirecting" steps={[
+          {
+            eyebrow: "input",
+            label: "Candidate URL",
+            detail: "?next= / ?returnTo=",
+          },
+          {
+            eyebrow: "scheme",
+            label: "Dangerous scheme?",
+            detail: "javascript:/data:/file: to refused",
+            tone: "danger",
+          },
+          {
+            eyebrow: "shape",
+            label: "Protocol-relative or CR/LF?",
+            detail: "// or backslash or control chars to refused",
+            tone: "danger",
+          },
+          {
+            eyebrow: "allowlist",
+            label: "Path or origin allowed?",
+            detail: "allowedPaths / allowedOrigins exact match",
+          },
+          {
+            eyebrow: "allowed",
+            label: "Emit Location",
+            detail: "303 + Cache-Control: no-store",
+            tone: "success",
+          },
+          {
+            eyebrow: "rejected",
+            label: "Fallback or throw",
+            detail: "fallback path, else OpenRedirectBlockedError",
+            tone: "danger",
+          },
+        ]} caption="Every candidate runs the full gauntlet before any Location header is built. Dangerous schemes, protocol-relative escapes, and control characters are refused outright. Only an exact allowlist match is emitted. A rejected target either falls back or throws." />
+
+## Quick start
+
+```ts
+import { App, safeRedirect } from "@daloyjs/core";
+
+const app = new App();
+
+app.get(
+  "/login/callback",
+  {
+    operationId: "loginCallback",
+    responses: { 303: { description: "redirect" } },
+  },
+  async ({ request }) => {
+    const next = new URL(request.url).searchParams.get("next") ?? "/";
+    return safeRedirect(next, {
+      allowedPaths: ["/", "/dashboard", "/account"],
+      allowedOrigins: ["https://app.example.com"],
+      fallback: "/",
+    });
+  },
+);
+```
+
+`safeRedirect()` returns a Web-standard `Response` with the validated `Location` header and a `Cache-Control: no-store` directive so a per-request redirect is never cached and reused.
+
+## Strict by default
+
+The defaults are deliberately conservative:
+
+- Same-origin paths must start with `/` and must not start with `//` or `/\` (browsers treat those as protocol-relative URLs that escape your origin).
+- Backslashes, control characters, and CR/LF are rejected to stop response-splitting and homograph tricks.
+- Absolute URLs are allowed only when their `origin` exactly matches an entry in `allowedOrigins`.
+- `javascript:`, `data:`, `vbscript:`, and `file:` schemes are always refused, even if you accidentally wrote one into the allowlist.
+- The default status is `303 See Other`, the POST-redirect-GET-safe choice.
+
+## Allowing internal paths and external origins
+
+```ts
+// Same-origin paths only (exact pathname match).
+safeRedirect(next, { allowedPaths: ["/", "/dashboard", "/orders"] });
+
+// Permit a specific external origin (scheme + host + optional port).
+safeRedirect(next, {
+  allowedPaths: ["/"],
+  allowedOrigins: ["https://app.example.com", "https://admin.example.com"],
+});
+
+// Escape hatch: accept ANY same-origin path (disables path allowlisting).
+safeRedirect(next, { allowedPaths: ["/*"] });
+```
+
+Path matching is exact on `pathname`. Query strings and fragments on the candidate are preserved in the final `Location` but ignored when deciding whether the target is allowed.
+
+## Fallback vs. throwing
+
+When a candidate is rejected, you choose the behavior. Provide a `fallback` path and the user is redirected there. Omit it and `safeRedirect()` throws an `OpenRedirectBlockedError` carrying the `reason` and the offending `target`.
+
+```ts
+import { safeRedirect, OpenRedirectBlockedError } from "@daloyjs/core";
+
+// Option A: silent fallback (best UX for login flows).
+return safeRedirect(next, { allowedPaths: ["/dashboard"], fallback: "/" });
+
+// Option B: handle the rejection explicitly.
+try {
+  return safeRedirect(next, { allowedPaths: ["/dashboard"] });
+} catch (err) {
+  if (err instanceof OpenRedirectBlockedError) {
+    app.log.warn({ reason: err.reason, target: err.target }, "blocked open redirect");
+    return safeRedirect("/", { allowedPaths: ["/"] });
+  }
+  throw err;
+}
+```
+
+The `reason` is one of `empty-target`, `invalid-control-characters`, `non-latin1-target`, `protocol-relative`, `backslash-path`, `path-not-allowed`, `origin-not-allowed`, `scheme-not-allowed`, or `parse-failed`, useful for metrics on which attack shape you are seeing. (`non-latin1-target` covers same-origin paths carrying a code point above U+00FF, including the Unicode slash homographs.)
+
+## Choosing a status code
+
+Override the default `303` only when you genuinely need a different redirect semantic. Accepted values are `301`, `302`, `303`, `307`, and `308`. You can also merge extra response headers. The `Location` header is always overwritten with the validated target.
+
+```ts
+safeRedirect(next, {
+  allowedPaths: ["/dashboard"],
+  status: 307, // preserve method + body on redirect
+  headers: { "X-Redirect-Source": "login" },
+});
+```

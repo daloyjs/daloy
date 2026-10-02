@@ -1,0 +1,112 @@
+---
+title: Installation
+description: Install DaloyJS with pnpm, npm, yarn, or bun. Set up the framework on Node.js, Bun, Deno, Cloudflare Workers, or Vercel in minutes.
+keywords:
+  - install DaloyJS
+  - pnpm add daloyjs
+  - DaloyJS setup
+  - TypeScript framework install
+sitemap:
+  priority: 0.8
+---
+
+# Installation
+
+DaloyJS targets **Node.js ≥ 24.0.0 (active LTS)** and is distributed on the public npm registry as `@daloyjs/core`. The package has **no peer dependencies**, so `npm`, `yarn`, `pnpm`, and `bun` can all install it directly. We *recommend* [pnpm](https://pnpm.io/motivation) together with the hardened `.npmrc` defaults below for supply-chain reasons, but it is not required. The `engines.pnpm` entry in `package.json` is advisory metadata, while `engines.node` communicates the supported runtime and may warn or fail depending on your package manager and engine-strict settings.
+
+<FlowDiagram numbered title="Two ways in" steps={[
+          {
+            eyebrow: "fastest",
+            label: "Scaffold",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "or",
+            label: "Install into a project",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "harden",
+            label: "Add .npmrc defaults",
+            detail: "strict-peer-dependencies, frozen lockfile",
+            tone: "muted",
+          },
+          {
+            eyebrow: "confirm",
+            label: "Verify the import",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]} caption="Either scaffold a hardened project in one command or add the dependency-free package to an existing one, then drop in the hardened .npmrc and verify the import resolves." />
+
+## Fastest path: scaffold a project
+
+Use the official generator, it sets up a hardened `.npmrc`, strict TypeScript, and a working route in one command.
+
+Package links: [create-daloy on npm](https://www.npmjs.com/package/create-daloy) and [@daloyjs/core on npm](https://www.npmjs.com/package/@daloyjs/core).
+
+```bash
+# choose one package manager
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+See [Scaffold a project](/docs/scaffolder) for templates and flags.
+
+## Or install into an existing project
+
+### Prerequisites
+
+- **Node.js** 24.0.0 or newer (active LTS).
+- A package manager. Any of these works, pnpm 11.x or newer is recommended for supply-chain hardening, but `npm`, `yarn`, and `bun` install `@daloyjs/core` cleanly because the package has no peer dependencies.
+
+To enable pnpm via [Corepack](https://nodejs.org/api/corepack.html):
+
+```bash
+corepack enable
+corepack prepare pnpm@11.1.3 --activate
+pnpm --version
+```
+
+### Install DaloyJS
+
+<PackageInstall packages="@daloyjs/core zod" />
+
+Optional, only if you want to generate a typed SDK:
+
+<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+
+The framework package published to npm is [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core).
+
+## Hardened `.npmrc`
+
+Drop this `.npmrc` in your project root to make pnpm reject unsafe installs by default:
+
+```ini title=".npmrc"
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+minimum-release-age=1440
+ignore-scripts=true
+```
+
+Read the rationale in [Security](/docs/security) and the [pnpm motivation guide](https://pnpm.io/motivation).
+
+## Verify
+
+Run this from the project root after installing, it works the same under pnpm, npm, yarn, or bun because it shells straight to `node`:
+
+```bash
+node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
+```
+
+## Next
+
+<Cards>
+<Card title="Getting started" href="/docs/getting-started">Write your first route, validate it, and serve the OpenAPI docs.</Card>
+<Card title="Scaffold a project" href="/docs/scaffolder">Let <code>create-daloy</code> set up a hardened project for you.</Card>
+</Cards>

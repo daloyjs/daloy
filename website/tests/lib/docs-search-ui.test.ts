@@ -25,7 +25,7 @@ const INDEX = [
 test("searchDocs puts title-prefix matches in Jump to, ranked rest in results", () => {
   const { jumps, results } = searchDocs(INDEX, "rout", null);
   assert.deepEqual(jumps.map((i) => i.href), ["/docs/routing"]);
-  assert.ok(!results.some((i) => i.href === "/docs/routing"), "jumps and results are disjoint");
+  assert.ok(!results.some((i) => (i.href as string) === "/docs/routing"), "jumps and results are disjoint");
 });
 
 test("searchDocs ranks body matches and honors the section filter", () => {
