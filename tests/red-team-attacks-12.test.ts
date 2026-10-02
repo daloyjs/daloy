@@ -16,7 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fc from "fast-check";
 
-import { App, bearerAuth, except } from "../src/index.js";
+import { App, bearerAuth, defineWebSocket, except } from "../src/index.js";
 import { Router } from "../src/router.js";
 
 const ok = { 200: { description: "ok" } } as const;
@@ -199,4 +199,23 @@ test("[property] captures never carry dot components, controls, or unflagged sep
     }),
     { numRuns: 1500, seed: 20261003 },
   );
+});
+
+test("[websocket] upgrade routes refuse encoded separators and traversal", () => {
+  const app = new App({ logger: false });
+  app.ws("/chat/:room", defineWebSocket({ open: () => {} }));
+  app.ws("/files/*path", defineWebSocket({ open: () => {} }));
+  assert.deepEqual(app.webSocketRoutes.find("/chat/general")?.params, { room: "general" });
+  assert.deepEqual(app.webSocketRoutes.find("/chat/a%20b")?.params, { room: "a b" });
+  assert.deepEqual(app.webSocketRoutes.find("/files/a/b")?.params, { path: "a/b" });
+  for (const p of [
+    "/chat/a%2Fb",
+    "/chat/a%5Cb",
+    "/chat/..%2Fadmin",
+    "/chat/%00",
+    "/files/a%2Fb",
+    "/files/..%2F..%2Fsecret",
+  ]) {
+    assert.equal(app.webSocketRoutes.find(p), undefined, p);
+  }
 });

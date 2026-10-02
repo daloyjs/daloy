@@ -537,11 +537,17 @@ export class WebSocketRegistry {
   /**
    * Match a request pathname against the registered WS routes.
    *
+   * A capture that decoded a percent-encoded `/` or `\` (`%2F`, `%5C`) never
+   * matches: unlike HTTP routes there is no `allowEncodedSlash` opt-in, so the
+   * upgrade is refused exactly like an unknown path.
+   *
    * @param pathname URL pathname of the upgrade request.
-   * @returns The matched entry plus extracted params, or `undefined` when no route matches.
+   * @returns The matched entry plus extracted params, or `undefined` when no
+   *   route matches or a capture decoded an encoded separator.
    */
   find(pathname: string): RouteMatch<WebSocketRouteEntry> | undefined {
-    return this.router.find("GET", pathname);
+    const match = this.router.find("GET", pathname);
+    return match?.encodedSeparator === true ? undefined : match;
   }
 
   /**

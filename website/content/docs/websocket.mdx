@@ -79,6 +79,8 @@ const chatHandler = defineWebSocket({
 app.ws("/chat/:room", chatHandler);
 ```
 
+WebSocket paths go through the same router as HTTP routes, so `ctx.params` never holds a `.`/`..` component or a control character (`%00`, `%0A`, ...). WebSocket routes are stricter than HTTP routes in one way: a capture that decodes an encoded `/` or `\` (`%2F`, `%5C`) is never accepted, and there is no `allowEncodedSlash` opt-in. Such an upgrade request is treated as an unknown path.
+
 ## Connection API
 
 The `WebSocketConnection` passed to your handlers mirrors the WHATWG `WebSocket` interface where it makes sense on the server side:
