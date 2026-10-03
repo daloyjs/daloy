@@ -10,36 +10,80 @@ type TocEntry = {
   id: string;
   text: string;
   level: 2 | 3;
+  /** The heading itself. Ids are not unique across the document (see below). */
+  element: HTMLHeadingElement;
 };
 
 /**
- * Collect the `h2[id]` / `h3[id]` headings of the current docs article.
+ * Whether an element is actually rendered.
+ *
+ * With `cacheComponents`, Next.js keeps previously visited pages mounted but
+ * hidden (React `<Activity>` sets `display: none !important` on them) inside
+ * the same docs article. Their headings are still in the DOM, and their ids
+ * can repeat on the visible page (`#next`, `#install`), so every lookup here
+ * must skip hidden subtrees instead of trusting `getElementById`.
+ *
+ * @param element - The element to test.
+ * @returns `true` when the element and its ancestors are displayed.
+ */
+export function isRendered(element: Element): boolean {
+  if (typeof (element as HTMLElement).checkVisibility === "function") {
+    return (element as HTMLElement).checkVisibility();
+  }
+  // Fallback for environments without checkVisibility (and tests): look for
+  // an inline display:none on the element or an ancestor.
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    if (/display:\s*none/i.test(node.getAttribute("style") ?? "")) return false;
+  }
+  return true;
+}
+
+/**
+ * Collect the visible `h2[id]` / `h3[id]` headings of the current docs article.
  *
  * Read-only: the article subtree may not have hydrated yet, and mutating it
  * (e.g. injecting anchor elements) causes hydration text mismatches. The
  * hover "#" affordance is drawn with CSS (`::after`) instead, and
- * {@link handleHeadingClick} makes it clickable.
+ * {@link handleHeadingClick} makes it clickable. Headings of hidden, cached
+ * pages are skipped (see {@link isRendered}).
  *
  * @param article - The rendered docs article element.
  * @returns The table-of-contents entries in document order.
  */
-function collectHeadings(article: HTMLElement): TocEntry[] {
-  const headings = article.querySelectorAll<HTMLHeadingElement>(
-    "h2[id], h3[id]"
-  );
+export function collectHeadings(article: ParentNode): TocEntry[] {
+  const headings = article.querySelectorAll<HTMLHeadingElement>("h2[id], h3[id]");
 
-  return Array.from(headings, (heading) => ({
-    id: heading.id,
-    text: heading.textContent?.trim() ?? heading.id,
-    level: heading.tagName === "H2" ? (2 as const) : (3 as const),
-  }));
+  return Array.from(headings)
+    .filter(isRendered)
+    .map((heading) => ({
+      id: heading.id,
+      text: heading.textContent?.trim() ?? heading.id,
+      level: heading.tagName === "H2" ? (2 as const) : (3 as const),
+      element: heading,
+    }));
+}
+
+/**
+ * Jump to a heading and record it in the URL, like a native `#anchor` link,
+ * but targeting the given element rather than the first element in the
+ * document with that id (which may belong to a hidden, cached page).
+ * `scrollIntoView` honors the heading's `scroll-margin-top`.
+ *
+ * @param heading - The visible heading to show.
+ */
+function jumpToHeading(heading: HTMLElement) {
+  heading.scrollIntoView({ block: "start" });
+  if (window.location.hash !== `#${heading.id}`) {
+    window.history.pushState(window.history.state, "", `#${heading.id}`);
+  }
 }
 
 /**
  * Delegated click handler that turns the CSS-drawn "#" after each heading
  * into a deep link: clicks landing past the heading's text (i.e. on the
- * `::after` pseudo-element) set the URL hash. Clicks on the text itself are
- * ignored so selecting or copying heading text never jumps the page.
+ * `::after` pseudo-element) jump to the heading and set the URL hash. Clicks
+ * on the text itself are ignored so selecting or copying heading text never
+ * jumps the page.
  *
  * @param event - The click event from the docs article.
  */
@@ -63,7 +107,7 @@ function handleHeadingClick(event: MouseEvent) {
     return;
   }
 
-  window.location.hash = heading.id;
+  jumpToHeading(heading);
 }
 
 /**
@@ -90,17 +134,39 @@ function useDocsToc(wireHeadingLinks: boolean): { entries: TocEntry[]; activeId:
     // is suspended.
     let cancelled = false;
     let article: HTMLElement | null = null;
+    let observer: MutationObserver | null = null;
+    let scheduled = false;
+
+    const refresh = () => {
+      scheduled = false;
+      if (cancelled || !article) return;
+      setEntries(collectHeadings(article));
+    };
 
     queueMicrotask(() => {
       if (cancelled) return;
 
       article = document.querySelector<HTMLElement>("[data-docs-content]");
-      if (wireHeadingLinks) article?.addEventListener("click", handleHeadingClick);
-      setEntries(article ? collectHeadings(article) : []);
+      if (!article) {
+        setEntries([]);
+        return;
+      }
+      if (wireHeadingLinks) article.addEventListener("click", handleHeadingClick);
+      refresh();
+      // Cached pages are shown/hidden by toggling an inline style on the
+      // article's top-level children (and new pages add children), so watch
+      // exactly that and re-read the visible headings when it changes.
+      observer = new MutationObserver(() => {
+        if (scheduled) return;
+        scheduled = true;
+        queueMicrotask(refresh);
+      });
+      observer.observe(article, { childList: true, attributes: true, attributeFilter: ["style"], subtree: false });
     });
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
       if (wireHeadingLinks) article?.removeEventListener("click", handleHeadingClick);
     };
   }, [pathname, wireHeadingLinks]);
@@ -112,9 +178,9 @@ function useDocsToc(wireHeadingLinks: boolean): { entries: TocEntry[]; activeId:
 
     let cancelled = false;
     let frame = 0;
-    const elements = entries
-      .map((entry) => document.getElementById(entry.id))
-      .filter((el): el is HTMLElement => el !== null);
+    // The collected elements, not getElementById: a hidden cached page can
+    // hold an earlier element with the same id.
+    const elements = entries.map((entry) => entry.element);
     // scroll-mt-24 = 96px today; read it so a CSS change cannot desync the spy.
     const offset =
       (elements[0] ? Number.parseFloat(getComputedStyle(elements[0]).scrollMarginTop) || 96 : 96) + 8;
@@ -170,7 +236,15 @@ function TocList({ entries, activeId, onNavigate }: { entries: TocEntry[]; activ
         <li key={entry.id}>
           <a
             href={`#${entry.id}`}
-            onClick={onNavigate}
+            onClick={(event) => {
+              // Plain clicks jump to this exact heading; the native fragment
+              // lookup could land on a same-id heading of a hidden cached page.
+              // Modifier clicks (new tab, etc.) keep the browser default.
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              jumpToHeading(entry.element);
+              onNavigate?.();
+            }}
             aria-current={activeId === entry.id ? "location" : undefined}
             className={cn(
               "block border-s-2 py-1 pe-2 leading-5 transition-colors duration-200 focus-visible:rounded-e-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",

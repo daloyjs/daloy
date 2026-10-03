@@ -431,7 +431,7 @@ The defaults assume the remote agent is not fully trusted, because an Agent Card
 
 - **SSRF-guarded transport.** The default `fetch` is `fetchGuard()`, which refuses loopback, private, link-local, and cloud-metadata addresses. On runtimes without a DNS resolver (Cloudflare Workers), pass `fetchGuard({ resolve })`.
 - **The card cannot redirect your credentials.** The card is fetched without your headers, and the JSON-RPC URL it names must share the card's origin. Anything else is refused before a single credential is sent, unless you list it in `allowedOrigins`.
-- **No surprises on the wire.** `https:` only (loopback excepted), redirects are never followed, responses are size-capped (`maxResponseBytes`, 1 MiB) and parsed with prototype-pollution-safe JSON, and the JSON-RPC id must match.
+- **No surprises on the wire.** `https:` only (loopback excepted), JSON-RPC calls go to the exact URL that passed the origin check (even through a custom `fetch`), redirects are never followed, responses are size-capped (`maxResponseBytes`, 1 MiB) and parsed with prototype-pollution-safe JSON, and the JSON-RPC id must match.
 - **Timeouts on every call** (`timeoutMs`, 10 seconds), combined with any `signal` you pass.
 - **Fresh credentials.** Pass `headers` as a function and it runs per request, so short-lived tokens do not go stale in a long-lived client.
 

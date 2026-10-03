@@ -109,7 +109,11 @@ function isSkippedNode(node: Node): boolean {
     node.getAttribute("aria-hidden") === "true" ||
     // Alternate representations (e.g. the npm/yarn/bun panels of a package
     // manager tab set) that would only repeat the visible one.
-    node.hasAttribute("data-md-skip")
+    node.hasAttribute("data-md-skip") ||
+    // A previously visited page that Next.js keeps mounted but hidden
+    // (cacheComponents / React <Activity> sets an inline display:none). Only
+    // the page being read belongs in "Copy page".
+    /display:\s*none/i.test(node.getAttribute("style") ?? "")
   );
 }
 

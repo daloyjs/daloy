@@ -74,6 +74,8 @@ A limiter placed before `preBody` auth also counts requests that auth rejects by
 
 ### `BearerAuthOptions` [#bearer-auth-options]
 
+`bearerAuth()` and `jwk()` pass any token value through verbatim, with no length, charset or prefix check, so new token formats keep working. The one exception is a token containing whitespace or a comma. Duplicate `Authorization` headers are comma-joined into one value (`Bearer a, Bearer b`), so such a token is a `401` and never reaches `validate()` or the JWT verifier.
+
 <AutoTypeTable path="src/middleware.ts" name="BearerAuthOptions" />
 
 ## Composition primitives

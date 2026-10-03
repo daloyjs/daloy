@@ -88,7 +88,7 @@ app.post(
 
 - `maxBytes`: reject files larger than this many bytes.
 - `accept`: MIME allowlist. Each entry can be exact (`"image/png"`) or a wildcard (`"image/*"` / `"*/*"`).
-- `filename(name)`: predicate for filename validation, useful for forcing extensions.
+- `filename(name)`: predicate for filename validation, useful for forcing extensions. When it rejects a file, the error message echoes the name with control, bidi and invisible characters removed and the length capped at 128 characters, so a crafted name cannot spoof logs or error UIs. The `name` passed to your predicate is the raw, untouched value.
 - `magicBytes`: verify file signatures before the handler receives the upload. `true` derives known signatures from `accept` for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP. Custom signatures support domain-specific formats.
 - `rejectScriptableImages`: reject SVG, MVG, MSL, PostScript, and EPS payloads that can execute inside renderers such as ImageMagick. This is enabled automatically when `magicBytes` is configured. Set it to `false` only when the renderer is sandboxed.
 - `optional`: when `true`, accept `undefined`/`null` values without raising.
