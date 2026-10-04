@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-10-04
+
 ### Security
 
 - `bearerAuth()` and `jwk()` refuse a Bearer token containing whitespace or a
@@ -3621,7 +3623,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.2...HEAD
+[1.5.2]: https://github.com/daloyjs/daloy/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/daloyjs/daloy/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/daloyjs/daloy/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/daloyjs/daloy/compare/v1.4.0...v1.4.1
