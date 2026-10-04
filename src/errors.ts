@@ -9,6 +9,8 @@
  * messages never leak to clients (security: information disclosure).
  */
 
+import { readNodeEnv } from "./internal-env.js";
+
 /**
  * RFC 9457 Problem Details document. This is the on-the-wire shape DaloyJS
  * uses for **every** error response (the `Content-Type` is
@@ -44,7 +46,11 @@ export interface ProblemDetails {
  * @since 0.1.0
  */
 export interface ProblemRenderOptions {
-  /** Scrub `detail` from 5xx responses. Defaults to `process.env.NODE_ENV === "production"`. */
+  /**
+   * Scrub `detail` from 5xx responses. Defaults to scrubbing unless
+   * `process.env.NODE_ENV` is positively `"development"` or `"test"`, so an
+   * unset or unknown environment fails closed.
+   */
   production?: boolean;
   /** Request id stamped into `instance` as `urn:request:<id>` for log correlation. */
   requestId?: string;
@@ -150,8 +156,21 @@ export function checkCustomErrorResponseHeaders(
   return offending;
 }
 
+/**
+ * `true` only on a positive development signal: `NODE_ENV` is `"development"`
+ * or `"test"`. Unset, empty, unknown, or unreadable (e.g. a Deno permission
+ * error) all return `false`, so 5xx `detail` is redacted by default.
+ *
+ * @returns Whether 5xx problem `detail` may be sent to clients.
+ * @internal
+ */
+export function nodeEnvRevealsErrorDetail(): boolean {
+  const nodeEnv = readNodeEnv();
+  return nodeEnv === "development" || nodeEnv === "test";
+}
+
 function defaultIsProduction(): boolean {
-  return typeof process !== "undefined" && process.env?.NODE_ENV === "production";
+  return readNodeEnv() === "production";
 }
 
 function defaultSecureDefaults(): boolean {
@@ -318,8 +337,7 @@ export class HttpError extends Error {
    * @returns A `Response` with `Content-Type: application/problem+json`.
    */
   toResponse(opts: ProblemRenderOptions = {}): Response {
-    const isProd =
-      opts.production ?? (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
+    const isProd = opts.production ?? !nodeEnvRevealsErrorDetail();
     const out: ProblemDetails = { ...this.problem };
     if (isProd && this.status >= 500) {
       delete out.detail; // do not leak internals

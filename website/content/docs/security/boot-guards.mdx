@@ -115,22 +115,26 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
 
 ## 4. Spoofable client-IP headers with `trustProxy` unset return 500 [#4-x-forwarded-with-trustproxy-unset-returns-500]
 
-When `app({ trustProxy })` is not set and a request arrives carrying `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, or `X-Real-IP`, Daloy refuses to dispatch the request and returns a structured `500 problem+json`. The rate limiter, audit log, and request-id propagation would otherwise honour the attacker-supplied IP.
+When `app({ behindProxy })` (or the older `trustProxy`) is not set and a request arrives carrying `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, or `X-Real-IP`, Daloy refuses to dispatch the request and returns a structured `500 problem+json`. The rate limiter, audit log, and request-id propagation would otherwise honour the attacker-supplied IP.
 
 The same refusal now covers the platform-specific client-IP headers `cf-connecting-ip` (Cloudflare), `fly-client-ip` (Fly.io), and `true-client-ip`. They are exactly as spoofable as `X-Forwarded-*` when the app is not actually running behind that platform's proxy, so an unconfigured app refuses them too rather than letting a client forge its source IP through a vendor header the operator never opted into.
 
 ```ts
 // Pick exactly one in production:
 
-// (a) Running behind a trusted reverse proxy (nginx, ALB, Cloudflare):
-const app = new App({ env: "production", trustProxy: true });
+// (a) One proxy in front: Vercel, Cloudflare Workers, Netlify, Fly.io, Render,
+//     Railway, Heroku, or a single nginx / load balancer. Add 1 per extra
+//     proxy (Cloudflare in front of Vercel is { hops: 2 }).
+const app = new App({ env: "production", behindProxy: { hops: 1 } });
 
-// (b) Direct-to-process - ignore forwarded headers:
-const app = new App({ env: "production", trustProxy: false });
+// (b) Trust forwarded headers only from your proxies' addresses:
+const app = new App({ env: "production", behindProxy: { cidrs: ["10.0.0.0/8"] } });
 
-// (c) Disable every boot guard (escape hatch):
-const app = new App({ env: "production", secureDefaults: false });
+// (c) Clients connect directly to the process and no proxy sets these headers:
+const app = new App({ env: "production", behindProxy: "none" });
 ```
+
+Don't pick (c), `trustProxy`, or `secureDefaults: false` just to make the `500` go away. On serverless and edge platforms there is no TCP peer to fall back on, so with any of those `rateLimit()` cannot tell clients apart and puts every caller in one shared bucket: one client can exhaust it for everyone. In production DaloyJS logs a `rate-limit.shared-bucket` warning the first time that happens.
 
 The warning is logged at `warn` exactly once per process via a latch, so a flood of forged requests does not flood your logs.
 
@@ -282,6 +286,6 @@ See the [A2A docs](/docs/a2a#security-checklist) for the full agent setup.
 - Audit every `session({ secret })` call, regenerate any secret shorter than 32 bytes with `openssl rand -base64 48`.
 - Replace `cors({ origin: "*" })` with an explicit allowlist or predicate.
 - Add `app.use(csrf(...))` next to `app.use(session(...))`, or pass `app({ csrf: "off" })` for non-browser-facing apps.
-- Pick a `trustProxy` posture explicitly for every production app. If you relied on `cf-connecting-ip`, `fly-client-ip`, or `true-client-ip`, set `trustProxy: true` now that those headers are refused too.
+- Pick a `behindProxy` posture explicitly for every production app: `{ hops: 1 }` on Vercel, Cloudflare Workers and similar platforms. If you relied on `cf-connecting-ip`, `fly-client-ip`, or `true-client-ip`, declare the proxy with `behindProxy` now that those headers are refused too.
 - For every route that declares `auth:`, confirm a built-in auth middleware covers it, or wrap your custom hook with `markAuthHook(...)`.
 - Add an auth middleware in front of every `mcpRoutes()` endpoint, or pass `mcpRoutes(path, handler, { public: true })` for a deliberately public MCP server.

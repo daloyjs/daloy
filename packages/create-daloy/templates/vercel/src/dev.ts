@@ -10,6 +10,10 @@
 import { serve } from "@daloyjs/core/node";
 import { app } from "../api/index.ts";
 
+// 5xx error detail is shown only on a positive development signal; an unset
+// NODE_ENV redacts it, so default it here for the local server only.
+process.env.NODE_ENV ||= "development";
+
 const port = Number(process.env.PORT ?? 3000);
 serve(app, { port });
 // eslint-disable-next-line no-console

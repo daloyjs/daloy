@@ -1,3 +1,4 @@
+import { readNodeEnv } from "./internal-env.js";
 import type { Hooks, PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
 import { mediaTypeEssence, randomId, safeJsonParseLimited } from "./security.js";
@@ -1226,7 +1227,7 @@ export function createA2aHandler(options: A2aHandlerOptions): A2aHandler {
   }
   const allowedOrigins = compileOriginAllowlist(options.allowedOrigins, "A2A");
   const headers = options.headers;
-  const nodeEnv = typeof process === "object" ? process.env?.NODE_ENV : undefined;
+  const nodeEnv = readNodeEnv();
   let exposeInternalErrors =
     options.exposeInternalErrors ?? (nodeEnv === "development" || nodeEnv === "test");
 

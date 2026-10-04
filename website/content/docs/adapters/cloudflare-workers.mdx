@@ -62,6 +62,27 @@ import { app } from "./server.js";
 export default toFetchHandler(app);
 ```
 
+Workers have no `NODE_ENV`, so set production mode explicitly. If you write `src/server.ts` by hand instead of scaffolding with `create-daloy`, configure the App the way the Cloudflare template does:
+
+```ts
+// src/server.ts
+import { App, rateLimit } from "@daloyjs/core";
+
+export const app = new App({
+  bodyLimitBytes: 256 * 1024,
+  requestTimeoutMs: 5_000,
+  production: true, // no NODE_ENV on Workers: without this, production guards stay off
+  // Cloudflare's edge sets X-Forwarded-For. One hop tells DaloyJS which entry
+  // Cloudflare appended, so rateLimit() keys on the real client.
+  behindProxy: { hops: 1 },
+});
+
+// The in-memory store is per isolate: an abuse brake, not a global quota.
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+```
+
+Without `production: true`, the production-only refuse-to-boot guards never run. 5xx `detail` is still redacted, because an unset environment fails closed. Without `behindProxy`, production requests carrying `X-Forwarded-For` are refused with a `500`. Fix that with `{ hops: 1 }`, not `"none"` or `trustProxy`: a Worker has no TCP peer, so those settings make `rateLimit()` put every caller in one shared bucket. DaloyJS logs a `rate-limit.shared-bucket` warning in production when that happens.
+
 ## wrangler.jsonc [#wrangler-jsonc]
 
 Cloudflare now recommends `wrangler.jsonc` over `wrangler.toml` for new projects. Both are still supported. The single `nodejs_compat` flag is all you need on a recent compatibility date, there's no separate `nodejs_compat_v2` to add.

@@ -4,11 +4,13 @@ import {
   normalizeWebSocketOptions,
   type WebSocketHandler,
 } from "./websocket.js";
+import { readNodeEnv } from "./internal-env.js";
 import {
   BadRequestError,
   ForbiddenError,
   HttpError,
   InternalError,
+  nodeEnvRevealsErrorDetail,
   MethodNotAllowedError,
   NotFoundError,
   PayloadTooLargeError,
@@ -395,7 +397,15 @@ export interface AppOptions {
     maxFiles?: number;
   };
 
-  /** Production mode hides 5xx detail in error responses. Default: NODE_ENV === "production". */
+  /**
+   * Production mode: enables the production boot guards and turns off
+   * auto-mounted docs. Default: `NODE_ENV === "production"`.
+   *
+   * 5xx problem `detail` is redacted unless the environment is positively
+   * development or test (`env: "development" | "test"`, or `NODE_ENV` set to
+   * one of those). `production: false` on its own does not reveal it, so an
+   * unset environment never sends exception messages to clients.
+   */
   production?: boolean;
 
   /**
@@ -1539,6 +1549,8 @@ export class App<
    * work in the hot path. Computed lazily on first read.
    */
   private _productionCache: boolean | undefined;
+  /** Memoized result of `redactsErrorDetail()`; same inputs as `_productionCache`. */
+  private _redactDetailCache: boolean | undefined;
   /** WebSocket route registry. Adapters look up handlers via `app.webSocketRoutes.find()`. */
   readonly webSocketRoutes: WebSocketRegistry = new WebSocketRegistry();
   private prefix = "";
@@ -1964,10 +1976,7 @@ export class App<
   private warnOnEnvMismatch(): void {
     const env = this.options.env;
     if (env === undefined) return;
-    const nodeEnv =
-      typeof process !== "undefined" && typeof process.env !== "undefined"
-        ? process.env.NODE_ENV
-        : undefined;
+    const nodeEnv = readNodeEnv();
     if (nodeEnv && nodeEnv !== env) {
       this.log.warn(
         { event: "env.mismatch", env, nodeEnv },
@@ -1982,16 +1991,28 @@ export class App<
    * then falls back to `NODE_ENV === "production"`. Used by the docs
    * auto-mount and error response detail stripping.
    */
+  /**
+   * Whether 5xx problem `detail` is redacted. Fails closed: only an explicit
+   * `env: "development" | "test"`, or (with no `env`) a `NODE_ENV` of
+   * `development` / `test` together with `production` not `true`, reveals it.
+   */
+  private redactsErrorDetail(): boolean {
+    if (this._redactDetailCache !== undefined) return this._redactDetailCache;
+    let v: boolean;
+    if (this.options.env !== undefined) v = this.options.env === "production";
+    else if (this.options.production === true) v = true;
+    else v = !nodeEnvRevealsErrorDetail();
+    this._redactDetailCache = v;
+    return v;
+  }
+
   private isProduction(): boolean {
     if (this._productionCache !== undefined) return this._productionCache;
     let v: boolean;
     if (this.options.env !== undefined) v = this.options.env === "production";
     else if (this.options.production !== undefined) v = this.options.production;
     else
-      v =
-        typeof process !== "undefined" &&
-        typeof process.env !== "undefined" &&
-        process.env.NODE_ENV === "production";
+      v = readNodeEnv() === "production";
     this._productionCache = v;
     return v;
   }
@@ -2107,7 +2128,21 @@ export class App<
     // proxy's address (one shared bucket that any client can drain).
     const behindProxyHook = (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK];
     if (typeof behindProxyHook === "function") {
-      (behindProxyHook as (cfg: unknown) => void)(this.options.behindProxy);
+      // In production, say so once when a guard cannot tell clients apart and
+      // falls back to one shared bucket (edge platforms have no TCP peer).
+      const onSharedBucket = this.isProduction()
+        ? () =>
+            this.log.warn(
+              { event: "rate-limit.shared-bucket", behindProxy: this.options.behindProxy ?? null },
+              "rateLimit() cannot identify the client, so every caller shares one bucket and one " +
+                "client can exhaust it for everyone. On Vercel, Cloudflare Workers, Netlify, Fly.io, " +
+                "Render, Railway or Heroku set app({ behindProxy: { hops: 1 } }).",
+            )
+        : undefined;
+      (behindProxyHook as (cfg: unknown, onSharedBucket?: () => void) => void)(
+        this.options.behindProxy,
+        onSharedBucket,
+      );
     }
     // Always-on correctness guard (independent of secureDefaults / environment).
     // A hook bundle must be a single Hooks object. Passing an ARRAY — or any
@@ -2206,10 +2241,7 @@ export class App<
     ) {
       return false;
     }
-    const nodeEnv =
-      typeof process !== "undefined" && typeof process.env !== "undefined"
-        ? process.env.NODE_ENV
-        : undefined;
+    const nodeEnv = readNodeEnv();
     return nodeEnv === undefined || nodeEnv === "";
   }
 
@@ -2493,17 +2525,15 @@ export class App<
       this.trustProxyWarned = true;
       this.log.warn(
         { event: "trust-proxy.unconfigured", header: found },
-        `Request carried ${found} but app({ trustProxy }) is unset; refusing to honour spoofable proxy headers.`,
+        `Request carried ${found} but app({ behindProxy }) is unset; refusing to honour spoofable proxy headers. ` +
+          PROXY_FIX_HINT,
       );
     }
     const refusal = new InternalError(
-      `Refusing to dispatch request: ${found} header is present but app({ trustProxy }) is unconfigured. ` +
+      `Refusing to dispatch request: ${found} header is present but app({ behindProxy }) is unconfigured. ` +
         `Honouring a spoofable forwarded header would let a client forge its source IP for the rate ` +
         `limiter, audit log, and request-id propagation. ` +
-        `Pass app({ trustProxy: true }) when running behind a trusted reverse proxy, ` +
-        `or app({ trustProxy: false }) to ignore forwarded headers, ` +
-        `or app({ secureDefaults: false }) to disable this guard. ` +
-        `See https://daloyjs.dev/docs/security/boot-guards.`,
+        PROXY_FIX_HINT,
     );
     // Every refused request throws from this one line, so the stack is
     // identical each time and names framework internals rather than anything
@@ -5003,7 +5033,7 @@ export class App<
       if (httpErr.status < 500)
         log.warn({ status: httpErr.status }, httpErr.problem.title);
       const res = httpErr.toResponse({
-        production: this.isProduction(),
+        production: this.redactsErrorDetail(),
         requestId,
       });
       if (ctx) copyContextHeaders(ctx, res);
@@ -5458,6 +5488,22 @@ function isStateChangingMethod(method: HttpMethod): boolean {
     method === "DELETE"
   );
 }
+
+/**
+ * Fix guidance appended to the unconfigured-proxy refusal. It names the right
+ * `behindProxy` value per deployment first, because whatever the message
+ * suggests is what a developer (or a coding agent) will paste. `"none"` and
+ * `trustProxy` cannot tell clients apart on an edge platform, where there is
+ * no TCP peer, so `rateLimit()` would fall back to one shared bucket.
+ */
+const PROXY_FIX_HINT =
+  `Declare where requests come from: app({ behindProxy: { hops: 1 } }) on Vercel, Cloudflare ` +
+  `Workers, Netlify, Fly.io, Render, Railway, Heroku, or behind one nginx / load balancer ` +
+  `(add 1 per extra proxy, e.g. Cloudflare in front of Vercel is { hops: 2 }); ` +
+  `app({ behindProxy: { cidrs: [...] } }) to trust only your proxies' addresses; ` +
+  `app({ behindProxy: "none" }) only when clients connect directly and no proxy sets these headers. ` +
+  `Do not disable this guard to make the error go away: without a correct behindProxy, rateLimit() ` +
+  `cannot tell clients apart. See https://daloyjs.dev/docs/security/boot-guards.`;
 
 /**
  * Extract the pathname from a fully-qualified request URL without

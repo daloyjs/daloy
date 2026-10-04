@@ -1,3 +1,4 @@
+import { readNodeEnv } from "./internal-env.js";
 import type { PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
 import { mediaTypeEssence, safeJsonParse, safeJsonParseLimited } from "./security.js";
@@ -1578,7 +1579,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
   const allowedOrigins = compileOriginAllowlist(options.allowedOrigins, "MCP");
 
   // Fail closed: expose raw error text only on a positive dev signal.
-  const nodeEnv = typeof process === "object" ? process.env?.NODE_ENV : undefined;
+  const nodeEnv = readNodeEnv();
   let exposeInternalErrors =
     options.exposeInternalErrors ?? (nodeEnv === "development" || nodeEnv === "test");
   const maxResourceUriLength = options.maxResourceUriLength ?? DEFAULT_MAX_RESOURCE_URI_LENGTH;

@@ -72,9 +72,9 @@ async function importEntry(specifier) {
   }
 }
 
-function spawnDev(command, args) {
+function spawnDev(command, args, env) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { stdio: "inherit", shell: false });
+    const child = spawn(command, args, { stdio: "inherit", shell: false, env: env ?? process.env });
     const forward = (sig) => {
       try {
         child.kill(sig);

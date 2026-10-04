@@ -360,3 +360,39 @@ describe("A2A client: trace propagation", () => {
     assert.ok(seen instanceof Request);
   });
 });
+
+describe("createA2aClient endpoint pinning", () => {
+  test("RPC calls go to the validated URL, not the card's raw string", async () => {
+    const seen: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const raw = String(input);
+      seen.push(raw);
+      if (raw.endsWith("/.well-known/agent-card.json")) {
+        return Response.json({
+          name: "agent",
+          supportedInterfaces: [
+            { protocolBinding: "JSONRPC", protocolVersion: "1.0", url: "HTTPS://AGENT.TEST:443/x/../a2a" },
+          ],
+        });
+      }
+      return Response.json({ jsonrpc: "2.0", id: "never-matches", result: {} });
+    };
+    const c = createA2aClient({ url: "https://agent.test", fetch: fetchImpl });
+    await assert.rejects(c.sendMessage("hi"), A2aClientError);
+    assert.equal(seen[1], "https://agent.test/a2a");
+  });
+
+  test("[unhappy] an off-origin card endpoint is still refused before any RPC", async () => {
+    const seen: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      seen.push(String(input));
+      return Response.json({
+        name: "agent",
+        supportedInterfaces: [{ protocolBinding: "JSONRPC", protocolVersion: "1.0", url: "https://evil.test/a2a" }],
+      });
+    };
+    const c = createA2aClient({ url: "https://agent.test", fetch: fetchImpl });
+    await assert.rejects(c.sendMessage("hi"), /not the card's origin/);
+    assert.equal(seen.length, 1);
+  });
+});

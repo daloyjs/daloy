@@ -50,6 +50,19 @@
 import type { StandardSchemaV1 } from "./schema.js";
 import { validate } from "./schema.js";
 
+/** C0/C1 controls, bidi overrides, and invisible format characters. */
+const UNSAFE_ECHO_RE =
+  /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]/g;
+
+/**
+ * Make a client-supplied value safe to echo in a validation message: strip
+ * control, bidi and invisible characters (log / UI spoofing) and cap length.
+ */
+function echoSafe(value: string): string {
+  const cleaned = value.replace(UNSAFE_ECHO_RE, "");
+  return cleaned.length > 128 ? `${cleaned.slice(0, 128)}...` : cleaned;
+}
+
 /** Marker key used by the OpenAPI generator to emit `multipart/form-data`. */
 export const MULTIPART_SCHEMA_MARKER = "~daloy.multipart" as const;
 /** Marker key for individual file fields. */
@@ -417,7 +430,7 @@ export function fileField(
               issues: [
                 {
                   message: `File type "${
-                    file.type || "(unknown)"
+                    echoSafe(file.type) || "(unknown)"
                   }" not in accept list: ${opts.accept.join(", ")}`,
                 },
               ],
@@ -428,7 +441,7 @@ export function fileField(
           const name = typeof file.name === "string" ? file.name : "";
           if (!opts.filename(name)) {
             return {
-              issues: [{ message: `File name "${name}" rejected by filename matcher` }],
+              issues: [{ message: `File name "${echoSafe(name)}" rejected by filename matcher` }],
             };
           }
         }

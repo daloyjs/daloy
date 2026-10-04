@@ -5,6 +5,7 @@ import { App } from "../src/index.js";
 import {
   runCli,
   parseArgs,
+  devEnvironment,
   type CliIO,
   detectRuntime,
   buildDevCommand,
@@ -497,6 +498,33 @@ test("runCli dev: invokes spawn with the runtime-specific command", async () => 
   assert.equal(calls[0]!.command, "bun");
   assert.deepEqual(Array.from(calls[0]!.args), ["--hot", "./src/server.ts"]);
   assert.match(out.join(""), /bun → bun --hot \.\/src\/server\.ts/);
+});
+
+test("devEnvironment defaults NODE_ENV to development only when unset", () => {
+  assert.equal(devEnvironment({}).NODE_ENV, "development");
+  assert.equal(devEnvironment({ NODE_ENV: "" }).NODE_ENV, "development");
+  assert.equal(devEnvironment({ NODE_ENV: "production" }).NODE_ENV, "production");
+  assert.equal(devEnvironment({ NODE_ENV: "test", PATH: "/bin" }).PATH, "/bin");
+  const base = { PATH: "/bin" };
+  devEnvironment(base);
+  assert.deepEqual(base, { PATH: "/bin" });
+});
+
+test("runCli dev: hands the child an environment with NODE_ENV set", async () => {
+  let seen: Readonly<Record<string, string | undefined>> | undefined;
+  const io: CliIO = {
+    stdout: () => {},
+    stderr: () => {},
+    importEntry: async () => ({}),
+    version: "0.0.0",
+    spawn: async (_command, _args, env) => {
+      seen = env;
+      return 0;
+    },
+    detectRuntime: () => "node",
+  };
+  await runCli(["dev", "src/server.ts"], io);
+  assert.ok(seen?.NODE_ENV);
 });
 
 test("runCli dev: propagates child exit code", async () => {

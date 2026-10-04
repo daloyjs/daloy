@@ -79,7 +79,7 @@ Every row below describes behavior that is on by default in a fresh DaloyJS app.
 | Missing JWT expiry | Signing without an `exp` claim is refused, not defaulted to a forever token. |
 | Unsafe compression cases (BREACH) | `compression()` skips `Set-Cookie`, `Authorization`, session / CSRF cookie responses, and already-encoded content; downgrades strong ETags per RFC 9110. |
 | Unsafe file-upload assumptions | `multipartObject` + `fileField` enforce per-field size caps, MIME allowlists, and magic-byte checks. |
-| Leaky production errors | Production mode strips `detail` from `5xx` problem+json automatically. Stack traces never leak through the default error path. |
+| Leaky production errors | `5xx` problem+json `detail` is redacted unless the environment is explicitly development or test; an unset `NODE_ENV` redacts too. Stack traces never leak through the default error path. |
 | Unsupported content types | Routes with body schemas reject non-allowed content-types with `415`. |
 | Method confusion | Real `405` with `Allow` header instead of a misleading `404`. |
 | Header / response splitting | `sanitizeHeaderName` / `sanitizeHeaderValue` reject CRLF and NUL in header values. |

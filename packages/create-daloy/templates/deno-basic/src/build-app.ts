@@ -9,10 +9,14 @@ import { App, NotFoundError, rateLimit, requestId, secureHeaders } from "@daloyj
  * as a side effect.
  */
 export function buildApp(): App {
+  const denoEnv = Deno.env.get("DENO_ENV");
   const app = new App({
     bodyLimitBytes: 1024 * 1024,
     requestTimeoutMs: 5_000,
-    production: Deno.env.get("DENO_ENV") === "production",
+    production: denoEnv === "production",
+    // 5xx error detail (the thrown message) is sent to clients only when
+    // DENO_ENV=development, which the `dev` task sets; otherwise it's redacted.
+    ...(denoEnv === "development" ? { env: "development" as const } : {}),
     // Reverse-proxy posture. When the app runs behind a trusted edge proxy
     // (Railway, Render, Fly, Heroku, a single nginx / load balancer), set the
     // TRUST_PROXY_HOPS env var to the number of proxy hops in front of it — a

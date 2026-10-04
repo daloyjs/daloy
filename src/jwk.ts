@@ -36,6 +36,7 @@ import {
   type JwtKeyMaterial,
   type JwtVerified,
 } from "./jwt.js";
+import { parseBearerToken } from "./security.js";
 import type { Hooks, PreBodyContext } from "./types.js";
 
 /** Asymmetric algorithms accepted by {@link jwk}. */
@@ -271,6 +272,8 @@ function makeJwksLoader(
  * each key is WebCrypto-imported once for the life of the middleware (cached
  * by its full content, so same-`kid` rotations take effect immediately).
  * Set `maxLifetimeSeconds` to require expiry and cap accepted token lifetimes.
+ * A Bearer token containing whitespace or a comma (including comma-joined
+ * duplicate `Authorization` headers) is a `401` before verification.
  *
  * @example
  * ```ts
@@ -394,14 +397,13 @@ export function jwk(opts: JwkOptions): Hooks {
 
   const authHooks: Hooks = {
     async preBody(ctx) {
-      const header = ctx.request.headers.get("authorization") ?? "";
-      const match = /^Bearer\s+(.+)$/i.exec(header);
-      if (!match) {
+      const token = parseBearerToken(ctx.request.headers.get("authorization"));
+      if (token === undefined) {
         return unauthorized(realm);
       }
       let verified: JwtVerified;
       try {
-        verified = await verifier.verify(match[1]!);
+        verified = await verifier.verify(token);
       } catch (err) {
         const message = err instanceof JwtError ? err.message : "JWT verification failed";
         return unauthorized(realm, "invalid_token", message);

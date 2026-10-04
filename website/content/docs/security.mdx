@@ -91,7 +91,7 @@ These checks happen in `App` or the runtime adapter itself. Applications get the
 | Slow-loris / hung handlers | `requestTimeoutMs` (default 30s) returns `408` and fires `ctx.request.signal` for cooperative teardown. The Node adapter also sets socket timeouts. |
 | Unsupported content types | Routes with body schemas reject non-allowed content-types -\> 415. |
 | Method confusion | Real **405** with `Allow` header, never a misleading 404. |
-| Information disclosure (5xx) | Production mode strips `detail` from 5xx problem+json automatically. |
+| Information disclosure (5xx) | 5xx problem+json `detail` is redacted unless the environment is explicitly development or test; an unset `NODE_ENV` redacts too. |
 
 ## First-party security middleware
 

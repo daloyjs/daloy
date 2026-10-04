@@ -133,6 +133,8 @@ The exact command spawned depends on the runtime that hosts the CLI:
 
 Pass `--runtime <node|bun|deno>` to override runtime detection. This is required when running `daloy dev` from a `package.json` script on Bun or Deno, because the CLI binary's `#!/usr/bin/env node` shebang otherwise forces Node detection. The `bun-basic` template ships `"dev": "daloy dev --runtime bun"` for this reason.
 
+`daloy dev` also sets `NODE_ENV=development` for the child process when it is unset or empty. An explicit value, including `production`, is kept. This is what lets local responses show 5xx error `detail`, which DaloyJS redacts unless the environment is positively development or test (see [Errors](/docs/errors)).
+
 ## `daloy doctor`: secure-defaults audit
 
 `daloy doctor [entry]` loads the same `App` as `inspect`, then audits the live configuration for secure-by-default regressions. It exits 1 when it finds an error-level issue, so it can guard CI or a container `HEALTHCHECK`:

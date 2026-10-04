@@ -17,6 +17,56 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- `bearerAuth()` and `jwk()` refuse a Bearer token containing whitespace or a
+  comma with `401`. `Headers` comma-joins duplicate `Authorization` headers, so
+  the previous parse read `Bearer a, Bearer b` as the token `"a, Bearer b"` and
+  passed it to `validate()`. Every other token shape still passes through
+  verbatim (no charset or format check).
+- `fileField()` validation errors strip control, bidi and invisible characters
+  from the echoed filename and cap it at 128 characters.
+- `createA2aClient()` sends JSON-RPC calls to the URL that passed the origin
+  check rather than re-reading the Agent Card's raw string, so a custom `fetch`
+  transport cannot parse the endpoint differently from the check.
+- 5xx problem+json `detail` (the thrown error's message) is now redacted
+  unless the environment is positively development or test: `env:
+  "development" | "test"`, or no `env` and `NODE_ENV` set to one of those.
+  Previously an unset `NODE_ENV` counted as development, so edge deployments
+  (Cloudflare Workers, Deno Deploy) and scaffolded apps passing
+  `production: process.env.NODE_ENV === "production"` sent exception messages,
+  such as database errors, to clients. `production: false` alone no longer
+  reveals `detail`. `HttpError.toResponse()` without options follows the same
+  rule.
+
+- The unconfigured-proxy refusal (the production `500` when a request carries
+  `X-Forwarded-*` and `behindProxy` is unset) no longer suggests
+  `trustProxy: true`, `trustProxy: false` or `secureDefaults: false`. On edge
+  and serverless platforms, which have no TCP peer, each of those made
+  `rateLimit()` put every caller in one shared bucket that one client could
+  exhaust. The message now leads with `behindProxy: { hops: 1 }` and names the
+  platforms it applies to. In production, `rateLimit()` / `loginThrottle()`
+  log a one-time `rate-limit.shared-bucket` warning when they fall back to the
+  shared bucket.
+
+### Fixed
+
+- Reading `NODE_ENV` can no longer crash an app. On Deno with an
+  `--allow-env` allowlist that omits `NODE_ENV`, `new App({ env })`, `jwt`
+  defaults, and `createMcpHandler()` / `createA2aHandler()` threw `NotCapable`
+  at construction. An unreadable value is now treated as unset.
+
+### Changed
+
+- `daloy dev` starts its child process with `NODE_ENV=development` when the
+  variable is unset or empty, so local responses keep showing 5xx detail.
+- Docs: the Vercel and Cloudflare Workers adapter pages show the templates'
+  `production` and `behindProxy` settings for hand-written apps, and the
+  boot-guards page recommends `behindProxy` instead of `trustProxy`.
+- Templates: deno-basic's `dev` task sets `DENO_ENV=development` and maps it to
+  `env: "development"`; vercel's local `src/dev.ts` defaults
+  `NODE_ENV=development`.
+
 ## [1.5.1] - 2026-10-02
 
 ### Security

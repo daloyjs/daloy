@@ -1,7 +1,7 @@
 {
   "name": "my-daloy-deno-app",
   "tasks": {
-    "dev": "deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL --watch src/main.ts",
+    "dev": "DENO_ENV=development deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL --watch src/main.ts",
     "start": "deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL src/main.ts",
     "typecheck": "deno check src/ tests/ scripts/",
     "test": "deno test --allow-net --allow-env tests/",

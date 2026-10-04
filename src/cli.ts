@@ -33,7 +33,11 @@ export interface CliIO {
    * `daloy dev`; optional so unit tests that only exercise `inspect`
    * can omit it.
    */
-  spawn?: (command: string, args: readonly string[]) => Promise<number>;
+  spawn?: (
+    command: string,
+    args: readonly string[],
+    env?: Readonly<Record<string, string | undefined>>,
+  ) => Promise<number>;
   /**
    * Read a UTF-8 text file by path. Required for `daloy diff`; optional so
    * unit tests that only exercise `inspect` can omit it.
@@ -999,6 +1003,23 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
   return { exitCode: findings.some((f) => f.level === "error") ? 1 : 0 };
 }
 
+/**
+ * Environment for the `daloy dev` child process: the caller's environment with
+ * `NODE_ENV` defaulted to `"development"` when unset or empty. An explicit
+ * value (including `"production"`) is kept. Without this default the dev
+ * server would redact 5xx error detail, which is shown only on a positive
+ * development / test signal.
+ *
+ * @param base - The parent process environment.
+ * @returns A new environment object; `base` is not mutated.
+ * @since 1.5.2
+ */
+export function devEnvironment(
+  base: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+  return base.NODE_ENV ? { ...base } : { ...base, NODE_ENV: "development" };
+}
+
 async function runDev(opts: CliOptions, io: CliIO): Promise<CliResult> {
   if (!io.spawn) {
     io.stderr("daloy dev requires a spawn-capable host (use the bundled bin/daloy.mjs CLI).\n");
@@ -1015,7 +1036,9 @@ async function runDev(opts: CliOptions, io: CliIO): Promise<CliResult> {
   const { command, args } = buildDevCommand(runtime, entry);
   io.stdout(`daloy dev: ${runtime} → ${command} ${args.join(" ")}\n`);
   try {
-    const code = await io.spawn(command, args);
+    const parentEnv =
+      typeof process === "object" && process.env ? process.env : {};
+    const code = await io.spawn(command, args, devEnvironment(parentEnv));
     return { exitCode: code };
   } catch (err) {
     io.stderr(`daloy dev: failed to start: ${(err as Error).message}\n`);

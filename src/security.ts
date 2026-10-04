@@ -286,6 +286,28 @@ export function randomId(): string {
  *
  * @since 0.15.0
  */
+/** One `Bearer` credential: any value without whitespace or a comma. */
+const BEARER_TOKEN_RE = /^Bearer[ \t]+([^\s,]+)[ \t]*$/i;
+
+/**
+ * Extract the credential from an `Authorization: Bearer ...` value.
+ *
+ * Deliberately not a charset allowlist (see SECURITY.md, "never validate a
+ * credential against a hardcoded format"): any token shape passes through,
+ * except one containing whitespace or a comma. Those are refused because
+ * `Headers` comma-joins duplicate `Authorization` headers, so
+ * `Bearer a, Bearer b` must never be read as a single token.
+ *
+ * @param header - Raw `Authorization` header value, or `null` when absent.
+ * @returns The token, or `undefined` when the header is absent or malformed.
+ * @internal
+ */
+export function parseBearerToken(header: string | null): string | undefined {
+  if (header === null) return undefined;
+  const match = BEARER_TOKEN_RE.exec(header);
+  return match === null ? undefined : match[1];
+}
+
 export const SMUGGLING_SINGLETON_HEADERS: readonly string[] = Object.freeze([
   "host",
   "content-length",

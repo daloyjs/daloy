@@ -61,6 +61,27 @@ import { app } from "../src/server.ts";
 export default toFetchHandler(app);
 ```
 
+If you write `src/server.ts` by hand instead of scaffolding with `create-daloy`, configure the App the way the Vercel template does:
+
+```ts
+// src/server.ts
+import { App, rateLimit } from "@daloyjs/core";
+
+export const app = new App({
+  bodyLimitBytes: 256 * 1024, // Vercel itself caps function bodies at 4.5 MB
+  requestTimeoutMs: 5_000,
+  production: process.env.NODE_ENV === "production", // Vercel sets NODE_ENV=production on deploys
+  // Vercel's edge sets X-Forwarded-For on every request. One hop tells DaloyJS
+  // which entry Vercel appended, so rateLimit() keys on the real client.
+  // Use { hops: 2 } with another CDN (e.g. Cloudflare) in front of Vercel.
+  behindProxy: { hops: 1 },
+});
+
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+```
+
+Leave out `behindProxy` and every production request that carries `X-Forwarded-For` (which is all of them on Vercel) is refused with a `500`. That refusal is deliberate. Fix it with `{ hops: 1 }`, not `behindProxy: "none"` or `trustProxy`: a function has no TCP peer to fall back on, so those settings make `rateLimit()` put every caller in one shared bucket that a single client can exhaust for everyone. In production DaloyJS logs a `rate-limit.shared-bucket` warning when that happens.
+
 Vercel maps `api/index.ts` to `/api`, but a DaloyJS app registers its routes at the **root** (`/healthz`, `/docs`, ...). Add a **rewrite** so every path reaches the function and DaloyJS owns routing at the site root, without it the deployed root domain returns a Vercel 404:
 
 ```json

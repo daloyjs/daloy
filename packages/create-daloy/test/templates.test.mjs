@@ -1895,7 +1895,15 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   const denoJson = JSON.parse(
     await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8")
   );
-  assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
+  // The dev task is the positive development signal that unlocks 5xx detail;
+  // `start` must not set it, so deploys redact by default.
+  assert.match(denoJson.tasks.dev, /^DENO_ENV=development deno run.*--watch src\/main\.ts$/);
+  assert.doesNotMatch(denoJson.tasks.start, /DENO_ENV=/);
+  const denoBuildApp = await readFile(
+    path.join(pkgRoot, "templates/deno-basic/src/build-app.ts"),
+    "utf8"
+  );
+  assert.match(denoBuildApp, /denoEnv === "development" \? \{ env: "development" as const \}/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
   // Derived from the published core version rather than hardcoded. Hardcoding
   // is what let this template fall a full release behind: through the entire

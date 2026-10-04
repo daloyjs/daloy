@@ -8,7 +8,7 @@
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
-import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
+import { parseBearerToken, randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
 import {
   getConnInfo,
   resolveClientIp,
@@ -1205,16 +1205,21 @@ function declaresNoClientTrust(opts: {
  * when the TCP peer is one of those proxies. With no posture, `"none"`, or two
  * Apps reporting different postures for the same guard instance, it keys on
  * the TCP peer exactly as before. A request with no resolvable client IP
- * shares `"global"`, as it did before.
+ * shares `"global"`, as it did before. On edge platforms (no TCP peer) that
+ * is every request unless `behindProxy` names the proxy hops, so the App may
+ * pass `onSharedBucket`, called once, the first time a request falls back to
+ * `"global"`, to make that silent degradation visible.
  */
 function appProxyAwareKey(ipv6Subnet: number): {
   keyOf: (ctx: RateLimitContext) => string;
-  receive: (cfg: unknown) => void;
+  receive: (cfg: unknown, onSharedBucket?: () => void) => void;
 } {
   let posture: BehindProxyConfig | undefined;
   let received = false;
   let conflicted = false;
-  const receive = (cfg: unknown): void => {
+  let notifyShared: (() => void) | undefined;
+  const receive = (cfg: unknown, onSharedBucket?: () => void): void => {
+    if (onSharedBucket !== undefined && notifyShared === undefined) notifyShared = onSharedBucket;
     if (conflicted) return;
     if (!received) {
       received = true;
@@ -1226,11 +1231,22 @@ function appProxyAwareKey(ipv6Subnet: number): {
       posture = undefined;
     }
   };
+  const shared = (): string => {
+    const notify = notifyShared;
+    if (notify !== undefined) {
+      notifyShared = undefined;
+      notify();
+    }
+    return "global";
+  };
   const keyOf = (ctx: RateLimitContext): string => {
     const cfg = posture;
-    if (cfg === undefined || cfg === "none") return peerRateLimitKey(ctx, ipv6Subnet);
+    if (cfg === undefined || cfg === "none") {
+      const key = peerRateLimitKey(ctx, ipv6Subnet);
+      return key === "global" ? shared() : key;
+    }
     const ip = resolveClientIp(ctx.request, cfg);
-    if (ip === undefined) return "global";
+    if (ip === undefined) return shared();
     return ip === getConnInfo(ctx.request)?.remoteAddress
       ? peerRateLimitKey(ctx, ipv6Subnet)
       : ipRateLimitIdentity(ip, ipv6Subnet);
@@ -1548,6 +1564,9 @@ export interface BearerAuthOptions {
  * `Authorization: Bearer ...` header with `401` (and a `WWW-Authenticate`
  * challenge), and requests whose token fails `validate(token)` (or the
  * optional per-request `verify(token, ctx)` revalidation hook) with `403`.
+ * A token containing whitespace or a comma (including comma-joined duplicate
+ * `Authorization` headers) is a `401` and never reaches `validate`; any other
+ * token shape is passed through verbatim.
  *
  * The `validate` callback is the integration point with whatever JWT
  * verifier, opaque-token introspector, or in-memory test stub you use. The
@@ -1586,9 +1605,8 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
   }
   return markAuthHook({
     async preBody(ctx) {
-      const h = ctx.request.headers.get("authorization") ?? "";
-      const m = /^Bearer\s+(.+)$/i.exec(h);
-      if (!m) {
+      const token = parseBearerToken(ctx.request.headers.get("authorization"));
+      if (token === undefined) {
         return new Response(
           JSON.stringify({
             type: "https://daloyjs.dev/errors/unauthorized",
@@ -1605,10 +1623,10 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
           }
         );
       }
-      const ok = await options.validate(m[1]!);
+      const ok = await options.validate(token);
       if (!ok) throw new ForbiddenError("Invalid token");
       if (options.verify) {
-        const verified = await options.verify(m[1]!, ctx);
+        const verified = await options.verify(token, ctx);
         if (verified === false) throw new ForbiddenError("Token revoked");
       }
       return undefined;

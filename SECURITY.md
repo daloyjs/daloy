@@ -362,7 +362,7 @@ Router rejects `..` and `//` before walking.
 
 #### Auth/router path-matching mismatch
 
-Router is case-sensitive, performs no URL rewrites. The `except()` matcher consumes the same `url.pathname` the router sees (no double-decode, no case folding). That agreement is enforced at the adapter boundary: the Node adapter canonicalizes any request-target WHATWG parsing would rewrite (`%2e%2e`, `.%2e`, `\`, `.` segments) and the Node and Lambda adapters refuse with 400 a `Host` / trusted `X-Forwarded-Host` that is not a plain `host[:port]` (a Host such as `h\health?` used to move the WHATWG pathname away from the routed path). Router params and wildcards never bind a `.` / `..` segment, raw or percent-encoded. Regressions in [`tests/node-adapter.test.ts`](tests/node-adapter.test.ts) and [`tests/router.test.ts`](tests/router.test.ts) use raw sockets, because `fetch()` normalizes these paths on the client. Regression against Qinglong [CVE-2026-3965 / CVE-2026-4047](https://snyk.io/blog/qinglong-task-scheduler-rce-vulnerabilities/) in [`tests/path-auth-bypass-regression.test.ts`](tests/path-auth-bypass-regression.test.ts).
+Router is case-sensitive, performs no URL rewrites. The `except()` matcher consumes the same `url.pathname` the router sees (no double-decode, no case folding). That agreement is enforced at the adapter boundary: the Node adapter canonicalizes any request-target WHATWG parsing would rewrite (`%2e%2e`, `.%2e`, `\`, `.` segments) and the Node and Lambda adapters refuse with 400 a `Host` / trusted `X-Forwarded-Host` that is not a plain `host[:port]` (a Host such as `h\health?` used to move the WHATWG pathname away from the routed path). Router params and wildcards never bind a `.` / `..` segment, raw or percent-encoded, nor a decoded value that hides a `.` / `..` component behind an encoded separator (`..%2F`, `..%5C`) or carries a control character (`%00`, `%0A`). A capture that decodes `%2F` / `%5C` is a `404` unless the route opts in with `allowEncodedSlash` (WebSocket routes have no opt-in). `except()` ignores trailing slashes exactly as the router does and its `*` needs a non-empty segment, so `except("/docs/*")` can never exempt the `/docs` route that `/docs/` dispatches to (fixed in 1.5.1). Round 12 of the red-team suite fuzzes this agreement with fast-check. Regressions in [`tests/node-adapter.test.ts`](tests/node-adapter.test.ts) and [`tests/router.test.ts`](tests/router.test.ts) use raw sockets, because `fetch()` normalizes these paths on the client. Regression against Qinglong [CVE-2026-3965 / CVE-2026-4047](https://snyk.io/blog/qinglong-task-scheduler-rce-vulnerabilities/) in [`tests/path-auth-bypass-regression.test.ts`](tests/path-auth-bypass-regression.test.ts).
 
 #### Internal-header middleware bypass (Next.js [CVE-2025-29927](https://nvd.nist.gov/vuln/detail/CVE-2025-29927) class)
 
@@ -393,7 +393,7 @@ Four layers: (a) no user-supplied regex meets user-supplied input in core; the o
 
 #### 5xx info disclosure
 
-Production mode strips `detail` from 5xx problem+json automatically.
+5xx problem+json `detail` (the thrown error's message) is redacted unless the environment is positively development or test: `env: "development" | "test"`, or no `env` option and `NODE_ENV` set to `development` / `test`. An unset, empty, unknown, or unreadable `NODE_ENV` redacts, and `production: false` alone does not reveal it, so edge deployments with no `NODE_ENV` never send exception messages to clients (previously an unset environment counted as development). The stack trace is never sent in any mode.
 
 #### CRLF in user-controlled headers
 
@@ -513,7 +513,7 @@ policy. Do not send credentials or sensitive bodies to caller-selected URLs.
 
 ### Red-team verification (adversarial test suite)
 
-The in-scope classes above are not merely asserted by unit tests — they are continuously **attacked**. An eleven-wave red-team suite plays the external assessor against the framework inside the test harness, organized around the [Doyensec Web Application & API methodology](https://www.doyensec.com/services/web-applications-and-apis.html) (the OWASP WSTG categories Doyensec co-authors). In every wave the **secure outcome is the passing outcome**, so a regression that re-opens a defense turns the suite red. Run the waves on their own with `pnpm test:red-team` — wired as a dedicated gate in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+The in-scope classes above are not merely asserted by unit tests — they are continuously **attacked**. A thirteen-wave red-team suite plays the external assessor against the framework inside the test harness, organized around the [Doyensec Web Application & API methodology](https://www.doyensec.com/services/web-applications-and-apis.html) (the OWASP WSTG categories Doyensec co-authors). In every wave the **secure outcome is the passing outcome**, so a regression that re-opens a defense turns the suite red. Run the waves on their own with `pnpm test:red-team` — wired as a dedicated gate in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 | Wave | Focus                                                                                                                                                                                                           | File                                                               |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -528,6 +528,8 @@ The in-scope classes above are not merely asserted by unit tests — they are co
 | 9    | Doyensec live-service pass — framework fingerprinting, account enumeration, id entropy, session puzzling, XXE impossibility, log injection, clickjacking/HSTS, Host-header injection, CORS preflight disclosure | [`red-team-attacks-9.test.ts`](tests/red-team-attacks-9.test.ts)   |
 | 10   | Deep-dive campaigns — WAF multi-encoding evasion + the typed-contract backstop, JWT algorithm matrix, constant-time comparison timing analysis                                                                  | [`red-team-attacks-10.test.ts`](tests/red-team-attacks-10.test.ts) |
 | 11   | Response-cache key completeness (CWE-524) — the request authority, the `tenancy()`-resolved tenant, and `Cookie` identity, plus the cache-ahead-of-tenancy boot guard and cache-key injection                   | [`red-team-attacks-11.test.ts`](tests/red-team-attacks-11.test.ts) |
+| 12   | Router / `except()` path agreement — encoded traversal and control characters in captures, encoded separators, trailing-slash exemption bypass, WebSocket captures, fast-check property fuzzing                 | [`red-team-attacks-12.test.ts`](tests/red-team-attacks-12.test.ts) |
+| 13   | Credential and echo hardening — comma-joined duplicate `Authorization` headers, `fileField()` filename echo spoofing                                                                                             | [`red-team-attacks-13.test.ts`](tests/red-team-attacks-13.test.ts) |
 
 Waves 9–10 also record the framework's honest limitations rather than papering over them: the signature WAF uses bounded multi-decode (max two percent-decode passes) plus SQL block-comment stripping so classic double-encoding and `/**/` keyword splits are blocked, but triple-or-deeper encoding and novel signature evasions remain a residual gap (the typed schema contract is still the real backstop — see § Out of scope, "Insecure handler code"). The XXE / SOAP / WSDL family is **structurally inapplicable** because the framework speaks JSON only and rejects every non-JSON content type with `415`, leaving no XML parser to attack.
 
@@ -634,6 +636,7 @@ aggregate is worth knowing before you rely on it as defense in depth:
 | `autoBan`          | falls back to the unspoofable **TCP peer**; `onUnresolvedIdentity: "skip"` opts out                  |
 | `ipReputation`     | fail **open** — an unknown address is not on a denylist                                              |
 | `concurrencyLimit` | fail **open** — not subject to limiting                                                              |
+| `rateLimit` / `loginThrottle` | the **TCP peer**; with no peer (edge / serverless), one shared `"global"` bucket, logged once in production as `rate-limit.shared-bucket` |
 
 The fail-open entries are deliberate: a denylist cannot match an address it does
 not have, and failing closed there would reject all traffic on any topology
@@ -643,6 +646,13 @@ proxy chain" as a security requirement, not a deployment detail. Bind the origin
 to the proxy's network, or authenticate the hop. `autoBan` is the exception
 because unlimited credential attempts is never an acceptable answer to "I cannot
 identify you".
+
+On edge and serverless platforms (Vercel, Cloudflare Workers, Netlify) there is
+no TCP peer to fall back on, so `behindProxy: { hops: 1 }` is what lets
+`rateLimit()` tell clients apart. `behindProxy: "none"`, `trustProxy`, and
+`secureDefaults: false` all make every caller share one bucket that a single
+client can exhaust. The production refusal for an unconfigured proxy therefore
+recommends `behindProxy` by platform and never suggests disabling the guard.
 
 ### Anything that stores a response must partition it by caller
 
@@ -886,7 +896,7 @@ The registry-side bug ([Socket](https://socket.dev/blog/npm-registry-vulnerabili
 See the [Socket write-up](https://socket.dev/blog/packagist-urges-immediate-composer-update). Two lessons: never embed a credential value in an error message; never validate a credential against a hardcoded format. DaloyJS posture:
 
 - Every credential-rejection path in [`src/jwt.ts`](src/jwt.ts) / [`src/jwk.ts`](src/jwk.ts) / [`src/middleware.ts`](src/middleware.ts) / [`src/time-claims.ts`](src/time-claims.ts) throws fixed-string error messages. The rejected value is never interpolated.
-- `bearerAuth()` and `jwk()` parse only `^Bearer\s+(.+)$` and hand the verbatim value to the verifier — no hardcoded length/charset/prefix check, so new token shapes (GitHub `ghs_APPID_JWT`-style) flow straight through.
+- `bearerAuth()` and `jwk()` hand the verbatim token to the verifier — no hardcoded length/charset/prefix check, so new token shapes (GitHub `ghs_APPID_JWT`-style) flow straight through. The only refusal is a token containing whitespace or a comma, because `Headers` comma-joins duplicate `Authorization` headers and `Bearer a, Bearer b` must never read as one token (round 13 of the red-team suite).
 - Key-based redaction in [`src/logger.ts`](src/logger.ts) masks `authorization`, `cookie`, `set-cookie`, `token`, `access_token`, `refresh_token`, `id_token`, `password`, `client_secret`, `x-api-key`, and LLM-provider headers at every depth.
 - `redactJwtLikeStrings: true` (default) masks any `eyJ…\.eyJ…\.…` value under any key.
 - `redactCredentialLikeStrings: true` (default) redacts substrings matching published opaque-credential shapes (GitHub `gh[opru]_…` / `github_pat_…`, Slack, AWS `AKIA…`/`ASIA…`, Stripe, npm, GitLab, Google, OpenAI, Anthropic) so an interpolated `"got token: ghs_…"` cannot leak. The `ghs_` matcher accepts `[A-Za-z0-9._-]{36,}` (not just opaque alphanumerics) so the [2026 stateless installation-token format](https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/) — a ~520-char `ghs_`-prefixed JWT with two dots, including the Actions `GITHUB_TOKEN` going forward — is redacted in full rather than truncated at the first `.`. Conservative lengths avoid false positives on UUIDs and short prefixes.

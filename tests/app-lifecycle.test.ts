@@ -395,7 +395,8 @@ test("response schema validation failures become redacted production 500s", asyn
 });
 
 test("undeclared handler status becomes internal error", async () => {
-  const app = new App({ logger: false, production: false });
+  // 5xx detail is shown only on a positive development signal.
+  const app = new App({ logger: false, env: "development" });
   app.route({
     method: "GET",
     path: "/teapot",

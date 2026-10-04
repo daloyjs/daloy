@@ -98,7 +98,17 @@ x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
 
 ## Production redaction
 
-When `NODE_ENV=production`, DaloyJS strips the `detail` field on any 5xx response so internal stack traces and SQL fragments don't leak to clients. The full error is still emitted to your logger via the `onError` hook.
+DaloyJS strips the `detail` field on any 5xx response unless the environment is **positively** development or test, so internal error messages and SQL fragments don't leak to clients. The full error is still emitted to your logger and to the `onError` hook.
+
+| Configuration | 5xx `detail` |
+| --- | --- |
+| `env: "development"` or `env: "test"` | shown |
+| no `env`, `NODE_ENV=development` or `test` | shown |
+| no `env`, `NODE_ENV` unset, empty, or anything else | **redacted** |
+| `env: "production"`, `production: true`, or `NODE_ENV=production` | redacted |
+| `production: false` with `NODE_ENV` unset | **redacted** |
+
+An unset environment fails closed on purpose. Edge runtimes such as Cloudflare Workers and Deno Deploy have no `NODE_ENV`, and treating that as development would send exception messages to clients. `daloy dev` sets `NODE_ENV=development` for its child process when you haven't set it, so local development still shows the detail. Errors you serialize yourself (for example `ctx.json({ error: err.message })` in a catch block) are not redacted. Throw them instead, or throw an `HttpError` with a safe `detail`.
 
 ## Custom error classes
 

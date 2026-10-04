@@ -18,6 +18,7 @@
  * @since 0.21.0
  */
 
+import { readNodeEnv } from "./internal-env.js";
 import { assertTemporalClaims, TemporalClaimError } from "./time-claims.js";
 
 /** Algorithms understood by the helper. SHA-1 / `none` are deliberately absent. */
@@ -278,11 +279,7 @@ function isCryptoKey(v: unknown): v is CryptoKey {
 function isProductionEnv(env: JwtSignerOptions["env"]): boolean {
   if (env === "production") return true;
   if (env === "development" || env === "test") return false;
-  return (
-    typeof process !== "undefined" &&
-    typeof process.env !== "undefined" &&
-    process.env.NODE_ENV === "production"
-  );
+  return readNodeEnv() === "production";
 }
 
 function algParams(alg: JwtAlgorithm): {

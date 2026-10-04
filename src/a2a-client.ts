@@ -322,7 +322,7 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
   const extensionsHeader =
     options.extensions && options.extensions.length > 0 ? options.extensions.join(",") : undefined;
 
-  let cached: { card: A2aAgentCard; iface: A2aAgentInterface; at: number } | undefined;
+  let cached: { card: A2aAgentCard; iface: A2aAgentInterface; rpcHref: string; at: number } | undefined;
 
   function signalFor(callSignal: AbortSignal | undefined): AbortSignal {
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -349,7 +349,7 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
     }
   }
 
-  async function discover(callOptions: A2aCallOptions = {}): Promise<{ card: A2aAgentCard; iface: A2aAgentInterface }> {
+  async function discover(callOptions: A2aCallOptions = {}): Promise<{ card: A2aAgentCard; iface: A2aAgentInterface; rpcHref: string }> {
     if (cached && Date.now() - cached.at < cardMaxAgeMs) return cached;
     const signal = signalFor(callOptions.signal);
     // No credentials here: the card is public, and it has not been vetted yet.
@@ -384,12 +384,14 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
         `A2A Agent Card points its endpoint at ${rpcUrl.origin}, which is not the card's origin or an allowedOrigins entry. Refusing to send credentials there.`
       );
     }
-    cached = { card: card as unknown as A2aAgentCard, iface, at: Date.now() };
+    // Send to the URL that was validated, not the card's raw string, so a
+    // custom `fetch` transport cannot parse it differently from the check.
+    cached = { card: card as unknown as A2aAgentCard, iface, rpcHref: rpcUrl.href, at: Date.now() };
     return cached;
   }
 
   async function call(method: string, params: Record<string, unknown>, callOptions: A2aCallOptions = {}): Promise<unknown> {
-    const { iface } = await discover(callOptions);
+    const { iface, rpcHref } = await discover(callOptions);
     const headers = new Headers({
       "content-type": "application/json",
       accept: "application/json",
@@ -413,7 +415,7 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
     const id = randomId();
     const signal = signalFor(callOptions.signal);
     const res = await send(
-      iface.url,
+      rpcHref,
       { method: "POST", headers, body: JSON.stringify({ jsonrpc: "2.0", id, method, params: body }) },
       signal
     );
