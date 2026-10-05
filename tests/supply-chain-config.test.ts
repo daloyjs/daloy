@@ -577,7 +577,7 @@ test("all workflows avoid unsafe pull_request_target and zizmor is enforced", as
 test("release workflow isolates npm publish permissions", async () => {
   const workflow = await readWorkspaceFile(".github/workflows/release.yml");
   const stagedPublishes =
-    workflow.match(/npm stage publish "tarballs\/\$FILE" --access public --provenance/g) ?? [];
+    workflow.match(/npm stage publish "\.\/tarballs\/\$FILE" --access public --provenance/g) ?? [];
   const stagedPublishingCliInstalls =
     workflow.match(/npm install -g npm@11\.15\.0 --ignore-scripts --no-audit --no-fund/g) ?? [];
 
@@ -615,6 +615,9 @@ test("release workflow builds tarballs without publish credentials and stages ve
   assert.match(packJob, /pnpm build/);
   assert.match(packJob, /npm pack --ignore-scripts/);
   assert.match(packJob, /sha256sum/);
+  // A bare `tarballs/x.tgz` is npm's GitHub shorthand; every tarball path
+  // handed to npm must start with `./`.
+  assert.doesNotMatch(workflow, /npm (stage )?publish "tarballs\//);
   assert.match(packJob, /actions\/upload-artifact@[0-9a-f]{40}\s+# v7/);
 
   for (const job of ["publish-core", "publish-create-daloy"]) {

@@ -299,14 +299,15 @@ jobs:
         run: pnpm verify:no-agent-config-autorun
 
       # `--ignore-scripts`: the build already ran above; `prepublishOnly` and
-      # any other lifecycle script must not run again at pack time.
+      # any other lifecycle script must not run again at pack time. The JSON
+      # parse accepts npm 11 (an array) and npm 12 (an object keyed by name).
       - name: Pack tarballs and record their SHA-256
         id: pack
         run: |
           set -eu
           mkdir -p tarballs
-          core_file="$(npm pack --ignore-scripts --pack-destination tarballs --json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename)')"
-          create_file="$(cd packages/create-daloy && npm pack --ignore-scripts --pack-destination ../../tarballs --json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename)')"
+          core_file="$(npm pack --ignore-scripts --pack-destination tarballs --json | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write((Array.isArray(j)?j[0]:Object.values(j)[0]).filename)')"
+          create_file="$(cd packages/create-daloy && npm pack --ignore-scripts --pack-destination ../../tarballs --json | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write((Array.isArray(j)?j[0]:Object.values(j)[0]).filename)')"
           core_sha256="$(sha256sum "tarballs/$core_file" | cut -d' ' -f1)"
           create_sha256="$(sha256sum "tarballs/$create_file" | cut -d' ' -f1)"
           {
@@ -317,14 +318,16 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           (cd tarballs && sha256sum ./*.tgz)
 
+      # The `./` prefix matters: a bare `dir/file.tgz` is npm's GitHub
+      # shorthand (`owner/repo`), so npm would try to clone it.
       - name: Packaging signal (npm publish dry-run of the exact tarballs)
         env:
           CORE_FILE: ${{ steps.pack.outputs.core_file }}
           CREATE_FILE: ${{ steps.pack.outputs.create_file }}
         run: |
           set -eu
-          npm publish "tarballs/$CORE_FILE" --dry-run --access public --tag latest --ignore-scripts
-          npm publish "tarballs/$CREATE_FILE" --dry-run --access public --tag latest --ignore-scripts
+          npm publish "./tarballs/$CORE_FILE" --dry-run --access public --tag latest --ignore-scripts
+          npm publish "./tarballs/$CREATE_FILE" --dry-run --access public --tag latest --ignore-scripts
 
       - name: Upload tarballs for the publish jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -440,7 +443,7 @@ jobs:
         env:
           FILE: ${{ needs.pack.outputs.core_file }}
           NPM_CONFIG_PROVENANCE: "true"
-        run: npm stage publish "tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
+        run: npm stage publish "./tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
 
   publish-create-daloy:
     name: Publish create-daloy
@@ -548,7 +551,7 @@ jobs:
         env:
           FILE: ${{ needs.pack.outputs.create_file }}
           NPM_CONFIG_PROVENANCE: "true"
-        run: npm stage publish "tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
+        run: npm stage publish "./tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
 
   # ---------------------------------------------------------------------------
   # Publish the JSR package `@daloyjs/daloy`.
