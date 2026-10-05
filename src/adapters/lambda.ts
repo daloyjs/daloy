@@ -177,10 +177,11 @@ export function toLambdaHandler(app: App): LambdaHandler {
   // Refuse an insecure configuration at cold start (and so at deploy time
   // where the platform validates startup) instead of on the first request.
   app.assertSecureConfig();
+  const trustProto = appTrustsForwardedProto(app);
   return async (event) => {
     let request: Request;
     try {
-      request = eventToRequest(event);
+      request = eventToRequest(event, trustProto);
     } catch {
       return responseToLambda(badRequestResponse(), isV2Event(event));
     }
@@ -212,11 +213,12 @@ export function toLambdaStreamHandler(app: App): LambdaStreamHandler {
   // Refuse an insecure configuration at cold start (and so at deploy time
   // where the platform validates startup) instead of on the first request.
   app.assertSecureConfig();
+  const trustProto = appTrustsForwardedProto(app);
   const runtime = lambdaStreamingRuntime();
   return runtime.streamifyResponse(async (event, rawStream) => {
     let request: Request;
     try {
-      request = eventToRequest(event);
+      request = eventToRequest(event, trustProto);
     } catch {
       await streamLambdaResponse(badRequestResponse(), rawStream, runtime);
       return;
@@ -226,7 +228,7 @@ export function toLambdaStreamHandler(app: App): LambdaStreamHandler {
   });
 }
 
-function eventToRequest(event: LambdaEvent): Request {
+function eventToRequest(event: LambdaEvent, trustProto: boolean): Request {
   const headers = new Headers();
   for (const [k, v] of Object.entries(event.headers ?? {})) {
     if (v === undefined) continue;
@@ -259,7 +261,7 @@ function eventToRequest(event: LambdaEvent): Request {
   if (!isPlainAuthority(host)) {
     throw new TypeError("Invalid Host header");
   }
-  const proto = forwardedProto(headers.get("x-forwarded-proto"));
+  const proto = trustProto ? forwardedProto(headers.get("x-forwarded-proto")) : "https";
   const rawQueryString = isV2Event(event)
     ? (event.rawQueryString ?? "")
     : queryStringForV1(event);
@@ -349,11 +351,27 @@ function isPlainAuthority(host: string): boolean {
 }
 
 /** First `X-Forwarded-Proto` token when it is `http`/`https`; otherwise `"https"`. */
+/**
+ * Scheme from `X-Forwarded-Proto`, read only when the App declares a proxy.
+ * Takes the last entry (the one the nearest proxy appended); earlier entries
+ * are whatever the client sent. Defaults to `https`.
+ */
 function forwardedProto(raw: string | null): "http" | "https" {
   if (raw === null) return "https";
-  const comma = raw.indexOf(",");
-  const token = (comma === -1 ? raw : raw.slice(0, comma)).trim().toLowerCase();
+  const comma = raw.lastIndexOf(",");
+  const token = (comma === -1 ? raw : raw.slice(comma + 1)).trim().toLowerCase();
   return token === "http" ? "http" : "https";
+}
+
+/**
+ * `true` when the App declares a proxy topology, so `X-Forwarded-Proto` came
+ * from it. Without one, a client-sent value could downgrade the scheme the
+ * app sees, so Lambda (HTTPS-only behind API Gateway / Function URLs)
+ * assumes `https`.
+ */
+function appTrustsForwardedProto(app: App): boolean {
+  const behindProxy = (app as unknown as { options?: { behindProxy?: unknown } }).options?.behindProxy;
+  return behindProxy !== undefined && behindProxy !== "none";
 }
 
 function isV2Event(event: LambdaEvent): event is LambdaEventV2 {

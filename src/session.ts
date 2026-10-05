@@ -24,6 +24,7 @@ import {
   serializeCookie,
 } from "./cookie.js";
 import { timingSafeEqual } from "./security.js";
+import { readNodeEnv } from "./internal-env.js";
 
 const DEFAULT_COOKIE_NAME = "__Host-daloy.sid";
 
@@ -116,7 +117,10 @@ export interface SessionCookieOptions {
   maxAgeSeconds?: number;
   /** Emit `Partitioned` (CHIPS) for cross-site contexts. Default: `false`. */
   partitioned?: boolean;
-  /** Default: `true`. Sessions are server-side state, never readable by JS. */
+  /**
+   * Default: `true`. Sessions are server-side state, never readable by JS.
+   * `false` is refused: it would let any XSS read the session id.
+   */
   httpOnly?: boolean;
 }
 
@@ -137,6 +141,15 @@ export interface SessionOptions {
   store?: SessionStore;
   /** Default session lifetime in seconds. Default: `86400` (1 day). */
   ttlSeconds?: number;
+  /**
+   * Allow `cookieOptions.secure: false` in production. A production session
+   * cookie without `Secure` is sent over plain HTTP, where it can be stolen.
+   * Set this only for a deployment that is genuinely served over plain HTTP
+   * (e.g. a private network); behind a TLS-terminating proxy the browser
+   * still sees HTTPS, so keep `secure: true`.
+   * @since 1.5.4
+   */
+  allowInsecureCookie?: boolean;
   /**
    * Reset the session expiration on every access. Default: `true`.
    * Disable for fixed-duration sessions.
@@ -548,7 +561,9 @@ export class MemorySessionStore implements SessionStore {
  * @returns A {@link Hooks} object that loads/verifies the session before the
  *   handler and persists mutations plus the `Set-Cookie` header afterwards.
  * @throws Error at setup time on missing/short secrets, invalid cookie
- *   attribute combinations, or a non-positive `ttlSeconds`. A custom store
+ *   attribute combinations, `httpOnly: false`, `secure: false` in production
+ *   (at construction via NODE_ENV, or when registered on a production App)
+ *   without `allowInsecureCookie`, or a non-positive `ttlSeconds`. A custom store
  *   without `update()` is accepted with a one-time warning (see
  *   {@link SessionStore.update}).
  */
@@ -574,6 +589,27 @@ export function session(opts: SessionOptions): Hooks {
     name: cookieName,
     attributes: sessionCookieAttributes(cookieOpts),
   });
+  if (cookieOpts.httpOnly !== true) {
+    throw new Error(
+      "session(): cookieOptions.httpOnly: false would let page JavaScript, and so any XSS, read " +
+        "the session id. Session cookies are always HttpOnly; expose login state through a " +
+        "separate non-secret cookie or an endpoint instead."
+    );
+  }
+  // Production-only: plain-HTTP local development needs `secure: false`.
+  // Checked here against NODE_ENV and again when the App registers these
+  // hooks, so `new App({ env: "production" })` counts without NODE_ENV.
+  const refuseInsecureCookie = (production: boolean): void => {
+    if (production && !cookieOpts.secure && opts.allowInsecureCookie !== true) {
+      throw new Error(
+        "session(): cookieOptions.secure: false in production sends the session cookie over " +
+          "plain HTTP, where it can be intercepted. Keep secure: true (it works behind a " +
+          "TLS-terminating proxy), or pass allowInsecureCookie: true for a deployment that is " +
+          "genuinely plain HTTP."
+      );
+    }
+  };
+  refuseInsecureCookie(readNodeEnv() === "production");
 
   const ttlSeconds = opts.ttlSeconds ?? 86_400;
   if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
@@ -791,6 +827,12 @@ export function session(opts: SessionOptions): Hooks {
     },
   };
   (hooks as Record<PropertyKey, unknown>)[SESSION_HOOK_MARKER] = true;
+  if (opts.store === undefined) {
+    // Read by the App: an in-memory store is warned about in production.
+    (hooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.session.memoryStore")] = true;
+  }
+  (hooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.hooks.appProduction")] =
+    refuseInsecureCookie;
   (hooks as Record<PropertyKey, unknown>)[SESSION_SECRETS_MARKER] = secrets.slice();
   return hooks;
 }

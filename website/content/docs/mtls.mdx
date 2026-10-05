@@ -181,7 +181,7 @@ The building blocks are exported from `@daloyjs/core/mtls` too: `parseForwardedC
 
 ## Stored-response isolation
 
-An accepted certificate is also recorded as the caller identity (since 2.0.0). mTLS callers usually send no `Authorization` or `Cookie`, so without this a shared cache or idempotency store could not tell two allow-listed peers apart. [`responseCache()`](/docs/response-cache#credentials-fail-closed) therefore bypasses certificate-authenticated requests unless a `principal` names the peer or `cacheAuthenticatedRequests: { clientIdentity: true }` declares the response shareable, and [`idempotency()`](/docs/idempotency#security-notes) scopes keys per certificate by default.
+An accepted certificate is also recorded as the caller identity (since 1.3.7). mTLS callers usually send no `Authorization` or `Cookie`, so without this a shared cache or idempotency store could not tell two allow-listed peers apart. [`responseCache()`](/docs/response-cache#credentials-fail-closed) therefore bypasses certificate-authenticated requests unless a `principal` names the peer or `cacheAuthenticatedRequests: { clientIdentity: true }` declares the response shareable, and [`idempotency()`](/docs/idempotency#security-notes) scopes keys per certificate by default.
 
 ```ts
 app.use(clientCertAuth({ allowSubjectCNs: ["svc-a", "svc-b"] }));

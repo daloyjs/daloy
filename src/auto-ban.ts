@@ -26,6 +26,7 @@ import {
   readRemoteAddress,
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
@@ -716,5 +717,5 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
     };
   }
 
-  return hooks;
+  return stampForwardedTrust(hooks, "autoBan()", opts);
 }

@@ -35,6 +35,7 @@
 import { UnauthorizedError } from "./errors.js";
 import { markAuthIdentity } from "./internal-replay.js";
 import type { Hooks } from "./types.js";
+import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 /**
  * HTTP Signature algorithm identifiers from the RFC 9421 registry that this
@@ -1140,7 +1141,10 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
   const authHooks: Hooks = {
     async preBody(ctx) {
       const headers = ctx.request.headers;
-      if (opts.optional && !headers.has("signature")) return undefined;
+      if (opts.optional && !headers.has("signature")) {
+        markAuthPassed(ctx);
+        return undefined;
+      }
       const result = await verifyRequest(ctx.request, opts);
       if (!result.valid) {
         throw new UnauthorizedError(`${message} (${result.reason})`);
@@ -1152,13 +1156,14 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
         ctx.state as Record<PropertyKey, unknown>,
         `httpsig:${JSON.stringify([result.keyid ?? null, result.alg])}`
       );
+      markAuthPassed(ctx);
       return undefined;
     },
   };
   // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
   // the middleware module out of this bundle): lets the route-auth boot guard
   // recognize that a route declaring `auth:` is actually enforced here.
-  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  stampAuthHook(authHooks, true);
   return authHooks;
 }
 

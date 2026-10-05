@@ -130,9 +130,9 @@ app.use(waf({
 
 ## Scan limits never fail open [#scan-limits]
 
-Scanning is bounded so a hostile payload cannot turn inspection into CPU-DoS, but the bounds no longer leave anything uninspected (since 2.0.0). `maxValueLength` (default `8192`) is the scan-window size: a longer string is scanned in overlapping windows (plus a whitespace-collapsed form), not truncated to its prefix, so padding a payload past the first 8 KB does not hide it. Total work stays linear in the body-limited input. Only own enumerable properties are followed. Prototype keys are never inspected.
+Scanning is bounded so a hostile payload cannot turn inspection into CPU-DoS, but the bounds no longer leave anything uninspected (since 1.3.7). `maxValueLength` (default `8192`) is the scan-window size: a longer string is scanned in overlapping windows (plus a whitespace-collapsed form), not truncated to its prefix, so padding a payload past the first 8 KB does not hide it. Total work stays linear in the body-limited input. Only own enumerable properties are followed. Prototype keys are never inspected.
 
-`maxBodyNodes` (default `10000`) caps how many body nodes are walked. An attacker could hide a payload behind 10,000 junk nodes, so a walk that stops at the cap with nodes left over is itself treated as an anomaly. `onLimitExceeded` (since 2.0.0) decides what happens:
+`maxBodyNodes` (default `10000`) caps how many body nodes are walked. An attacker could hide a payload behind 10,000 junk nodes, so a walk that stops at the cap with nodes left over is itself treated as an anomaly. `onLimitExceeded` (since 1.3.7) decides what happens:
 
 - `"block"` (default): record a synthetic match with `ruleId: "limits"` scoring `blockThreshold`. The request is rejected in block mode and reported through `onMatch` in log mode.
 - `"log"`: report through `onMatch` (action `"logged"`) but never reject on this ground alone. A real signature match still blocks.

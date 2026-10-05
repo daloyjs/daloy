@@ -30,6 +30,7 @@
  */
 import { ForbiddenError } from "./errors.js";
 import {
+  assertAudienceConfigured,
   createJwtVerifier,
   JwtError,
   type JwtAlgorithm,
@@ -38,6 +39,7 @@ import {
 } from "./jwt.js";
 import { parseBearerToken } from "./security.js";
 import type { Hooks, PreBodyContext } from "./types.js";
+import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 /** Asymmetric algorithms accepted by {@link jwk}. */
 export type JwkAlgorithm = Exclude<JwtAlgorithm, "HS256" | "HS384" | "HS512">;
@@ -93,8 +95,21 @@ export interface JwkOptions {
   algorithms: JwkAlgorithm[];
   /** Optional expected issuer (string or allowlist). */
   issuer?: string | string[];
-  /** Optional expected audience (string or allowlist). */
+  /**
+   * Expected audience (string or allowlist). Required in production unless
+   * {@link JwkOptions.allowAnyAudience} is set; an App resolving to production
+   * refuses to register `jwk()` without one.
+   */
   audience?: string | string[];
+  /**
+   * Accept tokens without checking their `aud` claim. In production a verifier
+   * with no `audience` is refused, because it accepts every token the issuer
+   * signs for any other app or tenant. Set this only for a single-tenant
+   * private identity provider that issues tokens for this API alone.
+   * @since 1.5.4
+   */
+  allowAnyAudience?: boolean;
+
   /**
    * Maximum accepted token lifetime in seconds. When set, requires `exp` and
    * enforces `exp - (iat ?? now) <= maxLifetimeSeconds` through the JWT verifier.
@@ -301,6 +316,10 @@ function makeJwksLoader(
  *   failed auth yields a `401` problem+json with `WWW-Authenticate`.
  * @throws {Error} at construction for missing options, an empty or
  *   symmetric-containing allowlist, invalid TTLs or lifetime cap, or a malformed realm.
+ * @throws {JwtError} (`invalid_options`) when there is no `audience` and
+ *   `allowAnyAudience` is not set, in production: at construction when
+ *   `NODE_ENV=production`, and when registered on an App that resolves to
+ *   production.
  * @since 0.22.0
  */
 export function jwk(opts: JwkOptions): Hooks {
@@ -370,6 +389,7 @@ export function jwk(opts: JwkOptions): Hooks {
     algorithms,
     issuer: opts.issuer,
     audience: opts.audience,
+    ...(opts.allowAnyAudience !== undefined ? { allowAnyAudience: opts.allowAnyAudience } : {}),
     maxLifetimeSeconds: opts.maxLifetimeSeconds,
     clockSkewSeconds: opts.clockSkewSeconds,
     // Resolver picks the JWK by `kid` and enforces the alg cross-check.
@@ -421,13 +441,20 @@ export function jwk(opts: JwkOptions): Hooks {
         const ok = await opts.verify(payload, ctx);
         if (ok === false) throw new ForbiddenError("Token revoked");
       }
+      markAuthPassed(ctx);
       return undefined;
     },
   };
   // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
   // the middleware module out of jwk's bundle): lets the route-auth boot guard
   // recognize that a route declaring `auth:` is actually enforced here.
-  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  stampAuthHook(authHooks, true);
+  // The App reports its resolved environment when the hooks are registered,
+  // which covers `new App({ env: "production" })` without NODE_ENV (the
+  // verifier above can only read NODE_ENV).
+  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.hooks.appProduction")] = (
+    production: boolean,
+  ): void => assertAudienceConfigured(opts, production, "jwk()");
   return authHooks;
 }
 

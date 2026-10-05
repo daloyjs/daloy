@@ -559,7 +559,6 @@ test("session non-host cookie with domain + Max-Age + Partitioned + SameSite=Non
         domain: "example.com",
         maxAgeSeconds: 3600,
         partitioned: true,
-        httpOnly: false,
       },
     })
   );
@@ -578,7 +577,7 @@ test("session non-host cookie with domain + Max-Age + Partitioned + SameSite=Non
   assert.match(sc, /Domain=example\.com/);
   assert.match(sc, /Max-Age=3600/);
   assert.match(sc, /Partitioned/);
-  assert.doesNotMatch(sc, /HttpOnly/);
+  assert.match(sc, /HttpOnly/);
 });
 
 test("session uses a custom generator", async () => {

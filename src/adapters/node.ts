@@ -150,6 +150,31 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     Symbol.for("daloyjs.app.listenerDevHosts")
   ]?.();
   const trustProxy = opts.trustProxy === true;
+  const appBehindProxy = (app as unknown as { options?: { behindProxy?: unknown } }).options?.behindProxy;
+  if (trustProxy && appBehindProxy === "none") {
+    throw new Error(
+      'serve(): trustProxy: true contradicts app({ behindProxy: "none" }). With it, any client ' +
+        "could set X-Forwarded-Host / X-Forwarded-Proto and change the URL your app sees (and the " +
+        "links it generates, e.g. password resets). Drop trustProxy, or declare the proxy with " +
+        "app({ behindProxy: { hops } | { cidrs } })."
+    );
+  }
+  if (
+    opts.connectionTimeoutMs !== undefined &&
+    (!Number.isSafeInteger(opts.connectionTimeoutMs) || opts.connectionTimeoutMs < 0)
+  ) {
+    throw new Error(
+      `serve(): connectionTimeoutMs must be a finite, non-negative integer; got ${String(opts.connectionTimeoutMs)}. ` +
+        "NaN or a negative value would disable the slowloris timeouts."
+    );
+  }
+  if (opts.connectionTimeoutMs === 0 && app.getSecurityPosture().production) {
+    app.log.warn(
+      { event: "serve.timeouts_disabled" },
+      "serve({ connectionTimeoutMs: 0 }) disables the header and request socket timeouts in " +
+        "production, so slowloris clients can hold connections open indefinitely."
+    );
+  }
   const requestedBufferCap =
     typeof opts.bufferedBodyMaxBytes === "number" && opts.bufferedBodyMaxBytes >= 0
       ? opts.bufferedBodyMaxBytes

@@ -3,10 +3,16 @@
 # and so action references can be migrated toward SHA-pinning over time.
 #
 # See https://docs.github.com/en/code-security/dependabot
+#
+# Every entry waits one day after a version is published before proposing it
+# (cooldown), matching the 24h minimumReleaseAge pnpm enforces on installs:
+# most malicious versions are caught and unpublished within hours.
 version: 2
 
 updates:
   - package-ecosystem: github-actions
+    cooldown:
+      default-days: 1
     directory: "/"
     schedule:
       interval: weekly
@@ -20,6 +26,8 @@ updates:
       prefix: "chore(actions)"
 
   - package-ecosystem: npm
+    cooldown:
+      default-days: 1
     directory: "/"
     schedule:
       interval: weekly
@@ -38,6 +46,8 @@ updates:
       prefix: "chore(deps)"
 
   - package-ecosystem: npm
+    cooldown:
+      default-days: 1
     directory: "/packages/create-daloy"
     schedule:
       interval: weekly
@@ -46,6 +56,8 @@ updates:
       prefix: "chore(create-daloy)"
 
   - package-ecosystem: npm
+    cooldown:
+      default-days: 1
     directory: "/website"
     schedule:
       interval: weekly

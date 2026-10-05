@@ -263,7 +263,8 @@ interface JwkOptions {
   jwks: JwkSource;                       // object, https:// URL, or resolver (http:// refused)
   algorithms: JwkAlgorithm[];            // required, non-empty; HS* refused at construction
   issuer?: string | string[];
-  audience?: string | string[];
+  audience?: string | string[];          // required in production from 1.5.4
+  allowAnyAudience?: boolean;            // 1.5.4: opt out of the production audience requirement
   maxLifetimeSeconds?: number;           // positive integer; requires exp; default: no cap
   clockSkewSeconds?: number;             // default: 0
   realm?: string;                        // WWW-Authenticate realm; default: "api"

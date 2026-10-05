@@ -270,7 +270,7 @@ app.route({
         seatCount: z.number().int().min(1).max(500),
       })
       // Unknown keys (role, isAdmin, isVerified) are rejected with a
-      // 400, not silently merged into the update.
+      // 422, not silently merged into the update.
       .strict(),
   },
   responses: {
@@ -279,7 +279,7 @@ app.route({
       // Only these three fields can ever leave the building.
       // passwordHash is not on the list, so it cannot leak even if
       // a junior dev adds it to the SELECT next quarter.
-      schema: z
+      body: z
         .object({
           id: z.uuid(),
           plan: z.enum(["free", "pro", "team"]),

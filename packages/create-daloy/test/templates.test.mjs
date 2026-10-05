@@ -808,7 +808,7 @@ test("pnpm scaffolds keep hardened .npmrc", async () => {
   }
 });
 
-test("npm scaffolds ship an engine-strict .npmrc without pnpm-specific keys", async () => {
+test("npm scaffolds ship an npm-native hardened .npmrc without pnpm-specific keys", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "npm-clean";
   try {
@@ -832,14 +832,22 @@ test("npm scaffolds ship an engine-strict .npmrc without pnpm-specific keys", as
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    // npm scaffolds keep a minimal npm-native .npmrc that enforces the
-    // npm >= 12 engine floor, but must NOT inherit the pnpm-only hardening keys.
+    // npm scaffolds get npm's own names for the guardrails: the npm >= 12
+    // engine floor, no dependency install scripts, and a 1-day release age.
+    // pnpm-only keys must not leak in (npm warns on unknown keys).
     const npmrc = await readFile(path.join(tmpDir, projectName, ".npmrc"), "utf8");
     assert.match(npmrc, /^engine-strict=true$/m);
+    assert.match(npmrc, /^ignore-scripts=true$/m);
+    assert.match(npmrc, /^min-release-age=1$/m);
     assert.doesNotMatch(npmrc, /minimum-release-age/);
     assert.doesNotMatch(npmrc, /verify-store-integrity/);
-    assert.doesNotMatch(npmrc, /ignore-scripts/);
     await assert.rejects(access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")));
+    // The README cooldown note names npm's setting instead of being dropped.
+    const readme = await readFile(path.join(tmpDir, projectName, "README.md"), "utf8");
+    if (readme.includes("Install refused right after a DaloyJS release")) {
+      assert.match(readme, /`min-release-age` in(\n> | )`\.npmrc`/);
+      assert.doesNotMatch(readme, /pnpm-workspace\.yaml`\), a supply-chain/);
+    }
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -872,10 +880,41 @@ test("yarn and bun scaffolds keep no pnpm-specific .npmrc or pnpm-workspace.yaml
       assert.equal(exitCode, 0);
       await assert.rejects(access(path.join(tmpDir, projectName, ".npmrc")));
       await assert.rejects(access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")));
+      if (packageManager === "yarn") {
+        // Yarn 2+ and Yarn 1 each get their own guardrails file.
+        const berry = await readFile(path.join(tmpDir, projectName, ".yarnrc.yml"), "utf8");
+        assert.match(berry, /^enableScripts: false$/m);
+        assert.match(berry, /^npmMinimalAgeGate: "1d"$/m);
+        const classic = await readFile(path.join(tmpDir, projectName, ".yarnrc"), "utf8");
+        assert.match(classic, /^ignore-scripts true$/m);
+      } else {
+        await assert.rejects(access(path.join(tmpDir, projectName, ".yarnrc.yml")));
+      }
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }
   }
+});
+
+test("every template Dockerfile pins its base images by digest", async () => {
+  for (const template of ["node-basic", "bun-basic", "deno-basic", "cloudflare-worker", "vercel"]) {
+    const dockerfile = await readFile(path.join(pkgRoot, "templates", template, "_Dockerfile"), "utf8");
+    const args = [...dockerfile.matchAll(/^ARG ([A-Z_]+_IMAGE)=(\S+)$/gm)];
+    assert.ok(args.length > 0, `${template} declares a base-image ARG`);
+    for (const [, name, value] of args) {
+      assert.match(value, /@sha256:[0-9a-f]{64}$/, `${template} ${name} must be digest-pinned`);
+    }
+    assert.doesNotMatch(dockerfile, /default is a floating tag/, `${template} has a stale comment`);
+  }
+});
+
+test("the Bun image the scaffolder inserts matches bun-basic's pinned digest", async () => {
+  const cli = await readFile(path.join(pkgRoot, "bin/create-daloy.mjs"), "utf8");
+  const inserted = cli.match(/const BUN_IMAGE_PINNED =\s*"([^"]+)"/)?.[1];
+  const dockerfile = await readFile(path.join(pkgRoot, "templates/bun-basic/_Dockerfile"), "utf8");
+  const shipped = dockerfile.match(/^ARG BUN_IMAGE=(\S+)$/m)?.[1];
+  assert.ok(inserted && shipped);
+  assert.equal(inserted, shipped);
 });
 
 test("dot project target scaffolds into the current directory", async () => {
@@ -1002,7 +1041,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
     assert.match(ci, /pnpm verify:lockfile/);
     assert.match(ci, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(ci, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(ci, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(ci, /pnpm\/action-setup@[0-9a-f]{40}\s+# v6/);
     assert.match(ci, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
@@ -1024,7 +1063,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(deploy, /--type spdxjson/);
     assert.match(deploy, /IMAGE_DIGEST=/);
     assert.match(deploy, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(deploy, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(deploy, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(deploy, /pnpm verify:lockfile/);
     assert.match(deploy, /if: github\.ref == 'refs\/heads\/main' \|\| github\.ref_type == 'tag'/);
     assert.doesNotMatch(deploy, /pull_request_target/);
@@ -1040,7 +1079,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(vulnScan, /Audit full dependency tree \(advisory\)/);
     assert.match(vulnScan, /continue-on-error: true/);
     assert.match(vulnScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(vulnScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(vulnScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(vulnScan, /cron: "13 6 \* \* \*"/);
     assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
 
@@ -1055,7 +1094,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(osvScan, /sha256sum --check --status/);
     assert.match(osvScan, /\.\/osv-scanner scan source --recursive/);
     assert.match(osvScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
 
@@ -1065,7 +1104,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(eolScan, /pnpm install --frozen-lockfile --ignore-scripts/);
     assert.match(eolScan, /pnpm verify:runtime-eol/);
     assert.match(eolScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(eolScan, /cron: "21 8 \* \* \*"/);
     assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 
@@ -1100,7 +1139,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(secretScan, /name: Secret scan/);
     assert.match(secretScan, /permissions:\s*\{\}/);
     assert.match(secretScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(secretScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(secretScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(secretScan, /persist-credentials: false/);
     assert.match(secretScan, /GITLEAKS_VERSION:/);
     assert.match(secretScan, /GITLEAKS_SHA256:\s*"[0-9a-f]{64}"/);
@@ -1296,7 +1335,7 @@ test("Dockerfile scaffolding follows the selected bun package manager", async ()
       assert.equal(exitCode, 0);
 
       const dockerfile = await readFile(path.join(tmpDir, projectName, "Dockerfile"), "utf8");
-      assert.match(dockerfile, /^ARG BUN_IMAGE=oven\/bun:1-alpine$/m);
+      assert.match(dockerfile, /^ARG BUN_IMAGE=oven\/bun:1-alpine@sha256:[0-9a-f]{64}$/m);
       assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS builder$/m);
       assert.match(dockerfile, /COPY package\.json bun\.lock\* bun\.lockb\* \./);
       assert.match(dockerfile, /RUN bun install --frozen-lockfile --ignore-scripts/);
@@ -1637,7 +1676,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(osvScan, /sha256sum --check --status/);
     assert.match(osvScan, /--lockfile=deno\.lock/);
     assert.match(osvScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
 
@@ -1647,7 +1686,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(eolScan, /denoland\/setup-deno@[0-9a-f]{40}\s+# v2\.0\.4/);
     assert.match(eolScan, /deno task verify:runtime-eol/);
     assert.match(eolScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
-    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v7/);
     assert.match(eolScan, /cron: "21 8 \* \* \*"/);
     assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 

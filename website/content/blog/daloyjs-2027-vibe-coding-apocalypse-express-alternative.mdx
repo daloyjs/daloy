@@ -45,7 +45,7 @@ And it runs the same code on Node, Bun, Deno, Cloudflare Workers, Vercel (Node a
 
 But the part I actually care about, the part that made me stop using other frameworks for new projects, is the design stance. DaloyJS attacks the vibe-coding problem from two directions at the same time.
 
-1. A secure-by-default runtime. The dangerous things are off until you turn them on. The safe things are on until you turn them off. The framework will literally refuse to boot on certain unsafe configurations.
+1. A secure-by-default runtime. The dangerous things are off until you turn them on. The safe things are on until you turn them off. In production, the framework will literally refuse to boot on the unsafe configurations it knows about.
 2. A hardened supply chain. Zero runtime dependencies, npm provenance, SBOMs, and a pnpm posture that assumes the registry is hostile, because it is.
 
 The secure path keeps the same developer experience. Guardrails ship enabled, and disabling them takes an explicit change. The smallest app shows how that works.
@@ -101,21 +101,22 @@ Now compare that to a typical vibe-coded Express app. The model gives you `app.g
 
 ## DaloyJS refuses to start on a dangerous config
 
-This is my favorite feature and it sounds aggressive when you first hear it. DaloyJS refuses to boot on known-dangerous configuration. It throws instead of logging a warning and continuing with an unsafe process.
+This is my favorite feature and it sounds aggressive when you first hear it. In production, DaloyJS refuses to boot on the dangerous configuration it knows about. It throws instead of logging a warning and continuing with an unsafe process. "In production" means the environment resolves to production: `new App({ env: "production" })`, `production: true`, or `NODE_ENV=production` exactly. With no environment signal at all, or (from 1.5.4) a `NODE_ENV` it does not recognize like `staging`, it logs each would-be refusal as a warning instead, because it cannot tell your deploy from your laptop.
 
-Things that will stop your app from starting:
+Things that will stop your app from starting in production:
 
-- `cors({ origin: "*" })` with `credentials: true`. This is the classic "I just wanted the CORS error to go away" move, and it is also how you let any website on the internet make authenticated requests as your logged-in user. DaloyJS throws at construction.
-- A weak session secret. If your secret is shorter than 32 bytes or is one of the known weak strings (think `"secret"`, `"changeme"`), it will not boot.
+- `cors({ origin: "*" })` with `credentials: true`. This is the classic "I just wanted the CORS error to go away" move, and it is also how you let any website on the internet make authenticated requests as your logged-in user. This one throws at construction in every environment, not only production.
+- A weak session secret. If your secret is shorter than 32 bytes, is one of the known placeholder strings (think `"secret"`, `"changeme"`), or is one character repeated, it will not boot.
 - A `session()` plus a state-changing route with no `csrf()` protection. The framework notices you have cookies and a POST route and no CSRF, and it stops you.
-- Unconfigured `X-Forwarded-*` handling in production. If you are behind a proxy and you have not told the framework whom to trust, it will not silently believe spoofed client IPs.
+
+One related guard is per request, not at boot: if a request in production carries `X-Forwarded-*` (or a vendor client-IP header) and you have not set `behindProxy` to tell the framework whom to trust, that request gets a `500` instead of the framework silently believing a spoofed client IP.
 
 ```ts
-// This throws at construction. Your CI catches it. Not your incident channel.
-const app = new App({
-  cors: { origin: "*", credentials: true },
-});
+// This throws when the line runs, in every environment.
+app.use(cors({ origin: "*", credentials: true }));
 ```
+
+Your CI catches the environment-gated guards too, as long as it runs `daloy doctor` or calls `app.assertSecureConfig({ production: true })` in a test. Not your incident channel.
 
 I know some of you just twitched. "What if I have a legitimate reason?" Then you fix the default for everyone with a scoped knob, you do not strip the guardrail inline. The framework's philosophy, which is written into its contributor rules in capital letters, is that bad defaults are bugs. If a guard genuinely blocks a real use case, the answer is a narrower override, not a deleted check. For service-to-service deployments behind a mesh there is even a `preset: "internal-service"` that turns off the browser-only guards (the CORS guard, the CSRF boot guard, auto secure headers) while keeping every input, parser, credential, and SSRF guard on. The choice gets logged at boot, and you can audit the live posture with `app.getSecurityPosture()`. Opt-in, visible, reversible. That is the pattern.
 
@@ -255,18 +256,18 @@ You can write the most careful handler in the world and still get owned through 
 
 `@daloyjs/core` has zero runtime dependencies. Not "few." Zero. That is enforced in CI by a gate called `verify:no-runtime-deps`, and it is treated as a floor, not a goal. A hallucinated dependency literally cannot transitively land in the published tarball, because there is no dependency tree to hide in. Every feature I described in this article, the JWT verifier, the SSRF guard, the WAF, the rate limiter, the WebSocket layer, is built on web-standard APIs and Node built-ins. No `node_modules` surprise party.
 
-The scaffolder ships a hardened `.npmrc`:
+The pnpm scaffold ships the hardened settings in `pnpm-workspace.yaml`, because pnpm 11 reads them from there and ignores the `.npmrc` spelling (the `.npmrc` keeps a mirror for npm and older tooling):
 
-```ini
-ignore-scripts=true
-minimum-release-age=1440
-strict-peer-dependencies=true
-prefer-frozen-lockfile=true
-verify-store-integrity=true
-provenance=true
+```yaml
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
 ```
 
-`ignore-scripts=true` kills lifecycle-script payloads, which is how most install-time worms detonate. `minimum-release-age=1440` refuses to install anything published in the last 24 hours, which is the typical window in which a malicious package gets detected and unpublished. Combined, those two defaults blunt slopsquatting hard. The attacker pre-registers the name your agent will hallucinate, but your install refuses fresh packages and refuses lifecycle scripts, and a workspace gate called `verify:known-dep-names` refuses any top-level dependency name that is not on an explicit allowlist. So `pnpm add some-hallucinated-name` cannot slip into a `package.json`. It forces a one-line diff that a human has to look at. That review checkpoint is the whole defense, and the framework makes it unavoidable.
+`ignoreScripts` kills lifecycle-script payloads, which is how install-script worms like Shai-Hulud detonate. It does nothing against a payload that runs when your code imports the package, which is what the chalk/debug compromise did. `minimumReleaseAge: 1440` refuses to install anything published in the last 24 hours, which is the typical window in which a malicious package gets detected and unpublished, and that cooldown plus your lockfile is what helps against the import-time kind. Combined, those defaults blunt slopsquatting, but only for squats somebody catches within a day. In the DaloyJS repo itself there is one more layer: a CI gate called `verify:known-dep-names` refuses any top-level dependency name that is not on an explicit allowlist, so `pnpm add some-hallucinated-name` cannot slip into one of its `package.json` files without a one-line diff that a human has to look at. Your scaffolded app does not get that gate, so for your own project that review checkpoint is on you and your code review.
 
 On top of that, `@daloyjs/core` is published with npm provenance and ships CycloneDX 1.5 plus SPDX 2.3 SBOMs, regenerated and verified on every release. There is a whole pile of CI gates with names like `verify:no-registry-exfiltration`, `verify:no-remote-exec`, `verify:no-lifecycle-scripts`, and `verify:no-weak-random`, and they carry IOC coverage for active campaigns. There are even gates that scan AI-agent config files (`CLAUDE.md`, `.cursorrules`, `AGENTS.md`) for the prompt-injection persistence trick the TrapDoor crypto-stealer used, and gates that refuse editor configs that auto-run a command on folder open, which is how the Miasma worm detonated. The supply chain is treated as hostile, which in 2027 is just accurate.
 
@@ -314,7 +315,7 @@ The migration guide lists the concrete differences between DaloyJS and Express:
 
 - OpenAPI and a typed client for free. In Express you bolt on `swagger-jsdoc`, hand-write JSDoc comments above each route, and pray they stay in sync with the code. They never do. In DaloyJS the route definition *is* the spec, so it cannot drift, and a typed SDK falls out of `pnpm gen`.
 - Validation the type system actually trusts. Express hands you `req.body as any` and wishes you luck. DaloyJS validates with Standard Schema (Zod, Valibot, ArkType) and infers your handler's `params`, `query`, and `body` types from the same schemas that do the runtime checking. One source of truth, no casts.
-- Secure defaults instead of a TODO list. This is the whole thesis of the article. Express ships almost nothing on the security front. DaloyJS ships body limits, request timeouts, header sanitization, prototype-pollution-safe JSON, and one-line `secureHeaders()` and `rateLimit()` helpers, and it refuses to boot on configurations that are known to be unsafe.
+- Secure defaults instead of a TODO list. This is the whole thesis of the article. Express ships almost nothing on the security front. DaloyJS ships body limits, request timeouts, header sanitization, prototype-pollution-safe JSON, and one-line `secureHeaders()` and `rateLimit()` helpers, and in production it refuses to boot on configurations that are known to be unsafe.
 - Run the same app everywhere. Express is welded to Node's `http` module. DaloyJS is built on web-standard `Request` and `Response`, so the same app object runs on Node, Bun, Deno, Workers, and Lambda. When your platform decision changes (it will), you swap an import, not a framework.
 - Zero runtime dependencies. A fresh Express app pulls in dozens of transitive packages, and every one of them is a slopsquatting target and a `postinstall` risk. `@daloyjs/core` has none. There is no dependency tree for a malicious package to hide in.
 

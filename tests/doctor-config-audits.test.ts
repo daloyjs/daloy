@@ -20,7 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
 
-import { App } from "../src/index.js";
+import { App, cors } from "../src/index.js";
 import { runCli, type CliIO } from "../src/cli.js";
 import { runParityAudits } from "../scripts/verify-parity-audits.js";
 
@@ -118,28 +118,9 @@ test("doctor: jsonMaxKeys high value surfaces a blanket warn", async () => {
   assert.ok(codes.includes("audit.jsonMaxKeys.blanket"), codes.join(","));
 });
 
-test("doctor: item 6 - allowUnsafeValidationDetails surfaces an error", async () => {
-  const app = dummyApp({ allowUnsafeValidationDetails: true });
-  const { io, out } = buildIO(app);
-  const r = await runCli(["doctor", "--json", "entry.ts"], io);
-  assert.equal(r.exitCode, 1);
-  const parsed = JSON.parse(out.join(""));
-  const codes = parsed.findings.map((f: { code: string }) => f.code);
-  assert.ok(codes.includes("audit.validationDetails.leak"), codes.join(","));
-});
-
-test("doctor: item 6 - exposeFrameworkIdentity surfaces an error", async () => {
-  const app = dummyApp({ exposeFrameworkIdentity: true });
-  const { io, out } = buildIO(app);
-  const r = await runCli(["doctor", "--json", "entry.ts"], io);
-  assert.equal(r.exitCode, 1);
-  const parsed = JSON.parse(out.join(""));
-  const codes = parsed.findings.map((f: { code: string }) => f.code);
-  assert.ok(codes.includes("audit.identityLeak"), codes.join(","));
-});
-
-test("doctor: item 1 - cors maxAge > 24h surfaces a warn", async () => {
-  const app = dummyApp({ cors: { origin: ["https://example.test"], maxAge: 604_800 } });
+test("doctor: item 1 - cors maxAgeSeconds > 24h on an installed cors() surfaces a warn", async () => {
+  const app = new App({ logger: false });
+  app.use(cors({ origin: ["https://example.test"], maxAgeSeconds: 604_800 }));
   const { io, out } = buildIO(app);
   const r = await runCli(["doctor", "--json", "entry.ts"], io);
   // warn-only - exit code stays 0 unless another error fires
@@ -149,36 +130,17 @@ test("doctor: item 1 - cors maxAge > 24h surfaces a warn", async () => {
   assert.ok(codes.includes("audit.cors.maxAge"), codes.join(","));
 });
 
-test("doctor: item 1 - cors wildcard + credentials surfaces an error", async () => {
-  // The App constructor refuses this combo at construction time when
-  // cors() is used as middleware. Here we exercise the *defense-in-depth*
-  // doctor check by injecting the option directly onto `app.options`
-  // (simulating a custom plugin that mutates options post-construction).
-  const app = dummyApp();
-  (app as unknown as { options: Record<string, unknown> }).options.cors = {
-    origin: "*",
-    credentials: true,
-  };
+test("doctor: a cors() policy within 24h does not surface a maxAge finding", async () => {
+  const app = new App({ logger: false });
+  app.use(cors({ origin: ["https://example.test"], maxAgeSeconds: 600 }));
   const { io, out } = buildIO(app);
-  const r = await runCli(["doctor", "--json", "entry.ts"], io);
-  assert.equal(r.exitCode, 1);
-  const parsed = JSON.parse(out.join(""));
-  const codes = parsed.findings.map((f: { code: string }) => f.code);
-  assert.ok(codes.includes("audit.cors.wildcardCredentials"), codes.join(","));
-});
-
-test("doctor: item 7 - enableServerTimingInProduction in production surfaces an error", async () => {
-  const app = dummyApp({ env: "production", enableServerTimingInProduction: true });
-  const { io, out } = buildIO(app);
-  const r = await runCli(["doctor", "--json", "entry.ts"], io);
-  assert.equal(r.exitCode, 1);
-  const parsed = JSON.parse(out.join(""));
-  const codes = parsed.findings.map((f: { code: string }) => f.code);
-  assert.ok(codes.includes("audit.serverTiming.production"), codes.join(","));
+  await runCli(["doctor", "--json", "entry.ts"], io);
+  const codes = JSON.parse(out.join("")).findings.map((f: { code: string }) => f.code);
+  assert.ok(!codes.includes("audit.cors.maxAge"), codes.join(","));
 });
 
 test("doctor: --no-audit-defaults skips every live audit check", async () => {
-  const app = dummyApp({ allowUnsafeValidationDetails: true });
+  const app = dummyApp({ bodyLimitBytes: 50 * 1024 * 1024 });
   const { io, out } = buildIO(app);
   const r = await runCli(["doctor", "--json", "--no-audit-defaults", "entry.ts"], io);
   assert.equal(r.exitCode, 0);
@@ -227,16 +189,6 @@ test("doctor: in-range disconnectStatusCode does not surface a finding", async (
   const parsed = JSON.parse(out.join(""));
   const codes = parsed.findings.map((f: { code: string }) => f.code);
   assert.ok(!codes.includes("disconnectStatusCode.range"), codes.join(","));
-});
-
-test("doctor: idleTimeoutMs: 0 in production surfaces an error", async () => {
-  const app = dummyApp({ env: "production", idleTimeoutMs: 0 });
-  const { io, out } = buildIO(app);
-  const r = await runCli(["doctor", "--json", "entry.ts"], io);
-  assert.equal(r.exitCode, 1);
-  const parsed = JSON.parse(out.join(""));
-  const codes = parsed.findings.map((f: { code: string }) => f.code);
-  assert.ok(codes.includes("audit.idleTimeout.zero"), codes.join(","));
 });
 
 test("doctor: text output renders a clean app as OK", async () => {

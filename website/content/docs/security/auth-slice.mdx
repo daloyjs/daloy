@@ -111,7 +111,7 @@ Every JWKS source (object, URL, or resolver function) is read per verification, 
 
 ### Service-to-service policy [#workload-identity-policy]
 
-For machine callers, pin both `issuer` and `audience`, set a short `maxLifetimeSeconds`, and apply `requireScopes()` to protected routes. Both issuer and audience checks are opt-in. Use distinct identities and secret stores for each workload and environment; `env: "production"` does not isolate credentials. The `verify` hook below can check whether the verified service identity is still active in your own store. DaloyJS does not inventory service accounts, rotate credentials, detect credential reuse, or automate offboarding. Use an identity provider and secret manager for those lifecycle controls.
+For machine callers, pin both `issuer` and `audience`, set a short `maxLifetimeSeconds`, and apply `requireScopes()` to protected routes. The issuer check is opt-in. From 1.5.4, `jwk()` and `createJwtVerifier()` refuse to construct in production without an `audience`, unless you pass `allowAnyAudience: true` (meant for a single-tenant private identity provider that mints tokens only for this service); outside production a missing `audience` is still accepted. Use distinct identities and secret stores for each workload and environment; `env: "production"` does not isolate credentials. The `verify` hook below can check whether the verified service identity is still active in your own store. DaloyJS does not inventory service accounts, rotate credentials, detect credential reuse, or automate offboarding. Use an identity provider and secret manager for those lifecycle controls.
 
 ## 2. Per-scheme `verify(credentials, ctx)` hook [#2-per-scheme-verify-credentials-ctx-hook]
 

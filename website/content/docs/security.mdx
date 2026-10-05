@@ -84,11 +84,12 @@ These checks happen in `App` or the runtime adapter itself. Applications get the
 
 | Threat | Built-in behavior |
 | --- | --- |
-| Body-size DoS | Streamed read, hard cap (default 1 MiB), Content-Length checked first -\> 413. |
+| Body-size DoS | Streamed read, hard cap (default 1 MiB), Content-Length checked first -\> 413. From 1.5.4 the cap covers every route, including handlers that read `ctx.request` directly; before that, only routes with a body schema. The cap applies when the body is read, so a route that ignores its body is not refused for it. |
 | Prototype pollution | `safeJsonParse` strips `__proto__`, `constructor`, `prototype` via reviver. |
 | Header / response splitting | `sanitizeHeaderName` / `sanitizeHeaderValue` reject CRLF + NUL. |
 | Path traversal | Dot-segments (`.` / `..`) are resolved to a canonical path before route matching, and empty `//` segments are refused. Routes match exact strings, so there is no directory to escape into. |
-| Slow-loris / hung handlers | `requestTimeoutMs` (default 30s) returns `408` and fires `ctx.request.signal` for cooperative teardown. The Node adapter also sets socket timeouts. |
+| Slow-loris / hung handlers | `requestTimeoutMs` (default 30s) returns `408` and fires `ctx.request.signal` for cooperative teardown. From 1.5.4 it covers the hooks, the body read and the handler (before: the handler only). The Node adapter also sets socket timeouts. |
+| Limits disabled by a bad value | From 1.5.4, `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys` and `jsonMaxDepth` must be finite non-negative integers; `NaN` (for example `Number(process.env.UNSET)`) and other invalid values throw at construction in every environment. |
 | Unsupported content types | Routes with body schemas reject non-allowed content-types -\> 415. |
 | Method confusion | Real **405** with `Allow` header, never a misleading 404. |
 | Information disclosure (5xx) | 5xx problem+json `detail` is redacted unless the environment is explicitly development or test; an unset `NODE_ENV` redacts too. |
@@ -259,10 +260,10 @@ DaloyJS is distributed via [pnpm](https://pnpm.io/motivation) for a stricter ins
 - Strict isolation: packages cannot reach phantom dependencies.
 - Content-addressable store: every byte is hashed and verified.
 - Frozen lockfile in CI with `--ignore-scripts`: reproducible installs without transitive lifecycle execution.
-- `verify-store-integrity`, corruption-detecting reads.
-- `strict-peer-dependencies`, no silent peer mismatches.
-- `minimum-release-age=1440`, wait 24h before installing fresh releases.
-- `ignore-scripts=true` with explicit `pnpm.onlyBuiltDependencies`: reviewed allowlist for native install scripts.
+- `verifyStoreIntegrity`, corruption-detecting reads.
+- `strictPeerDependencies`, no silent peer mismatches.
+- `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`, wait 24h before installing fresh releases (pnpm 11 ignores the `.npmrc` spelling; see [Install hardening](#install-hardening)).
+- `ignoreScripts: true` in scaffolds, and `strictDepBuilds` with an `allowBuilds` allowlist in the DaloyJS repo: no dependency install scripts except reviewed ones. This stops install-script worms, not payloads that run on import.
 - SHA-pinned GitHub Actions: the optional generated GitHub workflows pin third-party actions to immutable commits, not mutable tags.
 - Protected DaloyJS npm publishing: the framework's own packages use a tag-only release workflow, protected environment approval, OIDC trusted publishing, and `--provenance`.
 
@@ -308,15 +309,20 @@ return htmlResponse(html, {
 });
 ```
 
-```ini
-# .npmrc
-ignore-scripts=true
-minimum-release-age=1440
-strict-peer-dependencies=true
-prefer-frozen-lockfile=true
-verify-store-integrity=true
-provenance=true
+## Install hardening [#install-hardening]
+
+On pnpm 11+, install-time settings live in `pnpm-workspace.yaml` with camelCase keys. pnpm 11 ignores the `.npmrc` spelling of these settings, so an `.npmrc`-only setup silently loses the cooldown and the script policy. Keep an `.npmrc` mirror only for npm and older tooling.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440    # skip versions published in the last 24 hours
+blockExoticSubdeps: true   # transitive deps must come from the registry
+ignoreScripts: true        # no dependency lifecycle scripts
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
 ```
+
+These settings protect the installs that use them. `ignoreScripts` stops install-script worms (the Shai-Hulud kind); a payload that runs when your code imports the package is mitigated only by the cooldown and a committed lockfile. `create-daloy` writes this file for pnpm scaffolds.
 
 For the full CI/CD and maintainer playbook, read [Supply-chain security](/docs/security/supply-chain). Run `pnpm audit --prod` in CI and before release.
 

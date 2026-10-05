@@ -456,7 +456,10 @@ test("trustProxy unconfigured guard logs a warn exactly once across many request
   await app.request("/ip", { headers: { "x-forwarded-for": "1.2.3.4" } });
   await app.request("/ip", { headers: { "x-forwarded-for": "1.2.3.4" } });
   await app.request("/ip", { headers: { "x-forwarded-for": "1.2.3.4" } });
-  assert.equal(warns.length, 1);
+  const proxyWarns = warns.filter(
+    (w) => (w as { event?: string } | null)?.event === "trust-proxy.unconfigured"
+  );
+  assert.equal(proxyWarns.length, 1);
 });
 
 test("trustProxy unconfigured refusal logs an error per request but without a stack", async () => {

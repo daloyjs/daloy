@@ -18,7 +18,7 @@ keywords:
 
 # Supply-chain security
 
-<blockquote>Provenance links a package to its build. A 24-hour release-age floor delays new versions, and <code>ignore-scripts=true</code> prevents dependency lifecycle scripts from running during installation.</blockquote>
+<blockquote>Provenance links a package to its build. A 24-hour release-age floor delays new versions, and <code>ignoreScripts</code> prevents dependency lifecycle scripts from running during installation. None of this stops every supply-chain attack; this page says what each control covers and what it does not.</blockquote>
 
 npm worm campaigns ship in waves: `chalk`/`debug` in September 2025, `node-ipc` in May 2026, the @tanstack/\* compromise on 2026-05-11. The pattern is consistent: a single phished maintainer or one CI cache-poisoning bug becomes thousands of downstream installs in minutes. DaloyJS is built and shipped with that threat model in mind, and we recommend the same defaults for your project.
 
@@ -56,6 +56,7 @@ npm worm campaigns ship in waves: `chalk`/`debug` in September 2025, `node-ipc` 
 
 - Releases run in a separate workflow (`release.yml`) that is triggered *only* by a signed tag push and gated by a protected GitHub Environment requiring maintainer approval. Fork PRs cannot touch it.
 - npm trusted publishing (OIDC) with `--provenance`: every `@daloyjs/core` tarball is bound to its source commit and workflow run via Sigstore. There is no long-lived `NPM_TOKEN` in repo secrets to steal.
+- Build and publish are separate jobs (from 1.5.4). A job with no publish credentials builds the package, runs `npm pack`, and records the tarball's sha256. The publish job only verifies that hash and stages that exact tarball, so the job holding `id-token: write` never runs the build or a dependency's code.
 - `id-token: write` is granted only to the publish job, on the post-approval runner, with egress blocked to everything except npm, GitHub, and Sigstore (via `step-security/harden-runner`).
 - No GitHub Actions cache in the standard CI workflow. Cache scope bridges fork PRs and pushes to `main`, which is the poisoning channel that bridged TanStack's PR pipeline into its release pipeline.
 - No `pull_request_target` that runs fork code. CI uses the safe `pull_request` trigger. The one narrow exception (a workflow that auto-closes external PRs) never checks out, installs, or runs any PR code. A `zizmor` check on every PR fails the build on the dangerous `pull_request_target`-plus-fork-checkout pattern.
@@ -83,24 +84,39 @@ The harness, including the per-target oracle and the digest-pinned OSS-Fuzz buil
 
 ## Defaults you get from `pnpm create daloy`
 
-Every project scaffolded with `create-daloy` ships with an`.npmrc` and `pnpm-workspace.yaml` that turn on the install-time controls below when you choose `pnpm`. Keep them on.
+When you choose `pnpm`, a project scaffolded with `create-daloy` gets a `pnpm-workspace.yaml` that turns on the install-time controls below. pnpm 11+ reads these settings from `pnpm-workspace.yaml` (camelCase keys) and ignores them in `.npmrc`; the scaffold also writes an `.npmrc` with the same values for npm and older tooling. Keep them on.
 
-```ini
-# .npmrc, shipped by create-daloy
+```yaml title="pnpm-workspace.yaml (shipped by create-daloy)"
+# Wait 24h (1440 minutes) before resolving a freshly published version.
+# npm worm campaigns are typically detected and unpublished within hours.
+minimumReleaseAge: 1440
 
-# Block transitive postinstall/preinstall/prepare hooks, which is the
-# execution channel used by chalk/debug, node-ipc, and Shai-Hulud.
-ignore-scripts=true
+# Only direct dependencies may use git or tarball sources.
+blockExoticSubdeps: true
 
-# Wait 24h before resolving a freshly published version. npm worm
-# campaigns are typically detected and unpublished within hours.
-minimum-release-age=1440
+# Never run dependency lifecycle scripts (preinstall / install /
+# postinstall / prepare).
+ignoreScripts: true
 
 # Reproducible installs.
-prefer-frozen-lockfile=true
-verify-store-integrity=true
-strict-peer-dependencies=true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
 ```
+
+What these controls do and do not cover:
+
+- `ignoreScripts` stops install-script payloads, the channel used by self-replicating worms such as Shai-Hulud. It does not stop a payload that runs when your code imports the package, which is how the `chalk`/`debug` and `node-ipc` compromises executed.
+- Import-time payloads are mitigated only by the release-age cooldown (a bad version caught within 24 hours never resolves) and by a committed lockfile (an existing install does not move to the bad version on its own).
+- The cooldown is consumer-side: it protects the installs that set it, and only against compromises detected within the window.
+
+Other package managers (from 1.5.4):
+
+- **npm** scaffolds get an `.npmrc` with `ignore-scripts=true`, `min-release-age=1` (days), and `engine-strict=true`.
+- **Yarn** scaffolds get a `.yarnrc.yml` with `enableScripts: false` and a minimum release age.
+- **Bun** scaffolds get a `bunfig.toml` with `minimumReleaseAge` (Bun 1.3+).
+- Template Dockerfiles pin their base images by digest, so a retagged base image cannot change what your container build pulls.
 
 When (and only when) you scaffold with `--package-manager npm`, the CLI adds an `npm >= 12` floor to `engines` and swaps the pnpm `.npmrc` for an npm-native one containing `engine-strict=true`, so npm *refuses* to install on an older CLI instead of only printing a warning. pnpm scaffolds get the equivalent guard: a `pnpm >= 11` floor in `engines.pnpm`, which pnpm always enforces at install time. This matters because pnpm older than 11 silently ignores the `minimumReleaseAge` setting in `pnpm-workspace.yaml`, which disables the 24-hour release-age cooldown. The CLI also warns during scaffolding when the installed pnpm is below the floor. Yarn and Bun scaffolds never run npm or pnpm, so they get neither floor. This keeps npm users on a CLI new enough for the modern lockfile and provenance-verification behavior the project relies on.
 
@@ -118,17 +134,15 @@ On GitLab, Bitbucket, Azure DevOps, Jenkins, or an on-prem runner, you still inh
 
 ## If you legitimately need a postinstall
 
-`ignore-scripts=true` is global. To allow a build script for a package you actually trust (e.g. `esbuild`), allowlist it explicitly in `package.json`:
+Disabling scripts is global. On pnpm 11+, allow a build script for a package you actually trust (e.g. `esbuild`) explicitly in `pnpm-workspace.yaml`, the way the DaloyJS repo does:
 
-```json
-{
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  }
-}
+```yaml title="pnpm-workspace.yaml"
+strictDepBuilds: true   # an unreviewed lifecycle script fails the install
+allowBuilds:
+  esbuild: true
 ```
 
-DaloyJS itself uses the pnpm 11+ equivalent, an `allowBuilds` allowlist in `pnpm-workspace.yaml` (`package.json#pnpm.onlyBuiltDependencies` is the pre-v11 form). Each entry should be reviewed in PR.
+`package.json#pnpm.onlyBuiltDependencies` is the pre-v11 form; pnpm 11 does not read `package.json#pnpm`. Each entry should be reviewed in PR.
 
 ## Avoid git and tarball dependencies
 
@@ -146,11 +160,11 @@ npm install -g @aikidosec/safe-chain
 safe-chain setup
 ```
 
-DaloyJS deliberately does **not** add `safe-chain` (or any other third-party scanner) as a dependency or scaffold default. `@daloyjs/core` ships zero runtime dependencies by policy and any install-time tool you run is your trust decision, not the framework's. Equivalent commercial offerings (Socket, Snyk Advisor, JFrog Curation, npm's own Package Trust) sit at the same layer. Pick one or run none, but understand that `minimum-release-age=1440` is already doing most of the work the article recommends.
+DaloyJS deliberately does **not** add `safe-chain` (or any other third-party scanner) as a dependency or scaffold default. `@daloyjs/core` ships zero runtime dependencies by policy and any install-time tool you run is your trust decision, not the framework's. Equivalent commercial offerings (Socket, Snyk Advisor, JFrog Curation, npm's own Package Trust) sit at the same layer. Pick one or run none, but understand that the `minimumReleaseAge: 1440` cooldown is already doing much of the work the article recommends, for compromises caught within a day.
 
 ## Mapped to the ENISA package-manager advisory
 
-ENISA's [Technical Advisory for Secure Use of Package Managers](https://www.enisa.europa.eu/publications/enisa-technical-advisory-for-secure-use-of-package-managers) (v1.1, March 2026) is the EU reference checklist for consuming third-party packages, organised across a four-stage life cycle. DaloyJS implements the integration checklist **as shipped defaults**, including the two controls ENISA itself flags as “optional” or “more suited for high-security environments.”
+ENISA's [Technical Advisory for Secure Use of Package Managers](https://www.enisa.europa.eu/publications/enisa-technical-advisory-for-secure-use-of-package-managers) (v1.1, March 2026) is the EU reference checklist for consuming third-party packages, organised across a four-stage life cycle. The DaloyJS repo implements the integration checklist, including the two controls ENISA itself flags as “optional” or “more suited for high-security environments.” The table notes which controls a pnpm scaffold also gets and which are gates in the DaloyJS repo only.
 
 <FlowDiagram title="ENISA package-consumption life cycle" steps={[
           {
@@ -175,22 +189,22 @@ ENISA's [Technical Advisory for Secure Use of Package Managers](https://www.enis
             detail: "assess, prioritise, patch, document",
             tone: "success",
           },
-        ]} caption="DaloyJS meets or exceeds the Select and Integrate controls as defaults. Monitor is daily SCA plus Dependabot. Per-app CVE reachability triage in Mitigate is the consumer's job." />
+        ]} caption="The DaloyJS repo covers the Select and Integrate controls; a pnpm scaffold gets the install-time ones. Monitor is daily SCA plus Dependabot. Per-app CVE reachability triage in Mitigate is the consumer's job." />
 
 | ENISA recommendation | DaloyJS control |
 | --- | --- |
-| Installation script prevention (`ignore-scripts`; ENISA flags as “high-security”) | Default, not opt-in: `ignore-scripts=true` + `pnpm verify:no-lifecycle-scripts` |
-| Release-age delay (`--before`; ENISA flags as “optional and situational”) | Standing policy: `minimum-release-age=1440` (24h) |
+| Installation script prevention (`ignore-scripts`; ENISA flags as “high-security”) | Scaffold default: `ignoreScripts: true`. Repo gate: `pnpm verify:no-lifecycle-scripts` (checks the published packages' own manifests) |
+| Release-age delay (`--before`; ENISA flags as “optional and situational”) | Scaffold default and repo policy: `minimumReleaseAge: 1440` (24h) |
 | Integrity / lockfile verification (SHA-512) | `frozen-lockfile` + `verify-store-integrity` + `pnpm verify:lockfile` |
 | Package source enforcement (trusted registry only) | `registry=` pinned + `pnpm verify:lockfile` |
 | SBOM creation | CycloneDX 1.5 + SPDX 2.3 per release + `pnpm verify:sbom` |
 | Trusted Publishing + provenance | OIDC trusted publishing (no long-lived token) + `--provenance` Sigstore |
-| Internal allowlist of approved package names | `pnpm verify:known-dep-names` |
+| Internal allowlist of approved package names | Repo gate only: `pnpm verify:known-dep-names` |
 | Reduce dependencies (“is the dependency needed?”) | `@daloyjs/core` ships zero runtime deps (`verify:no-runtime-deps`) |
 
-ENISA section 5.2 names **slopsquatting** (attackers pre-registering hallucinated package names that AI tools emit) as a first-class AI-era threat. DaloyJS closes both axes: `verify:known-dep-names` forces every top-level dependency onto an explicit allowlist (name axis), and `minimum-release-age=1440` waits out the window in which a slop-squat is typically detected and unpublished (time axis). Full recommendation-by-control table: [SECURITY.md → ENISA mapping](https://github.com/daloyjs/daloy/blob/main/SECURITY.md#enisa-technical-advisory-for-secure-use-of-package-managers-march-2026-mapping).
+ENISA section 5.2 names **slopsquatting** (attackers pre-registering hallucinated package names that AI tools emit) as a first-class AI-era threat. DaloyJS narrows both axes, with limits. On the name axis, `verify:known-dep-names` forces every top-level dependency in the DaloyJS repo onto an explicit allowlist; it is a CI gate in this repo, and scaffolded apps do not get it, so in your project a new dependency name is caught only by your own review. On the time axis, the `minimumReleaseAge: 1440` cooldown waits out the window in which a slop-squat is typically detected and unpublished, which only helps against squats somebody detects within a day. Full recommendation-by-control table: [SECURITY.md → ENISA mapping](https://github.com/daloyjs/daloy/blob/main/SECURITY.md#enisa-technical-advisory-for-secure-use-of-package-managers-march-2026-mapping).
 
-ENISA section 5.2's concern is backed by survey data. Aikido's [State of AI in Security & Development 2026](https://www.aikido.dev/state-of-ai-security-development-2026) report (450 practitioners) found that 69% of organizations have uncovered vulnerabilities introduced by AI-generated code and 1 in 5 had a serious incident tied to it, and that automated CI gates reduce incidents while manual review and tool sprawl do not. That is the case for DaloyJS's posture here: secure-by-default output means AI-generated code starts safe, and the fail-closed `verify:*` gates are exactly the kind of automated, low-false-positive guardrail the report associates with fewer incidents.
+ENISA section 5.2's concern is backed by survey data. Aikido's [State of AI in Security & Development 2026](https://www.aikido.dev/state-of-ai-security-development-2026) report (450 practitioners) found that 69% of organizations have uncovered vulnerabilities introduced by AI-generated code and 1 in 5 had a serious incident tied to it, and that automated CI gates reduce incidents while manual review and tool sprawl do not. That is the case for DaloyJS's posture here: secure defaults mean AI-generated code starts from a safer baseline (it still needs review), and the fail-closed `verify:*` gates are the kind of automated, low-false-positive guardrail the report associates with fewer incidents.
 
 ## What to do if a maintainer account is phished
 
@@ -198,7 +212,7 @@ The September 2025 chalk/debug compromise started with a single fake `npmjs.help
 
 1. Pin every direct dependency that lists the affected maintainer to the last known-good version in your lockfile.
 2. `pnpm audit --prod` and rotate any deployment credential the install host had access to (npm token, GitHub token, AWS keys, SSH keys).
-3. Bump `minimum-release-age` in `.npmrc` further (e.g. `4320` for 72h) until the campaign settles.
+3. Bump `minimumReleaseAge` in `pnpm-workspace.yaml` further (e.g. `4320` for 72h) until the campaign settles. On pnpm 11+ a `minimum-release-age` line in `.npmrc` is ignored.
 4. Subscribe to [GitHub Security Advisories](https://github.com/advisories) for your dependency tree.
 
 ## Hardening your own GitHub Actions

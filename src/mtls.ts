@@ -32,6 +32,7 @@ import { ForbiddenError } from "./errors.js";
 import { markAuthIdentity } from "./internal-replay.js";
 import { timingSafeEqual } from "./security.js";
 import type { Hooks, PreBodyContext } from "./types.js";
+import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 /**
  * Normalized view of a TLS client certificate, independent of how it was
@@ -641,13 +642,14 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
       // caller is: this identity is not in Authorization/Cookie, so without it a
       // cache HIT would hand one allow-listed peer another peer's response.
       markAuthIdentity(ctx.state as Record<PropertyKey, unknown>, certIdentity(cert));
+      markAuthPassed(ctx);
       return undefined;
     },
   };
   // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
   // the middleware module out of this bundle): lets the route-auth boot guard
   // recognize that a route declaring `auth:` is actually enforced here.
-  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  stampAuthHook(authHooks, true);
   return authHooks;
 }
 

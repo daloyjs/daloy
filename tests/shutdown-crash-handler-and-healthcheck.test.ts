@@ -318,7 +318,7 @@ test("custom path is honoured", async () => {
 
 test("token-required probe rejects missing Authorization with 401", async () => {
   const app = new App({ env: "development" });
-  app.healthcheck({ token: "supersecret" });
+  app.healthcheck({ token: "supersecret-probe-token" });
   const res = await app.fetch(new Request("http://x/healthz"));
   assert.equal(res.status, 401);
   assert.equal(res.headers.get("www-authenticate"), 'Bearer realm="health"');
@@ -326,7 +326,7 @@ test("token-required probe rejects missing Authorization with 401", async () => 
 
 test("token-required probe rejects wrong token with 403", async () => {
   const app = new App({ env: "development" });
-  app.healthcheck({ token: "supersecret" });
+  app.healthcheck({ token: "supersecret-probe-token" });
   const res = await app.fetch(
     new Request("http://x/healthz", {
       headers: { authorization: "Bearer wrong" },
@@ -337,10 +337,10 @@ test("token-required probe rejects wrong token with 403", async () => {
 
 test("token-required probe accepts matching token", async () => {
   const app = new App({ env: "development" });
-  app.healthcheck({ token: "supersecret" });
+  app.healthcheck({ token: "supersecret-probe-token" });
   const res = await app.fetch(
     new Request("http://x/healthz", {
-      headers: { authorization: "Bearer supersecret" },
+      headers: { authorization: "Bearer supersecret-probe-token" },
     })
   );
   assert.equal(res.status, 200);
@@ -379,7 +379,7 @@ test("rateLimit: false disables the limiter entirely", async () => {
 
 test("token-required probe rate-limits missing Authorization attempts", async () => {
   const app = new App({ env: "development" });
-  app.healthcheck({ token: "supersecret", rateLimit: { limit: 1, windowMs: 60_000 } });
+  app.healthcheck({ token: "supersecret-probe-token", rateLimit: { limit: 1, windowMs: 60_000 } });
   const a = await app.fetch(new Request("http://x/healthz"));
   const b = await app.fetch(new Request("http://x/healthz"));
   assert.equal(a.status, 401);

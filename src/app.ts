@@ -5,6 +5,7 @@ import {
   type WebSocketHandler,
 } from "./websocket.js";
 import { readNodeEnv } from "./internal-env.js";
+import { AUTH_RAN } from "./internal-auth.js";
 import {
   BadRequestError,
   ForbiddenError,
@@ -86,6 +87,7 @@ import {
   AUTH_HOOK_MARKER,
   CORS_HOOK_MARKER,
   CORS_ORIGIN_ALLOW_MARKER,
+  CORS_RESPONSE_DECORATOR,
   CORS_WILDCARD_ORIGIN_MARKER,
   CSRF_HOOK_MARKER,
   _mergePreBodyWithEarlyRejections,
@@ -125,7 +127,7 @@ import {
   type JobWorkerOptions,
 } from "./jobs.js";
 import { securitySchemeRequiresPayloadAuth } from "./security-schemes.js";
-import { assertBehindProxy, type BehindProxyConfig } from "./conn-info.js";
+import { assertBehindProxy, FORWARDED_TRUST_MARKER, type BehindProxyConfig } from "./conn-info.js";
 import {
   requestFinalizersEnabled,
   runRequestFinalizers,
@@ -172,8 +174,11 @@ export function _resetInsecureDefaultsLogForTests(): void {
  * per `App` / per `.use()` call.
  */
 let indeterminateEnvSecurityWarnedThisProcess = false;
+/** Once-per-process latch for the unrecognized-NODE_ENV warning. */
+let unrecognizedNodeEnvWarned = false;
 /** @internal Test-only helper to reset the indeterminate-env warning latch. */
 export function _resetIndeterminateEnvWarningForTests(): void {
+  unrecognizedNodeEnvWarned = false;
   indeterminateEnvSecurityWarnedThisProcess = false;
 }
 
@@ -323,7 +328,14 @@ export interface AppOptions {
    */
   telemetry?: boolean | TelemetryOptions;
 
-  /** Hard cap on request body size in bytes. Default: 1 MiB. */
+  /**
+   * Hard cap on request body size in bytes, applied to every route: bodies
+   * parsed against a schema, and bodies a handler reads itself from
+   * `ctx.request` (`text()`, `json()`, `arrayBuffer()`, `formData()`, the
+   * `body` stream, `clone()`). Over the cap answers `413`. Default: 1 MiB.
+   *
+   * @throws Error at construction when not a finite non-negative integer.
+   */
   bodyLimitBytes?: number;
 
   /**
@@ -336,10 +348,15 @@ export interface AppOptions {
   allowedContentTypes?: string[];
 
   /**
-   * Per-request timeout in ms (handler + hooks). Default: 30000. Set 0 to
-   * disable. On timeout the framework aborts `ctx.request.signal` (cooperative
-   * cancellation of downstream I/O) and responds `408`; see
-   * {@link RequestTimeoutError}. It does not forcibly stop CPU-bound work.
+   * Per-request timeout in ms covering the `preBody` / `beforeHandle` /
+   * `afterHandle` hooks, the request-body read and the handler, measured from
+   * the first asynchronous step. Default: 30000. Set 0 to disable. On timeout
+   * the framework aborts `ctx.request.signal` (cooperative cancellation of
+   * downstream I/O) and responds `408`; see {@link RequestTimeoutError}. It does
+   * not forcibly stop CPU-bound work, and `onSend` / `onResponse` and response
+   * streaming are not bounded by it.
+   *
+   * @throws Error at construction when not a finite non-negative integer.
    */
   requestTimeoutMs?: number;
 
@@ -1097,6 +1114,21 @@ interface CompiledRoute {
   /** CORS origin allowlist predicates from global hooks; precomputed for the dispatch cross-origin check. */
   fullCorsOriginAllows: CorsOriginAllow[];
   /**
+   * The route's `cors()` response-header decorator (the last one in its
+   * effective chain, matching which policy `beforeHandle` leaves in place),
+   * applied before `preBody` so early rejections carry CORS headers.
+   * `undefined` when the route has no `cors()`.
+   */
+  corsDecorate: CorsDecorator | undefined;
+  /**
+   * The route must not reach its handler (or answer from a cache / replay)
+   * unless an authentication hook actually ran and let the request through:
+   * it declares `auth:`, is an MCP / A2A endpoint, or `requireAuth` covers it.
+   * Presence in the chain is not enough, since `except()` or a permissive
+   * `some()` branch can keep the hook from running.
+   */
+  requiresAuthRun: boolean;
+  /**
    * Decorations visible in this route's registration scope, or `undefined`
    * when the scope had none. Captured at registration (like {@link mergedHooks})
    * so plugin-local decorations reach only that plugin's routes instead of
@@ -1175,6 +1207,30 @@ const A2A_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.a2a.appProduction");
 const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
 /** Must match the string used by rateLimit() / loginThrottle() in middleware.ts. */
 const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
+
+/**
+ * Registration-time hook key: a hook bundle storing a function here is called
+ * with the App's resolved production flag when it is registered, and may throw
+ * to refuse a configuration that is only unsafe in production.
+ * @internal
+ */
+const APP_PRODUCTION_HOOK = Symbol.for("daloyjs.hooks.appProduction");
+
+/** Stamped by `session()` when it falls back to its in-memory store. @internal */
+const SESSION_MEMORY_STORE_MARKER = Symbol.for("daloyjs.session.memoryStore");
+
+/** Summary a `cors()` bundle stamps on itself (see middleware). @internal */
+const CORS_POLICY_MARKER = Symbol.for("daloyjs.cors.policy");
+/** Shape stored under {@link CORS_POLICY_MARKER}. @internal */
+interface CorsPolicySummary {
+  credentials: boolean;
+  maxAgeSeconds: number | undefined;
+}
+/**
+ * Read-only accessor for the `cors()` policies registered on an App, used by
+ * `daloy doctor`. @internal
+ */
+export const APP_CORS_POLICIES = Symbol.for("daloyjs.app.corsPolicies");
 
 /**
  * Method key the self-hosted listeners (`serve()` on Node, Bun and Deno) call
@@ -1332,6 +1388,25 @@ const DEFAULTS = {
 };
 
 const TEXT_ENCODER = new TextEncoder();
+
+/**
+ * Validate a numeric App limit: `undefined` takes the default, anything else
+ * must be a finite non-negative safe integer. Refused in every environment,
+ * because a NaN / Infinity / negative limit silently disables the guard.
+ * @throws Error naming the option and the rejected value.
+ */
+function numericOption(name: string, value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
+    throw new Error(
+      `app({ ${name} }) must be a finite, non-negative integer; got ${shown}. ` +
+        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+        `would otherwise disable this limit. Omit the option to use the default.`,
+    );
+  }
+  return value;
+}
 
 /**
  * Internal Symbol used to stash the raw Uint8Array (or null) body on a
@@ -1707,6 +1782,16 @@ export class App<
    */
   private lastHostAuthority = "";
   private lastHostVerdict = false;
+  /** The in-memory session store warning is logged once per App. */
+  private memorySessionWarned = false;
+  /** Routes already warned about an auth hook that did not run (non-production). */
+  private unenforcedAuthWarned = new Set<string>();
+  /** `cors()` policies seen at registration, for `daloy doctor`. */
+  private corsPolicies: CorsPolicySummary[] = [];
+  /** @internal Registered `cors()` policy summaries (see {@link APP_CORS_POLICIES}). */
+  get [APP_CORS_POLICIES](): readonly CorsPolicySummary[] {
+    return this.corsPolicies;
+  }
   /** Boot-guard warnings already logged for an indeterminate environment. */
   private indeterminateGuardWarnings = new Set<string>();
   /** WebSocket route registry. Adapters look up handlers via `app.webSocketRoutes.find()`. */
@@ -1841,15 +1926,19 @@ export class App<
 
   constructor(options: AppOptions = {}) {
     const resolved = applySecurityPreset(options);
+    // Defaults are applied after the caller's options so an explicit
+    // `undefined` falls back to the default instead of erasing it, and every
+    // numeric limit is validated: `Number(process.env.UNSET)` is NaN, and
+    // `x > NaN` is always false, so a NaN limit used to switch it off.
     this.options = {
+      ...resolved,
       validateResponses:
         resolved.validateResponses ?? DEFAULTS.validateResponses,
-      bodyLimitBytes: resolved.bodyLimitBytes ?? DEFAULTS.bodyLimitBytes,
-      requestTimeoutMs: resolved.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs,
-      maxHeaderCount: resolved.maxHeaderCount ?? DEFAULTS.maxHeaderCount,
-      jsonMaxKeys: resolved.jsonMaxKeys ?? DEFAULTS.jsonMaxKeys,
-      jsonMaxDepth: resolved.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
-      ...resolved,
+      bodyLimitBytes: numericOption("bodyLimitBytes", resolved.bodyLimitBytes, DEFAULTS.bodyLimitBytes),
+      requestTimeoutMs: numericOption("requestTimeoutMs", resolved.requestTimeoutMs, DEFAULTS.requestTimeoutMs),
+      maxHeaderCount: numericOption("maxHeaderCount", resolved.maxHeaderCount, DEFAULTS.maxHeaderCount),
+      jsonMaxKeys: numericOption("jsonMaxKeys", resolved.jsonMaxKeys, DEFAULTS.jsonMaxKeys),
+      jsonMaxDepth: numericOption("jsonMaxDepth", resolved.jsonMaxDepth, DEFAULTS.jsonMaxDepth),
     };
     // Telemetry is resolved before the logger so the logger's write sink can
     // tee into the OTLP log exporter. Inert when no endpoint is configured.
@@ -1873,6 +1962,8 @@ export class App<
             });
 
     this.warnOnEnvMismatch();
+    this.warnUnrecognizedNodeEnv();
+    this.warnPartiallyDisabledDefaults();
     if (this.options.allowedHosts !== undefined) {
       this.hostMatcher = compileAllowedHosts(this.options.allowedHosts);
     }
@@ -2287,6 +2378,41 @@ export class App<
     // of their own learn the App's behindProxy posture here, so behind a proxy
     // they key on the real client instead of collapsing every caller onto the
     // proxy's address (one shared bucket that any client can drain).
+    // A guard that trusts X-Forwarded-For from any peer contradicts an App that
+    // says no proxy is in front: any client could then choose its own IP and
+    // walk past the rate limit / ban / allowlist the guard enforces.
+    const trustsForwarded = (hooks as Record<PropertyKey, unknown>)[FORWARDED_TRUST_MARKER];
+    if (typeof trustsForwarded === "string" && this.options.behindProxy === "none") {
+      throw new Error(
+        `${trustsForwarded} trusts X-Forwarded-For (trustProxyHeaders: true or trustedHops), but ` +
+          `app({ behindProxy: "none" }) says no proxy is in front, so any client could set its own ` +
+          `IP. Drop the guard's proxy-trust option (it follows the App's behindProxy), or declare ` +
+          `the real topology with app({ behindProxy: { hops } | { cidrs } }).`,
+      );
+    }
+    if (
+      (hooks as Record<PropertyKey, unknown>)[SESSION_MEMORY_STORE_MARKER] === true &&
+      this.isProduction() &&
+      !this.memorySessionWarned
+    ) {
+      this.memorySessionWarned = true;
+      this.log.warn(
+        { event: "session.memory_store_in_production" },
+        "session() uses the in-memory store in production: sessions vanish on restart, and a logout " +
+          "or revocation on one instance does not reach the others. Pass a shared store (Redis, KV, a database).",
+      );
+    }
+    const corsPolicy = (hooks as Record<PropertyKey, unknown>)[CORS_POLICY_MARKER];
+    if (corsPolicy !== undefined && !this.corsPolicies.includes(corsPolicy as CorsPolicySummary)) {
+      this.corsPolicies.push(corsPolicy as CorsPolicySummary);
+    }
+    // Hooks with production-only refusals (jwk() without an audience) learn
+    // the App's resolved environment here, so `env: "production"` counts even
+    // when NODE_ENV is unset. They throw to refuse the registration.
+    const productionHook = (hooks as Record<PropertyKey, unknown>)[APP_PRODUCTION_HOOK];
+    if (typeof productionHook === "function") {
+      (productionHook as (production: boolean) => void)(this.isProduction());
+    }
     const behindProxyHook = (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK];
     if (typeof behindProxyHook === "function") {
       // In production, say so once when a guard cannot tell clients apart and
@@ -2386,7 +2512,9 @@ export class App<
   /**
    * Whether the resolved runtime environment is indeterminate: no explicit
    * {@link AppOptions.env} / {@link AppOptions.production} was provided AND
-   * `process.env.NODE_ENV` is unset or empty. This is the common default on
+   * `process.env.NODE_ENV` is unset, empty, or not one of `development`,
+   * `test`, `production` (e.g. `staging` or `prod`, which used to switch the
+   * production refusals off without a word). This is the common default on
    * edge runtimes (Cloudflare Workers, Deno Deploy), which have no
    * `NODE_ENV`. Deliberately does not sniff the runtime — it only reports
    * whether the environment signal is absent — so it stays runtime-portable.
@@ -2403,7 +2531,58 @@ export class App<
       return false;
     }
     const nodeEnv = readNodeEnv();
-    return nodeEnv === undefined || nodeEnv === "";
+    return (
+      nodeEnv !== "development" && nodeEnv !== "test" && nodeEnv !== "production"
+    );
+  }
+
+  /**
+   * In production, log one warning listing secure defaults that were switched
+   * off individually. `secureDefaults: false` already logs its own error; this
+   * covers the per-feature opt-outs, which were otherwise silent.
+   */
+  private warnPartiallyDisabledDefaults(): void {
+    const o = this.options;
+    if (o.secureDefaults === false || !this.isProduction()) return;
+    const off: string[] = [];
+    if (o.secureHeaders === false) off.push("secureHeaders: false (no CSP / HSTS / frame protection)");
+    if (o.corsCrossOriginGuard === false) off.push("corsCrossOriginGuard: false (cross-site writes not rejected)");
+    if (o.csrf === "off") off.push('csrf: "off" (no CSRF boot guard)');
+    if (o.crashOnUnhandledRejection === false) off.push("crashOnUnhandledRejection: false");
+    if (off.length === 0) return;
+    this.log.warn(
+      { event: "secure_defaults.partially_disabled", disabled: off },
+      `Production app with secure defaults switched off: ${off.join("; ")}. ` +
+        "Confirm each is intended; together they can leave cookie-authenticated routes open to cross-site requests.",
+    );
+  }
+
+  /**
+   * Log once per process when `NODE_ENV` holds a value DaloyJS does not
+   * recognize, because only exactly `production` enables the production
+   * refusals. Silent when `env` / `production` is passed explicitly.
+   */
+  private warnUnrecognizedNodeEnv(): void {
+    if (unrecognizedNodeEnvWarned) return;
+    if (this.options.env !== undefined || this.options.production !== undefined) return;
+    const nodeEnv = readNodeEnv();
+    if (
+      nodeEnv === undefined ||
+      nodeEnv === "" ||
+      nodeEnv === "development" ||
+      nodeEnv === "test" ||
+      nodeEnv === "production"
+    ) {
+      return;
+    }
+    unrecognizedNodeEnvWarned = true;
+    this.log.warn(
+      { event: "env.unrecognized", nodeEnv },
+      `NODE_ENV="${nodeEnv}" is not recognized. Only "production" enables the production ` +
+        `refusals (boot guards, proxy-header refusal, insecure-default checks), so they are logged ` +
+        `as warnings instead of enforced. Set app({ env: "production" }) for a production-like ` +
+        `deploy, or app({ env: "development" }) to silence this.`,
+    );
   }
 
   /**
@@ -2579,6 +2758,35 @@ export class App<
   }
 
   /**
+   * A route that requires authentication was about to run (or answer from a
+   * cache / replay) although no authentication hook ran and let the request
+   * through, typically because `except()` exempted the path or a permissive
+   * `some()` branch matched first. Skipped under `secureDefaults: false`.
+   * Production fails closed with a `500`
+   * (detail redacted); other environments log one warning per route and
+   * continue, so local development keeps working while the gap is visible.
+   */
+  private refuseUnauthenticatedRoute(def: RouteDefinition<any, any, any, any>): void {
+    // `secureDefaults: false` is the documented switch for every guard.
+    if (this.options.secureDefaults === false) return;
+    const route = `${def.method} ${def.path}`;
+    const message =
+      `Route ${route} requires authentication (auth:, an MCP/A2A endpoint, or requireAuth) ` +
+      `but no authentication hook ran for this request. An auth hook is in its chain, but ` +
+      `except() exempted this path or a some() branch let the request through without it. ` +
+      `Adjust the exemption, or mark the route public: true / remove its auth: declaration ` +
+      `if it is meant to be open. See https://daloyjs.dev/docs/security/boot-guards.`;
+    if (this.isProduction()) {
+      this.log.error({ event: "auth.not_enforced", route }, message);
+      throw new InternalError(message);
+    }
+    if (!this.unenforcedAuthWarned.has(route)) {
+      this.unenforcedAuthWarned.add(route);
+      this.log.warn({ event: "auth.not_enforced", route }, message);
+    }
+  }
+
+  /**
    * Called by `serve()` on Node, Bun and Deno when they start. Installs the
    * development `Host` allowlist (localhost, `*.localhost`, IP literals) when
    * the App set no `allowedHosts` and the environment is positively
@@ -2609,7 +2817,8 @@ export class App<
       this.indeterminateGuardWarnings.add(key);
       this.log.warn(
         { event: "secure_defaults.env_indeterminate", guard: issue.code, route: issue.route },
-        `No environment signal (env / production / NODE_ENV), so this production refusal is not ` +
+        `No recognized environment signal (env / production / NODE_ENV of development, test or ` +
+          `production), so this production refusal is not ` +
           `enforced: ${issue.message} Set app({ env: "production" }) (or NODE_ENV=production) ` +
           `to enforce it, or app({ env: "development" }) to silence this warning.`,
       );
@@ -2845,6 +3054,13 @@ export class App<
   }
 
   private mountDocs(opts: DocsRouteOptions): void {
+    if (this.isProduction()) {
+      this.log.warn(
+        { event: "docs.public_in_production" },
+        "API docs (/docs, /openapi.json) are mounted in production and public: anyone can read the " +
+          "full route map. Fine for a public API; otherwise drop docs in production or put auth in front.",
+      );
+    }
     const openapiPath = (opts.openapiPath ?? "/openapi.json") as PathString;
     const openapiYamlPath =
       opts.openapiYamlPath === false
@@ -3320,6 +3536,12 @@ export class App<
         hasFinalizeHook,
         corsOriginAllows,
         fullCorsOriginAllows,
+        corsDecorate: corsDecoratorFromHooks([globalHookLayer, ...sources]),
+        requiresAuthRun:
+          (merged.auth !== undefined && merged.auth !== null) ||
+          (merged as unknown as Record<PropertyKey, unknown>)[MCP_ROUTE_MARKER] === true ||
+          (merged as unknown as Record<PropertyKey, unknown>)[A2A_ROUTE_MARKER] === true ||
+          (this.options.requireAuth === true && merged.public !== true),
         decorations,
       },
       def.operationId,
@@ -3747,6 +3969,14 @@ export class App<
         ? null
         : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const token = opts.token;
+    // A token is compared with timingSafeEqual, but a short one is still
+    // guessable; refuse it in every environment.
+    if (token !== undefined && (typeof token !== "string" || token.length < 16)) {
+      throw new Error(
+        "Probe/metrics token must be a string of at least 16 characters; generate one with " +
+          "`openssl rand -base64 24`.",
+      );
+    }
 
     // Refuse-to-boot: an unauthenticated metrics scrape in production is a
     // documented info-disclosure surface (route inventory, latency
@@ -4137,6 +4367,14 @@ export class App<
         ? null
         : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const token = opts.token;
+    // A token is compared with timingSafeEqual, but a short one is still
+    // guessable; refuse it in every environment.
+    if (token !== undefined && (typeof token !== "string" || token.length < 16)) {
+      throw new Error(
+        "Probe/metrics token must be a string of at least 16 characters; generate one with " +
+          "`openssl rand -base64 24`.",
+      );
+    }
 
     // Refuse-to-boot: unauthenticated health/ready probes in
     // production are a documented info-disclosure surface (process uptime,
@@ -4857,6 +5095,11 @@ export class App<
             url: sanitizeUrlForLog(request.url),
           });
     const stripFingerprint = this.options.stripServerHeaders !== false;
+    // One timer per request bounds hooks, body read and handler together. It
+    // is created at the first asynchronous step, so a fully synchronous
+    // request never arms a timer, and it is cleared in `finally`.
+    const timeoutMs = this.options.requestTimeoutMs;
+    let deadline: RequestDeadline | undefined;
     let ctx: BaseContext<any, any> | undefined;
     // Synthetic OPTIONS-preflight context, tracked only so the `finally` block
     // can run request finalizers registered on it (it is never `ctx`).
@@ -5098,7 +5341,21 @@ export class App<
       // Build a minimal route context before validation or body I/O so cheap
       // perimeter hooks can reject unauthenticated callers without consuming
       // an attacker-controlled request stream.
+      // A route with a body schema already reads its body through the capped
+      // parser. Without one, the handler (or a preBody hook) reads
+      // `ctx.request` itself, so bound those reads too. Lazy: a route that
+      // never reads its body is never refused for it.
+      if (def.request?.body === undefined) {
+        capRequestBody(request, this.options.bodyLimitBytes);
+      }
       ctx = createPreBodyContext(request, getUrl, match.params);
+      // Apply the route's CORS policy before any preBody hook can end the
+      // request, so an auth 401/403 or a 413/415/422 body error is readable
+      // by the browser instead of surfacing as a generic "CORS error". Every
+      // exit path copies ctx.set.headers onto the response. Disallowed
+      // origins still get no Access-Control-Allow-Origin (only Vary: Origin).
+      const corsDecorate = match.handler.corsDecorate;
+      if (corsDecorate !== undefined) corsDecorate(request, ctx.set.headers);
       // Matched route template for low-cardinality labels (`http.route`).
       ctx.routePath = def.path as string;
       // Stable two-field write keeps `ctx.state`'s hidden class consistent across
@@ -5118,13 +5375,22 @@ export class App<
       if (allHooks.preBody !== undefined) {
         const preBodyResult = allHooks.preBody(ctx);
         const preBody = isPromiseLike(preBodyResult)
-          ? await preBodyResult
+          ? await (timeoutMs === 0
+              ? preBodyResult
+              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(preBodyResult))
           : preBodyResult;
         const overriddenId = state.requestId;
         if (typeof overriddenId === "string" && overriddenId.length > 0) {
           requestId = overriddenId;
         }
         if (preBody instanceof Response) {
+          if (
+            preBody.status < 400 &&
+            match.handler.requiresAuthRun &&
+            (state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
+          ) {
+            this.refuseUnauthenticatedRoute(def);
+          }
           assertAcknowledgedSuccessfulHookResponse(preBody, def, "preBody");
           copyContextHeaders(ctx, preBody);
           if (!preBody.headers.has("x-request-id"))
@@ -5150,12 +5416,18 @@ export class App<
         def,
         this.options,
       );
-      ctx = isPromiseLike(validatedCtx) ? await validatedCtx : validatedCtx;
+      ctx = isPromiseLike(validatedCtx)
+        ? await (timeoutMs === 0
+            ? validatedCtx
+            : (deadline ??= new RequestDeadline(timeoutMs, request)).race(validatedCtx))
+        : validatedCtx;
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);
         const before = isPromiseLike(beforeResult)
-          ? await beforeResult
+          ? await (timeoutMs === 0
+              ? beforeResult
+              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(beforeResult))
           : beforeResult;
         // Honor any request id override applied by middleware (e.g. the
         // `requestId()` Hooks bundle replaces the framework-generated value
@@ -5165,6 +5437,16 @@ export class App<
           requestId = overriddenId;
         }
         if (before instanceof Response) {
+          // A cache hit or an idempotent replay answers here; it must not
+          // serve a protected route's stored response to an unauthenticated
+          // request any more than the handler may.
+          if (
+            before.status < 400 &&
+            match.handler.requiresAuthRun &&
+            (state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
+          ) {
+            this.refuseUnauthenticatedRoute(def);
+          }
           assertAcknowledgedSuccessfulHookResponse(before, def, "beforeHandle");
           copyContextHeaders(ctx, before);
           if (!before.headers.has("x-request-id"))
@@ -5182,15 +5464,27 @@ export class App<
         }
       }
 
+      if (
+        match.handler.requiresAuthRun &&
+        (ctx.state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
+      ) {
+        this.refuseUnauthenticatedRoute(def);
+      }
       const runResult = this.options.mockMode
         ? mockResponseFor(def)
-        : runHandler(def, ctx, this.options.requestTimeoutMs);
-      let result: any = isPromiseLike(runResult) ? await runResult : runResult;
+        : def.handler(ctx);
+      let result: any = isPromiseLike(runResult)
+        ? await (timeoutMs === 0
+            ? runResult
+            : (deadline ??= new RequestDeadline(timeoutMs, request)).race(runResult))
+        : runResult;
 
       if (allHooks.afterHandle !== undefined) {
         const afterResult = allHooks.afterHandle(ctx, result);
         const afterReturn = isPromiseLike(afterResult)
-          ? await afterResult
+          ? await (timeoutMs === 0
+              ? afterResult
+              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(afterResult))
           : afterResult;
         if (afterReturn !== undefined) result = afterReturn;
       }
@@ -5347,6 +5641,7 @@ export class App<
         stripFingerprint,
       );
     } finally {
+      if (deadline !== undefined) deadline.clear();
       this.inflight--;
       // Guaranteed lease release (e.g. concurrencyLimit slots) that does not
       // depend on every onSend/onError hook succeeding. One boolean read when
@@ -5395,7 +5690,7 @@ export class App<
    * `secureDefaults: false`. See {@link findRoutesMissingResponseBodySchema}.
    */
   private warnMissingResponseBodySchemas(): void {
-    if (this.isProduction()) return;
+    // Production too: that is where an undeclared field actually leaks.
     if (this.options.secureDefaults === false) return;
     const offending = findRoutesMissingResponseBodySchema(this.routes);
     if (offending.length === 0) return;
@@ -5582,6 +5877,23 @@ function appTrustsProxyHeaders(options: {
   behindProxy?: unknown;
 }): boolean {
   return options.trustProxy === true || options.behindProxy !== undefined;
+}
+
+/** Signature of the decorator `cors()` exposes under {@link CORS_RESPONSE_DECORATOR}. */
+type CorsDecorator = (request: Request, headers: Headers) => void;
+
+/**
+ * The last `cors()` response decorator across a route's hook layers, in the
+ * order their `beforeHandle` hooks run (so the policy matches the one that
+ * would end up on the response).
+ */
+function corsDecoratorFromHooks(layers: Hooks[]): CorsDecorator | undefined {
+  let found: CorsDecorator | undefined;
+  for (const hooks of layers) {
+    const decorate = (hooks as Record<PropertyKey, unknown>)[CORS_RESPONSE_DECORATOR];
+    if (typeof decorate === "function") found = decorate as CorsDecorator;
+  }
+  return found;
 }
 
 function corsOriginAllowsFromHooks(layers: Hooks[]): CorsOriginAllow[] {
@@ -6869,18 +7181,6 @@ function mockResponseFor(def: RouteDefinition<any, any, any, any>) {
   return { status, body: example };
 }
 
-function runHandler(
-  def: RouteDefinition<any, any, any, any>,
-  ctx: BaseContext<any, any>,
-  requestTimeoutMs: number,
-): unknown {
-  const result = def.handler(ctx);
-  if (requestTimeoutMs === 0 || !isPromiseLike(result)) {
-    return result;
-  }
-  return withTimeout(result, requestTimeoutMs, ctx.request);
-}
-
 /**
  * Fire an adapter's request abort hook (see {@link DALOY_REQUEST_ABORT}) if the
  * request shim exposes one. Called as a method so `this` stays bound to the
@@ -6899,47 +7199,231 @@ function abortRequest(request: Request, reason: unknown): void {
 }
 
 /**
- * Race a handler promise against the per-request timeout.
+ * Enforce {@link AppOptions.bodyLimitBytes} on every way a request body can be
+ * read, so a route without a body schema cannot be handed an unbounded body.
  *
- * On timeout the request's {@link DALOY_REQUEST_ABORT} hook is fired first —
- * aborting `request.signal` with a `TimeoutError` `DOMException` (the same
- * reason shape as `AbortSignal.timeout()`) so cooperative downstream I/O the
- * handler forwarded the signal to unwinds — and then the returned promise
- * rejects with a {@link RequestTimeoutError} so the client receives a `408`.
- * The handler promise itself keeps a rejection handler attached, so a late
- * settle (including the `AbortError` from the work it just cancelled) never
- * surfaces as an unhandled rejection.
+ * Lazy by design: nothing is refused until something reads the body, so a
+ * route that ignores its body is never refused for it, and an
+ * `Expect: 100-continue` header never changes the outcome (RFC 9110 §10.1.1).
  *
- * @typeParam T - The handler's resolved value type.
- * @param p - The handler (or hook chain) promise to bound.
- * @param ms - Timeout in milliseconds; assumed non-zero by the caller.
- * @param request - The in-flight request, used to fire the abort hook.
- * @returns A promise that settles with the handler result or a 408 timeout.
+ * - No body (GET / HEAD, `Content-Length: 0`, or no stream): nothing to do.
+ * - Adapter pre-buffered bytes within the limit: nothing to wrap.
+ * - Otherwise the read methods (`body`, `text`, `json`, `arrayBuffer`,
+ *   `bytes`, `blob`, `formData`, `clone`) are shadowed on this instance. The
+ *   first read refuses an over-limit declared `Content-Length` with `413`
+ *   before any byte is solicited, then reads through a counting stream that
+ *   errors with a `PayloadTooLargeError` past the limit. The object keeps its
+ *   identity, so connection info and the abort hook keyed on it still work.
  */
-function withTimeout<T>(
-  p: PromiseLike<T>,
-  ms: number,
-  request: Request,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => {
+function capRequestBody(request: Request, limit: number): void {
+  const method = request.method;
+  if (method === "GET" || method === "HEAD") return;
+  const declared = request.headers.get("content-length");
+  const declaredBytes = declared === null ? undefined : Number(declared);
+  if (declaredBytes === 0) return;
+  const cached = (request as unknown as Record<symbol, unknown>)[
+    DALOY_REQUEST_RAW_BODY
+  ];
+  if (cached instanceof Uint8Array && cached.byteLength <= limit) return;
+  let limited: ReadableStream<Uint8Array> | null | undefined;
+  const stream = (): ReadableStream<Uint8Array> | null => {
+    if (limited !== undefined) return limited;
+    if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > limit) {
+      throw new PayloadTooLargeError(limit);
+    }
+    const original = readOriginalBody(request);
+    limited = original === null ? null : byteCappedStream(original, limit);
+    return limited;
+  };
+  const bytes = async (): Promise<Uint8Array> => {
+    const source = stream();
+    if (source === null) return new Uint8Array(0);
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    const reader = source.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
+  };
+  const contentType = (): string => request.headers.get("content-type") ?? "";
+  Object.defineProperties(request, {
+    body: { configurable: true, get: stream },
+    bytes: { configurable: true, value: bytes },
+    arrayBuffer: {
+      configurable: true,
+      value: async () => {
+        const b = await bytes();
+        return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+      },
+    },
+    text: { configurable: true, value: async () => TEXT_DECODER.decode(await bytes()) },
+    json: {
+      configurable: true,
+      value: async () => JSON.parse(TEXT_DECODER.decode(await bytes())),
+    },
+    blob: {
+      configurable: true,
+      value: async () => new Blob([(await bytes()) as BlobPart], { type: contentType() }),
+    },
+    formData: {
+      configurable: true,
+      value: async () =>
+        new Request(request.url, {
+          method: "POST",
+          headers: { "content-type": contentType() },
+          body: (await bytes()) as BodyInit,
+        }).formData(),
+    },
+    clone: {
+      configurable: true,
+      value: () => {
+        const source = stream();
+        let theirs: ReadableStream<Uint8Array> | null = null;
+        if (source !== null) {
+          const [mine, other] = source.tee();
+          limited = mine;
+          theirs = other;
+        }
+        return new Request(request.url, {
+          method,
+          headers: request.headers,
+          body: theirs,
+          signal: request.signal,
+          duplex: "half",
+        } as RequestInit);
+      },
+    },
+  });
+}
+
+/**
+ * The request's own body stream, read through the prototype getter so an
+ * instance already shadowed by {@link capRequestBody} is never wrapped twice.
+ */
+function readOriginalBody(request: Request): ReadableStream<Uint8Array> | null {
+  let proto: object | null = Object.getPrototypeOf(request);
+  while (proto !== null) {
+    const desc = Object.getOwnPropertyDescriptor(proto, "body");
+    if (desc !== undefined) {
+      return (desc.get ? desc.get.call(request) : desc.value) as ReadableStream<Uint8Array> | null;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  return null;
+}
+
+/**
+ * Wrap `source` in a stream that errors with a `413` once more than `limit`
+ * bytes pass. Pull-based (`highWaterMark: 0`): nothing is read from the source
+ * until a consumer reads, so creating it does not mark the body used (a
+ * `pipeThrough` would start pumping at once and trip `bodyUsed` checks such as
+ * idempotency's).
+ */
+function byteCappedStream(
+  source: ReadableStream<Uint8Array>,
+  limit: number,
+): ReadableStream<Uint8Array> {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let seen = 0;
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        reader ??= source.getReader();
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        seen += value.byteLength;
+        if (seen > limit) {
+          controller.error(new PayloadTooLargeError(limit));
+          reader.cancel().catch(() => {});
+          return;
+        }
+        controller.enqueue(value);
+      },
+      cancel(reason) {
+        return reader ? reader.cancel(reason) : source.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
+/**
+ * Per-request deadline for {@link AppOptions.requestTimeoutMs}, shared by the
+ * hooks, the body read and the handler. Armed once (one timer) at the first
+ * asynchronous step and cleared when dispatch finishes.
+ *
+ * On expiry the request's {@link DALOY_REQUEST_ABORT} hook fires first,
+ * aborting `request.signal` with a `TimeoutError` `DOMException` (the same
+ * reason shape as `AbortSignal.timeout()`) so cooperative downstream I/O
+ * unwinds, and every step raced against the deadline rejects with a
+ * {@link RequestTimeoutError}, so the client receives a `408`. A handler
+ * stays attached to every raced step, so a late settle (including the
+ * `AbortError` from the work it just cancelled) is never an unhandled
+ * rejection. Steps are awaited one at a time, so a single pending slot is
+ * enough and arming the deadline costs one timer and no promises.
+ */
+class RequestDeadline {
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private readonly ms: number;
+  /** Set once the deadline has passed. */
+  private expired = false;
+  /** Rejects the step currently being awaited (steps run one at a time). */
+  private rejectStep: ((reason: unknown) => void) | undefined;
+
+  constructor(ms: number, request: Request) {
+    this.ms = ms;
+    this.timer = setTimeout(() => {
+      this.expired = true;
       abortRequest(
         request,
         new DOMException(`Request exceeded ${ms}ms`, "TimeoutError"),
       );
-      reject(new RequestTimeoutError(ms));
+      const reject = this.rejectStep;
+      this.rejectStep = undefined;
+      reject?.(new RequestTimeoutError(ms));
     }, ms);
-    p.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      },
-    );
-  });
+  }
+
+  /** Settle with `step`, or reject with a 408 if the deadline passes first. */
+  race<T>(step: PromiseLike<T>): Promise<T> {
+    if (this.expired) {
+      // Keep a handler on the abandoned step so its late settle is never an
+      // unhandled rejection.
+      step.then(undefined, () => {});
+      return Promise.reject(new RequestTimeoutError(this.ms));
+    }
+    return new Promise<T>((resolve, reject) => {
+      this.rejectStep = reject;
+      step.then(
+        (value) => {
+          this.rejectStep = undefined;
+          resolve(value);
+        },
+        (error: unknown) => {
+          this.rejectStep = undefined;
+          reject(error);
+        },
+      );
+    });
+  }
+
+  /** Disarm the timer once dispatch is done. */
+  clear(): void {
+    clearTimeout(this.timer);
+  }
 }
 
 /**

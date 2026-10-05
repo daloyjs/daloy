@@ -68,13 +68,13 @@ export const CORE_PACKAGE_VERSION =
   process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.5.3";
 
 export const HOME_TITLE =
-  "The first TypeScript REST API framework built for secure AI-assisted services";
+  "Contract-first TypeScript REST APIs with secure defaults, built for AI-assisted teams";
 
 export const HOME_DESCRIPTION =
-  "Any framework can route a request. DaloyJS adds what the others don't: secure-by-default guardrails, zero runtime dependencies, and OpenAPI 3.1 with typed clients.";
+  "Secure defaults, production refuse-to-boot checks for known misconfigurations, zero runtime dependencies, and OpenAPI 3.1 typed clients from one route contract.";
 
 export const SITE_TAGLINE =
-  "The runtime-portable TypeScript framework with secure-by-default runtime guardrails, hardened pnpm installs, source-verified lockfiles, and typed end-to-end APIs. Optional hardened GitHub Actions bundle for teams on GitHub.";
+  "The runtime-portable TypeScript framework with secure runtime defaults, hardened pnpm install settings, a provenance-signed publish pipeline, and typed end-to-end APIs. Optional hardened GitHub Actions bundle for teams on GitHub.";
 
 export const DEFAULT_KEYWORDS = [
   "DaloyJS",

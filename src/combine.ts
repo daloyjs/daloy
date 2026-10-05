@@ -192,6 +192,23 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
     return hooks;
   const matches = compileExceptMatcher(when);
   const wrapped: Hooks = { ...hooks };
+  // The App applies a cors() response decorator ahead of every hook (so early
+  // rejections carry CORS headers). Path patterns are checked synchronously
+  // here so it still skips the exempted paths; a predicate can be async and
+  // read ctx, so with one the decorator is dropped and the wrapped
+  // beforeHandle applies CORS as before.
+  const decoratorKey = Symbol.for("daloyjs.cors.decorate");
+  const decorate = (wrapped as Record<PropertyKey, unknown>)[decoratorKey];
+  if (typeof decorate === "function") {
+    if (typeof when === "function") {
+      delete (wrapped as Record<PropertyKey, unknown>)[decoratorKey];
+    } else {
+      const exempt = compilePathMatcher(when);
+      (wrapped as Record<PropertyKey, unknown>)[decoratorKey] = (request: Request, headers: Headers) => {
+        if (!exempt(request.url)) (decorate as (r: Request, h: Headers) => void)(request, headers);
+      };
+    }
+  }
   if (Array.isArray(earlyRejectionHooks)) {
     (wrapped as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] =
       earlyRejectionHooks.map((hook) => {
@@ -211,6 +228,19 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
       (await matches(ctx)) ? undefined : original(ctx);
   }
   return wrapped;
+}
+
+/**
+ * Synchronous path test for string patterns, keyed on a request URL. Same
+ * semantics as {@link compileExceptMatcher} (trailing slashes ignored).
+ */
+function compilePathMatcher(when: string | string[]): (url: string) => boolean {
+  const patterns = Array.isArray(when) ? when : [when];
+  const matchers = patterns.map(compilePathPattern);
+  return (url) => {
+    const path = trimTrailingSlashes(new URL(url).pathname);
+    return matchers.some((m) => m(path));
+  };
 }
 
 function compileExceptMatcher(
@@ -258,6 +288,9 @@ function compilePathPattern(pattern: string): (path: string) => boolean {
   const regex = new RegExp(`^${escaped}$`);
   return (path) => regex.test(path);
 }
+
+/** Registration-time production hook key (see app.ts APP_PRODUCTION_HOOK). */
+const APP_PRODUCTION_HOOK = Symbol.for("daloyjs.hooks.appProduction");
 
 function mergeCombineHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
@@ -337,6 +370,20 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
           ...(Array.isArray(existing) ? existing : []),
           ...(Array.isArray(incoming) ? incoming : []),
         ];
+        continue;
+      }
+      if (key === APP_PRODUCTION_HOOK) {
+        // Several bundles (jwk(), session()) can each refuse a production-only
+        // misconfiguration at registration; call all of them, not the first.
+        const existing = (merged as Record<PropertyKey, unknown>)[key];
+        const incoming = record[key];
+        (merged as Record<PropertyKey, unknown>)[key] =
+          typeof existing === "function" && typeof incoming === "function"
+            ? (production: boolean) => {
+                (existing as (p: boolean) => void)(production);
+                (incoming as (p: boolean) => void)(production);
+              }
+            : incoming;
         continue;
       }
       if (!(key in (merged as Record<PropertyKey, unknown>))) {

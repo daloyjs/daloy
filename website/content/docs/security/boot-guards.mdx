@@ -1,6 +1,6 @@
 ---
 title: Boot guards
-description: "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, shadow-security auth: routes, unauthenticated mcpRoutes() and a2aRoutes() endpoints, and unconfigured proxy / vendor client-IP headers. Learn each guard, how to opt out, and how to migrate."
+description: "In production, Daloy refuses to boot on weak session secrets, wildcard CORS, missing CSRF, shadow auth and open MCP or A2A routes. Learn each guard's limits."
 keywords:
   - DaloyJS boot guards
   - weak session secret
@@ -20,11 +20,11 @@ keywords:
 
 # Boot guards
 
-<blockquote>Boot guards stop the app when they find unsafe configuration, including credentialed wildcard CORS, weak session secrets, and missing proxy trust settings.</blockquote>
+<blockquote>Boot guards stop the app when they find unsafe configuration they know about, such as credentialed wildcard CORS or weak session secrets. They catch known misconfigurations; they do not prove an app is secure.</blockquote>
 
-Daloy ships the boot-guards slice of the secure-by-default initiative: refuse-to-boot / first-request guards that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers.
+Daloy ships the boot-guards slice of the secure-by-default initiative: refuse-to-boot / first-request guards that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers (that one is a per-request `500`, not a boot refusal).
 
-Every guard is gated on the resolved environment being `production` (sources: `app({ env: "production" })`, then `app({ production: true })`, then `NODE_ENV === "production"`) so dev and CI workflows keep working with sample secrets and ad-hoc headers. The single master escape hatch `app({ secureDefaults: false })` disables every boot guard at once.
+The guards on this page are gated on the resolved environment being `production` (sources: `app({ env: "production" })`, then `app({ production: true })`, then `NODE_ENV === "production"` exactly) so dev and CI workflows keep working with sample secrets and ad-hoc headers. A few related checks throw in every environment; they are listed under [Checks that apply in every environment](#every-environment). The single master escape hatch `app({ secureDefaults: false })` disables every boot guard at once.
 
 ## When the guards run [#when-the-guards-run]
 
@@ -44,6 +44,10 @@ app.assertSecureConfig({ production: true });
 ```
 
 **No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning.
+
+**Unrecognized `NODE_ENV` (1.5.4).** A `NODE_ENV` other than `development`, `test` or `production` (for example `staging` or `prod`) is treated the same way: DaloyJS logs a one-time warning naming the value, and each would-be production refusal is logged instead of enforced. If `staging` should behave like production, set `app({ env: "production" })` there.
+
+**Your CI.** Because most guards need a production signal, a test run with `NODE_ENV=test` does not trip them. Run `daloy doctor`, or call `app.assertSecureConfig({ production: true })` in a test, to check the production configuration in CI. In 1.5.4, several `daloy doctor` checks that read option names that do not exist (and so never fired) were fixed to read the real options.
 
 <FlowDiagram title="Fail in the driveway, not the intersection" numbered steps={[
           {
@@ -94,7 +98,7 @@ Third-party session implementations can opt into the same check by stamping `SES
 
 ## 2. `cors({ origin: "*" })` refuse-to-boot [#2-cors-refuse-to-boot]
 
-A wildcard CORS origin exposes every state-changing route cross-origin and is almost never what production wants. Daloy now refuses to register a `cors()` hook whose `origin` is `"*"` or an array containing `"*"` in production.
+A wildcard CORS origin exposes every state-changing route cross-origin and is almost never what production wants. Daloy now refuses to register a `cors()` hook whose `origin` is `"*"` or an array containing `"*"` in production. `origin: "*"` together with `credentials: true` throws in every environment, and from 1.5.4 so does `credentials: true` with a predicate or list that allows every origin or allows `"null"` (see [below](#every-environment)).
 
 ```ts
 import { App, cors } from "@daloyjs/core";
@@ -197,6 +201,8 @@ app.get(
 
 The exported `AUTH_HOOK_MARKER` symbol is the marker `markAuthHook()` stamps, in case you need to check for it yourself. Disable this guard along with the rest via `app({ secureDefaults: false })`.
 
+<Callout type="warning">At boot this guard can only see that an auth-marked hook is **present** in the route's effective chain. A hook wrapped so that it never fires, such as `except(() => true, bearerAuth(...))`, or combined with a hook that always passes, such as `some(auth, permissiveHook)`, still satisfies the boot check. From 1.5.4 the boot check is backed by a request-time check: auth hooks record when they run and let a request through, and a route that requires auth (`auth:`, an MCP or A2A endpoint, or `requireAuth`) whose hook did not run, for example because `except()` exempted the path or a permissive `some()` branch matched, is refused with `500` in production before its handler or a cached response runs. Outside production it logs an `auth.not_enforced` warning once per route. A custom hook only counts when wrapped with `markAuthHook()`. The same applies to guards 6, 9 and 10. What a `markAuthHook()` hook actually verifies is still up to you, so test that protected routes return `401` without credentials.</Callout>
+
 ## 6. Unauthenticated `mcpRoutes()` endpoint [#6-unauthenticated-mcp-endpoint]
 
 MCP tools are model-controlled and side-effecting, so an unauthenticated MCP endpoint is a high-impact default. In production with `secureDefaults` on, the App refuses to boot when an `mcpRoutes()` `POST` endpoint has no authentication hook in its effective chain. Cover it with an auth middleware, or opt in to a genuinely public server with the new `mcpRoutes(path, handler, { public: true })` option (typed as `McpRoutesOptions`).
@@ -219,7 +225,7 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
 }
 ```
 
-Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `OPTIONS` (CORS preflight) are left unmarked so preflight stays credential-free. See the [MCP docs](/docs/mcp#security-checklist) for the full server setup.
+Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `OPTIONS` (CORS preflight) are left unmarked so preflight stays credential-free. Like guard 5, the boot check sees that an auth hook is present; from 1.5.4 the request-time check also refuses the call in production when that hook did not run. See the [MCP docs](/docs/mcp#security-checklist) for the full server setup.
 
 ## 7. `responseCache()` mounted ahead of `tenancy()`
 
@@ -281,7 +287,7 @@ Ordering the limiter first does mean cache hits and replays spend budget. That i
 
 ## 9. Unauthenticated `a2aRoutes()` endpoint [#9-unauthenticated-a2a-endpoint]
 
-An A2A agent endpoint runs your `onMessage` handler for whichever peer agent calls it, so it gets the same rule as MCP. In production with `secureDefaults` on, the App refuses to boot when the `a2aRoutes()` JSON-RPC `POST` route has no authentication hook in its effective chain. The public Agent Card route is never checked: discovery has to work before a peer has credentials. In production, registration also throws if the card advertises a non-HTTPS endpoint on a non-loopback host.
+An A2A agent endpoint runs your `onMessage` handler for whichever peer agent calls it, so it gets the same rule as MCP. In production with `secureDefaults` on, the App refuses to boot when the `a2aRoutes()` JSON-RPC `POST` route has no authentication hook in its effective chain. The public Agent Card route is never checked: discovery has to work before a peer has credentials. Like guard 5, the boot check sees that an auth hook is present; from 1.5.4 the request-time check also refuses the call in production when that hook did not run. In production, registration also throws if the card advertises a non-HTTPS endpoint on a non-loopback host.
 
 ```ts
 import { App, a2aRoutes, bearerAuth, createA2aHandler, timingSafeEqual } from "@daloyjs/core";
@@ -332,6 +338,40 @@ const app = new App({
 
 Ports are ignored and matching is case-insensitive. `"*"`, an empty list, a scheme or a port in an entry are refused at construction. When `allowedHosts` is unset, `serve()` on Node, Bun and Deno applies a development default (`localhost`, `*.localhost` and IP literals) when the environment is positively development, which `daloy dev` sets. Production and unknown environments accept any host unless you set the list, and `daloy doctor` warns about that in production. Platforms such as Vercel route by `Host` and never deliver a rebound name to your function, so there the list is defense in depth.
 
+## 12. JWT verification without an audience (1.5.4) [#12-jwt-audience]
+
+In production, `jwk()` and `createJwtVerifier()` refuse to construct without an `audience`. Without it, any token your identity provider issues for another API is accepted by this one. Pass `allowAnyAudience: true` only when the issuer mints tokens for this service alone, such as a single-tenant private identity provider.
+
+```ts
+// Throws in production: no audience.
+app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER }));
+
+// OK.
+app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER, audience: "api://orders" }));
+```
+
+## Checks that apply in every environment [#every-environment]
+
+These are construction-time refusals that do not wait for a production signal, because there is no development use for the configuration:
+
+- `cors({ origin: "*", credentials: true })`. From 1.5.4 also `credentials: true` with an origin predicate or list that allows every origin (detected by probing a canary origin) or allows `"null"`.
+- From 1.5.4, numeric options must be finite non-negative integers: `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys` and `jsonMaxDepth`. `NaN`, `Infinity`, negatives, non-integers and strings throw; an explicit `undefined` uses the default. The usual trigger is `Number(process.env.UNSET)`, which is `NaN` and used to disable the limit silently. `rateLimit()` likewise refuses a `windowMs` that is not a positive integer or a `max` that is not a non-negative integer (`max: 0` still refuses every request).
+- From 1.5.4, `behindProxy: { cidrs: [...] }` and the guards' `trustedProxies` refuse a `/0` range (`0.0.0.0/0`, `::/0`), which would trust every peer.
+- From 1.5.4, a client-identity guard (`rateLimit`, `loginThrottle`, `autoBan`, `ipRestriction`, `geoBlock`, `ipReputation`, `botGuard`, `concurrencyLimit`) with `trustProxyHeaders: true` or `trustedHops` is refused on an App with `behindProxy: "none"`: the two contradict each other, and the guard's setting would let any client pick its own IP. Drop the guard's option (it follows the App's `behindProxy`) or declare the real topology. `trustedProxies`, which checks the peer address, is still allowed.
+- From 1.5.4, `serve(app, { trustProxy: true })` is refused when the App says `behindProxy: "none"`, and `connectionTimeoutMs` must be a finite non-negative integer (`0` still disables the socket timeouts, with a warning in production).
+- From 1.5.4, `csrf()` refuses `ignoreMethods` that include `POST`, `PUT`, `PATCH` or `DELETE`, and an `allowedOrigins` predicate that accepts a test origin no real allowlist would.
+- From 1.5.4, JWT `clockSkewSeconds` above 300 is refused (a larger skew keeps expired tokens valid), and `healthcheck()` / `readinesscheck()` / `metrics()` tokens must be at least 16 characters.
+- From 1.5.4, `secureHeaders()` treats `frame-ancestors *` or a bare scheme (`https:`) as no clickjacking protection, so turning off `frameOptions` with such a CSP is refused like a missing directive.
+
+From 1.5.4, production also logs a one-time warning for configurations that are allowed but risky: `session()` on its in-memory store (`session.memory_store_in_production`), mounted API docs (`docs.public_in_production`), secure defaults switched off one by one (`secure_defaults.partially_disabled`), and routes whose 2xx response has no body schema (`security.response.bodySchemaMissing`, previously development-only).
+
+```ts
+// Throws at construction from 1.5.4, in every environment.
+new App({ bodyLimitBytes: Number(process.env.BODY_LIMIT) }); // NaN when unset
+new App({ behindProxy: { cidrs: ["0.0.0.0/0"] } });
+app.use(cors({ origin: () => true, credentials: true }));
+```
+
 ## Migration checklist
 
 - Audit every `session({ secret })` call, regenerate any secret shorter than 32 bytes with `openssl rand -base64 48`.
@@ -340,3 +380,4 @@ Ports are ignored and matching is case-insensitive. `"*"`, an empty list, a sche
 - Pick a `behindProxy` posture explicitly for every production app: `{ hops: 1 }` on Vercel, Cloudflare Workers and similar platforms. If you relied on `cf-connecting-ip`, `fly-client-ip`, or `true-client-ip`, declare the proxy with `behindProxy` now that those headers are refused too.
 - For every route that declares `auth:`, confirm a built-in auth middleware covers it, or wrap your custom hook with `markAuthHook(...)`.
 - Add an auth middleware in front of every `mcpRoutes()` endpoint, or pass `mcpRoutes(path, handler, { public: true })` for a deliberately public MCP server.
+- 1.5.4: give every `jwk()` / `createJwtVerifier()` an `audience` (or `allowAnyAudience: true` for a single-tenant private provider), parse numeric env vars with a fallback instead of a bare `Number(...)`, and set `env: "production"` explicitly where `NODE_ENV` is something like `staging`.

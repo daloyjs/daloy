@@ -35,6 +35,7 @@ import {
   readRemoteAddress,
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
@@ -323,7 +324,7 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   // Peer fallback applies only to the built-in forwarded resolver.
   const peerFallback = onUnresolvedIp === "peer" && !opts.resolveIp && hops !== undefined;
 
-  return {
+  return stampForwardedTrust({
     // Runs in `preBody`, not `beforeHandle`. A `beforeHandle` hook that returns
     // a Response ends the chain, so a country gate in that phase is preempted by
     // any earlier `beforeHandle` middleware that short-circuits — a
@@ -379,5 +380,5 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
       const state: GeoState = country ? { country } : {};
       (ctx.state as Record<string, unknown>)[stateKey] = state;
     },
-  };
+  }, "geoBlock()", opts);
 }

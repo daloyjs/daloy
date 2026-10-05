@@ -51,6 +51,7 @@ import { fetchGuard } from "./fetch-guard.js";
 import {
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-match.js";
@@ -400,7 +401,7 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
 
   const ready = opts.loadOnStart === false ? Promise.resolve() : refresh();
 
-  return {
+  const controller: IpReputationController = {
     hooks: {
       // `preBody`, not `beforeHandle`: a denylist gate that short-circuits from
       // `beforeHandle` is preempted by any earlier `beforeHandle` middleware that
@@ -435,4 +436,6 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
       return matchingFeeds(ip).length > 0;
     },
   };
+  stampForwardedTrust(controller.hooks, "ipReputation()", opts);
+  return controller;
 }

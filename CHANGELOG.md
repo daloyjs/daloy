@@ -17,6 +17,128 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- `bodyLimitBytes` now applies to every route. Previously only routes with a
+  request-body schema were capped, so a handler reading `ctx.request` itself
+  (`text()`, `json()`, `arrayBuffer()`, `formData()`, `blob()`, the `body`
+  stream, `clone()`) received any size. Reads are now capped and answer `413`.
+  The cap is lazy: a route that never reads its body is not refused for it, and
+  `Expect: 100-continue` still never changes the outcome.
+- `requestTimeoutMs` now covers the `preBody`, `beforeHandle` and `afterHandle`
+  hooks and the request-body read, not only the handler, with one shared
+  deadline per request measured from the first asynchronous step. A slow hook
+  or a trickled upload now answers `408`.
+- Numeric App options (`bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`,
+  `jsonMaxKeys`, `jsonMaxDepth`) are validated at construction in every
+  environment: NaN, Infinity, negatives, fractions and strings throw. A value
+  such as `Number(process.env.UNSET)` is NaN, which previously disabled the
+  limit silently. An explicit `undefined` now falls back to the default instead
+  of erasing it.
+- `rateLimit()` refuses a `windowMs` that is not a positive integer and a `max`
+  that is not a non-negative integer (NaN, Infinity and negatives disabled the
+  limit). `max: 0` still refuses every request.
+- `cors()` with `credentials: true` refuses, in every environment, an origin
+  policy that allows `"null"` or a predicate that accepts any origin (detected by
+  probing a test origin that no real allowlist accepts).
+- `behindProxy: { cidrs }` and the guards' `trustedProxies` refuse a `/0` range
+  (`0.0.0.0/0`, `::/0`), which would let any client set its own IP.
+- `jwk()` and `createJwtVerifier()` refuse to run in production without an
+  `audience` (they accepted every token the issuer signs for any other app or
+  tenant). Pass `allowAnyAudience: true` for a single-tenant identity provider.
+  `jwk()` is refused when registered on an App resolving to production, so
+  `env: "production"` counts even without `NODE_ENV`.
+- Routes that require authentication are now checked at request time, not
+  only at boot. The shadow-auth, MCP, A2A and `requireAuth` guards could only
+  see that an auth hook was present in a route's chain, so
+  `except(() => true, bearerAuth(...))`, an `except()` path pattern, or a
+  permissive `some()` branch kept it from running and the route served
+  unauthenticated requests. Auth hooks (the built-ins and anything wrapped with
+  `markAuthHook()`) now record when they run and let a request through; a route
+  that requires auth whose hook did not run is refused with `500` in production
+  before its handler or a cached/replayed response, and logged as
+  `auth.not_enforced` elsewhere. Skipped under `secureDefaults: false`.
+- `createJwtSigner()` / `createJwtVerifier()` refuse, in production, an HS* key
+  that meets the 32-byte floor but is guessable: a single repeated byte, a
+  short repeated pattern, a known placeholder, or fewer than 8 distinct byte
+  values.
+- `session()` refuses `cookieOptions.httpOnly: false` in every environment and
+  `cookieOptions.secure: false` in production (from `NODE_ENV` or the App
+  `env`). `allowInsecureCookie: true` opts out of the latter for a genuinely
+  plain-HTTP deployment. `every()` / `some()` now keep every bundle's
+  production refusal instead of only the first.
+- Refused in every environment: a client-identity guard trusting
+  `X-Forwarded-For` (`trustProxyHeaders: true` / `trustedHops`) on an App with
+  `behindProxy: "none"`; `serve(app, { trustProxy: true })` against
+  `behindProxy: "none"`; a NaN, negative or fractional `connectionTimeoutMs`;
+  `csrf()` `ignoreMethods` containing a state-changing method and an
+  `allowedOrigins` predicate that accepts any origin; JWT `clockSkewSeconds`
+  above 300; health / readiness / metrics tokens shorter than 16 characters;
+  and `frame-ancestors *` (or a bare scheme) standing in for clickjacking
+  protection.
+- New production warnings: `session()` on the in-memory store, mounted API
+  docs, secure defaults switched off individually, `connectionTimeoutMs: 0`,
+  and 2xx responses without a body schema (that warning was development-only).
+- The Lambda adapter reads `X-Forwarded-Proto` only when the App declares a
+  proxy, and then from the last entry (the one the proxy appended), so a
+  client-sent header can no longer downgrade the scheme.
+- An unrecognized `NODE_ENV` (anything but `development`, `test` or
+  `production`, e.g. `staging`) logs a one-time `env.unrecognized` warning, and
+  each would-be production refusal is logged, as for an unset environment.
+  Previously only exactly `production` enabled the refusals and other values
+  disabled them without a word.
+
+### Fixed
+
+- CORS headers are now applied to responses that end a request early. `cors()`
+  set its headers in `beforeHandle`, so an auth `401`/`403` from `jwk()` or
+  `bearerAuth()` (which validate in `preBody`) and `413`/`415`/`422` body
+  errors had no `Access-Control-Allow-Origin`. A browser reported them as a
+  generic "CORS error", so a portal could not tell an expired token from a
+  CORS fault. The route's `cors()` policy is now applied before any hook, so
+  hook registration order no longer matters. Disallowed origins still get no
+  `Access-Control-Allow-Origin`, and a `cors()` wrapped in `except()` with
+  path patterns stays off the exempted paths.
+- `daloy doctor` checks that read options that do not exist on `App`
+  (`cors`, `idleTimeoutMs`, `allowUnsafeValidationDetails`,
+  `exposeFrameworkIdentity`, `enableServerTimingInProduction`) could never fire.
+  The CORS check now audits the `cors()` policies actually registered
+  (`maxAgeSeconds` over 24 h); the others were removed. The timeout check is
+  the existing `requestTimeout.zero` finding.
+
+### Changed
+
+- Release pipeline: a new `pack` job with no publish credentials runs install,
+  build, SBOM generation and `npm pack`, and records each tarball's SHA-256.
+  The npm publish jobs no longer install or build anything: they download the
+  tarball, verify its hash against the `pack` job's record, and stage exactly
+  those bytes with `npm stage publish <tarball>`.
+- Scaffolds created with npm get `ignore-scripts=true` and `min-release-age=1`
+  in `.npmrc`; Yarn scaffolds get `.yarnrc.yml` (`enableScripts: false`,
+  `npmMinimalAgeGate: "1d"`) and `.yarnrc` (`ignore-scripts true`) for Yarn 1.
+  The README cooldown note now names each package manager's own setting.
+- Supply chain: `verify:jsr-packaging` runs a pinned `jsr@0.14.3` instead of
+  whatever is latest; Dependabot waits one day after a version is published
+  (`cooldown`); `verify:actions-pinned` now also covers the workflows shipped
+  to scaffolded projects, whose stale `harden-runner`, `checkout` and `zizmor`
+  pins were refreshed.
+- Template Dockerfiles pin their base images (`node:24-alpine`,
+  `oven/bun:1-alpine`, `denoland/deno:alpine`) by multi-arch index digest. Also
+  fixes a Bun scaffold of a Node template that could not add its `BUN_IMAGE`
+  build arg once the Node image was pinned.
+
+### Performance
+
+- Measured against 1.5.3 (A/B on `app.fetch`): GET, async-handler JSON POST and
+  authenticated routes with an async handler are at parity, and the new
+  request-time auth check costs nothing measurable. A request that reaches its
+  first asynchronous step in a hook or the body read but has a synchronous
+  handler arms one timer that 1.5.3 did not: about 4% on a JSON POST with an
+  unbuffered body, about 6% on a `bearerAuth` GET with a synchronous handler.
+  That is the cost of `requestTimeoutMs` now covering hooks and the body read;
+  with an async handler 1.5.3 already armed one, and on Node the body is
+  pre-buffered.
+
 ## [1.5.3] - 2026-10-05
 
 ### Security

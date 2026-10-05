@@ -13,7 +13,9 @@
  *
  * Daloy's defense:
  *
- *   1. Every `uses:` line in `.github/workflows/**` MUST reference a
+ *   1. Every `uses:` line in `.github/workflows/**` (and in the template
+ *      workflows under each `packages/create-daloy/templates/_ci/<runtime>/_github/workflows/`)
+ *      MUST reference a
  *      40-character lowercase hex commit SHA. Mutable tags (`@v4`,
  *      `@main`, `@HEAD`, `@2.1.3`) are rejected. This makes a future
  *      retagging attack against any third-party action a no-op for our
@@ -173,6 +175,31 @@ async function listWorkflowFiles(): Promise<readonly string[]> {
     .sort();
 }
 
+/**
+ * Workflows shipped to scaffolded projects (`create-daloy --with-ci`) live in
+ * `_github/workflows/` folders under the template tree. They run in users'
+ * repositories, so they get the same pinning rule as this repo's own.
+ */
+const TEMPLATE_CI_DIR = new URL("../packages/create-daloy/templates/_ci/", import.meta.url);
+
+async function listTemplateWorkflowFiles(): Promise<readonly string[]> {
+  const out: string[] = [];
+  let entries;
+  try {
+    entries = await readdir(TEMPLATE_CI_DIR, { withFileTypes: true, recursive: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const parent = (e as unknown as { parentPath?: string; path?: string }).parentPath ??
+      (e as unknown as { path?: string }).path ?? "";
+    if (e.isFile() && /\.ya?ml$/.test(e.name) && /[\\/]_github[\\/]workflows$/.test(parent)) {
+      out.push(`${parent}/${e.name}`);
+    }
+  }
+  return out.sort();
+}
+
 async function main(): Promise<void> {
   const files = await listWorkflowFiles();
   let failed = 0;
@@ -181,6 +208,15 @@ async function main(): Promise<void> {
     const text = await readFile(url, "utf8");
     const violations = findUnpinnedActions(`.github/workflows/${name}`, text);
     for (const v of violations) {
+      failed += 1;
+      console.error(`verify-actions-pinned: ${v.file}:${v.line}: ${v.reason}`);
+      console.error(`    ${v.raw}`);
+    }
+  }
+  for (const path of await listTemplateWorkflowFiles()) {
+    const text = await readFile(path, "utf8");
+    const rel = path.slice(path.indexOf("packages/create-daloy/"));
+    for (const v of findUnpinnedActions(rel, text)) {
       failed += 1;
       console.error(`verify-actions-pinned: ${v.file}:${v.line}: ${v.reason}`);
       console.error(`    ${v.raw}`);

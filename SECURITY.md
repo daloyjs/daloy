@@ -30,7 +30,20 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
   are invalidated when routes are registered.
 - Set `env: "production"` explicitly when the runtime does not reliably set
   `NODE_ENV`. Environment-dependent boot diagnostics and error-detail redaction
-  do not infer production from a publicly reachable endpoint.
+  do not infer production from a publicly reachable endpoint. Production is
+  `env: "production"`, `production: true`, or `NODE_ENV` exactly
+  `production`. With no signal, or (from 1.5.4) an unrecognized `NODE_ENV`
+  such as `staging` or `prod`, each would-be production refusal is logged as a
+  warning instead of enforced, and 1.5.4 logs a one-time warning naming the
+  unrecognized value.
+- Boot guards that check for authentication (`auth:` declared, `mcpRoutes()`,
+  `a2aRoutes()`, `requireAuth`) can only see that an auth-marked hook is
+  *present* in the route's chain. From 1.5.4 a request-time check confirms it
+  *ran*: auth hooks record a pass, and a route that requires auth whose hook
+  did not run (`except()` exempted it, a permissive `some()` branch matched) is
+  refused with `500` in production before its handler or a stored response,
+  and logged as `auth.not_enforced` elsewhere. A custom check only counts when
+  wrapped with `markAuthHook()`; what that hook verifies is still up to you.
 - Trust forwarding headers only behind an enforced proxy topology. Prefer
   `trustedProxies` for middleware or `behindProxy: { cidrs: [...] }` when adapter
   peer metadata is available. IP syntax validation is not proxy authentication.
@@ -51,6 +64,10 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
   not sanitize or fully decode an image. Use `magicBytes`, explicit field/file
   limits, and an isolated, maintained image decoder. Platform `formData()` may
   allocate before part-count validation; a wire-byte cap is not a heap cap.
+- `fetchGuard()` is an opt-in wrapper: outbound calls are guarded only when
+  they go through it (or through helpers that default to it, such as
+  `createWebhookSender()` and `createA2aClient()`). The global `fetch` is not
+  patched.
 - `fetchGuard()` does not pin HTTPS DNS resolution; runtime-portable validation
   cannot eliminate the validation/connect race. Enforce outbound network policy
   for untrusted destinations. Never treat a WAF or URL check as a network sandbox.
@@ -166,8 +183,8 @@ DaloyJS is free OSS under MIT, so Recital 16 / Article 3(18) exempts non-commerc
 | CRA requirement                                                         | DaloyJS evidence                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **(1)(a) Delivered without known exploitable vulnerabilities**          | `pnpm audit --audit-level=high` in [`ci.yml`](.github/workflows/ci.yml) + pre-publish `verify` in [`release.yml`](.github/workflows/release.yml); daily [`vuln-scan.yml`](.github/workflows/vuln-scan.yml); `@daloyjs/core` declares **zero** runtime dependencies (`pnpm verify:no-runtime-deps`).                                                                                               |
-| **(1)(b) Secure-by-default configuration**                              | Documented in § Threat model. Body cap (1 MiB), `requestTimeoutMs` (30 s), `secureHeaders()`, `fetchGuard()` SSRF defaults, prototype-pollution stripping, real 405, prod 5xx redaction, CRLF/NUL rejection, CORS opt-in. Scaffolded projects inherit `ignore-scripts=true` + `minimum-release-age=1440` in `_npmrc`.                                                                             |
-| **(1)(c) Security updates installable separately from feature updates** | SemVer with patch releases (`0.x.Y`) reserved for security/regression fixes. Patch releases never change OpenAPI surface or route signatures.                                                                                                                                                                                                                                                     |
+| **(1)(b) Secure-by-default configuration**                              | Documented in § Threat model. Body cap (1 MiB), `requestTimeoutMs` (30 s), auto `secureHeaders()`, prototype-pollution stripping, real 405, prod 5xx redaction, CRLF/NUL rejection, CORS opt-in. `fetchGuard()` is an opt-in outbound wrapper with default-deny SSRF settings (global `fetch` is not patched). pnpm scaffolds set `ignoreScripts: true` + `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` (mirrored in `_npmrc` for npm and older tooling). |
+| **(1)(c) Security updates installable separately from feature updates** | SemVer. Patch releases (`1.x.Y`) carry security and regression fixes and may add opt-in hardening options or tighten an unsafe configuration into a refusal (as 1.5.3 and 1.5.4 did); they do not remove or rename existing public API. |
 | **(1)(d) Authentication, identity, access management**                  | First-party `bearerAuth`, `basicAuth`, `jwt()` (`src/jwt.ts` with `kid`-pinned JWKS + optional `isRevoked` hook), signed-cookie `session()`, `timingSafeEqual()`. `pnpm verify:secret-comparisons` refuses short-circuiting comparisons in `src/**`. Middleware runs unconditionally (no internal-header bypass — see Next.js [CVE-2025-29927](https://nvd.nist.gov/vuln/detail/CVE-2025-29927)). |
 | **(1)(e) Confidentiality of data in transit**                           | TLS terminated at the operator's edge; `secureHeaders()` ships HSTS (`max-age=31536000; includeSubDomains`). Secrets processed with `timingSafeEqual()`; the logger's `redactRecord()` masks documented secret-shaped fields. At-rest encryption is below the framework layer.                                                                                                                    |
 | **(1)(f) Integrity of data, configuration, and code**                   | Standard Schema validation (Zod 4 / Valibot / ArkType / TypeBox) on body / query / params **before** the handler, plus response-body schema on the way out. JSON parser strips `__proto__`/`constructor`/`prototype`. Router rejects `..` / `//`. Webhook HMAC parses only known algorithm prefixes (`sha256=`). Tarballs carry npm `--provenance` Sigstore attestations.                         |
@@ -183,7 +200,7 @@ DaloyJS is free OSS under MIT, so Recital 16 / Article 3(18) exempts non-commerc
 | CRA requirement                                                             | DaloyJS evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **(2)(1) SBOM in a commonly-used machine-readable format**                  | Every published tarball includes `dist/sbom.cdx.json` (CycloneDX 1.5) and `dist/sbom.spdx.json` (SPDX 2.3) — generated by [`scripts/generate-sbom.ts`](scripts/generate-sbom.ts), locked by `pnpm verify:sbom`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **(2)(2) Address vulnerabilities without delay; separate security updates** | CVSS-keyed Patch SLA above. Patch releases (`0.x.Y`) ship security fixes independently of minor / major releases.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **(2)(2) Address vulnerabilities without delay; separate security updates** | CVSS-keyed Patch SLA above. Patch releases (`1.x.Y`) ship security fixes independently of minor / major releases.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **(2)(3) Effective and regular testing**                                    | Full test + coverage on Node 24 on every push/PR (`node-version: 24` in [`ci.yml`](.github/workflows/ci.yml) and [`release.yml`](.github/workflows/release.yml); `engines.node` is `^24.0.0` or `>=26.0.0`). `pnpm coverage` enforces 90% lines/functions on tsx; `pnpm coverage:branches` enforces 92% branches on compiled JS. Multi-runtime adapters (Bun, Deno, Workers) are covered by `pnpm verify:runtime-parity-audits`, not a per-runtime test matrix on every PR. The full `verify:*` family runs in `ci.yml` and the publish jobs of `release.yml`. Weekly DAST job ([`dast.yml`](.github/workflows/dast.yml)) runs OWASP ZAP baseline against the bookstore example. |
 | **(2)(4) Public disclosure of fixed vulnerabilities**                       | GHSAs with CVSS v3.1 vector, affected range, fixed version, and upgrade command — see § Evidence per advisory.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **(2)(5) Coordinated disclosure policy**                                    | This file. Entry point is [`security.txt`](https://daloyjs.dev/.well-known/security.txt). Rotation in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md), tested quarterly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -287,6 +304,8 @@ keys as well as raw material. Nonextractable keys are checked through metadata,
 not exported. This prevents weak or mismatched application-supplied keys from
 silently defeating the verifier's stated algorithm policy.
 
+From 1.5.4, `jwk()` and `createJwtVerifier()` refuse to construct in production without an `audience`, unless `allowAnyAudience: true` is passed (meant for a single-tenant private identity provider). Without an audience check, a token minted for another API of the same issuer is accepted.
+
 JWKS URL fetches use `redirect: "error"`; configure the final HTTPS endpoint
 directly. A redirect cannot install a replacement key set or downgrade to
 plaintext transport. Failed refreshes retain only previously trusted keys
@@ -336,7 +355,9 @@ certificate headers require a trusted proxy that strips caller-supplied values.
 
 #### Body-size DoS + structural DoS
 
-Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced.
+Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced. From 1.5.4 the cap applies to every route, including handlers that read `ctx.request` directly (`text()`, `json()`, `arrayBuffer()`, `formData()`, the `body` stream, `clone()`), answering `413`; before 1.5.4 only routes with a request-body schema were capped.
+
+From 1.5.4, `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys` and `jsonMaxDepth` must be finite non-negative integers, checked at construction in every environment (`NaN`, `Infinity`, negatives, non-integers and strings throw; an explicit `undefined` uses the default). `Number(process.env.UNSET)` is `NaN`, which previously disabled a limit silently. `rateLimit()` likewise refuses a `windowMs` that is not a positive integer or a `max` that is not a non-negative integer (`max: 0` still refuses every request).
 
 In addition, `jsonMaxKeys` (default 10 000 total object keys across the parsed tree) and `jsonMaxDepth` (default 50) bound "hash flood" wide objects and deeply nested structures even when they fit inside the byte limit. `safeJsonParseLimited` enforces both with a single allocation-free pre-parse scan of the raw text (object keys counted via structural `:` delimiters, depth via `{`/`[` balance), so an oversized structure is rejected in bounded time **before** it is parsed into memory. Applied to JSON bodies, MCP envelopes, CSP reports, and pagination cursors. Can be raised per `App()` or disabled (0). See `getSecurityPosture()`.
 
@@ -374,7 +395,7 @@ Real **405** with `Allow` header.
 
 #### Slow handlers / runaway loops
 
-`requestTimeoutMs` aborts handlers (30 s default); Node adapter sets `requestTimeout` + `headersTimeout` + `maxHeaderSize`.
+`requestTimeoutMs` (30 s default) answers `408` and aborts `ctx.request.signal`. From 1.5.4 it covers the `preBody`, `beforeHandle` and `afterHandle` hooks, the request-body read, and the handler, measured from the first asynchronous step; before 1.5.4 it covered the handler only. Node adapter sets `requestTimeout` + `headersTimeout` + `maxHeaderSize`.
 
 #### HTTP/2 Rapid Reset DDoS ([CVE-2023-44487](https://nvd.nist.gov/vuln/detail/CVE-2023-44487))
 
@@ -410,6 +431,8 @@ All built-in middleware emitting headers from config (`basicAuth` realm, `csrf` 
 #### Cross-origin forgery (CSRF)
 
 `csrf()` ships two strategies: double-submit cookie (default) and Fetch-Metadata (`Sec-Fetch-Site`-based, tokenless). See [docs](https://daloyjs.dev/docs/security/csrf).
+
+`cors()` throws, in every environment, for `origin: "*"` with `credentials: true`. From 1.5.4 it also refuses `credentials: true` with an origin predicate or list that allows every origin (detected by probing a canary origin) or allows `"null"`.
 
 #### Cross-Site WebSocket Hijacking (CSWSH)
 
@@ -451,7 +474,7 @@ The Ghost CMS [CVE-2026-26980](https://nvd.nist.gov/vuln/detail/CVE-2026-26980) 
 
 #### Trusted-proxy header spoofing
 
-`rateLimit({ trustProxyHeaders })` and `requestId({ trustIncoming })` default OFF. Key generators must be explicit.
+`rateLimit({ trustProxyHeaders })` and `requestId({ trustIncoming })` default OFF. Key generators must be explicit. In production, a request carrying `X-Forwarded-*`, `X-Real-IP`, `CF-Connecting-IP`, `Fly-Client-IP` or `True-Client-IP` gets a `500` until `behindProxy` is set (a per-request check, not a boot refusal). From 1.5.4, `behindProxy: { cidrs }` and the guards' `trustedProxies` refuse a `/0` range (`0.0.0.0/0`, `::/0`), which would trust every peer.
 
 #### Server-side template injection (SSTI)
 
@@ -807,6 +830,7 @@ We treat the package supply chain as an attack surface. Most controls below were
 - **Trusted Publisher must allow staging.** Each npm package must allow `npm stage publish` for repository `daloyjs/daloy`, workflow `release.yml`, environment `npm-publish`. Old "publish-only" configs fail with `OIDC permission denied for this action`.
 - **`--provenance`** on every staged publish (Sigstore + OIDC bound to source commit + workflow run on Rekor).
 - **Tag/version match verified** before `npm stage publish` runs.
+- **Build and publish are split (from 1.5.4).** A job with no publish credentials builds the package, runs `npm pack`, and records the tarball's sha256. The publish job only verifies that hash and stages that exact tarball, so the credentialed job never runs the build.
 - **No third-party install scripts run.** Install uses `--ignore-scripts`; required builders are allowlisted in `allowBuilds` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml).
 - **`@daloyjs/core` and `create-daloy` ship together.** A signed `v*` tag stages both; follow-up `workflow_dispatch` can narrow scope.
 
@@ -828,11 +852,11 @@ The gates below close many specific campaigns. Rather than narrate each one, thi
 
 #### `ignore-scripts=true` + `pnpm verify:no-lifecycle-scripts`
 
-No `preinstall` / `install` / `postinstall` / `prepare` runs on install (root `.npmrc`, every scaffolded template `_npmrc`, framework's own publish). Blocks: `ua-parser-js` hijack, `coa` hijack, 60-package Discord-webhook campaign, Jade Sleet/Lazarus paired packages, BeaverTail/InvisibleFerret, Beamglea, RATatouille's install path, Qix/DuckDB future variants, GemStuffer, generic PoC archetype.
+No `preinstall` / `install` / `postinstall` / `prepare` runs on install (the repo's `strictDepBuilds` + `allowBuilds` in `pnpm-workspace.yaml`, the pnpm scaffold's `ignoreScripts: true` in `pnpm-workspace.yaml`, the framework's own publish with `--ignore-scripts`). On pnpm 11+ the `.npmrc` spelling of these settings is ignored; the workspace keys are what pnpm reads. `pnpm verify:no-lifecycle-scripts` checks the published packages' own manifests (`@daloyjs/core`, `create-daloy`), not the dependency tree. This blocks install-script payloads only: a payload that runs when a package is imported (the `chalk`/`debug` and `node-ipc` compromises) is not stopped by it, and is mitigated only by the release-age cooldown and lockfile pinning. Blocks: `ua-parser-js` hijack, `coa` hijack, 60-package Discord-webhook campaign, Jade Sleet/Lazarus paired packages, BeaverTail/InvisibleFerret, Beamglea, RATatouille's install path, Qix/DuckDB future variants, GemStuffer, generic PoC archetype.
 
 #### `minimum-release-age=1440` (24h cooldown)
 
-Refuses any dependency published less than 24 h ago. Most worm versions (Shai-Hulud, BlokTrooper, TanStack 2026-05-11, Qix 19-package + DuckDB, `node-ipc` 9.1.6/9.2.3/12.0.1, `xrpl@2.14.2`/`4.2.x`, Lazarus typosquats, `nayflore` packages, RATatouille, Telegram-bot SSH backdoor) are detected and yanked inside this window.
+Refuses any dependency published less than 24 h ago, for the installs that set it: the cooldown is consumer-side, so it protects this repo and projects that opt in (pnpm scaffolds do by default), and only against versions caught within the window. Most worm versions (Shai-Hulud, BlokTrooper, TanStack 2026-05-11, Qix 19-package + DuckDB, `node-ipc` 9.1.6/9.2.3/12.0.1, `xrpl@2.14.2`/`4.2.x`, Lazarus typosquats, `nayflore` packages, RATatouille, Telegram-bot SSH backdoor) are detected and yanked inside this window.
 
 #### `pnpm verify:no-runtime-deps` (zero runtime deps)
 
@@ -844,7 +868,7 @@ Refuses lockfile entries from `git+` / `git://` / `ssh://` / `github:` / `gitlab
 
 #### `pnpm verify:known-dep-names` ([`scripts/verify-known-dep-names.ts`](scripts/verify-known-dep-names.ts))
 
-Top-level deps must be on an explicit allowlist. Defeats slopsquatting / AI-hallucinated package names (catches the 60-package Discord-webhook names, `string-width-cjs` aliases, `xuxingfeng` typosquats, etc.).
+Top-level deps in this repo must be on an explicit allowlist. Narrows slopsquatting / AI-hallucinated package names for the DaloyJS repo itself; it is a CI gate here, not something scaffolded apps get (catches the 60-package Discord-webhook names, `string-width-cjs` aliases, `xuxingfeng` typosquats, etc.).
 
 #### `pnpm verify:no-remote-exec` ([`scripts/verify-no-remote-exec.ts`](scripts/verify-no-remote-exec.ts))
 
@@ -942,7 +966,7 @@ What this does **not** cover: a consumer who depends on a different low-level pa
 
 ### AI-generated-code incident risk (Aikido State-of-AI 2026 survey)
 
-Not an attack — a 450-practitioner survey ([State of AI in Security & Development 2026](https://www.aikido.dev/state-of-ai-security-development-2026)) whose findings (69% of orgs found AI-introduced vulnerabilities; 1 in 5 had a serious incident; tool sprawl and false positives drive risk; automated CI gates beat manual review) describe what _reduces_ incidents. DaloyJS's design is that prescription: secure-by-default output means AI-generated code on DaloyJS starts safe, and the [`AGENTS.md`](AGENTS.md) "do not weaken a check" rule plus the fail-closed `verify:*` gates are automated, low-false-positive, in-pipeline guardrails on a single `pnpm verify:*` surface. NB: this survey does not itself cover slopsquatting — that thread is the ENISA §5.2 mapping above, defended by `verify:known-dep-names` + `minimum-release-age`.
+Not an attack — a 450-practitioner survey ([State of AI in Security & Development 2026](https://www.aikido.dev/state-of-ai-security-development-2026)) whose findings (69% of orgs found AI-introduced vulnerabilities; 1 in 5 had a serious incident; tool sprawl and false positives drive risk; automated CI gates beat manual review) describe what _reduces_ incidents. DaloyJS's design follows that prescription: secure defaults mean AI-generated code on DaloyJS starts from a safer baseline (it still needs review), and the [`AGENTS.md`](AGENTS.md) "do not weaken a check" rule plus the fail-closed `verify:*` gates are automated, low-false-positive, in-pipeline guardrails on a single `pnpm verify:*` surface. NB: this survey does not itself cover slopsquatting — that thread is the ENISA §5.2 mapping above, defended by `verify:known-dep-names` + `minimum-release-age`.
 
 ### Container & base-image hardening
 
@@ -988,13 +1012,13 @@ ENISA's [Technical Advisory for Secure Use of Package Managers](https://www.enis
 
 #### §5.2 AI-assisted development & "vibe-coding" — slopsquatting
 
-ENISA §5.2 names **slopsquatting** (attackers pre-registering hallucinated package names that AI tools confidently emit) as a first-class AI-era threat, and recommends: maintain visibility over AI-selected packages, review their necessity, automate selection/integration controls in CI, and strengthen vulnerability assessment since upfront scrutiny is reduced. DaloyJS closes both axes:
+ENISA §5.2 names **slopsquatting** (attackers pre-registering hallucinated package names that AI tools confidently emit) as a first-class AI-era threat, and recommends: maintain visibility over AI-selected packages, review their necessity, automate selection/integration controls in CI, and strengthen vulnerability assessment since upfront scrutiny is reduced. DaloyJS narrows both axes, with limits:
 
-- **Name axis** — `pnpm verify:known-dep-names` forces every top-level dependency onto an explicit allowlist, so a hallucinated `pnpm add <name>` cannot land without a reviewed PR diff.
-- **Time axis** — `minimum-release-age=1440` waits out the window in which a freshly-registered slop-squat is typically detected and unpublished.
+- **Name axis** — in the DaloyJS repo, `pnpm verify:known-dep-names` forces every top-level dependency onto an explicit allowlist, so a hallucinated `pnpm add <name>` cannot land without a reviewed PR diff. This is a CI gate in this repo; scaffolded apps do not get it, so in an app the name check is the app team's own review.
+- **Time axis** — the `minimumReleaseAge: 1440` cooldown waits out the window in which a freshly-registered slop-squat is typically detected and unpublished. A squat nobody detects within a day is not caught by it.
 - ENISA's other three AI-dev mitigations (visibility, necessity review, CI automation) are exactly what the `verify:*` gate family enforces mechanically, plus the zero-runtime-deps posture that minimises what an AI can pull in through the framework.
 
-**Net:** DaloyJS meets or exceeds the ENISA integration checklist as defaults. The one area it does not (and structurally cannot) build in is per-consumer-app CVE reachability triage. Cross-references: the binding-law view of the same controls is the [§ EU Cyber Resilience Act (CRA) mapping](#eu-cyber-resilience-act-cra-mapping) above; the gate-by-gate campaign coverage is § Supply-chain attack classes blocked.
+**Net:** the DaloyJS repo meets the ENISA integration checklist, and pnpm scaffolds get its install-time controls by default; the repo-only gates above are noted as such. The one area it does not (and structurally cannot) build in is per-consumer-app CVE reachability triage. Cross-references: the binding-law view of the same controls is the [§ EU Cyber Resilience Act (CRA) mapping](#eu-cyber-resilience-act-cra-mapping) above; the gate-by-gate campaign coverage is § Supply-chain attack classes blocked.
 
 ### Vibe-coder checklist (Aikido)
 

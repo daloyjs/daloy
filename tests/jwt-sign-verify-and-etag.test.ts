@@ -103,7 +103,8 @@ test("createJwtSigner: refuses acknowledgeNoExp: true in production", () => {
     () =>
       createJwtSigner({
         alg: "HS256",
-        key: new Uint8Array(32),
+        // Random so the weak-key check passes and the no-exp refusal is what fires.
+        key: crypto.getRandomValues(new Uint8Array(32)),
         maxLifetimeSeconds: 60,
         acknowledgeNoExp: true,
         env: "production",

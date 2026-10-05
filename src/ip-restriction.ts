@@ -13,6 +13,7 @@ import { ForbiddenError } from "./errors.js";
 import {
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 // Matcher primitives live in a leaf module so `conn-info` can peer-verify
@@ -129,7 +130,7 @@ export function ipRestriction(opts: IpRestrictionOptions): Hooks {
     opts.resolveIp ??
     (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
   const message = opts.message ?? "IP address not permitted";
-  return {
+  return stampForwardedTrust({
     // `preBody`, not `beforeHandle`: a gate that returns a Response from
     // `beforeHandle` can be preempted by any earlier `beforeHandle` middleware
     // that short-circuits first — a `responseCache()` HIT mounted above it would
@@ -147,7 +148,7 @@ export function ipRestriction(opts: IpRestrictionOptions): Hooks {
         throw new ForbiddenError(message);
       }
     },
-  };
+  }, "ipRestriction()", opts);
 }
 
 function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {

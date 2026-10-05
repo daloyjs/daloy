@@ -100,12 +100,22 @@ export function getConnInfo(request: Request): ConnInfo | undefined {
 }
 
 /**
+ * `true` for a `/0` range (`0.0.0.0/0`, `::/0`): it contains every address, so
+ * "trust forwarded headers from these proxies" becomes "trust every client",
+ * and any caller can set its own IP.
+ */
+function isWholeAddressSpace(entry: string): boolean {
+  return /\/0+$/.test(entry.trim());
+}
+
+/**
  * Refuses-at-construction on malformed {@link BehindProxyConfig}. Called once
  * during `new App({ behindProxy })`.
  *
  * @param cfg - Proxy posture to validate; `undefined` is accepted as "unset".
  * @throws Error when `hops` is not an integer in [0, 64], when `cidrs` is
- *   empty or contains non-string entries, or when the shape is unrecognized.
+ *   empty, contains non-string entries or a `/0` range that would trust every
+ *   peer, or when the shape is unrecognized.
  * @since 0.24.0
  */
 export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
@@ -134,6 +144,13 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
           compileCidrMatcher(c);
         } catch {
           throw new Error(`behindProxy.cidrs: invalid IP/CIDR entry ${JSON.stringify(c)}.`);
+        }
+        if (isWholeAddressSpace(c)) {
+          throw new Error(
+            `behindProxy.cidrs: ${JSON.stringify(c)} contains every address, so any client could forge ` +
+              `its IP through X-Forwarded-For. List your proxies' addresses, or use { hops: n } on ` +
+              `platforms whose proxy addresses you don't know.`
+          );
         }
       }
       return;
@@ -167,6 +184,35 @@ export function pickForwardedForByHops(header: string | null, hops: number): str
   // typically lives at parts[parts.length - hops].
   const selected = parts[parts.length - hops];
   return selected && parseIp(selected) ? selected : undefined;
+}
+
+/**
+ * Marker a client-identity guard carries when it trusts `X-Forwarded-For`
+ * from any peer (`trustProxyHeaders: true` or `trustedHops`, without a
+ * `trustedProxies` allowlist that verifies the peer). The App refuses such a
+ * guard when it declares `behindProxy: "none"`: the two contradict each other,
+ * and the guard's setting would let any client choose its own IP.
+ * @internal
+ */
+export const FORWARDED_TRUST_MARKER = Symbol.for("daloyjs.hooks.trustsForwarded");
+
+/**
+ * Stamp {@link FORWARDED_TRUST_MARKER} (with the guard name) when `opts`
+ * trusts forwarded headers without peer verification. Returns `hooks`.
+ * @internal
+ */
+export function stampForwardedTrust<T extends object>(
+  hooks: T,
+  name: string,
+  opts: { trustedHops?: number; trustProxyHeaders?: boolean; trustedProxies?: readonly string[] }
+): T {
+  if (
+    opts.trustedProxies === undefined &&
+    (opts.trustProxyHeaders === true || opts.trustedHops !== undefined)
+  ) {
+    (hooks as Record<PropertyKey, unknown>)[FORWARDED_TRUST_MARKER] = name;
+  }
+  return hooks;
 }
 
 /**
@@ -252,8 +298,8 @@ export function resolveForwardedTrust(
  * @param opts - The middleware's options object; only `trustedProxies` is read.
  * @returns The compiled matchers, or `undefined` when `trustedProxies` is not
  *   declared (no peer verification — the pre-existing posture).
- * @throws Error when the list is empty (a silent "trust nobody" foot-gun) or
- *   any entry is not a valid IP/CIDR. Both are refuse-at-construction
+ * @throws Error when the list is empty (a silent "trust nobody" foot-gun),
+ *   any entry is not a valid IP/CIDR, or an entry is a `/0` range. Both are refuse-at-construction
  *   misconfigurations, never request-time surprises.
  * @internal
  */
@@ -270,11 +316,19 @@ export function resolveTrustedProxyMatchers(
     if (typeof entry !== "string" || entry.length === 0) {
       throw new Error(`${name}: trustedProxies entries must be non-empty strings.`);
     }
+    let matcher: IpMatcher;
     try {
-      return compileCidrMatcher(entry);
+      matcher = compileCidrMatcher(entry);
     } catch {
       throw new Error(`${name}: trustedProxies — invalid IP/CIDR entry ${JSON.stringify(entry)}.`);
     }
+    if (isWholeAddressSpace(entry)) {
+      throw new Error(
+        `${name}: trustedProxies entry ${JSON.stringify(entry)} contains every address, so any client ` +
+          `could forge its IP. List your proxies' addresses instead.`
+      );
+    }
+    return matcher;
   });
 }
 

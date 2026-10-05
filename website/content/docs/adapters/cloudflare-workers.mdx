@@ -81,7 +81,7 @@ export const app = new App({
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 ```
 
-Without `production: true`, the production-only refuse-to-boot guards never run. 5xx `detail` is still redacted, because an unset environment fails closed. Without `behindProxy`, production requests carrying `X-Forwarded-For` are refused with a `500`. Fix that with `{ hops: 1 }`, not `"none"` or `trustProxy`: a Worker has no TCP peer, so those settings make `rateLimit()` put every caller in one shared bucket. DaloyJS logs a `rate-limit.shared-bucket` warning in production when that happens.
+Without `production: true`, the production-only refuse-to-boot guards do not refuse; each would-be refusal is only logged as a `secure_defaults.env_indeterminate` warning. 5xx `detail` is still redacted, because an unset environment fails closed. Without `behindProxy`, production requests carrying `X-Forwarded-For` are refused with a `500`. Fix that with `{ hops: 1 }`, not `"none"` or `trustProxy`: a Worker has no TCP peer, so those settings make `rateLimit()` put every caller in one shared bucket. DaloyJS logs a `rate-limit.shared-bucket` warning in production when that happens.
 
 ## wrangler.jsonc [#wrangler-jsonc]
 

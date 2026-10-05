@@ -118,8 +118,8 @@ CMD ["node", "dist/server.js"]
 - Callback-style handlers (`(event, context, callback) => ...`) are not supported on supported Node versions. Always use `async` handlers. The DaloyJS adapter does.
 - For Function URLs with streaming, set `InvokeMode: RESPONSE_STREAM` and use `toLambdaStreamHandler`.
 - Cold starts: prefer the Node adapter on provisioned concurrency or use a container with the Web Adapter for warmer reuse.
-- Since 2.0.0 the adapter answers `400` when the event's `Host` header is not a plain `host[:port]` or bracketed IPv6 literal (for example one containing `\ / ? # @ %` or whitespace). The host is spliced into the request URL, so such a value could otherwise move bytes into the path that `except()` and other middleware match on.
-- `X-Forwarded-Proto` is honoured only as `http` or `https` (first comma-separated token). Any other value is treated as `https` (since 1.3.7).
+- Since 1.3.7 the adapter answers `400` when the event's `Host` header is not a plain `host[:port]` or bracketed IPv6 literal (for example one containing `\ / ? # @ %` or whitespace). The host is spliced into the request URL, so such a value could otherwise move bytes into the path that `except()` and other middleware match on.
+- `X-Forwarded-Proto` is honoured only when the App declares a proxy (`behindProxy` set and not `"none"`), and then only as `http` or `https`, read from the last comma-separated entry (the one the nearest proxy appended). Otherwise the scheme is `https`, so a client-sent header can't downgrade the URL your app sees (since 1.5.4; before that, the first entry was honoured without a declared proxy).
 
 ## See also
 

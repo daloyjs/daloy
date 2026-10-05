@@ -182,7 +182,7 @@ test("[boot-warning] framework health and metrics routes never warn about themse
   );
 });
 
-test("[boot-warning] production stays silent (operators run `daloy doctor` in CI instead)", async () => {
+test("[boot-warning] production warns too, where an undeclared field actually leaks", async () => {
   const { logger, warns } = capturingLogger();
   const app = new App({
     production: true,
@@ -193,7 +193,7 @@ test("[boot-warning] production stays silent (operators run `daloy doctor` in CI
     method: "GET",
     path: "/profile",
     operationId: "profile",
-    responses: { 200: { description: "ok" } }, // schema-less, but prod is silent
+    responses: { 200: { description: "ok" } }, // schema-less
     handler: async () => ({ status: 200 as const, body: { id: "1" } as any }),
   });
   await app.request("/profile");
@@ -201,8 +201,8 @@ test("[boot-warning] production stays silent (operators run `daloy doctor` in CI
     warns.filter(
       (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
     ).length,
-    0,
-    "the dev warning must not fire in production"
+    1,
+    "production logs the warning once"
   );
 });
 

@@ -946,7 +946,8 @@ test("lambda adapter supports API Gateway v1 and Netlify-style events", async ()
   assert.equal(multiValueResult.isBase64Encoded, false);
   assert.deepEqual(multiValueResult.multiValueHeaders, { "set-cookie": ["legacy=1; Path=/"] });
   const multiValueBody = JSON.parse(multiValueResult.body);
-  assert.equal(multiValueBody.url, "http://legacy.example.com/search?tag=a&tag=b&q=hello+world");
+  // No behindProxy declared, so the client-sent X-Forwarded-Proto is ignored.
+  assert.equal(multiValueBody.url, "https://legacy.example.com/search?tag=a&tag=b&q=hello+world");
   assert.equal(multiValueBody.cookie, "s=abc; u=alice");
 
   const singleValueResult = await handler({
@@ -1152,8 +1153,8 @@ test("[unhappy] lambda adapter: a non-plain Host is refused 400 and cannot steer
   }
 });
 
-test("lambda adapter: plain Host / IPv6 authority accepted; X-Forwarded-Proto limited to http|https", async () => {
-  const app = new App({ logger: false });
+test("lambda adapter: plain Host / IPv6 authority accepted; X-Forwarded-Proto only from a declared proxy", async () => {
+  const app = new App({ logger: false, behindProxy: { hops: 1 } });
   app.route({
     method: "GET",
     path: "/whoami",
@@ -1174,9 +1175,31 @@ test("lambda adapter: plain Host / IPv6 authority accepted; X-Forwarded-Proto li
   };
   assert.equal(await call({ host: "api.example.com:8443" }), "https://api.example.com:8443/whoami");
   assert.equal(await call({ host: "[::1]:3000", "x-forwarded-proto": "http" }), "http://[::1]:3000/whoami");
-  assert.equal(await call({ host: "a.example", "x-forwarded-proto": "HTTPS, http" }), "https://a.example/whoami");
+  // The last entry is the one the proxy appended; earlier ones are the client's.
+  assert.equal(await call({ host: "a.example", "x-forwarded-proto": "http, HTTPS" }), "https://a.example/whoami");
+  assert.equal(await call({ host: "a.example", "x-forwarded-proto": "https, http" }), "http://a.example/whoami");
   assert.equal(
     await call({ host: "a.example", "x-forwarded-proto": "javascript://evil/" }),
     "https://a.example/whoami"
   );
+});
+
+test("lambda adapter: without a declared proxy a client-sent X-Forwarded-Proto cannot downgrade the scheme", async () => {
+  for (const behindProxy of [undefined, "none"] as const) {
+    const app = new App({ logger: false, ...(behindProxy ? { behindProxy } : {}) });
+    app.route({
+      method: "GET",
+      path: "/whoami",
+      operationId: "lambdaWhoami3",
+      responses: { 200: { description: "ok" } },
+      handler: (ctx) => ({ status: 200 as const, body: { url: ctx.request.url } }),
+    });
+    const res = await toLambdaHandler(app)({
+      version: "2.0",
+      rawPath: "/whoami",
+      headers: { host: "a.example", "x-forwarded-proto": "http" },
+      requestContext: { http: { method: "GET" } },
+    });
+    assert.equal(JSON.parse(res.body).url, "https://a.example/whoami", String(behindProxy));
+  }
 });

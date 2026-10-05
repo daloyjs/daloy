@@ -25,17 +25,17 @@ A reader sent [Aikido's "WTF is Vibe Coding Security"](https://www.aikido.dev/bl
 
 For the unfamiliar: **vibe coding** is when someone, often someone who is not a developer, describes what they want in English and ships whatever the model writes. **Agentic coding** is the same thing with the model also installing the dependencies, running the tests, and pushing the PR. The Aikido post lists the usual scary outcomes: SQL injection, path traversal, hardcoded secrets, an admin route left mounted on the public app (the "Tea app" story), and an AI agent that deleted a production database while "lying about unit tests" (the Replit / SaaStr story).
 
-I read it, opened DaloyJS, and went through each risk to see what we already block, what needs one opt-in line, and where DaloyJS can't help. Below is that mapping. The TL;DR: if a sales rep uses Claude to scaffold a DaloyJS app at 1am, the boring stuff, body limits, prototype pollution, header splitting, path traversal, secret-shaped logs, is on before they type their first prompt. What they still have to *choose* is which routes need auth and where the admin surface lives. Those are policy, not defaults.
+I read it, opened DaloyJS, and went through each risk to see what we already block, what needs one opt-in line, and where DaloyJS can't help. Below is that mapping. The TL;DR: if a sales rep uses an AI assistant to scaffold a DaloyJS app at 1am, the boring stuff, body limits, prototype pollution, header splitting, path traversal, secret-shaped logs, is on before they type their first prompt. What they still have to *choose* is which routes need auth and where the admin surface lives. Those are policy, not defaults.
 
 ## Risk 1: SQL injection
 
-<RiskCard risk="Aikido: 'SQL injections, path traversal, hardcoded secrets.'" framework="Standard Schema (Zod / Valibot) validation is a route-level requirement, not an afterthought. The framework has no untyped req.body escape hatch in the public API. /docs/security/sql-injection documents the per-ORM patterns; the scaffolder ships Prisma / Drizzle / TypeORM templates that are parameterized by construction." user="Pick a real ORM. Don't write template-string SQL. The framework will not stop you from doing the wrong thing inside your handler, but it will hand you a fully-typed, validated input object so you have no excuse." />
+<RiskCard risk="Aikido: 'SQL injections, path traversal, hardcoded secrets.'" framework="Standard Schema (Zod / Valibot) validation lives in the route definition, not in an afterthought. A declared schema is enforced before the handler runs; a route without one still gets the raw ctx.request, so look for that in review. /docs/security/sql-injection documents the per-ORM patterns; the scaffolder ships Prisma / Drizzle / TypeORM templates that are parameterized by construction." user="Pick a real ORM. Don't write template-string SQL. The framework will not stop you from doing the wrong thing inside your handler, but it will hand you a fully-typed, validated input object so you have no excuse." />
 
 DaloyJS doesn't ship an ORM. That's deliberate, pinning one ORM would be the same kind of opinionation that gets frameworks in trouble. What it does ship is a route shape where the input is validated *before* your handler runs:
 
 ```ts
 // What a "vibe-coded" route looks like in DaloyJS.
-// The AI cannot skip validation because the schema IS the route.
+// The schema lives in the route, and a declared schema runs before the handler.
 import { z } from "zod";
 import { App } from "@daloyjs/core";
 
@@ -46,8 +46,9 @@ app.route({
   path: "/orders",
   operationId: "createOrder",
   request: {
-    // No schema, no route. A missing body schema is a build-time error
-    // for endpoints with bodies, and unknown content types get 415.
+    // Declared here, enforced before the handler runs. Unknown content
+    // types get 415. (A route with no body schema still gets the raw
+    // ctx.request, so this line is the one to look for in review.)
     body: z.object({
       sku: z.string().min(1).max(64),
       quantity: z.number().int().positive().max(1000),
@@ -58,8 +59,8 @@ app.route({
     201: { description: "created" },
   },
   handler: async ({ body }) => {
-    // 'body' is fully typed AND already validated. There is no untyped
-    // req.body.whatever escape hatch in the public API.
+    // 'body' is fully typed AND already validated. The raw ctx.request is
+    // still there, but nothing here needs it.
     return { status: 201, body: { id: crypto.randomUUID(), ...body } };
   },
 });
@@ -133,11 +134,13 @@ The full list of what the router refuses to walk into is in [/docs/security/runt
 
 ## Risk 3: Hardcoded secrets and AI-generated supply-chain rot
 
-<RiskCard risk="Aikido: 'hardcoded secrets' + the broader agentic-coding worry that an AI agent installs whatever npm package its prompt mentioned." framework="Repo-wide CI gates that block leaked credentials, base64-smuggled payloads, invisible-unicode Trojan Source, install-time lifecycle scripts (the #1 npm attack vector), remote exec (curl|sh, eval(fetch())), unpinned GitHub Actions, and unauthorized license categories. A CycloneDX SBOM is generated and signed on every release. @daloyjs/core itself ships with zero runtime dependencies, there is no transitive blast radius." user="Run 'pnpm verify' in your project's CI. The create-daloy templates ship the workflow. Don't disable it because a dependency 'needs' a postinstall, that's the attack." />
+<RiskCard risk="Aikido: 'hardcoded secrets' + the broader agentic-coding worry that an AI agent installs whatever npm package its prompt mentioned." framework="Repo-wide CI gates that block leaked credentials, base64-smuggled payloads, invisible-unicode Trojan Source, install-time lifecycle scripts in the published packages' own manifests (the #1 npm attack vector), remote exec (curl|sh, eval(fetch())), unpinned GitHub Actions, and unauthorized license categories. CycloneDX and SPDX SBOMs are generated and verified on every release, and the package is published with npm provenance. @daloyjs/core itself ships with zero runtime dependencies, there is no transitive blast radius." user="These gates run in the DaloyJS repo. Scaffold with --with-ci to get lockfile verification, secret scanning, CodeQL, OSV and Scorecard workflows in your own project. Don't turn ignore-scripts off because a dependency 'needs' a postinstall, that's the attack." />
 
 ```bash
-# Daloy's repo and every scaffolded create-daloy project run these CI
-# gates on every PR. They are not aspirational - a failure blocks merge.
+# The DaloyJS repo runs these CI gates on every PR. They are not
+# aspirational - a failure blocks merge. (Scaffolded projects do not get
+# them; `create-daloy --with-ci` adds lockfile verification, secret
+# scanning, CodeQL, OSV and Scorecard workflows instead.)
 pnpm verify:no-leaked-credentials      # AWS keys, GCP keys, GH tokens, npm tokens
 pnpm verify:secret-comparisons         # all secret compares use timingSafeEqual
 pnpm verify:no-encoded-payloads        # base64 blobs (a common AI-slop smuggling vector)
@@ -148,10 +151,10 @@ pnpm verify:no-registry-exfiltration   # no sneaky POSTs to a registry-shaped UR
 pnpm verify:no-runtime-deps            # @daloyjs/core ships ZERO runtime deps
 pnpm verify:actions-pinned             # every GH Action pinned to a commit SHA
 pnpm verify:dep-licenses               # license allow-list
-pnpm verify:sbom                       # CycloneDX SBOM generated + signed
+pnpm verify:sbom                       # CycloneDX + SPDX SBOMs match the manifests
 ```
 
-The full reasoning behind each gate is in ["Supply-chain hardening for TypeScript libraries"](/blog/supply-chain-hardening-for-typescript-libraries). The shorter version: attackers do not need a 0-day if they can ship a malicious `postinstall`, and AI agents do not inspect `scripts` blocks before running `npm install`. The gate that says "no lifecycle scripts at all" is the one that stops the next `chalk-style` compromise from reaching a vibe-coded project.
+The full reasoning behind each gate is in ["Supply-chain hardening for TypeScript libraries"](/blog/supply-chain-hardening-for-typescript-libraries). The shorter version: attackers do not need a 0-day if they can ship a malicious `postinstall`, and AI agents do not inspect `scripts` blocks before running `npm install`. Turning lifecycle scripts off (`ignore-scripts`) is what stops the next Shai-Hulud-style install-script worm. It does not stop a `chalk`-style compromise, where the payload runs when your code imports the package; the 24-hour release-age cooldown and a committed lockfile are what help there.
 
 ## Risk 4, Unlocked admin routes (the "Tea app" story)
 
@@ -186,9 +189,9 @@ The dedicated page is [/docs/security/admin-panels](/docs/security/admin-panels)
 
 ## Risk 5: Missing input sanitization
 
-<RiskCard risk="Aikido: 'input sanitization' is one of the four basics the vibe-coder checklist asks for." framework="Standard Schema everywhere (Zod, Valibot, ArkType all supported). Body, query, params, and headers are all validated against a declared schema. Unknown fields are stripped, the wrong type 400s before the handler runs, and the validated value is the only thing visible to the handler." user="Write the schema. The framework will hold the line." />
+<RiskCard risk="Aikido: 'input sanitization' is one of the four basics the vibe-coder checklist asks for." framework="Standard Schema everywhere (Zod, Valibot, ArkType all supported). Body, query, params, and headers are all validated against a declared schema. Unknown fields are stripped or rejected depending on your schema, the wrong type gets a 422 before the handler runs, and the validated value is what the handler's typed arguments carry." user="Write the schema. The framework will hold the line." />
 
-This is the same pattern as Risk 1, applied to *every* input surface, not just bodies. The router itself is the sanitization layer, there is no "remember to call zod.parse" convention. If a route omits a body schema and declares a body content type, the build complains. If the body schema rejects, the handler never runs.
+This is the same pattern as Risk 1, applied to *every* input surface, not just bodies. The route contract is the validation layer, there is no "remember to call zod.parse" convention. If the body schema rejects, the handler never runs. The honest limit: a route that declares no body schema still gets the raw `ctx.request`, and nothing stops a handler from reading it, so "does this route declare its inputs?" is still a review question.
 
 ## Risk 6, Agentic coding doing things the prompt didn't ask for
 
@@ -229,7 +232,7 @@ The article's most useful line: "Treat AI code like a junior developer wrote it.
 //    checked first -> 413. AI agents love to forget body limits.
 // 2. Request timeout: 30s default. Slow-loris and hung handlers die.
 // 3. Prototype pollution: __proto__ / constructor / prototype stripped
-//    from every JSON body. A vibe-coded user-update route can't be
+//    from every JSON body the framework parses. A vibe-coded user-update route can't be
 //    abused into mass assignment of internal flags.
 // 4. CRLF / header splitting: rejected at write time. Set-Cookie smuggling
 //    via a 'name' field never reaches the wire.

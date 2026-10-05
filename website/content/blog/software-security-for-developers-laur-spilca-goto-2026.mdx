@@ -132,11 +132,11 @@ new App();
 //  - real 405 with Allow, not an enumeration-friendly 404
 //  - cookies default __Host- + Secure + HttpOnly + SameSite=Lax
 //
-// And the schema IS the route, so the AI literally cannot ship an
-// unvalidated body without a build-time error.
+// And a declared body schema is enforced before the handler runs.
+// (A route with no body schema still gets the raw ctx.request.)
 ```
 
-Because the schema *is* the route in DaloyJS, an AI cannot ship an unvalidated body without producing a build-time error. That is the difference between "please remember to validate" and "the build is red until you do." I unpacked more of this in [Vibe Coding Security](/blog/vibe-coding-security-what-daloyjs-already-blocks).
+Because the schema lives *in* the route definition in DaloyJS, a declared schema is enforced before the handler runs, and the handler's `body` type comes from it. A route without a body schema still gets the raw request, so that is the thing to look for in review. That is the difference between "please remember to validate" and "the contract says what is validated, in one place." I unpacked more of this in [Vibe Coding Security](/blog/vibe-coding-security-what-daloyjs-already-blocks).
 
 ## 5. PKI and certificates still matter
 

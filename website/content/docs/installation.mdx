@@ -81,9 +81,21 @@ Optional, only if you want to generate a typed SDK:
 
 The framework package published to npm is [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core).
 
-## Hardened `.npmrc`
+## Hardened install settings [#hardened-npmrc]
 
-Drop this `.npmrc` in your project root to make pnpm reject unsafe installs by default:
+On pnpm 11+, put the supply-chain settings in `pnpm-workspace.yaml` in your project root (camelCase keys; pnpm 11 reads this file even in a single-package project). pnpm 11 ignores these settings in `.npmrc`, so an `.npmrc`-only setup does not get the cooldown or the script policy.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
+```
+
+For npm and older pnpm versions, keep the same values in `.npmrc` as well:
 
 ```ini title=".npmrc"
 auto-install-peers=true
@@ -93,6 +105,8 @@ verify-store-integrity=true
 minimum-release-age=1440
 ignore-scripts=true
 ```
+
+The cooldown and `ignoreScripts` reduce supply-chain risk for these installs; they do not stop every attack. `ignoreScripts` blocks install-script payloads, not code that runs when a package is imported, and the 24-hour cooldown only helps against compromises that are caught within a day.
 
 Read the rationale in [Security](/docs/security) and the [pnpm motivation guide](https://pnpm.io/motivation).
 

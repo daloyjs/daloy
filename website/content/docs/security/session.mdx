@@ -122,7 +122,7 @@ app.post(
 Every option is conservative by default, with explicit error messages when a setting would silently weaken security (for example, a non-`/` path on a `__Host-` cookie or `SameSite=None` without `Secure`).
 
 - `cookieName`: `__Host-daloy.sid` - forces `Secure`, `Path=/`, no `Domain`.
-- `cookieOptions`: `{ secure: true, httpOnly: true, sameSite: "Lax", path: "/", maxAgeSeconds: 86_400 }`.
+- `cookieOptions`: `{ secure: true, httpOnly: true, sameSite: "Lax", path: "/", maxAgeSeconds: 86_400 }`. From 1.5.4, `httpOnly: false` is refused in every environment, because it would let any XSS read the session id. `secure: false` is refused in production (from `NODE_ENV` or the App's `env`), because the cookie would travel over plain HTTP. It still works behind a TLS-terminating proxy, since the browser sees HTTPS. For a deployment that is genuinely plain HTTP, pass `allowInsecureCookie: true`.
 - `store`: a fresh `MemorySessionStore()` per app. Replace with a KV-backed store in production.
 - `rolling`: `true` - every authenticated request slides the expiry and re-emits `Set-Cookie`.
 - `saveUninitialized`: `false` - anonymous traffic that never touches the session never writes a cookie or store record.

@@ -19,6 +19,7 @@
  */
 
 import { readNodeEnv } from "./internal-env.js";
+import { WEAK_SECRET_STRINGS } from "./security.js";
 import { assertTemporalClaims, TemporalClaimError } from "./time-claims.js";
 
 /** Algorithms understood by the helper. SHA-1 / `none` are deliberately absent. */
@@ -140,8 +141,25 @@ export interface JwtVerifierOptions {
     | ((header: Record<string, unknown>) => JwtKeyMaterial | Promise<JwtKeyMaterial>);
   /** Optional issuer (string or allowlist). */
   issuer?: string | string[];
-  /** Optional audience (string or allowlist). */
+  /**
+   * Expected audience (string or allowlist). Required in production unless
+   * {@link JwtVerifierOptions.allowAnyAudience} is set.
+   */
   audience?: string | string[];
+  /**
+   * Accept tokens without checking their `aud` claim. In production a verifier
+   * with no `audience` is refused, because it accepts every token the issuer
+   * signs for any other app or tenant. Set this only for a single-tenant
+   * private identity provider that issues tokens for this API alone.
+   * @since 1.5.4
+   */
+  allowAnyAudience?: boolean;
+  /**
+   * Environment used for the production-only audience requirement. Defaults to
+   * `NODE_ENV`; pass the App's `env` when `NODE_ENV` is not set.
+   * @since 1.5.4
+   */
+  env?: "development" | "production" | "test";
   /** Clock skew tolerance applied to `exp` / `nbf` / `iat`. Default `0`. */
   clockSkewSeconds?: number;
   /**
@@ -274,6 +292,84 @@ function isCryptoKey(v: unknown): v is CryptoKey {
     typeof (v as { type?: unknown }).type === "string" &&
     typeof (v as { algorithm?: unknown }).algorithm === "object"
   );
+}
+
+/** Upper bound for `clockSkewSeconds` (5 minutes). */
+const MAX_CLOCK_SKEW_SECONDS = 300;
+
+const WEAK_HS_PLACEHOLDERS = new Set(WEAK_SECRET_STRINGS.map((s) => s.toLowerCase()));
+
+/**
+ * Why an HS* key that passed the length check is still guessable, or
+ * `undefined` when it looks random. Length alone lets 32 zero bytes or
+ * `"changeme"` repeated four times through.
+ */
+function weakHsKeyReason(key: Uint8Array): string | undefined {
+  const n = key.byteLength;
+  // Shortest period p such that the key is one p-byte unit repeated.
+  for (let p = 1; p <= 16 && p < n; p++) {
+    let repeats = true;
+    for (let i = p; i < n; i++) {
+      if (key[i] !== key[i - p]) {
+        repeats = false;
+        break;
+      }
+    }
+    if (repeats) {
+      const unit = new TextDecoder().decode(key.subarray(0, p)).toLowerCase();
+      return p === 1
+        ? "a single repeated byte"
+        : WEAK_HS_PLACEHOLDERS.has(unit)
+          ? `the placeholder "${unit}" repeated`
+          : `a ${p}-byte pattern repeated`;
+    }
+  }
+  const text = new TextDecoder().decode(key).toLowerCase();
+  if (WEAK_HS_PLACEHOLDERS.has(text)) return "a well-known placeholder";
+  if (new Set(key).size < 8) return "fewer than 8 distinct byte values";
+  return undefined;
+}
+
+/**
+ * Refuse, in production, an HS* key that meets the length floor but is
+ * guessable (repeated byte or pattern, a known placeholder, very low variety).
+ * Anyone who guesses it can forge tokens.
+ * @throws JwtError (`weak_hs_secret`).
+ * @internal
+ */
+function assertStrongHsKey(key: Uint8Array, production: boolean, owner: string): void {
+  if (!production) return;
+  const reason = weakHsKeyReason(key);
+  if (reason !== undefined) {
+    throw new JwtError(
+      "weak_hs_secret",
+      `${owner}: the HS* secret is ${reason}, so anyone who guesses it can forge tokens. ` +
+        `Use a random value, e.g. \`openssl rand -base64 48\`, loaded from a secret manager.`,
+    );
+  }
+}
+
+/**
+ * Refuse a production verifier that would accept tokens for any audience.
+ * @throws JwtError (`invalid_options`) when `production` is true, no
+ *   `audience` is set, and `allowAnyAudience` is not `true`.
+ * @internal
+ */
+export function assertAudienceConfigured(
+  opts: { audience?: string | string[]; allowAnyAudience?: boolean },
+  production: boolean,
+  owner: string,
+): void {
+  if (!production || opts.allowAnyAudience === true) return;
+  const aud = opts.audience;
+  if (aud === undefined || (Array.isArray(aud) && aud.length === 0) || aud === "") {
+    throw new JwtError(
+      "invalid_options",
+      `${owner}: no audience is set, so in production it would accept every token the issuer ` +
+        `signs for any other application or tenant. Set audience to this API's identifier, or ` +
+        `pass allowAnyAudience: true if the identity provider issues tokens only for this API.`,
+    );
+  }
 }
 
 function isProductionEnv(env: JwtSignerOptions["env"]): boolean {
@@ -503,6 +599,9 @@ export function createJwtSigner(opts: JwtSignerOptions): {
       `jwt(): ${alg} secret must be at least ${MIN_HS_KEY_BYTES} bytes (RFC 7518 §3.2); got ${opts.key.byteLength}.`
     );
   }
+  if (SYMMETRIC.has(alg) && opts.key instanceof Uint8Array) {
+    assertStrongHsKey(opts.key, isProductionEnv(opts.env), "createJwtSigner()");
+  }
   if (
     typeof opts.maxLifetimeSeconds !== "number" ||
     !Number.isFinite(opts.maxLifetimeSeconds) ||
@@ -642,8 +741,10 @@ function normalizeStringSet(value: string | string[] | undefined): ReadonlySet<s
  * @returns An object whose `verify(token)` resolves to the decoded
  *   {@link JwtVerified} or rejects with {@link JwtError}.
  * @throws {JwtError} at construction for an empty/invalid allowlist, `"none"`
- *   in the allowlist, weak HS* secrets, or HS* mixed with a JWK source.
- *   `verify()` also rejects imported keys that violate algorithm or strength policy.
+ *   in the allowlist, weak HS* secrets, HS* mixed with a JWK source, or (in
+ *   production, per `env` or `NODE_ENV`) no `audience` without
+ *   `allowAnyAudience: true`. `verify()` also rejects imported keys that
+ *   violate algorithm or strength policy.
  * @since 0.21.0
  */
 export function createJwtVerifier(opts: JwtVerifierOptions): {
@@ -652,6 +753,7 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
   if (!opts || typeof opts !== "object") {
     throw new JwtError("invalid_options", "jwt(): verifier options object is required.");
   }
+  assertAudienceConfigured(opts, isProductionEnv(opts.env), "createJwtVerifier()");
   if (!Array.isArray(opts.algorithms) || opts.algorithms.length === 0) {
     throw new JwtError(
       "missing_algorithms",
@@ -681,6 +783,9 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
       `jwt(): HS* secret must be at least ${MIN_HS_KEY_BYTES} bytes (RFC 7518 §3.2); got ${opts.key.byteLength}.`
     );
   }
+  if (hasSym && opts.key instanceof Uint8Array) {
+    assertStrongHsKey(opts.key, isProductionEnv(opts.env), "createJwtVerifier()");
+  }
   if (hasSym && opts.refuseSymmetricWithJwk !== false && looksLikeJwkSource(opts.key)) {
     throw new JwtError(
       "sym_with_jwk_refused",
@@ -696,6 +801,15 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
       throw new JwtError(
         "invalid_clock_skew",
         "jwt(): clockSkewSeconds must be a non-negative finite number."
+      );
+    }
+    // A skew this large keeps expired tokens valid long after `exp`; clocks
+    // that drift by more than a few minutes need fixing, not tolerance.
+    if (opts.clockSkewSeconds > MAX_CLOCK_SKEW_SECONDS) {
+      throw new JwtError(
+        "invalid_clock_skew",
+        `jwt(): clockSkewSeconds must be at most ${MAX_CLOCK_SKEW_SECONDS}; got ${opts.clockSkewSeconds}. ` +
+          "A larger skew accepts tokens long after they expire."
       );
     }
   }

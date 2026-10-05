@@ -65,7 +65,7 @@ That single hook gives every request:
 
 ### `url.query` is redacted by default [#url-query-redaction]
 
-Query strings often carry OAuth `code` values, `access_token`s, and presigned-URL signatures. Since 2.0.0, `otelTracing()` runs the query through `sanitizeUrlQueryForLog`, the same rules the logger applies to URLs (see [Logging](/docs/logging#redaction-secure-by-default)): values of sensitive keys and JWT or credential-shaped values become `[REDACTED]` before the attribute reaches your tracing backend. The `redactQuery` option (since 1.3.7) changes that:
+Query strings often carry OAuth `code` values, `access_token`s, and presigned-URL signatures. Since 1.3.7, `otelTracing()` runs the query through `sanitizeUrlQueryForLog`, the same rules the logger applies to URLs (see [Logging](/docs/logging#redaction-secure-by-default)): values of sensitive keys and JWT or credential-shaped values become `[REDACTED]` before the attribute reaches your tracing backend. The `redactQuery` option (since 1.3.7) changes that:
 
 ```ts
 // Default: ?page=2&code=abc -> url.query = "page=2&code=%5BREDACTED%5D"

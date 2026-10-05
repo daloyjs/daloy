@@ -51,7 +51,9 @@ Any handler that calls `fetch()` on a URL the user can influence (an avatar fetc
           },
         ]} caption="A request only leaves the box after the protocol, the resolved IPs, and every redirect Location pass the deny floor. Anything that resolves to an internal or metadata address throws SsrfBlockedError instead of being sent." />
 
-`fetchGuard()` wraps the global `fetch` and refuses to dispatch a request whose target resolves to a dangerous internal address, including every documented cloud metadata IP (AWS / Azure / DigitalOcean `169.254.169.254`, Oracle Cloud `192.0.0.192`, Alibaba `100.100.100.200`).
+`fetchGuard()` returns a guarded wrapper around `fetch` that refuses to dispatch a request whose target resolves to a dangerous internal address, including every documented cloud metadata IP (AWS / Azure / DigitalOcean `169.254.169.254`, Oracle Cloud `192.0.0.192`, Alibaba `100.100.100.200`).
+
+It is opt-in: only calls made through the returned function (or through helpers that use it by default, such as `createWebhookSender()` and `createA2aClient()`) are guarded. DaloyJS does not patch the global `fetch`, so a plain `fetch(url)` elsewhere in your code is not checked.
 
 ## Quick start
 
@@ -122,7 +124,7 @@ const safeFetch = fetchGuard({
 
 A common SSRF bypass is to return `302 Location: http://169.254.169.254/` from a public host. `fetchGuard()` follows redirects **manually**: it re-checks the protocol and re-resolves DNS for every Location header before issuing the next request. Set `maxRedirects: 0` to return the 3xx directly, or pass `redirect: "manual"` per call for the same effect.
 
-An in-memory request body (string, `ArrayBuffer` or view, `Blob`, `URLSearchParams`, `FormData`) up to `maxReplayBodyBytes` (default 1 MiB; `0` never buffers) is copied once so a `307` or `308` can replay it on the re-validated next hop (since 2.0.0). Multipart filenames count toward the cap, and the serialized byte length is checked before a body is kept for replay. A `301`/`302`/`303` that downgrades to `GET` drops the body as usual. A body you pass as a `ReadableStream` or async iterable, the body of a `Request` you forward (for example `ctx.request` in a proxy), and an in-memory body over the cap are streamed through without buffering, so a `307`/`308` of one throws `SsrfBlockedError` with reason `redirect-body-not-replayable` instead of a raw `TypeError`. Buffer the body yourself, or use `redirect: "error"`, when a streamed upload must follow redirects.
+An in-memory request body (string, `ArrayBuffer` or view, `Blob`, `URLSearchParams`, `FormData`) up to `maxReplayBodyBytes` (default 1 MiB; `0` never buffers) is copied once so a `307` or `308` can replay it on the re-validated next hop (since 1.3.7). Multipart filenames count toward the cap, and the serialized byte length is checked before a body is kept for replay. A `301`/`302`/`303` that downgrades to `GET` drops the body as usual. A body you pass as a `ReadableStream` or async iterable, the body of a `Request` you forward (for example `ctx.request` in a proxy), and an in-memory body over the cap are streamed through without buffering, so a `307`/`308` of one throws `SsrfBlockedError` with reason `redirect-body-not-replayable` instead of a raw `TypeError`. Buffer the body yourself, or use `redirect: "error"`, when a streamed upload must follow redirects.
 
 ## Custom allowlists
 

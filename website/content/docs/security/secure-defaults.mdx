@@ -109,6 +109,12 @@ State-changing requests carrying an `Origin` header from a different origin than
           },
         ]} caption="Without a cors() policy that allows the origin, a cross-origin state-changing request is rejected with 403 before your handler runs. Read-only methods and same-origin requests are never affected." />
 
+#### CORS headers on early rejections [#cors-headers-on-early-rejections]
+
+From 1.5.4, a route's `cors()` policy is applied before any hook runs, so responses that end the request early carry it too. That covers an auth `401`/`403` from `jwk()` or `bearerAuth()` (which validate in `preBody`) and a `413`/`415`/`422` body error. Before 1.5.4 those responses had no `Access-Control-Allow-Origin`, so a browser reported a generic "CORS error" and a portal could not tell an expired token from a CORS fault, or refresh the token.
+
+The order of `app.use(cors(...))` and your auth middleware no longer matters, and preflight `OPTIONS` requests still need no credentials. A disallowed origin still gets no `Access-Control-Allow-Origin`, only `Vary: Origin`. A `cors()` wrapped in `except()` with path patterns stays off the exempted paths; with a function predicate, it is applied when its `beforeHandle` runs, as before.
+
 ```ts
 import { App, cors } from "@daloyjs/core";
 
@@ -119,6 +125,8 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 ```
 
 Per-route opt-in works too, register the `cors()` hook on the specific routes that need it via `route({ hooks: cors({...}) })`.
+
+With `credentials: true`, `cors()` refuses at construction, in every environment, an `origin` of `"*"`. From 1.5.4 it also refuses a predicate or list that allows every origin (it probes the policy with a canary origin) or that allows `"null"`, the origin sandboxed iframes and `file:` pages send. List the origins you trust, or write a predicate that actually checks them.
 
 To disable the guard entirely (you handle cross-origin admission another way, e.g. via `csrf()` with the `fetch-metadata` strategy):
 

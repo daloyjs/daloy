@@ -329,7 +329,7 @@ Binary gates beat homework. A named failing check is something you fix. A 40-ite
                     found:
                       "92% of AI-related breaches lacked proper access controls. Apps, APIs, and plugins were common entry points",
                     daloy:
-                      "Auth middleware (jwk() with asymmetric algorithm allowlists, bearerAuth, etc.) plus per-route schemas so tools only accept declared fields. MCP routes refuse to boot unauthenticated unless you opt out on purpose.",
+                      "Auth middleware (jwk() with asymmetric algorithm allowlists, bearerAuth, etc.) plus per-route schemas so tools only accept declared fields. MCP routes refuse to boot in production without an auth hook in the chain unless you opt out on purpose.",
                   },
                   {
                     found:

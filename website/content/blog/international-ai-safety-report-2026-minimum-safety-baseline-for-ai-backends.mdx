@@ -49,10 +49,10 @@ That list maps cleanly onto what an HTTP framework can enforce at the request bo
 import { App, secureHeaders, requestId, rateLimit } from "@daloyjs/core";
 
 export const app = new App({
-  // Deployment-time guarantees you don't have to remember:
+  // Deployment-time defaults you don't have to remember:
   //   bodyLimitBytes: 1 << 20      // default 1 MiB
   //   requestTimeoutMs: 30_000     // default 30s
-  //   production: auto-detected    // prod-mode error redaction
+  //   production: from NODE_ENV    // prod-mode error redaction (or set env: "production")
 });
 
 // All three are independent of whatever the model "decided" to do.
@@ -63,7 +63,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
 ## Mandatory verification: the route schema is the contract
 
-<RequirementCard requirement="Report: 'Trust the verifier, not the model. Independent verification must sit in front of every side effect.'" framework="Every DaloyJS route declares a schema (Zod, Valibot, ArkType, anything Standard Schema). The handler does not run until the request matches. .strict() is the project convention so unknown keys are rejected, not silently dropped into the database. Response schemas are validated too, so a handler cannot leak a field the contract didn't promise, useful when the consumer is an agent that will happily exfiltrate anything it sees." user="Write the schema tight. min/max on numbers, min/max on string lengths, regex on identifiers, enum on choices. The framework runs whatever shape you give it. A permissive schema is permissive enforcement." />
+<RequirementCard requirement="Report: 'Trust the verifier, not the model. Independent verification must sit in front of every side effect.'" framework="Every DaloyJS route declares a contract, with schemas from Zod, Valibot, ArkType, anything Standard Schema. The handler does not run until the request matches the schemas you declared (a route that declares no body schema still gets the raw request, so declare one in front of every side effect). .strict() is the project convention so unknown keys are rejected, not silently dropped into the database. Response schemas are validated too, so a handler cannot leak a field the contract didn't promise, useful when the consumer is an agent that will happily exfiltrate anything it sees." user="Write the schema tight. min/max on numbers, min/max on string lengths, regex on identifiers, enum on choices. The framework runs whatever shape you give it. A permissive schema is permissive enforcement." />
 
 ```ts
 // The report's strongest point: AI systems can game evaluations
@@ -85,7 +85,7 @@ app.route({
   request: {
     body: z.object({
       // The model can scheme, plan, and rationalise all it wants.
-      // amountCents > 10_000 -> 400. No reasoning trace bypasses this.
+      // amountCents > 10_000 -> 422. No reasoning trace bypasses this.
       amountCents: z.number().int().min(1).max(10_000),
       destinationIban: z.string().regex(/^[A-Z]{2}[0-9A-Z]{13,32}$/),
       memo: z.string().min(1).max(140),
@@ -95,7 +95,7 @@ app.route({
     // Response schemas are validated too - the handler cannot
     // accidentally leak a field a downstream agent wasn't supposed
     // to see, even if a junior engineer adds it to the SELECT later.
-    200: { description: "queued", schema: z.object({ id: z.uuid() }).strict() },
+    200: { description: "queued", body: z.object({ id: z.uuid() }).strict() },
   },
   handler: async ({ body }) => transfers.queue(body),
 });
@@ -236,14 +236,14 @@ app.route({
     body: z.object({
       query: z.string().min(1).max(280),
       // Bounded. A model that "decides" to retrieve 999_999 docs
-      // gets a 400, not a database scan.
+      // gets a 422, not a database scan.
       limit: z.number().int().min(1).max(20).default(10),
     }).strict(),
   },
   responses: {
     200: {
       description: "results",
-      schema: z.object({
+      body: z.object({
         results: z.array(z.object({
           id: z.uuid(),
           title: z.string(),
@@ -349,7 +349,7 @@ app.route({
   responses: {
     200: {
       description: "refunded",
-      schema: z.object({ id: z.uuid() }).strict(),
+      body: z.object({ id: z.uuid() }).strict(),
     },
   },
   handler: async ({ body, ctx }) => refunds.create(ctx.user, body),

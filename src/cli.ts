@@ -777,36 +777,23 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
     // feature-specific tests, and forward-looking gates cover the
     // remaining audit items.
 
-    // CORS default posture audit. The framework refuses
-    // `origin: '*'` + `credentials: true` outright at construction; the
-    // doctor surfaces any `maxAge` greater than 24 h (86400 s) so
-    // reviewers re-evaluate the trade-off vs the documented strictest
-    // competitor.
-    const cors = (o.cors as Record<string, unknown> | undefined) ?? undefined;
-    if (cors !== undefined) {
-      const maxAge = cors.maxAge;
+    // CORS posture audit. `cors()` refuses wildcard and allow-everything
+    // credentialed policies at construction; here we review the installed
+    // policies' preflight cache lifetime, which no construction check covers.
+    const corsPolicies =
+      (app as unknown as Record<symbol, readonly { credentials: boolean; maxAgeSeconds?: number }[] | undefined>)[
+        Symbol.for("daloyjs.app.corsPolicies")
+      ] ?? [];
+    for (const policy of corsPolicies) {
+      const maxAge = policy.maxAgeSeconds;
       if (typeof maxAge === "number" && maxAge > 86_400) {
         findings.push({
           level: "warn",
           code: "audit.cors.maxAge",
           message:
-            `cors({ maxAge: ${maxAge} }) exceeds 24 h. Long preflight ` +
+            `cors({ maxAgeSeconds: ${maxAge} }) exceeds 24 h. Long preflight ` +
             "caches amplify the blast radius of an inadvertently widened " +
-            "Access-Control-Allow-* policy. Re-evaluate against the " +
-            "strictest documented competitor.",
-        });
-      }
-      if (cors.origin === "*" && cors.credentials === true) {
-        // The framework already refuses-at-construction, but a custom
-        // adapter that side-channels the cors() options would bypass
-        // that — surface it here too.
-        findings.push({
-          level: "error",
-          code: "audit.cors.wildcardCredentials",
-          message:
-            "cors({ origin: '*', credentials: true }) is forbidden — the " +
-            "browser will silently drop credentials anyway, but the " +
-            "configuration signals intent that does not match reality.",
+            "Access-Control-Allow-* policy.",
         });
       }
     }
@@ -894,63 +881,6 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
         message:
           `jsonMaxDepth is ${jsonMaxDepth} (> 200). Extremely deep JSON is ` +
           "almost never legitimate and can amplify CPU during validation.",
-      });
-    }
-
-    // Idle-timeout / request-timeout audit. Reaffirms the
-    // existing requestTimeoutMs check; also surface an explicit zero
-    // idleTimeoutMs in production. The framework also keeps adapter
-    // defaults non-zero, but a developer-supplied override is surfaced
-    // here.
-    const idleTimeoutMs = o.idleTimeoutMs;
-    if (isProd && idleTimeoutMs === 0) {
-      findings.push({
-        level: "error",
-        code: "audit.idleTimeout.zero",
-        message:
-          "idleTimeoutMs is 0 in production — adapters keep slow-loris " +
-          "connections open indefinitely.",
-      });
-    }
-
-    // Validation-detail / framework-identity leak audit. The
-    // framework refuses-at-construction any opt-in named
-    // `allowUnsafeValidationDetails` / `exposeFrameworkIdentity`. The
-    // doctor double-checks the live options because a custom plugin
-    // could mutate the object after construction.
-    if (o.allowUnsafeValidationDetails === true) {
-      findings.push({
-        level: "error",
-        code: "audit.validationDetails.leak",
-        message:
-          "allowUnsafeValidationDetails: true would expose schema paths " +
-          "to clients in production. The knob does not exist in the " +
-          "public type — a custom plugin must have set it. Remove it.",
-      });
-    }
-    if (o.exposeFrameworkIdentity === true) {
-      findings.push({
-        level: "error",
-        code: "audit.identityLeak",
-        message:
-          "exposeFrameworkIdentity: true would emit Server / X-Powered-By " +
-          "naming the framework + version.",
-      });
-    }
-
-    // Side-channel / timing exposure audit. Forbid any
-    // first-party middleware that attaches Server-Timing in production
-    // without authentication. The marker is the opt-in flag
-    // `enableServerTimingInProduction` that the framework's `timing()`
-    // helper refuses-at-construction; this doctor check is a
-    // defense-in-depth against custom plugins setting the same flag.
-    if (isProd && o.enableServerTimingInProduction === true) {
-      findings.push({
-        level: "error",
-        code: "audit.serverTiming.production",
-        message:
-          "Server-Timing in production leaks performance side channels. " +
-          "Disable or gate behind authenticated routes.",
       });
     }
 

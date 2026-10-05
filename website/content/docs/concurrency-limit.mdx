@@ -84,7 +84,7 @@ app.use(concurrencyLimit({
 `scope` decides how the concurrency budget is partitioned:
 
 - `"global"` (default): one shared budget across the whole mount.
-- `"route"`: a separate budget per `method + matched route template` (`ctx.routePath`, for example `GET /reports/:id`), so one hot endpoint can't starve the others mounted under the same guard. Because the key is the template, not the concrete path, `/reports/1`, `/reports/2`, and `/reports/1/` all share one budget: varying a path parameter or a trailing slash cannot mint a fresh one (since 2.0.0). Requests that matched no route fall back to the concrete pathname.
+- `"route"`: a separate budget per `method + matched route template` (`ctx.routePath`, for example `GET /reports/:id`), so one hot endpoint can't starve the others mounted under the same guard. Because the key is the template, not the concrete path, `/reports/1`, `/reports/2`, and `/reports/1/` all share one budget: varying a path parameter or a trailing slash cannot mint a fresh one (since 1.3.7). Requests that matched no route fall back to the concrete pathname.
 - `"client"`: a separate budget per client identity (requires `trustProxyHeaders`, `trustedHops`, `trustedProxies`, or a `keyGenerator`), so a heavy client can't consume everyone else's slots. The identity is the **rightmost** `X-Forwarded-For` entry (the one your proxy appended), so rotating spoofed left entries cannot hop buckets. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
 - a **function**: return a custom bucket key, or `undefined` to skip limiting for that request (fail-open).
 

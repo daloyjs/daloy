@@ -296,7 +296,7 @@ test("app.metrics() renders custom metrics from a supplied registry", async () =
 
 test("app.metrics() enforces a bearer token (401 missing, 403 wrong, 200 correct)", async () => {
   const app = new App({ env: "development" });
-  app.metrics({ token: "s3cret" });
+  app.metrics({ token: "s3cret-metrics-token" });
   const missing = await app.fetch(new Request("http://x/metrics"));
   assert.equal(missing.status, 401);
   assert.equal(
@@ -311,7 +311,7 @@ test("app.metrics() enforces a bearer token (401 missing, 403 wrong, 200 correct
   assert.equal(wrong.status, 403);
   const ok = await app.fetch(
     new Request("http://x/metrics", {
-      headers: { authorization: "Bearer s3cret" },
+      headers: { authorization: "Bearer s3cret-metrics-token" },
     }),
   );
   assert.equal(ok.status, 200);
@@ -333,7 +333,7 @@ test("app.metrics() refuses to boot unauthenticated in production", () => {
 
 test("app.metrics() boots in production with a token or explicit acknowledgement", () => {
   const withToken = new App({ env: "production" });
-  assert.doesNotThrow(() => withToken.metrics({ token: "t" }));
+  assert.doesNotThrow(() => withToken.metrics({ token: "t".repeat(16) }));
   const acked = new App({ env: "production" });
   assert.doesNotThrow(() =>
     acked.metrics({ acknowledgeUnauthenticated: true }),

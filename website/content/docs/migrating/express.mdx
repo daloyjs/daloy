@@ -417,7 +417,7 @@ Here is the part you actually came for: what to do with each Express middleware 
 | `express.json()` | Built in. Declare a `request.body` schema. JSON is parsed and validated automatically. |
 | `express.urlencoded()` | Built in when the route declares a `request.body` schema. DaloyJS parses `application/x-www-form-urlencoded` into an object and validates it, with the same body-size and prototype-pollution guards as JSON. Multipart forms: see [multipart](/docs/multipart). |
 | `express.static()` | No built-in static server (API-first). Serve assets from a CDN/object store, or front the app with nginx/Caddy. See [Static files](/docs/migrating/express#static). |
-| `cors` | `cors()` from `@daloyjs/core`. `app.use(cors({ origin: "https://app.example.com", credentials: true }))`. |
+| `cors` | `cors()` from `@daloyjs/core`. `app.use(cors({ origin: "https://app.example.com", credentials: true }))`. Unlike Express, registration order relative to auth doesn't matter: from 1.5.4 the policy is applied before any hook, so a `401` from auth still carries CORS headers. |
 | `helmet` | `secureHeaders()` for production-grade headers (CSP, HSTS, frame options, nosniff, ...). See [Security](/docs/security). |
 | `morgan` (logging) | An `onResponse` hook, or the built-in `timing()` hook plus your logger. See [tracing](/docs/tracing) / [metrics](/docs/metrics). |
 | `express-rate-limit` | `rateLimit({ windowMs, max })`. Redis-backed store available, see [Redis rate-limit store](/docs/security/rate-limit-redis). |

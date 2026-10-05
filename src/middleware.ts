@@ -14,10 +14,12 @@ import {
   resolveClientIp,
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
   type BehindProxyConfig,
 } from "./conn-info.js";
 import { ipRateLimitIdentity, type IpMatcher } from "./ip-match.js";
+import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 // ---------- Request ID ----------
 
@@ -235,11 +237,24 @@ function cspSourceListHasValues(directiveValue: string | string[]): boolean {
     : directiveValue.split(/\s+/).some((source) => source.length > 0);
 }
 
+/**
+ * `true` when a `frame-ancestors` source list actually restricts framing. `*`
+ * or a bare scheme (`https:`, `http:`, `data:`) lets any site frame the page,
+ * so it is treated like a missing directive.
+ */
+function frameAncestorsRestricts(sources: readonly string[]): boolean {
+  const values = sources.map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return values.length > 0 && !values.some((v) => v === "*" || /^[a-z][a-z0-9+.-]*:$/.test(v));
+}
+
 function cspStringHasFrameAncestors(csp: string): boolean {
   return csp.split(";").some((directivePart) => {
     const tokens = directivePart.trim().split(/\s+/).filter(Boolean);
     const directiveName = tokens[0];
-    return directiveName?.toLowerCase() === "frame-ancestors" && tokens.length > 1;
+    return (
+      directiveName?.toLowerCase() === "frame-ancestors" &&
+      frameAncestorsRestricts(tokens.slice(1))
+    );
   });
 }
 
@@ -247,7 +262,10 @@ function cspOptionsHaveFrameAncestors(csp: CspDirectivesOptions): boolean {
   for (const [directiveName, directiveValue] of Object.entries(csp.directives)) {
     if (
       directiveName.toLowerCase() === "frame-ancestors" &&
-      cspSourceListHasValues(directiveValue)
+      cspSourceListHasValues(directiveValue) &&
+      frameAncestorsRestricts(
+        Array.isArray(directiveValue) ? directiveValue : String(directiveValue).split(/\s+/)
+      )
     ) {
       return true;
     }
@@ -759,6 +777,11 @@ export function _mergePreBodyWithEarlyRejections(
  * authentication is performed by an upstream gateway/mesh and the in-app hook
  * is intentionally a pass-through.
  *
+ * Marking also wraps the bundle's `preBody` / `beforeHandle` so that, when it
+ * runs and lets a request through, it records that on the request. A route
+ * that requires auth refuses (in production) when no marked hook recorded a
+ * pass, so mark only hooks that really authenticate the caller.
+ *
  * @param hooks - The hook bundle to mark (mutated in place and returned).
  * @returns The same `hooks` object, now stamped as an auth hook.
  *
@@ -774,8 +797,7 @@ export function _mergePreBodyWithEarlyRejections(
  * @since 1.0.0
  */
 export function markAuthHook(hooks: Hooks): Hooks {
-  (hooks as Record<PropertyKey, unknown>)[AUTH_HOOK_MARKER] = true;
-  return hooks;
+  return stampAuthHook(hooks);
 }
 
 /** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
@@ -831,11 +853,27 @@ export interface CorsOptions {
  * }));
  * ```
  *
+ * The policy is applied to every response the route produces, including ones
+ * that end the request before `cors()`'s own `beforeHandle` runs (an auth
+ * `401`/`403` from a `preBody` hook, a `413`/`415`/`422` body error), so a
+ * browser can read them; registration order relative to auth does not matter.
+ *
  * @param opts - CORS configuration.
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
- * @throws {Error} When `credentials: true` is combined with `origin: "*"`.
+ * @throws {Error} When `credentials: true` is combined with `origin: "*"`, with
+ *   `"null"`, or with a predicate that accepts any origin (probed with a canary).
  * @since 0.1.0
  */
+/**
+ * Hook-bundle key under which `cors()` exposes its response-header decorator.
+ * The App applies it before `preBody` so early rejections carry CORS headers.
+ * @internal
+ */
+export const CORS_RESPONSE_DECORATOR = Symbol.for("daloyjs.cors.decorate");
+
+/** Origin no real allowlist accepts; probed to detect allow-everything CORS predicates. */
+const CORS_CANARY_ORIGIN = "https://daloy-cors-canary.invalid";
+
 export function cors(opts: CorsOptions): Hooks {
   // Reject the classic CORS footgun up front. Browsers will refuse to attach
   // credentials to a wildcard origin (the spec literally forbids
@@ -850,6 +888,31 @@ export function cors(opts: CorsOptions): Hooks {
       throw new Error(
         'cors(): origin: "*" cannot be combined with credentials: true. ' +
           "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
+      );
+    }
+    // The same footgun without the literal "*": a predicate that returns true
+    // for everything (or a regex loose enough) reflects any site's Origin with
+    // credentials, letting every website read responses with the user's
+    // cookies. "null" is the opaque origin of sandboxed iframes, data: URLs and
+    // local files, which any attacker page can produce. Probe both.
+    const allowsNull =
+      opts.origin === "null" || (Array.isArray(opts.origin) && opts.origin.includes("null"));
+    let allowsAny = false;
+    if (typeof opts.origin === "function") {
+      for (const canary of [CORS_CANARY_ORIGIN, "null"]) {
+        try {
+          if (opts.origin(canary)) allowsAny = true;
+        } catch {
+          // A predicate that throws on an unexpected origin is not permissive.
+        }
+      }
+    }
+    if (allowsNull || allowsAny) {
+      throw new Error(
+        `cors(): credentials: true with an origin policy that allows ${allowsNull ? '"null"' : "any origin"} ` +
+          `would let every website read responses with the user's cookies. ` +
+          `The policy accepted ${allowsNull ? 'the opaque origin "null"' : `the test origin ${CORS_CANARY_ORIGIN}`}. ` +
+          "List the exact origins you trust (or a predicate that checks them exactly)."
       );
     }
   }
@@ -877,24 +940,34 @@ export function cors(opts: CorsOptions): Hooks {
   const exposed = opts.exposedHeaders?.join(", ");
   const maxAge = String(opts.maxAgeSeconds ?? 600);
 
+  // The response headers for an actual (non-preflight) request. Also handed
+  // to the App, which applies it before any `preBody` hook so responses that
+  // end the request early (an auth 401/403, a 413/415/422 body error) carry
+  // the policy too; otherwise the browser hides them as a "CORS error" and the
+  // client cannot react to the real status (e.g. refresh an expired token).
+  const decorate = (request: Request, headers: Headers): void => {
+    const origin = request.headers.get("origin");
+    if (origin === null) return;
+    // Always advertise that the response depends on `Origin` when the
+    // request carried one, even if we decided not to allow it. Otherwise
+    // an HTTP cache (CDN, reverse proxy) that fronts the API can serve a
+    // response generated for an allowed origin to a different,
+    // disallowed origin — the classic CORS cache-poisoning footgun
+    // called out in Aikido's "CORS Security: Beyond Basic Configuration"
+    // (section 6: Vary: Origin on cached preflight responses).
+    appendVary(headers, "Origin");
+    const allowed = allow(origin);
+    if (allowed) {
+      headers.set("access-control-allow-origin", allowed);
+      if (opts.credentials) headers.set("access-control-allow-credentials", "true");
+      if (exposed) headers.set("access-control-expose-headers", exposed);
+    }
+  };
   const hooks: Hooks = {
     beforeHandle(ctx) {
-      const origin = ctx.request.headers.get("origin");
-      const allowed = allow(origin);
-      // Always advertise that the response depends on `Origin` when the
-      // request carried one, even if we decided not to allow it. Otherwise
-      // an HTTP cache (CDN, reverse proxy) that fronts the API can serve a
-      // response generated for an allowed origin to a different,
-      // disallowed origin — the classic CORS cache-poisoning footgun
-      // called out in Aikido's "CORS Security: Beyond Basic Configuration"
-      // (section 6: Vary: Origin on cached preflight responses).
-      if (origin !== null) appendVary(ctx.set.headers, "Origin");
-      if (allowed) {
-        ctx.set.headers.set("access-control-allow-origin", allowed);
-        if (opts.credentials) ctx.set.headers.set("access-control-allow-credentials", "true");
-        if (exposed) ctx.set.headers.set("access-control-expose-headers", exposed);
-      }
+      decorate(ctx.request, ctx.set.headers);
       if (ctx.request.method === "OPTIONS") {
+        const allowed = allow(ctx.request.headers.get("origin"));
         const h = new Headers();
         // Preflights are themselves cacheable by both browsers and shared
         // caches; vary on Origin and on the preflight-specific request
@@ -921,6 +994,13 @@ export function cors(opts: CorsOptions): Hooks {
     },
   };
   (hooks as Record<PropertyKey, unknown>)[CORS_HOOK_MARKER] = true;
+  (hooks as Record<PropertyKey, unknown>)[CORS_RESPONSE_DECORATOR] = decorate;
+  // Read by the App at registration so `daloy doctor` can audit the policies
+  // that are actually installed.
+  (hooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.cors.policy")] = Object.freeze({
+    credentials: opts.credentials === true,
+    maxAgeSeconds: opts.maxAgeSeconds,
+  });
   (hooks as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER] = (origin: string) =>
     allow(origin) !== null;
   const hasWildcard =
@@ -1126,9 +1206,24 @@ class MemoryStore implements RateLimitStore {
  *
  * @param opts - Rate-limit configuration.
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
+ * @throws Error when `windowMs` is not a positive integer or `max` is not a
+ *   non-negative integer (NaN, Infinity, negative or fractional values would
+ *   disable the limit; `max: 0` refuses every request).
  * @since 0.1.0
  */
 export function rateLimit(opts: RateLimitOptions): Hooks {
+  // `count > NaN` / `count > Infinity` is never true and a zero or negative
+  // window resets every hit, so any of these silently disables the limit.
+  assertPositiveInteger("windowMs", opts.windowMs, "rateLimit()");
+  // `max: 0` is a deliberate "refuse everything" (e.g. maintenance), so only
+  // NaN, Infinity, negatives and fractions are refused here.
+  if (!Number.isInteger(opts.max) || opts.max < 0) {
+    throw new Error(
+      `rateLimit(): max must be a non-negative integer (got ${String(opts.max)}). ` +
+        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+        `would otherwise disable the limit.`,
+    );
+  }
   let store: RateLimitStore;
   if (opts.store) {
     store = opts.store;
@@ -1168,7 +1263,7 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   const hooks: Hooks = { beforeHandle: enforce };
   (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
   if (inherited) (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK] = inherited.receive;
-  return hooks;
+  return stampForwardedTrust(hooks, "rateLimit()", opts);
 }
 
 /**
@@ -1320,9 +1415,13 @@ function assertNonNegativeInteger(name: string, value: number): void {
   }
 }
 
-function assertPositiveInteger(name: string, value: number): void {
+function assertPositiveInteger(name: string, value: number, owner = "loginThrottle()"): void {
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`loginThrottle(): ${name} must be a positive integer.`);
+    throw new Error(
+      `${owner}: ${name} must be a positive integer (got ${String(value)}). ` +
+        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+        `would otherwise disable the limit.`,
+    );
   }
 }
 
@@ -1463,7 +1562,7 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   const hooks: Hooks = { beforeHandle: enforce };
   (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
   if (inherited) (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK] = inherited.receive;
-  return hooks;
+  return stampForwardedTrust(hooks, "loginThrottle()", opts);
 }
 
 // ---------- Timing ----------
@@ -1603,7 +1702,7 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
   if (/["\r\n\0]/.test(realm)) {
     throw new Error("bearerAuth(): realm must not contain quotes, CR, LF, or NUL bytes.");
   }
-  return markAuthHook({
+  return stampAuthHook({
     async preBody(ctx) {
       const token = parseBearerToken(ctx.request.headers.get("authorization"));
       if (token === undefined) {
@@ -1629,9 +1728,10 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
         const verified = await options.verify(token, ctx);
         if (verified === false) throw new ForbiddenError("Token revoked");
       }
+      markAuthPassed(ctx);
       return undefined;
     },
-  });
+  }, true);
 }
 
 // ---------- CSRF (double-submit cookie) ----------
@@ -1772,6 +1872,30 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
   const ignore = new Set(
     (opts.ignoreMethods ?? ["GET", "HEAD", "OPTIONS"]).map((m) => m.toUpperCase())
   );
+  // CSRF exists to protect state-changing methods; exempting one turns the
+  // protection off for exactly the requests it is for.
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    if (ignore.has(method)) {
+      throw new Error(
+        `csrf(): ignoreMethods must not include ${method}. State-changing requests are the ones ` +
+          `CSRF protection is for; exempt a specific route with except() instead.`
+      );
+    }
+  }
+  if (typeof opts.allowedOrigins === "function") {
+    let acceptsAny = false;
+    try {
+      acceptsAny = opts.allowedOrigins(CORS_CANARY_ORIGIN) === true;
+    } catch {
+      // A predicate that throws on an unexpected origin is not permissive.
+    }
+    if (acceptsAny) {
+      throw new Error(
+        `csrf(): the allowedOrigins predicate accepted the test origin ${CORS_CANARY_ORIGIN}, so it ` +
+          "would trust every site and switch the origin check off. Check origins exactly."
+      );
+    }
+  }
   const generator = opts.generator ?? generateCsrfToken;
 
   const originAllowed = (origin: string | null): boolean => {
@@ -2001,7 +2125,7 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
   if (!Number.isInteger(maxBytes) || maxBytes < 1) {
     throw new Error("basicAuth(): maxCredentialBytes must be a positive integer.");
   }
-  return markAuthHook({
+  return stampAuthHook({
     async preBody(ctx) {
       const header = ctx.request.headers.get("authorization") ?? "";
       const match = BASIC_AUTH_TOKEN_RE.exec(header);
@@ -2015,9 +2139,10 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
       if (options.onAuthSuccess) {
         await options.onAuthSuccess({ username: creds.user, password: creds.pass }, ctx);
       }
+      markAuthPassed(ctx);
       return undefined;
     },
-  });
+  }, true);
 }
 
 // ---------- requireScopes ----------

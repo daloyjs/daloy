@@ -659,7 +659,7 @@ validateMcpInput(schema, { sku: "", extra: true }); // 2 errors
 
 Concrete resources cover fixed documents. Resource templates cover families of them. A template advertises an RFC 6570 style URI pattern through `resources/templates/list`, and `resources/read` matches non-listed URIs against your templates, passing the extracted variables to your `read` handler. Only simple `{name}` variables are supported, and each matches a single URI segment. Operator expressions like `{+path}` are rejected at construction so the server never advertises a pattern it cannot serve.
 
-Templates are not compiled to a regular expression. Since 2.0.0 they are matched in linear time, so a template such as `docs://{name}.{ext}` cannot be driven into catastrophic backtracking (ReDoS) by a crafted URI. Before any lookup, `resources/read` also refuses a `params.uri` longer than `maxResourceUriLength` (default `8192` UTF-16 code units, since 1.3.7) with JSON-RPC `-32602`.
+Templates are not compiled to a regular expression. Since 1.3.7 they are matched in linear time, so a template such as `docs://{name}.{ext}` cannot be driven into catastrophic backtracking (ReDoS) by a crafted URI. Before any lookup, `resources/read` also refuses a `params.uri` longer than `maxResourceUriLength` (default `8192` UTF-16 code units, since 1.3.7) with JSON-RPC `-32602`.
 
 ```ts
 const mcp = createMcpHandler({
@@ -701,7 +701,7 @@ Features the specification deprecated in `2026-07-28` are deliberately absent ra
 
 Throw `McpToolError` when the model can fix the call, for example missing arguments or a domain object that does not exist. The client receives an MCP tool result with `isError: true`. Unexpected errors become JSON-RPC internal errors and are redacted in production.
 
-The raw message of an unexpected error is only included (as `error.data.detail`) when `exposeInternalErrors` is on. Since 2.0.0 the default fails closed: it is on only when `process.env.NODE_ENV` is `"development"` or `"test"`, so an unset `NODE_ENV` redacts. When the handler is mounted with `mcpRoutes()` on an App whose environment resolves to production (for example `new App({ env: "production" })`), details are redacted whatever `NODE_ENV` says. Only an explicit `exposeInternalErrors` value overrides both signals.
+The raw message of an unexpected error is only included (as `error.data.detail`) when `exposeInternalErrors` is on. Since 1.3.7 the default fails closed: it is on only when `process.env.NODE_ENV` is `"development"` or `"test"`, so an unset `NODE_ENV` redacts. When the handler is mounted with `mcpRoutes()` on an App whose environment resolves to production (for example `new App({ env: "production" })`), details are redacted whatever `NODE_ENV` says. Only an explicit `exposeInternalErrors` value overrides both signals.
 
 ```ts
 import { McpToolError, createMcpHandler } from "@daloyjs/core/mcp";

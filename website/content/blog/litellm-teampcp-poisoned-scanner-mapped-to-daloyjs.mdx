@@ -187,17 +187,17 @@ Every one of those runs in `release.yml` before `npm stage publish` ever fires, 
 
 1. Compromise a SHA-pinned action *at that exact SHA* (tag rewrites do nothing). The OIDC trust posture on the publish job means even that wouldn't hand over a usable npm token.
 2. Land a PR that adds an unpinned action, blocked by `verify:actions-pinned`.
-3. Land a PR that adds a lifecycle script to *any* package in the tree, blocked by `verify:no-lifecycle-scripts`.
+3. Land a PR that adds a lifecycle script to one of the published packages (`@daloyjs/core`, `create-daloy`), blocked by `verify:no-lifecycle-scripts`. That gate checks those manifests only, not every package in the dependency tree; `ignore-scripts` and the build allowlist cover dependencies at install time.
 4. Land a PR that adds a runtime dependency to `@daloyjs/core`: blocked by `verify:no-runtime-deps`.
 5. Sneak in a base64-encoded payload or invisible-unicode trick, blocked by `verify:no-encoded-payloads` and `verify:no-invisible-unicode`.
-6. Trigger a publish without a maintainer approving it in the `npm-publish` Environment, impossible by design.
-7. Beat the 24-hour `minimum-release-age` cooldown into every downstream pnpm install, also impossible by design.
+6. Trigger a publish without a maintainer approving it in the `npm-publish` Environment. The release jobs are designed so that cannot happen, but that rests on the GitHub environment protection staying configured, so it is a setting we audit, not a law of physics.
+7. Beat the 24-hour `minimum-release-age` cooldown. That cooldown is consumer-side: it protects installs that opt in to it (DaloyJS scaffolds do, by default), not every downstream install on the internet.
 
-A determined attacker may still find another way. Security is never finished. The path of least resistance in the LiteLLM compromise took (rewrite an action tag, steal a static token, ship a release that auto-runs on install) is shut on all four steps in this repo. Secure defaults block the obvious attack and make less obvious paths cost real effort.
+A determined attacker may still find another way. Security is never finished. The path of least resistance in the LiteLLM compromise took (rewrite an action tag, steal a static token, ship a release that auto-runs on install) is much harder on all four steps in this repo. Secure defaults block the obvious attack and make less obvious paths cost real effort.
 
 ## What you should do in your own DaloyJS project
 
-- Scaffold with `pnpm create daloy@latest --with-ci`. The generated `.github/workflows/` and `.npmrc` already carry the SHA-pinned actions, `ignore-scripts`, and 24h release-age cooldown.
+- Scaffold with `pnpm create daloy@latest --with-ci`. The generated `.github/workflows/` carry SHA-pinned actions, and the pnpm scaffold sets `ignoreScripts` and the 24h release-age cooldown in `pnpm-workspace.yaml` (pnpm 11 reads them there, not from `.npmrc`).
 - If you publish your own packages, use npm Trusted Publishing (OIDC). Delete any long-lived `NPM_TOKEN` from repo secrets. The blog post linked above has the exact `permissions:` block.
 - Don't run third-party security scanners in the same job as your publish step. Different workflow, different permissions, different runner identity. The LiteLLM team didn't, that's how they ended up here.
 - Turn on `step-security/harden-runner` with `egress-policy: audit` (or `egress-policy: block` if you know your allow-list). That alone would have surfaced the `models.litellm.cloud` POST in real time.

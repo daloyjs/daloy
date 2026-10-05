@@ -97,6 +97,19 @@ crypto.getRandomValues(key);
 createJwtSigner({ alg: "HS256", key, maxLifetimeSeconds: 60 });
 ```
 
+Length alone lets a guessable key through: 32 zero bytes, or `"changeme"` repeated four times, are long enough. From 1.5.4, in production (`env: "production"` or `NODE_ENV=production`) both functions also refuse an HS* key that is a single repeated byte, a short pattern (up to 16 bytes) repeated, a well-known placeholder (the same list `session()` uses), or made of fewer than 8 distinct byte values. Anyone who guesses such a key can forge tokens. Development keeps accepting them so tests can use fixed keys.
+
+```ts
+// ❌ refuses in production: JwtError [weak_hs_secret] ... the HS* secret is
+// the placeholder "changeme" repeated, so anyone who guesses it can forge tokens.
+createJwtSigner({
+  alg: "HS256",
+  key: new TextEncoder().encode("changeme".repeat(4)),
+  maxLifetimeSeconds: 60,
+  env: "production",
+});
+```
+
 ### 2a. JWT `crit` refusal and the verifier lifetime cap [#2a-jwt-crit-refusal-and-verifier-lifetime-cap]
 
 Two verification-side hardening rules close the asymmetries a live pentest against the 1.0.0 line surfaced. First, any token whose header carries `crit` is rejected outright: Daloy implements no JWS extensions, so RFC 7515 §4.1.11 requires refusal, and accepting the token would mean silently ignoring semantics the issuer marked critical. The signer refuses to *emit* `crit` for the same reason. Second, the signer-side `maxLifetimeSeconds` requirement now has a verifier-side counterpart: pass `maxLifetimeSeconds` to `createJwtVerifier()` and any token whose `exp - (iat ?? now)` exceeds it is rejected with `lifetime_exceeded`, so a misconfigured or compromised issuer sharing the key cannot mint a 100-year token your API accepts.

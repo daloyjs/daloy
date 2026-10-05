@@ -41,6 +41,7 @@ import { ForbiddenError } from "./errors.js";
 import {
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
@@ -439,7 +440,7 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
     if (mode === "block") throw new ForbiddenError(message);
   };
 
-  return {
+  return stampForwardedTrust({
     // `preBody`, not `beforeHandle`: a bot gate that short-circuits from
     // `beforeHandle` loses to any earlier `beforeHandle` middleware that returns
     // a Response first — a `responseCache()` HIT mounted above it would hand a
@@ -502,5 +503,5 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
       }
       return undefined;
     },
-  };
+  }, "botGuard()", opts);
 }

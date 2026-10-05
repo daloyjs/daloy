@@ -30,13 +30,16 @@
 #     builds can pin to an immutable digest:
 #       docker build --build-arg \
 #         DENO_IMAGE=denoland/deno:alpine@sha256:<digest> .
-#     The default is a floating tag, and Dependabot's `docker` ecosystem
-#     cannot update a `FROM ${ARG}` line. For automatic digest updates,
-#     write the digest into the ARG default below (for example
-#     `ARG DENO_IMAGE=denoland/deno:alpine@sha256:<digest>`).
+#     The ARG default below is already pinned by digest; Dependabot's
+#     `docker` ecosystem can keep a digest in an ARG default up to date
+#     (it cannot update a `FROM ${ARG}` line).
 
-# Override at build time to pin a specific digest.
-ARG DENO_IMAGE=denoland/deno:alpine
+# Override at build time with another pinned digest if you need to.
+# Base images are pinned by digest (multi-arch index) so a re-pushed or
+# compromised tag cannot change what you build. The tag is kept for
+# readability; the digest is what Docker pulls. To update, run
+# `docker buildx imagetools inspect <image:tag>` and copy the index digest.
+ARG DENO_IMAGE=denoland/deno:alpine@sha256:8ce780168429c4bf5962652e6cbea3fd45254ae902069e90585fb33f74c56968
 
 FROM ${DENO_IMAGE} AS builder
 WORKDIR /app

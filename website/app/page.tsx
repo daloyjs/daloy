@@ -103,7 +103,7 @@ serve(app, { port: 3000 });`;
 const CREATE_COMMAND = "pnpm create daloy@latest my-api";
 
 const HERO_FACTS = [
-  "2,357/2,357 tests passing",
+  "3,000+ framework tests passing",
   "≥90% line/function and ≥92% branch coverage gates",
   "0 runtime dependencies",
   "Node 24 LTS, Node 26+, Bun, Deno, Cloudflare",
@@ -135,7 +135,7 @@ const MCP_TOOLS = [
   },
 ] as const;
 
-const MCP_SERVER_SNIPPET = `import { App, createMcpHandler, mcpRoutes } from "@daloyjs/core";
+const MCP_SERVER_SNIPPET = `import { App, bearerAuth, createMcpHandler, mcpRoutes } from "@daloyjs/core";
 
 const mcp = createMcpHandler({
   serverInfo: { name: "inventory-mcp", version: "1.0.0" },
@@ -143,6 +143,7 @@ const mcp = createMcpHandler({
 });
 
 const app = new App();
+app.use(bearerAuth({ validate: checkToken })); // no auth hook: production refuses to boot
 for (const route of mcpRoutes("/mcp", mcp)) {
   app.route(route); // your API is now an MCP server too
 }`;
@@ -150,23 +151,23 @@ for (const route of mcpRoutes("/mcp", mcp)) {
 const FEATURES = [
   {
     icon: ShieldCheckIcon,
-    title: "Secure-by-default runtime",
-    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, automatic 5xx info-disclosure stripping in production, and a rate-limited CSP violation receiver.",
+    title: "Secure runtime defaults",
+    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: body limits, request timeouts, prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, and 5xx detail redaction in production. In production it refuses to boot on the misconfigurations it knows about, such as weak session secrets or session cookies without CSRF.",
   },
   {
     icon: PackageIcon,
     title: "Zero runtime dependencies",
-    body: "Installing @daloyjs/core adds exactly zero transitive packages. No postinstall scripts to audit, no surprise CVEs from dependencies you never chose, and nothing for a slopsquatter to impersonate: the smallest supply-chain surface a framework can ship.",
+    body: "Installing @daloyjs/core adds exactly zero transitive packages. No postinstall scripts to audit and no surprise CVEs from dependencies you never chose. The framework adds no dependency tree of its own; your app's other dependencies are still yours to vet.",
   },
   {
     icon: LockIcon,
     title: "Supply-chain-hardened scaffolds",
-    body: "Pick pnpm in create-daloy and the hardened .npmrc is already written: ignore-scripts=true blocks malicious post-install payloads, minimum-release-age=1440 waits out fresh-package attacks, and verify-store-integrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
+    body: "Pick pnpm in create-daloy and pnpm-workspace.yaml is already hardened: ignoreScripts blocks install-script payloads (not code that runs on import), a 24-hour minimumReleaseAge waits out freshly published bad versions that get caught in time, and verifyStoreIntegrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
   },
   {
     icon: SparkleIcon,
     title: "AI-native scaffolding",
-    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Copilot, Claude, and Cursor automatically understand your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
+    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Coding agents that read AGENTS.md pick up your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
   },
   {
     icon: FileCodeIcon,
@@ -243,16 +244,19 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The first TypeScript REST API framework built for secure
-              AI-assisted services
+              Contract-first TypeScript REST APIs with secure defaults,
+              built for AI-assisted teams
             </h1>
             <h2
               className="float-up max-w-3xl text-base font-medium text-foreground/80 text-pretty sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              DaloyJS combines runtime portability, contract-first OpenAPI,
-              generated typed clients, zero-dependency runtime guardrails, and
-              supply-chain-aware project defaults in one framework.
+              DaloyJS ships secure defaults and refuses to start in production
+              on the misconfigurations it knows about. It has zero runtime
+              dependencies and a hardened, provenance-signed publish pipeline.
+              No framework makes an app fully secure or stops every
+              supply-chain attack, so the docs say what is on by default, what
+              you turn on, and the risks that remain.
             </h2>
             <div
               className="float-up mt-2 flex flex-col gap-3 sm:flex-row"
@@ -359,10 +363,10 @@ export default function HomePage() {
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
               There are plenty of good ways to route an HTTP request in
               JavaScript. This is what the others don&apos;t give you:{" "}
-              <strong>secure by default</strong> at the runtime layer, pnpm
+              <strong>secure defaults</strong> at the runtime layer, pnpm
               install-time hardening shipped with <code>create-daloy</code>,
               and an optional hardened GitHub Actions bundle, so the app-safe
-              pieces of the LLM-era supply-chain defense are on the happy path
+              pieces of an LLM-era supply-chain defense are on the happy path
               without giving up OpenAPI ergonomics, runtime portability, typed
               clients, or Node ops.
             </p>
@@ -506,7 +510,7 @@ export default function HomePage() {
                   [
                     "Portable supply-chain hardening for the apps you build",
                     "pnpm defaults + zero-runtime-dep core",
-                    "Hardened .npmrc, source-verified lockfiles, SBOM + npm provenance",
+                    "Hardened pnpm install settings, source-verified lockfiles, SBOM + npm provenance",
                   ],
                 ].map(([want, best, give]) => (
                   <tr key={want} className="border-t">
@@ -532,7 +536,7 @@ export default function HomePage() {
               The numbers, with the asterisks attached
             </h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
-              DaloyJS ships security on by default, so a fair comparison has to
+              DaloyJS ships security checks on by default, so a fair comparison has to
               say so out loud. These charts come straight from the repo&apos;s
               own benchmark suite, and the caveats are part of the chart.
             </p>
@@ -581,11 +585,11 @@ export default function HomePage() {
       <section className="border-b">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight text-balance">
-            Ready to ship, secure by default?
+            Ready to ship with secure defaults?
           </h2>
           <p className="mb-8 leading-8 text-muted-foreground">
-            Scaffold a project in seconds with pnpm hardening when you choose
-            pnpm, generated CI that blocks install scripts, pinned GitHub
+            Scaffold a project in seconds with install hardening for your
+            package manager, generated CI that blocks install scripts, pinned GitHub
             Actions, Dependabot, CODEOWNERS, and lockfile source verification.
             Then keep the contract as the app grows, the same app runs on Node,
             Bun, Deno, and Cloudflare Workers.
@@ -655,7 +659,9 @@ export default function HomePage() {
                   DaloyJS builds MCP servers from <code>@daloyjs/core</code>{" "}
                   alone, no SDK required: Streamable HTTP transport,
                   input-schema validation, and a production boot guard that
-                  refuses to ship an unauthenticated MCP endpoint by accident.
+                  refuses to start when an MCP endpoint has no auth hook in
+                  its chain. It checks that the hook is there, not that it
+                  rejects anyone, so test your auth too.
                 </p>
                 <Link
                   href="/docs/mcp"

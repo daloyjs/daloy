@@ -106,9 +106,9 @@ Run `create-daloy --list-templates` to inspect the available starters without cr
 
 ### `node-basic`
 
-A production-ready Node.js HTTP server using `@daloyjs/core` with `secureHeaders`, `requestId`, `rateLimit`, a hardened `.npmrc`, a sample `GET /healthz` route, a contract-first `GET /books/:id` route with Zod validation, and Hey API codegen wired to `pnpm gen`.
+A production-ready Node.js HTTP server using `@daloyjs/core` with `secureHeaders`, `requestId`, `rateLimit`, hardened install settings (`pnpm-workspace.yaml` plus an `.npmrc` mirror), a sample `GET /healthz` route, a contract-first `GET /books/:id` route with Zod validation, and Hey API codegen wired to `pnpm gen`.
 
-Like FastAPI, every scaffolded project also exposes API documentation out of the box: `/docs` serves a Scalar API reference UI and `/openapi.json` serves the live OpenAPI 3.1 spec generated from your route definitions. The dev server logs both URLs at startup. Pass `docs: { ui: "swagger" }` on the `App` constructor to switch to Swagger UI instead.
+Like FastAPI, every scaffolded project also exposes API documentation out of the box in development: `/docs` serves a Scalar API reference UI and `/openapi.json` serves the live OpenAPI 3.1 spec generated from your route definitions. Templates set `docs: "auto"`, so a production deploy does not publish them unless you set `docs: true`. The dev server logs both URLs at startup. Pass `docs: { ui: "swagger" }` on the `App` constructor to switch to Swagger UI instead.
 
 ### `cloudflare-worker`
 
@@ -140,7 +140,7 @@ Sentinel comments (`// daloy-minimal:strip-start <tag>` /`// daloy-minimal:strip
 
 ## Hardened CI/security bundle [#hardened-ci-security-bundle]
 
-Pass `--with-ci` when the new project should start with GitHub-side supply-chain guardrails as well as runtime defaults. Node-style templates get CI, a manual-only deploy starter, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, `SECURITY.md`, and a lockfile-source verification script. The Deno template gets the same governance and scanning files with a Deno-native CI workflow. No template gets an npm publish workflow, because `create-daloy` scaffolds REST API services rather than reusable libraries.
+The bundle is on by default (the prompt defaults to yes; pass `--no-ci` to skip it, or `--with-ci` to choose it non-interactively). It gives the new project GitHub-side supply-chain guardrails as well as runtime defaults. Node-style templates get CI, a manual-only deploy starter, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, `SECURITY.md`, and a lockfile-source verification script. The Deno template gets the same governance and scanning files with a Deno-native CI workflow. No template gets an npm publish workflow, because `create-daloy` scaffolds REST API services rather than reusable libraries.
 
 ```bash
 pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security
@@ -177,7 +177,22 @@ Delete the file or remove the server entry if you do not want the integration. I
 
 DaloyJS is a backend framework, so the first ten minutes matter. The scaffolder gives every project the same guardrail-first posture, the same TypeScript baseline, and the same scripts so an AI coding agent or a new teammate can navigate it without a tour. Node, Bun, and Deno starters include `secureHeaders`, `requestId`, and `rateLimit`. The edge starters include `secureHeaders` and `requestId` plus tighter body and timeout limits.
 
-The CLI itself ships with **zero runtime dependencies**: only Node built-ins, so the supply-chain story stays clean. Templates are copied verbatim from the package's `templates/` directory and never run scripts during scaffolding. When you choose `pnpm`, the generated app keeps the hardened `.npmrc` and `pnpm-workspace.yaml`, and the CLI adds a `pnpm >= 11` floor to `engines` (pnpm always enforces `engines.pnpm`). older pnpm silently ignores `minimumReleaseAge`, which would disable the 24h supply-chain cooldown. The CLI also warns up front if the installed pnpm is older. When you choose `npm`, the CLI adds an `npm >= 12` floor to `engines` and swaps in an npm-native `.npmrc` with `engine-strict=true` so that floor is a hard install-time failure rather than a warning. Yarn and bun scaffolds drop the pnpm-specific config so installs stay warning-free. When you choose `--with-ci`, it also adds the GitHub-side security files that a company repo normally has to assemble by hand.
+The CLI itself ships with **zero runtime dependencies**: only Node built-ins, so the supply-chain story stays clean. Templates are copied verbatim from the package's `templates/` directory and never run scripts during scaffolding. When you choose `pnpm`, the generated app keeps the hardened `.npmrc` and `pnpm-workspace.yaml`, and the CLI adds a `pnpm >= 11` floor to `engines` (pnpm always enforces `engines.pnpm`). older pnpm silently ignores `minimumReleaseAge`, which would disable the 24h supply-chain cooldown. The CLI also warns up front if the installed pnpm is older. When you choose `npm`, the CLI adds an `npm >= 12` floor to `engines` and swaps in an npm-native `.npmrc` with `engine-strict=true` (so that floor is a hard install-time failure rather than a warning), `ignore-scripts=true`, and `min-release-age=1` (one day). Yarn and Bun scaffolds drop the pnpm-specific config so installs stay warning-free and get their own equivalents instead: Yarn gets `.yarnrc.yml` and `.yarnrc` (see the table below), and Bun gets a `bunfig.toml` with a 24-hour `minimumReleaseAge`. When you choose `--with-ci`, it also adds the GitHub-side security files that a company repo normally has to assemble by hand.
+
+## Install hardening per package manager (1.5.4) [#install-hardening]
+
+From 1.5.4 every package manager gets lifecycle scripts off and a release-age cooldown where the tool supports one:
+
+| Package manager | File | What it sets |
+| --- | --- | --- |
+| pnpm | `pnpm-workspace.yaml` (pnpm 11 reads it; `.npmrc` mirror for older tooling) | `ignoreScripts: true`, `minimumReleaseAge: 1440`, `blockExoticSubdeps: true`, store verification |
+| npm | `.npmrc` | `ignore-scripts=true`, `min-release-age=1` (days), `engine-strict=true` |
+| Yarn | `.yarnrc.yml` (Yarn 2+), `.yarnrc` (Yarn 1) | `enableScripts: false` and `npmMinimalAgeGate: "1d"`; Yarn 1 gets `ignore-scripts true` (it has no release-age setting) |
+| Bun | `bunfig.toml` | `minimumReleaseAge = 86400` (seconds, Bun 1.3+) |
+
+Template Dockerfiles also pin their base images by digest, so a retagged base image cannot change what your container build pulls; update the digest deliberately (Dependabot can do it with the `--with-ci` bundle).
+
+Blocking lifecycle scripts stops install-script payloads, not a payload that runs when your code imports a package. The cooldown helps only against bad versions that are caught within the window. See [Supply-chain security](/docs/security/supply-chain) for what each control covers.
 
 ## Next
 

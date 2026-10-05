@@ -25,8 +25,12 @@
 #       docker build --build-arg \
 #         NODE_IMAGE=node:24-alpine@sha256:<digest> .
 
-# Override at build time to pin a specific digest.
-ARG NODE_IMAGE=node:24-alpine
+# Override at build time with another pinned digest if you need to.
+# Base images are pinned by digest (multi-arch index) so a re-pushed or
+# compromised tag cannot change what you build. The tag is kept for
+# readability; the digest is what Docker pulls. To update, run
+# `docker buildx imagetools inspect <image:tag>` and copy the index digest.
+ARG NODE_IMAGE=node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
 
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app

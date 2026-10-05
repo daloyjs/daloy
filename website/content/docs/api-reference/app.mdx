@@ -48,10 +48,10 @@ interface AppOptions {
   acknowledgeInsecureDefaults?: boolean; // required when disabling defaults in production
   preset?: "internal-service";         // service-to-service preset (browser guards off)
 
-  // Request limits
-  bodyLimitBytes?: number;             // default: 1 MiB
+  // Request limits (1.5.4: finite non-negative integers, else construction throws)
+  bodyLimitBytes?: number;             // default: 1 MiB; every route, raw ctx.request reads included (1.5.4)
   allowedContentTypes?: string[];      // default: ["application/json", "application/x-www-form-urlencoded", "multipart/form-data"]
-  requestTimeoutMs?: number;           // default: 30_000; 0 disables
+  requestTimeoutMs?: number;           // default: 30_000; 0 disables; covers hooks + body read + handler (1.5.4)
   maxHeaderCount?: number;             // default: 100; 0 disables. Node also 431s at the parser cap (HTTP + WS upgrade); usable budget is 99 at default
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
 
@@ -66,7 +66,7 @@ interface AppOptions {
   corsCrossOriginGuard?: boolean;      // default: true
   csrf?: "off";                        // opt-out for the session+CSRF boot guard
   trustProxy?: boolean;                // legacy tri-state guard (undefined refuses X-Forwarded-*)
-  behindProxy?: BehindProxyConfig;     // "none" | "loopback" | { hops: N } | { cidrs: [...] }
+  behindProxy?: BehindProxyConfig;     // "none" | "loopback" | { hops: N } | { cidrs: [...] } (a /0 cidr throws, 1.5.4)
 
   // Operational
   disconnectStatusCode?: number;       // default: 499 (client-disconnect log code)

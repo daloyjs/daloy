@@ -779,15 +779,19 @@ async function patchTemplateTextFiles(dir, packageManager) {
 }
 
 function rewritePackageManagerText(raw, packageManager) {
-  // The release-day cooldown note names pnpm's settings file. Bun scaffolds
-  // get the same cooldown from bunfig.toml; npm and yarn scaffolds have no
-  // cooldown configured, so the note would be wrong there and is dropped.
-  const cooldownNote =
-    /> \*\*Install refused right after a DaloyJS release\?\*\*[\s\S]*?safeguard off\.\r?\n\r?\n/;
-  const withCooldownNote =
-    packageManager === "bun"
-      ? raw.replace("`pnpm-workspace.yaml`), a supply-chain", "`bunfig.toml`), a supply-chain")
-      : raw.replace(cooldownNote, "");
+  // The release-day cooldown note names pnpm's settings file. Every other
+  // package manager now gets a cooldown too, so the note is pointed at the
+  // file and key that manager actually reads.
+  const cooldownSetting = /\(`minimumReleaseAge` in(\r?\n> | )`pnpm-workspace\.yaml`\)/;
+  const cooldownByManager = {
+    bun: ["minimumReleaseAge", "bunfig.toml"],
+    npm: ["min-release-age", ".npmrc"],
+    yarn: ["npmMinimalAgeGate", ".yarnrc.yml"],
+  };
+  const target = cooldownByManager[packageManager];
+  const withCooldownNote = target
+    ? raw.replace(cooldownSetting, (_m, gap) => `(\`${target[0]}\` in${gap}\`${target[1]}\`)`)
+    : raw;
   return withCooldownNote
     .replace(
       "Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).",
@@ -852,11 +856,11 @@ function rewriteScriptsForPackageManager(scripts, pm) {
   return out;
 }
 
-// npm-native `.npmrc` written for npm scaffolds. The pnpm-specific hardening
-// keys (minimum-release-age, verify-store-integrity, …) mean nothing to npm,
-// but `engine-strict=true` is honored by npm and turns the `engines.npm`
-// floor in package.json into a hard failure instead of a silent warning — so
-// DaloyJS's "npm >= 12" requirement is actually enforced at install time.
+// npm-native `.npmrc` written for npm scaffolds. The pnpm-specific keys
+// (minimumReleaseAge, verifyStoreIntegrity, …) mean nothing to npm, so the
+// same guardrails are written with npm's own names: `ignore-scripts` (no
+// dependency install scripts), `min-release-age` (in days; npm >= 12, which
+// `engine-strict` enforces through the `engines.npm` floor).
 const NPM_STRICT_NPMRC = `# DaloyJS install-time guardrails for the npm CLI.
 #
 # engine-strict makes npm refuse to install when the developer's npm (or
@@ -864,6 +868,36 @@ const NPM_STRICT_NPMRC = `# DaloyJS install-time guardrails for the npm CLI.
 # requires npm >= 12 — instead of only printing a warning. Remove this line
 # only if you deliberately want to install on an unsupported npm version.
 engine-strict=true
+#
+# Don't run dependencies' install scripts (preinstall/install/postinstall),
+# the channel install-time worms use. \`npm run <script>\` still runs your own
+# scripts. This does not stop code that runs when a package is imported.
+ignore-scripts=true
+#
+# Wait 1 day before installing a freshly published version. Most npm worm
+# campaigns are detected and unpublished within hours. Set to 0 only for a
+# real hotfix.
+min-release-age=1
+`;
+
+// Yarn reads `.yarnrc.yml` (Yarn 2+) or `.yarnrc` (Yarn 1). Both are written
+// so the guardrails hold whichever Yarn the developer runs. Yarn 1 has no
+// release-age setting, so only scripts are disabled there.
+const YARN_BERRY_YARNRC = `# DaloyJS install-time guardrails for Yarn 2+.
+#
+# Don't run dependencies' postinstall scripts, the channel install-time
+# worms use. This does not stop code that runs when a package is imported.
+enableScripts: false
+#
+# Wait 1 day before installing a freshly published version. Most npm worm
+# campaigns are detected and unpublished within hours. Lower it only for a
+# real hotfix.
+npmMinimalAgeGate: "1d"
+`;
+
+const YARN_CLASSIC_YARNRC = `# DaloyJS install-time guardrails for Yarn 1 (classic). Yarn 2+ reads
+# .yarnrc.yml instead. Yarn 1 has no release-age setting.
+ignore-scripts true
 `;
 
 // Bun reads its install settings from bunfig.toml, not from pnpm-workspace.yaml
@@ -888,9 +922,9 @@ async function normalizePackageManagerFiles(dir, packageManager) {
     await rm(workspace, { force: true });
   }
   // The hardened `.npmrc` is authored for pnpm. For npm we replace it with an
-  // npm-native `.npmrc` that keeps the one guardrail npm understands
-  // (`engine-strict=true`, enforcing the npm >= 12 engine floor). yarn and bun
-  // ignore or misinterpret these keys, so they get no `.npmrc` at all.
+  // npm-native `.npmrc` (engine floor, no install scripts, 1-day release
+  // age). yarn and bun ignore or misinterpret these keys, so they get no
+  // `.npmrc`; each gets the same guardrails in its own config file instead.
   const npmrc = path.join(dir, ".npmrc");
   if (packageManager === "npm") {
     await writeFile(npmrc, NPM_STRICT_NPMRC, "utf8");
@@ -899,6 +933,10 @@ async function normalizePackageManagerFiles(dir, packageManager) {
   }
   if (packageManager === "bun") {
     await writeFile(path.join(dir, "bunfig.toml"), BUN_BUNFIG, "utf8");
+  }
+  if (packageManager === "yarn") {
+    await writeFile(path.join(dir, ".yarnrc.yml"), YARN_BERRY_YARNRC, "utf8");
+    await writeFile(path.join(dir, ".yarnrc"), YARN_CLASSIC_YARNRC, "utf8");
   }
 }
 
@@ -931,6 +969,14 @@ function dockerInstallSnippet(packageManager) {
   };
 }
 
+/**
+ * Digest-pinned Bun base image inserted when a Node template is scaffolded for
+ * Bun. Must match `ARG BUN_IMAGE` in templates/bun-basic/_Dockerfile (a test
+ * enforces it).
+ */
+const BUN_IMAGE_PINNED =
+  "oven/bun:1-alpine@sha256:d888c0ae6c86d7866ff10c5aafdd9077b36aee6455b33dd270fb93c0dd5cef6f";
+
 async function patchDockerfileForPackageManager(dir, packageManager) {
   const file = path.join(dir, "Dockerfile");
   if (!existsSync(file)) return;
@@ -953,13 +999,17 @@ async function patchDockerfileForPackageManager(dir, packageManager) {
 
   if (packageManager === "bun" && next.includes("FROM ${NODE_IMAGE} AS builder")) {
     if (!next.includes("ARG BUN_IMAGE=")) {
-      // CRLF-tolerant: the working tree may carry `\r\n`, so a plain
-      // `"...alpine\n"` substring replace would miss and the BUN_IMAGE ARG
-      // would never be inserted.
-      next = next.replace(
-        /ARG NODE_IMAGE=node:24-alpine\r?\n/,
-        "ARG NODE_IMAGE=node:24-alpine\nARG BUN_IMAGE=oven/bun:1-alpine\n"
+      // CRLF-tolerant, and independent of the NODE_IMAGE value (it is pinned
+      // by digest, which changes on every refresh).
+      const withBunArg = next.replace(
+        /^(ARG NODE_IMAGE=\S+)\r?\n/m,
+        (_m, nodeArg) => `${nodeArg}\nARG BUN_IMAGE=${BUN_IMAGE_PINNED}\n`
       );
+      if (withBunArg === next) {
+        // Never write a Dockerfile that references an undefined ${BUN_IMAGE}.
+        throw new Error("create-daloy: could not add the BUN_IMAGE build arg to the Dockerfile.");
+      }
+      next = withBunArg;
     }
     next = next.replace("FROM ${NODE_IMAGE} AS builder", "FROM ${BUN_IMAGE} AS builder");
   }

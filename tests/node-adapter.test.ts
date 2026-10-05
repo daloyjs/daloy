@@ -1258,9 +1258,9 @@ test("[unhappy] node adapter: that same window does not 413 a route that never r
 });
 
 test("[unhappy] node adapter: Expect never changes the outcome on a schema-less route", async () => {
-  // The property that the reverted header-time refusal violated. A route with no
-  // request body schema never applies `bodyLimitBytes`, because the body is never
-  // parsed — so an over-limit declared length is simply irrelevant there. The
+  // The property that the reverted header-time refusal violated. `bodyLimitBytes`
+  // applies when something reads the body; this route never does, so an
+  // over-limit declared length is simply irrelevant here. The
   // answer must be the same whether or not the client sends `Expect`, since
   // `Expect` is a hint about when to send the body (RFC 9110 §10.1.1), not
   // something that alters the request. Refusing at header time made curl (which

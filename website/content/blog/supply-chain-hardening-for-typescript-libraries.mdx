@@ -36,9 +36,11 @@ export const NPMRC = `# .npmrc, DaloyJS root npm/pnpm config (supply-chain harde
 # Lifecycle scripts
 # ---------------------------------------------------------------------------
 # Reject preinstall/install/postinstall/prepare hooks from transitive deps.
-# This is the primary execution channel in chalk/debug, node-ipc, and the
-# Shai-Hulud worm campaigns. Anything that legitimately needs to build (esbuild)
-# is on an explicit allowlist via pnpm-workspace.yaml allowBuilds.
+# This is the execution channel of install-script worms like Shai-Hulud.
+# (chalk/debug and node-ipc ran at import time instead; the release-age
+# cooldown and the lockfile are what help there.) Anything that legitimately
+# needs to build (esbuild) is on an explicit allowlist via pnpm-workspace.yaml
+# allowBuilds. On pnpm 11+ the workspace keys are the ones pnpm reads.
 ignore-scripts=true
 
 # ---------------------------------------------------------------------------
@@ -275,7 +277,7 @@ This file runs on every contributor's laptop and on every CI run. If you only fi
 <CodeBlock language="bash" code={NPMRC} />
 </EditorFrame>
 
-Three lines do most of the work. `ignore-scripts=true` stops every transitive postinstall hook, the canonical execution channel for the recent worm campaigns. `frozen-lockfile=true` makes a tampered lockfile cause an install failure, not a silent "sure, let me grab a different version". `minimum-release-age=1440` says "don't install anything published in the last 24 hours", which is the single most effective filter against worm campaigns because they are typically detected and unpublished within hours.
+Three lines do most of the work. `ignore-scripts=true` stops every transitive postinstall hook, the execution channel of install-script worms like Shai-Hulud (it does nothing for a payload that runs on import, like the chalk/debug one). One pnpm 11 caveat: pnpm 11 reads its settings from `pnpm-workspace.yaml` and ignores these `.npmrc` keys, so on pnpm 11 the cooldown and the script policy have to live in the workspace file below; the `.npmrc` copy is for npm and older tooling. `frozen-lockfile=true` makes a tampered lockfile cause an install failure, not a silent "sure, let me grab a different version". `minimum-release-age=1440` says "don't install anything published in the last 24 hours", which is the single most effective filter against worm campaigns because they are typically detected and unpublished within hours.
 
 ## Layer 2: pnpm 11 workspace keys
 

@@ -13,6 +13,10 @@
 #   * `id-token: write` is granted on the publish job only — never to
 #     `verify`, never to anything that runs untrusted code.
 #   * Builds and tests run BEFORE the publish job, in a job with no token.
+#     The token-less `pack` job runs install, build, SBOM generation and
+#     `npm pack`, then records each tarball's SHA-256. The publish jobs install
+#     and build nothing: they download the tarball, verify the hash against the
+#     pack job's output, and stage exactly those bytes.
 #   * Publish uses npm staged publishing + `--provenance` (npm trusted
 #     publishing via OIDC). CI can only stage a release; a separate npm
 #     MFA approval is required before the version becomes installable.
@@ -206,9 +210,133 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit --prod
 
+  # ---------------------------------------------------------------------------
+  # Build and pack both npm packages WITHOUT any publish credential.
+  #
+  # Everything that executes dependency code (install, tsc, tsx SBOM generation,
+  # tests) runs here, with no `id-token`, so a malicious devDependency that
+  # slipped past the release-age cooldown cannot mint an OIDC token or publish.
+  # The tarballs and their SHA-256 hashes are handed to the publish jobs, which
+  # verify the hash and stage exactly those bytes.
+  # ---------------------------------------------------------------------------
+  pack:
+    name: Build and pack tarballs (no publish credentials)
+    needs: verify
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.package == '@daloyjs/core' ||
+      github.event.inputs.package == 'create-daloy' ||
+      github.event.inputs.package == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      core_file: ${{ steps.pack.outputs.core_file }}
+      core_sha256: ${{ steps.pack.outputs.core_sha256 }}
+      create_file: ${{ steps.pack.outputs.create_file }}
+      create_sha256: ${{ steps.pack.outputs.create_sha256 }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Verify tag matches package versions
+        if: github.event_name == 'push'
+        run: |
+          set -eu
+          tag_version="${GITHUB_REF_NAME#v}"
+          for manifest in package.json packages/create-daloy/package.json; do
+            pkg_version="$(node -p "require('./$manifest').version")"
+            if [ "$tag_version" != "$pkg_version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match $manifest version $pkg_version"
+              exit 1
+            fi
+          done
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test create-daloy
+        run: pnpm --filter create-daloy test
+
+      - name: Generate CycloneDX 1.5 + SPDX 2.3 SBOMs for publishable tarballs
+        run: pnpm gen:sbom
+
+      - name: Verify SBOMs match published manifests before tarballs are sealed
+        run: pnpm verify:sbom
+
+      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
+        run: pnpm verify:no-leaked-credentials
+
+      - name: Verify no leaky agent skills in shipped SKILL.md / AGENTS.md (Snyk OpenClaw "leaky skills" gate)
+        run: pnpm verify:no-leaky-agent-skills
+
+      - name: Verify no AI-agent / editor config auto-run wiring (Miasma worm config-injection gate)
+        run: pnpm verify:no-agent-config-autorun
+
+      # `--ignore-scripts`: the build already ran above; `prepublishOnly` and
+      # any other lifecycle script must not run again at pack time.
+      - name: Pack tarballs and record their SHA-256
+        id: pack
+        run: |
+          set -eu
+          mkdir -p tarballs
+          core_file="$(npm pack --ignore-scripts --pack-destination tarballs --json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename)')"
+          create_file="$(cd packages/create-daloy && npm pack --ignore-scripts --pack-destination ../../tarballs --json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename)')"
+          core_sha256="$(sha256sum "tarballs/$core_file" | cut -d' ' -f1)"
+          create_sha256="$(sha256sum "tarballs/$create_file" | cut -d' ' -f1)"
+          {
+            echo "core_file=$core_file"
+            echo "core_sha256=$core_sha256"
+            echo "create_file=$create_file"
+            echo "create_sha256=$create_sha256"
+          } >> "$GITHUB_OUTPUT"
+          (cd tarballs && sha256sum ./*.tgz)
+
+      - name: Packaging signal (npm publish dry-run of the exact tarballs)
+        env:
+          CORE_FILE: ${{ steps.pack.outputs.core_file }}
+          CREATE_FILE: ${{ steps.pack.outputs.create_file }}
+        run: |
+          set -eu
+          npm publish "tarballs/$CORE_FILE" --dry-run --access public --tag latest --ignore-scripts
+          npm publish "tarballs/$CREATE_FILE" --dry-run --access public --tag latest --ignore-scripts
+
+      - name: Upload tarballs for the publish jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarballs
+          path: tarballs/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
   publish-core:
     name: Publish @daloyjs/core
-    needs: verify
+    needs: [verify, pack]
     if: |
       github.event_name == 'push' ||
       github.event.inputs.package == '@daloyjs/core' ||
@@ -220,38 +348,35 @@ jobs:
       url: https://www.npmjs.com/package/@daloyjs/core
     permissions:
       contents: read
-      # `id-token: write` is required by npm trusted publishing (OIDC).
-      # It is granted ONLY here, ONLY after the protected environment
-      # approval, and the job runs no third-party scripts.
+      # `id-token: write` is required by npm trusted publishing (OIDC). This
+      # job installs nothing and builds nothing: it verifies the tarball the
+      # token-less `pack` job produced and stages exactly those bytes.
       id-token: write
 
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
         with:
-          # Lock egress to the registries we actually need. Anything else
-          # (Session/Oxen, attacker C2, npm metadata abuse) is dropped.
+          # Lock egress to the registry, Sigstore, and the artifact store the
+          # tarball is downloaded from. Anything else is dropped.
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
             registry.npmjs.org:443
             fulcio.sigstore.dev:443
             rekor.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
           disable-sudo: true
 
-      - name: Checkout
+      - name: Checkout (SECURITY-CONTACTS.md only; no install, no build)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           show-progress: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
-        with:
-          run_install: false
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -265,11 +390,6 @@ jobs:
           npm install -g npm@11.15.0 --ignore-scripts --no-audit --no-fund
           npm --version
           npm stage --help >/dev/null
-        env:
-          npm_config_ignore_scripts: "true"
-
-      - name: Install (no scripts)
-        run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           npm_config_ignore_scripts: "true"
 
@@ -292,53 +412,39 @@ jobs:
             console.log(`Actor "${actor}" is on the SECURITY-CONTACTS active rotation.`);
           '
 
-      - name: Build
-        run: pnpm build
+      - name: Download the tarball built by the token-less pack job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-tarballs
+          path: tarballs
 
-      - name: Generate CycloneDX 1.5 + SPDX 2.3 SBOMs for publishable tarball
-        run: pnpm gen:sbom
-
-      - name: Verify SBOMs match published manifest before tarball is sealed
-        run: pnpm verify:sbom
-
-      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
-        run: pnpm verify:no-leaked-credentials
-
-      - name: Verify no leaky agent skills in shipped SKILL.md / AGENTS.md (Snyk OpenClaw "leaky skills" gate)
-        run: pnpm verify:no-leaky-agent-skills
-
-      - name: Verify no AI-agent / editor config auto-run wiring (Miasma worm config-injection gate)
-        run: pnpm verify:no-agent-config-autorun
-
-      - name: Verify tag matches package.json version
-        if: github.event_name == 'push'
+      - name: Verify the tarball hash matches the pack job's record
+        env:
+          FILE: ${{ needs.pack.outputs.core_file }}
+          EXPECTED: ${{ needs.pack.outputs.core_sha256 }}
         run: |
           set -eu
-          tag_version="${GITHUB_REF_NAME#v}"
-          pkg_version="$(node -p "require('./package.json').version")"
-          if [ "$tag_version" != "$pkg_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+          case "$FILE" in
+            */* | ..* | "") echo "::error::Unexpected tarball name: $FILE"; exit 1 ;;
+          esac
+          actual="$(sha256sum "tarballs/$FILE" | cut -d' ' -f1)"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::Tarball $FILE hash $actual does not match the pack job's $EXPECTED"
             exit 1
           fi
+          echo "Verified $FILE sha256=$actual"
 
       # npm refuses to publish a prerelease version (e.g. 1.0.0-beta.0) without
-      # an explicit --tag, even to put it on `latest`. We intentionally ship the
-      # 1.0 beta on `latest` (a plain `npm i` should resolve it during the
-      # pre-GA window), so the dist-tag is `latest`. Stable releases also pass
-      # `--tag latest`, which is a harmless no-op for them.
-      - name: Packaging signal (npm publish dry-run)
-        run: npm publish --dry-run --access public --provenance --tag latest
+      # an explicit --tag; stable releases pass `--tag latest` as a no-op.
+      - name: Stage the verified tarball on npm with provenance
         env:
+          FILE: ${{ needs.pack.outputs.core_file }}
           NPM_CONFIG_PROVENANCE: "true"
-
-      - name: Stage @daloyjs/core on npm with provenance
-        run: npm stage publish . --access public --provenance --tag latest
-        env:
-          NPM_CONFIG_PROVENANCE: "true"
+        run: npm stage publish "tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
 
   publish-create-daloy:
     name: Publish create-daloy
-    needs: verify
+    needs: [verify, pack]
     if: |
       github.event_name == 'push' ||
       github.event.inputs.package == 'create-daloy' ||
@@ -350,33 +456,35 @@ jobs:
       url: https://www.npmjs.com/package/create-daloy
     permissions:
       contents: read
+      # `id-token: write` is required by npm trusted publishing (OIDC). This
+      # job installs nothing and builds nothing: it verifies the tarball the
+      # token-less `pack` job produced and stages exactly those bytes.
       id-token: write
 
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
         with:
+          # Lock egress to the registry, Sigstore, and the artifact store the
+          # tarball is downloaded from. Anything else is dropped.
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
             registry.npmjs.org:443
             fulcio.sigstore.dev:443
             rekor.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
           disable-sudo: true
 
-      - name: Checkout
+      - name: Checkout (SECURITY-CONTACTS.md only; no install, no build)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           show-progress: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
-        with:
-          run_install: false
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -390,11 +498,6 @@ jobs:
           npm install -g npm@11.15.0 --ignore-scripts --no-audit --no-fund
           npm --version
           npm stage --help >/dev/null
-        env:
-          npm_config_ignore_scripts: "true"
-
-      - name: Install (no scripts)
-        run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           npm_config_ignore_scripts: "true"
 
@@ -417,37 +520,35 @@ jobs:
             console.log(`Actor "${actor}" is on the SECURITY-CONTACTS active rotation.`);
           '
 
-      - name: Test create-daloy
-        run: pnpm --filter create-daloy test
+      - name: Download the tarball built by the token-less pack job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-tarballs
+          path: tarballs
 
-      - name: Generate CycloneDX 1.5 + SPDX 2.3 SBOMs for publishable tarball
-        run: pnpm gen:sbom
-
-      - name: Verify SBOMs match published manifest before tarball is sealed
-        run: pnpm verify:sbom
-
-      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
-        run: pnpm verify:no-leaked-credentials
-
-      - name: Verify no leaky agent skills in shipped SKILL.md / AGENTS.md (Snyk OpenClaw "leaky skills" gate)
-        run: pnpm verify:no-leaky-agent-skills
-
-      - name: Verify no AI-agent / editor config auto-run wiring (Miasma worm config-injection gate)
-        run: pnpm verify:no-agent-config-autorun
-
-      # See the @daloyjs/core job: a prerelease needs an explicit --tag, and we
-      # ship the 1.0 beta on `latest` so create-daloy stays in lockstep with core.
-      - name: Packaging signal (npm publish dry-run)
-        working-directory: packages/create-daloy
-        run: npm publish --dry-run --access public --provenance --tag latest
+      - name: Verify the tarball hash matches the pack job's record
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          FILE: ${{ needs.pack.outputs.create_file }}
+          EXPECTED: ${{ needs.pack.outputs.create_sha256 }}
+        run: |
+          set -eu
+          case "$FILE" in
+            */* | ..* | "") echo "::error::Unexpected tarball name: $FILE"; exit 1 ;;
+          esac
+          actual="$(sha256sum "tarballs/$FILE" | cut -d' ' -f1)"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::Tarball $FILE hash $actual does not match the pack job's $EXPECTED"
+            exit 1
+          fi
+          echo "Verified $FILE sha256=$actual"
 
-      - name: Stage create-daloy on npm with provenance
-        working-directory: packages/create-daloy
-        run: npm stage publish . --access public --provenance --tag latest
+      # npm refuses to publish a prerelease version (e.g. 1.0.0-beta.0) without
+      # an explicit --tag; stable releases pass `--tag latest` as a no-op.
+      - name: Stage the verified tarball on npm with provenance
         env:
+          FILE: ${{ needs.pack.outputs.create_file }}
           NPM_CONFIG_PROVENANCE: "true"
+        run: npm stage publish "tarballs/$FILE" --access public --provenance --tag latest --ignore-scripts
 
   # ---------------------------------------------------------------------------
   # Publish the JSR package `@daloyjs/daloy`.

@@ -264,7 +264,7 @@ const store: AutoBanStore = {
 
 ### Store outages
 
-Since 2.0.0 a store error while *recording* a strike (a Redis outage, say) no longer turns the response into a `500`. The strike is skipped, the response goes out unchanged, and later `onSend` hooks (such as `concurrencyLimit()`'s slot release) still run. The error is reported to `onStoreError(error, key)`, which defaults to a one-line `console.warn`. Ban *checks* are different: a store error while checking for an active ban still fails closed and the request errors.
+Since 1.3.7 a store error while *recording* a strike (a Redis outage, say) no longer turns the response into a `500`. The strike is skipped, the response goes out unchanged, and later `onSend` hooks (such as `concurrencyLimit()`'s slot release) still run. The error is reported to `onStoreError(error, key)`, which defaults to a one-line `console.warn`. Ban *checks* are different: a store error while checking for an active ban still fails closed and the request errors.
 
 ```ts
 app.use(

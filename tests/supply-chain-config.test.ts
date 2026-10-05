@@ -577,7 +577,7 @@ test("all workflows avoid unsafe pull_request_target and zizmor is enforced", as
 test("release workflow isolates npm publish permissions", async () => {
   const workflow = await readWorkspaceFile(".github/workflows/release.yml");
   const stagedPublishes =
-    workflow.match(/npm stage publish \. --access public --provenance/g) ?? [];
+    workflow.match(/npm stage publish "tarballs\/\$FILE" --access public --provenance/g) ?? [];
   const stagedPublishingCliInstalls =
     workflow.match(/npm install -g npm@11\.15\.0 --ignore-scripts --no-audit --no-fund/g) ?? [];
 
@@ -605,4 +605,26 @@ test("release workflow isolates npm publish permissions", async () => {
 
   const verifyJob = workflow.match(/  verify:[\s\S]*?\n\n  publish-core:/)?.[0] ?? "";
   assert.doesNotMatch(verifyJob, /id-token:\s*write/);
+});
+
+test("release workflow builds tarballs without publish credentials and stages verified bytes", async () => {
+  const workflow = await readWorkspaceFile(".github/workflows/release.yml");
+  const packJob = workflow.match(/\n  pack:\n[\s\S]*?\n\n  publish-core:/)?.[0] ?? "";
+  assert.notEqual(packJob, "", "pack job exists before publish-core");
+  assert.doesNotMatch(packJob, /id-token:\s*write/, "pack must not hold an OIDC token");
+  assert.match(packJob, /pnpm build/);
+  assert.match(packJob, /npm pack --ignore-scripts/);
+  assert.match(packJob, /sha256sum/);
+  assert.match(packJob, /actions\/upload-artifact@[0-9a-f]{40}\s+# v7/);
+
+  for (const job of ["publish-core", "publish-create-daloy"]) {
+    const body =
+      workflow.match(new RegExp(`\\n  ${job}:\\n[\\s\\S]*?(?=\\n  [a-z-]+:\\n|\\n  # -{10})`))?.[0] ?? "";
+    assert.notEqual(body, "", `${job} exists`);
+    assert.match(body, /needs: \[verify, pack\]/, `${job} waits for the pack job`);
+    assert.doesNotMatch(body, /pnpm install|pnpm build|pnpm gen:sbom|npm pack/, `${job} runs no dependency code`);
+    assert.match(body, /actions\/download-artifact@[0-9a-f]{40}\s+# v8/);
+    assert.match(body, /needs\.pack\.outputs\.\w+_sha256/, `${job} checks the pack job's hash`);
+    assert.match(body, /does not match the pack job's/);
+  }
 });

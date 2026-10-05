@@ -56,6 +56,7 @@ import {
   getConnInfo,
   resolveForwardedClientIp,
   resolveForwardedTrust,
+  stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
@@ -356,7 +357,7 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
     if (typeof key === "string") release(key);
   };
 
-  return {
+  return stampForwardedTrust({
     async beforeHandle(ctx) {
       const key = resolveKey(ctx);
       if (key === undefined) return undefined; // fail-open: not subject to limiting
@@ -410,5 +411,5 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
       if (ctx) releaseFor(ctx);
       return undefined;
     },
-  };
+  }, "concurrencyLimit()", opts);
 }
