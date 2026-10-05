@@ -2506,6 +2506,12 @@ export function mcpRoutes(
       }
     }
   }
+  // GET (405 hint) and OPTIONS (preflight) never carry credentials, and the
+  // POST route is public when the caller said so: exempt them from
+  // app({ requireAuth: true }).
+  for (const route of routes) {
+    if (route.method !== "POST" || options.public === true) route.public = true;
+  }
   // Forward the handler's App-production hook onto the POST route so the App
   // can report its resolved environment at registration time
   // (`route[Symbol.for("daloyjs.mcp.appProduction")]?.(isProduction())`).

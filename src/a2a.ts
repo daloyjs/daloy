@@ -1855,6 +1855,12 @@ export function a2aRoutes(
       handler: (({ request }: { request: Request }) => handler.handleCard(request)) as never,
     });
   }
+  // The hint, the preflight and the Agent Card are public by design, and the
+  // JSON-RPC route is public when the caller said so: exempt them from
+  // app({ requireAuth: true }).
+  for (const route of routes) {
+    if (route !== post || isPublic) route.public = true;
+  }
   const record = post as unknown as Record<PropertyKey, unknown>;
   if (!isPublic) {
     // Same global-registry marker pattern as mcpRoutes(): app.ts reads the

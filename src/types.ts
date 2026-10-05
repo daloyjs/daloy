@@ -617,6 +617,16 @@ export interface RouteDefinition<
   allowEncodedSlash?: boolean;
 
   /**
+   * Mark the route as deliberately public: it is exempt from
+   * `app({ requireAuth: true })`, which otherwise refuses any route without an
+   * authentication hook in its effective chain. Has no effect without
+   * `requireAuth`.
+   *
+   * @since 1.5.3
+   */
+  public?: boolean;
+
+  /**
    * Optional OpenAPI 3.1 callbacks (out-of-band requests this operation may
    * trigger on the consumer). Each callback name maps to one or more runtime
    * expressions (e.g. `"{$request.body#/callbackUrl}"`); each expression maps

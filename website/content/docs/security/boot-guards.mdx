@@ -13,6 +13,9 @@ keywords:
   - a2aRoutes auth
   - cf-connecting-ip
   - secureDefaults
+  - assertSecureConfig
+  - requireAuth
+  - allowedHosts DNS rebinding
 ---
 
 # Boot guards
@@ -22,6 +25,25 @@ keywords:
 Daloy ships the boot-guards slice of the secure-by-default initiative: refuse-to-boot / first-request guards that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers.
 
 Every guard is gated on the resolved environment being `production` (sources: `app({ env: "production" })`, then `app({ production: true })`, then `NODE_ENV === "production"`) so dev and CI workflows keep working with sample secrets and ad-hoc headers. The single master escape hatch `app({ secureDefaults: false })` disables every boot guard at once.
+
+## When the guards run [#when-the-guards-run]
+
+The route-table guards (sections 3 and 5 to 9) need every route registered before they can judge the app, so they run in three places:
+
+- **At adapter startup.** `serve()` (Node, Bun, Deno), `toFetchHandler()` (Cloudflare, Vercel), `toWebHandler()`, `toLambdaHandler()` and the Fastly helpers call `app.assertSecureConfig()` before serving. In production a violation throws there, so the process or the cold start fails instead of live traffic. Cloudflare validates Worker startup on deploy, so there the deploy itself fails.
+- **On the first request**, as before. This still covers routes registered after the adapter was created.
+- **In CI**, with `daloy doctor`, which reports each violation as an error finding (`bootGuard.shadow-auth`, `bootGuard.session-without-csrf`, ...) and exits `1`.
+
+You can also call it yourself, for example in a test that checks your production configuration from a dev machine:
+
+```ts
+import { app } from "../src/server.ts";
+
+// Returns every violation; throws (listing them all) when production is in effect.
+app.assertSecureConfig({ production: true });
+```
+
+**No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning.
 
 <FlowDiagram title="Fail in the driveway, not the intersection" numbered steps={[
           {
@@ -280,6 +302,35 @@ for (const route of a2aRoutes("/a2a", agent, { public: true })) {
 ```
 
 See the [A2A docs](/docs/a2a#security-checklist) for the full agent setup.
+
+## 10. `requireAuth`: every route needs auth or `public: true` [#10-require-auth]
+
+Routes are public unless something authenticates them, which is easy to forget for one route among many. `app({ requireAuth: true })` flips that: registering a route with no authentication hook in its effective chain throws, unless the route says `public: true`. It is opt-in and, because you asked for it, enforced in every environment.
+
+```ts
+const app = new App({ requireAuth: true });
+
+app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"] })); // register auth first
+
+app.route({ method: "GET", path: "/orders", /* ... */ });                  // ok: jwk() covers it
+app.route({ method: "GET", path: "/status", public: true, /* ... */ });   // ok: deliberately open
+```
+
+Hooks apply to routes registered after them, so register auth before the routes it should cover. A route registered first is refused even if you add `app.use(auth)` later, which is the point: that route really would be unauthenticated. Framework routes that are public by design are already marked: docs, OpenAPI and AsyncAPI documents, health and metrics probes (which have their own `token`), the CSP report endpoint, the MCP and A2A `GET` / `OPTIONS` routes, and the A2A Agent Card. `mcpRoutes()` and `a2aRoutes()` with `{ public: true }` mark their JSON-RPC route public too.
+
+## 11. `allowedHosts`: DNS rebinding [#11-allowed-hosts]
+
+The cross-origin guard rejects a state-changing request whose `Origin` differs from the request's own origin. A DNS-rebinding page defeats that comparison: the attacker's name first resolves to their server, then to yours, so the browser sends `Origin` and `Host` that are both the attacker's name and match. That matters most for a server a victim's browser can reach but the internet cannot, such as a local dev server, an internal service, or a local agent tool.
+
+`allowedHosts` refuses any request whose `Host` is not listed, with `400`, before routing:
+
+```ts
+const app = new App({
+  allowedHosts: ["api.example.com", ".internal.example.com"], // ".x" = x and its subdomains
+});
+```
+
+Ports are ignored and matching is case-insensitive. `"*"`, an empty list, a scheme or a port in an entry are refused at construction. When `allowedHosts` is unset, `serve()` on Node, Bun and Deno applies a development default (`localhost`, `*.localhost` and IP literals) when the environment is positively development, which `daloy dev` sets. Production and unknown environments accept any host unless you set the list, and `daloy doctor` warns about that in production. Platforms such as Vercel route by `Host` and never deliver a rebound name to your function, so there the list is defense in depth.
 
 ## Migration checklist
 

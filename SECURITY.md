@@ -698,6 +698,30 @@ Two further rules apply to whatever is stored:
 If you write your own store-and-replay middleware, partition by caller and strip
 credentials from what you keep. Neither is something a key prefix gives you.
 
+### DNS rebinding and unauthenticated routes
+
+The cross-origin guard compares `Origin` with the request's own origin, which
+comes from `Host`. A DNS-rebinding page sends an `Origin` and a `Host` that
+are both the attacker's name, so they match and the guard passes. Set
+`allowedHosts` to refuse unknown hosts with `400` before routing. When it is
+unset, `serve()` on Node, Bun and Deno accepts only `localhost`,
+`*.localhost` and IP literals in development (the usual rebinding target);
+production and unknown environments accept any host, and `daloy doctor` warns
+about that in production. MCP and A2A endpoints keep their own `Origin`
+allowlists.
+
+Routes are public unless something authenticates them. `requireAuth: true`
+refuses, at registration and in every environment, any route without an
+authentication hook in its effective chain unless it is marked
+`public: true`.
+
+The route-table boot guards (shadow auth, unauthenticated MCP / A2A,
+cache ahead of tenancy, replay ahead of a budget, session without CSRF) run at
+adapter startup through `app.assertSecureConfig()`, again on the first
+request, and in CI through `daloy doctor`. With no environment signal they do
+not refuse, but each would-be refusal is logged once as
+`secure_defaults.env_indeterminate`.
+
 ### Out of scope (the framework will NOT defend)
 
 - **Network-layer DoS** (SYN floods, amplification). Place DaloyJS behind a reverse proxy / WAF / DDoS service.

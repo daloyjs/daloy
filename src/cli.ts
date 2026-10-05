@@ -718,6 +718,25 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
       "production";
 
   if (opts.noAuditDefaults !== true) {
+    // The production boot guards normally fire on the first request (or at
+    // adapter startup). Run them here so CI fails before a deploy does.
+    // production: false only stops assertSecureConfig() from throwing; every
+    // violation it returns is a production refusal, reported as an error.
+    const appWithGuards = app as unknown as {
+      assertSecureConfig?: (o: { production?: boolean }) => readonly { code: string; message: string }[];
+    };
+    for (const issue of appWithGuards.assertSecureConfig?.({ production: false }) ?? []) {
+      findings.push({ level: "error", code: `bootGuard.${issue.code}`, message: issue.message });
+    }
+    if (isProd && o.allowedHosts === undefined) {
+      findings.push({
+        level: "warn",
+        code: "allowedHosts.unset",
+        message:
+          "allowedHosts is unset in production, so the app answers any Host header and a DNS-rebinding " +
+          "page passes the cross-origin check. Set app({ allowedHosts: [\"api.example.com\"] }).",
+      });
+    }
     if (isProd && o.trustProxy === undefined && o.behindProxy === undefined) {
       findings.push({
         level: "error",

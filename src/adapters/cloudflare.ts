@@ -44,10 +44,15 @@ interface ExecutionContextLike {
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns An {@link ExportedFetchHandler} suitable as the module's `export default`.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toFetchHandler<Env = unknown>(
   app: App,
 ): ExportedFetchHandler<Env> {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   return {
     async fetch(req, _env, ctx) {
       const res = await app.fetch(req);

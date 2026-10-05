@@ -24,8 +24,13 @@ import type { App } from "../app.js";
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns A web-standard handler delegating to {@link App.fetch}.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toFastlyHandler(app: App): (req: Request) => Promise<Response> {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   return (req) => app.fetch(req);
 }
 
@@ -39,8 +44,13 @@ interface FastlyFetchEvent {
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @throws Error when `globalThis.addEventListener` is missing (not a Fastly Compute runtime).
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function installFastlyListener(app: App): void {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   const g = globalThis as {
     addEventListener?: (type: string, listener: (event: FastlyFetchEvent) => void) => void;
   };

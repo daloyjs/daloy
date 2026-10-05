@@ -623,6 +623,8 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 - Body limits, prototype-pollution-safe JSON, path-traversal guard, request timeouts, header injection guards.
 - Router captures never bind encoded traversal (`..%2F`, `..%5C`) or control characters, an encoded `/` in a capture is a `404` unless the route sets `allowEncodedSlash: true`, and `except()` matches the exact route the router dispatches to (trailing slashes included).
 - Request-smuggling defense: duplicate `Host`, `Content-Length`, and `Transfer-Encoding` headers are rejected.
+- `allowedHosts` refuses unknown `Host` values with `400` before routing (DNS rebinding); `serve()` on Node, Bun and Deno defaults to `localhost`, `*.localhost` and IP literals in development.
+- Opt-in `requireAuth: true` refuses, at registration, any route with no authentication hook unless it is marked `public: true`.
 - `Server` and `X-Powered-By` headers stripped by default.
 - Structured-log redaction defaults for authorization, cookie, password, token, and JWT-shaped values.
 - `secureHeaders()` auto-applied; user-installed instances automatically replace the auto one.
@@ -633,7 +635,7 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 
 ### Refuse-to-boot guardrails
 
-The framework refuses to start (or to construct) when configuration is unsafe:
+The framework refuses to start (or to construct) when configuration is unsafe. The adapters run the route-table guards at startup through `app.assertSecureConfig()`, `daloy doctor` runs them in CI, and with no environment signal at all each would-be refusal is logged instead of skipped:
 
 - Weak session secrets, `cors({ origin: "*" })` with credentials, `session()` + state-changing route without `csrf()`, and unconfigured forwarded / client-IP headers (`X-Forwarded-*`, `X-Real-IP`, and vendor headers `CF-Connecting-IP` / `Fly-Client-IP` / `True-Client-IP`) in production.
 - **Shadow auth**: a route that declares an `auth:` requirement (advertised as protected in the OpenAPI `security` list) but installs no authentication hook to enforce it. Built-in auth middlewares (`bearerAuth` / `basicAuth` / `jwk` / `httpSignatureAuth` / `clientCertAuth`) satisfy the guard automatically; mark a custom auth hook (or upstream-gateway-enforced auth) with `markAuthHook()`.

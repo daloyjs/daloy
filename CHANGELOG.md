@@ -17,6 +17,40 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- `allowedHosts` app option: a request whose `Host` is not listed gets `400`
+  before routing. The cross-origin guard compares `Origin` with the request's
+  own host, so a DNS-rebinding page (`Origin` and `Host` both the attacker's
+  name) passed it on ordinary routes. When `allowedHosts` is unset, `serve()`
+  on Node, Bun and Deno accepts only `localhost`, `*.localhost` and IP
+  literals in a positively development environment.
+- With no environment signal (no `env`, `production` or `NODE_ENV`), every
+  route-table boot guard that would refuse in production is now logged once
+  as `secure_defaults.env_indeterminate`; previously most were skipped
+  without a warning.
+
+### Added
+
+- `requireAuth` app option: refuse, at registration, any route with no
+  authentication hook in its effective chain unless it sets the new
+  `public: true` route flag. Framework routes that are public by design
+  (docs, OpenAPI, AsyncAPI, health, metrics, CSP reports, MCP / A2A preflight
+  and hint routes, the Agent Card) are already marked.
+- `app.assertSecureConfig()` runs the boot guards on demand, returns every
+  violation as a `SecureConfigIssue`, and throws listing all of them in
+  production. `serve()`, `toFetchHandler()`, `toWebHandler()`,
+  `toLambdaHandler()` and the Fastly helpers call it at startup, so an
+  insecure route table fails the process or cold start instead of the first
+  request.
+- `daloy doctor` reports boot-guard violations as `bootGuard.*` errors and
+  warns with `allowedHosts.unset` in production.
+
+### Fixed
+
+- Docs: the Node adapter page said `serve()` binds to `localhost` by default;
+  it binds to `0.0.0.0`.
+
 ## [1.5.2] - 2026-10-04
 
 ### Security

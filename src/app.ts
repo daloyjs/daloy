@@ -420,6 +420,40 @@ export interface AppOptions {
   env?: "development" | "production" | "test";
 
   /**
+   * Hostnames this app answers for. A request whose `Host` (the hostname in
+   * `request.url`, port ignored, case-insensitive) is not listed gets `400`
+   * before routing. An entry starting with `.` matches that domain and every
+   * subdomain (`.example.com` covers `example.com` and `api.example.com`).
+   *
+   * Security: the cross-origin guard compares `Origin` with the request's own
+   * host, so a DNS-rebinding page (whose `Origin` and `Host` are both the
+   * attacker's name) passes it. An allowlist closes that. Unset, every host is
+   * accepted, except that `serve()` on Node, Bun and Deno defaults to
+   * localhost, `*.localhost` and IP literals when the environment is
+   * positively development.
+   *
+   * @throws Error at construction for an empty list, `"*"`, or an entry that is
+   *   not a plain hostname.
+   * @since 1.5.3
+   */
+  allowedHosts?: readonly string[];
+
+  /**
+   * Refuse to register any route that has no authentication hook (a built-in
+   * auth middleware or `markAuthHook(...)`) in its effective hook chain,
+   * unless the route sets `public: true`. Enforced at registration in every
+   * environment. Framework routes that are public by design (docs, OpenAPI,
+   * health, metrics, CSP reports, MCP/A2A preflight and the Agent Card) are
+   * already marked.
+   *
+   * Register auth with `app.use(...)` (or `new App({ hooks })`) before the
+   * routes it should cover: hooks apply to routes registered after them.
+   *
+   * @since 1.5.3
+   */
+  requireAuth?: boolean;
+
+  /**
    * Strip the `Server` and `X-Powered-By` response headers from every
    * response (including those produced by user middleware). Defaults to
    * `true` — fingerprinting parity with the rest of the secure-by-default
@@ -1074,6 +1108,26 @@ interface CompiledRoute {
   decorations: Record<string, unknown> | undefined;
 }
 
+/**
+ * One boot-guard violation reported by {@link App.assertSecureConfig}.
+ *
+ * @since 1.5.3
+ */
+export interface SecureConfigIssue {
+  /** Which guard fired. */
+  code:
+    | "shadow-auth"
+    | "mcp-unauthenticated"
+    | "a2a-unauthenticated"
+    | "cache-before-tenancy"
+    | "replay-before-budget"
+    | "session-without-csrf";
+  /** The first offending route, as `"METHOD /path"`. */
+  route: string;
+  /** The full refusal message, including how to fix it. */
+  message: string;
+}
+
 interface RouteSecurityMarkers {
   method: HttpMethod;
   path: string;
@@ -1121,6 +1175,96 @@ const A2A_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.a2a.appProduction");
 const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
 /** Must match the string used by rateLimit() / loginThrottle() in middleware.ts. */
 const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
+
+/**
+ * Method key the self-hosted listeners (`serve()` on Node, Bun and Deno) call
+ * when they start. It installs the development-only `Host` allowlist
+ * (localhost, `*.localhost`, IP literals) unless the App set `allowedHosts` or
+ * the environment is not positively development. Global-registry symbol so
+ * the adapters never import this module's internals.
+ * @internal
+ */
+export const APP_LISTENER_DEV_HOSTS = Symbol.for("daloyjs.app.listenerDevHosts");
+
+/** IPv4 dotted quad, no leading signs or spaces. */
+const IPV4_LITERAL_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+/** An `allowedHosts` entry: optional leading `.`, then a plain hostname or IP literal. */
+const ALLOWED_HOST_ENTRY_RE = /^\.?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$|^\[[0-9a-f:.]+\]$/;
+
+/**
+ * Lowercased hostname of an absolute URL without building a `URL`: the
+ * authority after `://`, minus any port, `[...]` kept for IPv6, trailing `.`
+ * dropped. Adapters hand the App WHATWG-normalized URLs, so the authority is
+ * already a plain `host[:port]`.
+ */
+function hostnameOfUrl(url: string): string {
+  const start = url.indexOf("://");
+  if (start === -1) return "";
+  let end = url.length;
+  for (let i = start + 3; i < url.length; i++) {
+    const c = url.charCodeAt(i);
+    if (c === 47 /* / */ || c === 63 /* ? */ || c === 35 /* # */) {
+      end = i;
+      break;
+    }
+  }
+  let host = url.slice(start + 3, end);
+  if (host.charCodeAt(0) === 91 /* [ */) {
+    const close = host.indexOf("]");
+    host = close === -1 ? host : host.slice(0, close + 1);
+  } else {
+    const colon = host.lastIndexOf(":");
+    if (colon !== -1) host = host.slice(0, colon);
+  }
+  host = host.toLowerCase();
+  return host.endsWith(".") ? host.slice(0, -1) : host;
+}
+
+/** Development default: loopback names and IP literals only. */
+function isDevDefaultHost(host: string): boolean {
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    IPV4_LITERAL_RE.test(host) ||
+    host.charCodeAt(0) === 91 /* [ */
+  );
+}
+
+/**
+ * Compile `allowedHosts` into a matcher. Exact entries use a `Set`; entries
+ * starting with `.` match that domain and its subdomains.
+ * @throws Error for an empty list, `"*"`, or a malformed entry.
+ */
+function compileAllowedHosts(entries: readonly string[]): (host: string) => boolean {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error("app({ allowedHosts }) must be a non-empty array of hostnames; omit it to accept any host.");
+  }
+  const exact = new Set<string>();
+  const suffixes: string[] = [];
+  for (const raw of entries) {
+    if (typeof raw !== "string") {
+      throw new Error("app({ allowedHosts }) entries must be strings.");
+    }
+    const entry = raw.trim().toLowerCase().replace(/\.$/, "");
+    if (entry === "*") {
+      throw new Error('app({ allowedHosts }) does not accept "*"; omit the option to accept any host.');
+    }
+    if (!ALLOWED_HOST_ENTRY_RE.test(entry)) {
+      throw new Error(
+        `app({ allowedHosts }) entry ${JSON.stringify(raw)} is not a plain hostname. ` +
+          `Use "example.com", ".example.com" for the domain and its subdomains, or an IP literal; ` +
+          `leave out the scheme and port.`,
+      );
+    }
+    if (entry.startsWith(".")) {
+      exact.add(entry.slice(1));
+      suffixes.push(entry);
+    } else {
+      exact.add(entry);
+    }
+  }
+  return (host) => exact.has(host) || suffixes.some((suffix) => host.endsWith(suffix));
+}
 
 /**
  * Global-registry symbols stamped by `responseCache()` and `tenancy()` on the
@@ -1551,6 +1695,20 @@ export class App<
   private _productionCache: boolean | undefined;
   /** Memoized result of `redactsErrorDetail()`; same inputs as `_productionCache`. */
   private _redactDetailCache: boolean | undefined;
+  /**
+   * `Host` allowlist checked before routing: from `allowedHosts`, or the
+   * development default a listener installs. `undefined` accepts any host.
+   */
+  private hostMatcher: ((host: string) => boolean) | undefined;
+  /**
+   * One-entry memo for {@link hostAllowed}: nearly every request to an app
+   * carries the same authority, so the raw `host[:port]` string is compared
+   * before any parsing. Holds the verdict for denied hosts too.
+   */
+  private lastHostAuthority = "";
+  private lastHostVerdict = false;
+  /** Boot-guard warnings already logged for an indeterminate environment. */
+  private indeterminateGuardWarnings = new Set<string>();
   /** WebSocket route registry. Adapters look up handlers via `app.webSocketRoutes.find()`. */
   readonly webSocketRoutes: WebSocketRegistry = new WebSocketRegistry();
   private prefix = "";
@@ -1715,6 +1873,9 @@ export class App<
             });
 
     this.warnOnEnvMismatch();
+    if (this.options.allowedHosts !== undefined) {
+      this.hostMatcher = compileAllowedHosts(this.options.allowedHosts);
+    }
     this.assertDisconnectStatusCode();
     assertBehindProxy(this.options.behindProxy);
     if (this.options.hooks) this.assertSecureHookConfig(this.options.hooks);
@@ -2311,7 +2472,9 @@ export class App<
   /**
    * First-request boot guard. Verifies that the assembled hook
    * chain + route table is internally consistent before any user handler
-   * runs. Currently checks (production + `secureDefaults` only):
+   * runs. Refuses in production + `secureDefaults` only; with no environment
+   * signal at all each violation is logged once instead. The adapters also run
+   * the same checks at startup through {@link App.assertSecureConfig}. Checks:
    *
    * 1. **Shadow auth** — a route that declares an `auth:` requirement (so it is
    *    advertised as protected in the OpenAPI `security` list) must have an
@@ -2343,17 +2506,137 @@ export class App<
     }
     this.bootGuard.checked = true;
     if (this.options.secureDefaults === false) return;
-    // Per the risk register: boot guards only fire in production so CI /
+    // Per the risk register: boot guards only refuse in production so CI /
     // staging surfaces that ship sample secrets / no CSRF token while
-    // iterating do not pay the refuse-to-boot cost.
-    if (!this.isProduction()) return;
+    // iterating do not pay the refuse-to-boot cost. With no environment signal
+    // at all (edge runtimes have no NODE_ENV) the refusals cannot be told apart
+    // from a deploy, so every would-be refusal is logged instead of skipped.
+    if (!this.isProduction()) {
+      if (this.isEnvIndeterminate()) {
+        this.warnIndeterminateBootGuards(this.collectBootGuardIssues());
+      }
+      return;
+    }
+    const issues = this.collectBootGuardIssues();
+    if (issues.length === 0) return;
+    this.bootGuard.error = new Error(issues[0]!.message);
+    throw this.bootGuard.error;
+  }
+
+  /**
+   * Run the boot guards on demand and report every violation at once, instead
+   * of waiting for the first request (where a serverless app would answer
+   * `500` to live traffic). The adapters call this when they start
+   * (`serve()`, `toFetchHandler()`, `toLambdaHandler()`, ...) so a
+   * misconfiguration fails the deploy, and `daloy doctor` calls it in CI.
+   *
+   * The guards are the ones listed under "boot guards" in the docs: shadow
+   * auth, unauthenticated MCP / A2A routes, `responseCache()` ahead of
+   * `tenancy()`, a stored-response layer ahead of `rateLimit()`, and
+   * `session()` without `csrf()`. They are skipped under
+   * `secureDefaults: false`. The first-request check still runs, so routes
+   * registered after this call are covered too.
+   *
+   * @param options - `production` overrides the App's resolved environment
+   *   (pass `true` in CI to check a production config from a dev machine).
+   * @returns Every violation found, in guard order; empty when the config is clean.
+   * @throws Error listing every violation when the effective environment is
+   *   production. Outside production nothing is thrown; with no environment
+   *   signal at all the violations are logged once as a warning.
+   * @since 1.5.3
+   */
+  assertSecureConfig(options: { production?: boolean } = {}): readonly SecureConfigIssue[] {
+    if (this.options.secureDefaults === false) return [];
+    const issues = this.collectBootGuardIssues();
+    const production = options.production ?? this.isProduction();
+    if (production && issues.length > 0) {
+      throw new Error(
+        `Insecure configuration refused (${issues.length} issue${issues.length === 1 ? "" : "s"}):\n` +
+          issues.map((issue, i) => `${i + 1}. ${issue.message}`).join("\n"),
+      );
+    }
+    if (!production && options.production === undefined && this.isEnvIndeterminate()) {
+      this.warnIndeterminateBootGuards(issues);
+    }
+    return issues;
+  }
+
+  /**
+   * `Host` allowlist check with a one-entry memo keyed on the raw authority.
+   * The memo only skips re-deriving the same answer; the matcher still
+   * decides every distinct authority.
+   */
+  private hostAllowed(url: string): boolean {
+    const start = url.indexOf("://") + 3;
+    let end = url.indexOf("/", start);
+    if (end === -1) end = url.length;
+    const authority = url.slice(start, end);
+    if (authority === this.lastHostAuthority) return this.lastHostVerdict;
+    const verdict = this.hostMatcher!(hostnameOfUrl(url));
+    this.lastHostAuthority = authority;
+    this.lastHostVerdict = verdict;
+    return verdict;
+  }
+
+  /**
+   * Called by `serve()` on Node, Bun and Deno when they start. Installs the
+   * development `Host` allowlist (localhost, `*.localhost`, IP literals) when
+   * the App set no `allowedHosts` and the environment is positively
+   * development (`env: "development"`, or no `env`, `production` not `true`
+   * and `NODE_ENV=development`). That is the DNS-rebinding exposure: a dev
+   * server a browser can reach. Production and unknown environments are left
+   * alone, so a deploy is never refused on a guess.
+   * @internal
+   */
+  [APP_LISTENER_DEV_HOSTS](): void {
+    if (this.hostMatcher !== undefined) return;
+    const env = this.options.env;
+    const development =
+      env !== undefined
+        ? env === "development"
+        : this.options.production !== true && readNodeEnv() === "development";
+    if (development) this.hostMatcher = isDevDefaultHost;
+  }
+
+  /**
+   * Log each boot-guard violation once when the environment is indeterminate,
+   * so a deploy without `NODE_ENV` cannot skip the refusals silently.
+   */
+  private warnIndeterminateBootGuards(issues: readonly SecureConfigIssue[]): void {
+    for (const issue of issues) {
+      const key = `${issue.code} ${issue.route}`;
+      if (this.indeterminateGuardWarnings.has(key)) continue;
+      this.indeterminateGuardWarnings.add(key);
+      this.log.warn(
+        { event: "secure_defaults.env_indeterminate", guard: issue.code, route: issue.route },
+        `No environment signal (env / production / NODE_ENV), so this production refusal is not ` +
+          `enforced: ${issue.message} Set app({ env: "production" }) (or NODE_ENV=production) ` +
+          `to enforce it, or app({ env: "development" }) to silence this warning.`,
+      );
+    }
+  }
+
+  /**
+   * Evaluate every boot guard against the registered routes without throwing.
+   * Order and messages match the refusals, which throw the first entry.
+   */
+  private collectBootGuardIssues(): SecureConfigIssue[] {
+    const issues: SecureConfigIssue[] = [];
+    const add = (
+      code: SecureConfigIssue["code"],
+      r: { method: string; path: string },
+      message: string,
+    ): void => {
+      issues.push({ code, route: `${r.method} ${r.path}`, message });
+    };
+    const markers = this.routeSecurityMarkers;
 
     // Guard 1: shadow auth — declared `auth:` with nothing enforcing it.
-    const shadowAuth = this.routeSecurityMarkers.find(
-      (r) => r.declaresAuth && !r.hasAuth,
-    );
+    const shadowAuth = markers.find((r) => r.declaresAuth && !r.hasAuth);
     if (shadowAuth) {
-      const err = new Error(
+      add(
+        "shadow-auth",
+        shadowAuth,
         `Route ${shadowAuth.method} ${shadowAuth.path} declares an auth requirement (auth: ...) ` +
           `but no authentication hook is installed in its effective hook chain, so it is advertised ` +
           `as protected while accepting unauthenticated requests. ` +
@@ -2362,16 +2645,14 @@ export class App<
           `or pass app({ secureDefaults: false }) to disable this guard. ` +
           `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
-      this.bootGuard.error = err;
-      throw err;
     }
 
     // Guard 2: unauthenticated MCP tool endpoint.
-    const mcpNoAuth = this.routeSecurityMarkers.find(
-      (r) => r.isMcp && !r.hasAuth,
-    );
+    const mcpNoAuth = markers.find((r) => r.isMcp && !r.hasAuth);
     if (mcpNoAuth) {
-      const err = new Error(
+      add(
+        "mcp-unauthenticated",
+        mcpNoAuth,
         `MCP route ${mcpNoAuth.method} ${mcpNoAuth.path} (from mcpRoutes()) has no authentication ` +
           `hook in its effective hook chain. MCP tools are model-controlled and can trigger side ` +
           `effects, so an unauthenticated endpoint is a high-impact default. ` +
@@ -2380,17 +2661,15 @@ export class App<
           `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
           `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
-      this.bootGuard.error = err;
-      throw err;
     }
 
     // Guard 2b: unauthenticated A2A agent endpoint. Peer agents act on what
     // SendMessage does, so it is guarded exactly like an MCP tool endpoint.
-    const a2aNoAuth = this.routeSecurityMarkers.find(
-      (r) => r.isA2a && !r.hasAuth,
-    );
+    const a2aNoAuth = markers.find((r) => r.isA2a && !r.hasAuth);
     if (a2aNoAuth) {
-      const err = new Error(
+      add(
+        "a2a-unauthenticated",
+        a2aNoAuth,
         `A2A route ${a2aNoAuth.method} ${a2aNoAuth.path} (from a2aRoutes()) has no authentication ` +
           `hook in its effective hook chain. Peer agents can trigger whatever your onMessage handler ` +
           `does, so an unauthenticated agent endpoint is a high-impact default. ` +
@@ -2399,8 +2678,6 @@ export class App<
           `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
           `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
-      this.bootGuard.error = err;
-      throw err;
     }
 
     // Guard 3: responseCache() mounted ahead of tenancy(). The cache partitions
@@ -2408,11 +2685,11 @@ export class App<
     // ctx.state when the key is built. Mounted first, it would key every
     // tenant's response identically and serve one tenant's private body to the
     // next caller (CWE-524) — silently, with a normal-looking cache HIT.
-    const cacheBeforeTenancy = this.routeSecurityMarkers.find(
-      (r) => r.cacheBeforeTenancy,
-    );
+    const cacheBeforeTenancy = markers.find((r) => r.cacheBeforeTenancy);
     if (cacheBeforeTenancy) {
-      const err = new Error(
+      add(
+        "cache-before-tenancy",
+        cacheBeforeTenancy,
         `Route ${cacheBeforeTenancy.method} ${cacheBeforeTenancy.path} runs responseCache() ` +
           `before tenancy() in its effective hook chain. The cache key is built before the tenant ` +
           `is resolved, so every tenant would share one cache entry and one tenant's response ` +
@@ -2421,8 +2698,6 @@ export class App<
           `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
           `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
-      this.bootGuard.error = err;
-      throw err;
     }
 
     // Guard 3b: a stored-response layer mounted ahead of a request budget.
@@ -2430,20 +2705,14 @@ export class App<
     // end the hook chain, and `rateLimit()` / `loginThrottle()` enforce from that
     // same phase — so a limiter mounted behind either one never counts the
     // requests it serves. Measured: `rateLimit({ max: 2 })` behind a cache or a
-    // replay admitted six of six. The budget silently becomes infinite for
-    // exactly the traffic that repeats most, which is what the limit was written
-    // for. Same shape as the responseCache-ahead-of-gates finding, and the reason
-    // the five network-identity gates moved to `preBody`; `rateLimit` cannot
-    // follow them there because its `keyGenerator` is caller-supplied and may
-    // read `ctx.state`, so the unsafe order is refused instead.
-    const replayBeforeBudget = this.routeSecurityMarkers.find(
-      (r) => r.replayBeforeBudget !== null,
-    );
-    if (
-      replayBeforeBudget !== undefined &&
-      this.bootGuard.error === undefined
-    ) {
-      this.bootGuard.error = new Error(
+    // replay admitted six of six. `rateLimit` cannot move to `preBody` because
+    // its `keyGenerator` is caller-supplied and may read `ctx.state`, so the
+    // unsafe order is refused instead.
+    const replayBeforeBudget = markers.find((r) => r.replayBeforeBudget !== null);
+    if (replayBeforeBudget) {
+      add(
+        "replay-before-budget",
+        replayBeforeBudget,
         `Route ${replayBeforeBudget.method} ${replayBeforeBudget.path} runs ` +
           `${replayBeforeBudget.replayBeforeBudget} before rateLimit() / loginThrottle() in its ` +
           `effective hook chain. Both act from beforeHandle, so a cache hit or an idempotent ` +
@@ -2453,27 +2722,28 @@ export class App<
           `an earlier app.use(...) — so every request is counted before a stored response can ` +
           `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`,
       );
-      throw this.bootGuard.error;
     }
 
     // Guard 4: session() + state-changing route without csrf().
-    if (this.options.csrf === "off") return;
-    const stateChanging = this.routeSecurityMarkers.find(
-      (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf,
-    );
-    if (!stateChanging) return;
-
-    const err = new Error(
-      `session() is registered in the hook chain for a state-changing route ` +
-        `(${stateChanging.method} ${stateChanging.path}) but no csrf() hook is installed. ` +
-        `Without CSRF protection a browser can be tricked into making authenticated ` +
-        `state-changing requests cross-site. ` +
-        `Register csrf() via app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: [...] })), ` +
-        `or pass app({ csrf: "off" }) to acknowledge that this app is not browser-facing. ` +
-        `See https://daloyjs.dev/docs/security/boot-guards.`,
-    );
-    this.bootGuard.error = err;
-    throw err;
+    if (this.options.csrf !== "off") {
+      const stateChanging = markers.find(
+        (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf,
+      );
+      if (stateChanging) {
+        add(
+          "session-without-csrf",
+          stateChanging,
+          `session() is registered in the hook chain for a state-changing route ` +
+            `(${stateChanging.method} ${stateChanging.path}) but no csrf() hook is installed. ` +
+            `Without CSRF protection a browser can be tricked into making authenticated ` +
+            `state-changing requests cross-site. ` +
+            `Register csrf() via app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: [...] })), ` +
+            `or pass app({ csrf: "off" }) to acknowledge that this app is not browser-facing. ` +
+            `See https://daloyjs.dev/docs/security/boot-guards.`,
+        );
+      }
+    }
+    return issues;
   }
 
   /**
@@ -2629,6 +2899,7 @@ export class App<
       });
 
     this.route({
+      public: true,
       method: "GET",
       path: openapiPath,
       operationId: "getOpenAPIDocument",
@@ -2648,6 +2919,7 @@ export class App<
 
     if (openapiYamlPath) {
       this.route({
+        public: true,
         method: "GET",
         path: openapiYamlPath,
         operationId: "getOpenAPIDocumentYaml",
@@ -2693,6 +2965,7 @@ export class App<
     });
 
     this.route({
+      public: true,
       method: "GET",
       path: docsPath,
       operationId: "getDocsUI",
@@ -2814,6 +3087,7 @@ export class App<
       structuredClone(cachedDocument().doc);
 
     this.route({
+      public: true,
       method: "GET",
       path: jsonPath,
       operationId: "getAsyncAPIDocument",
@@ -2832,6 +3106,7 @@ export class App<
 
     if (yamlPath) {
       this.route({
+        public: true,
         method: "GET",
         path: yamlPath,
         operationId: "getAsyncAPIDocumentYaml",
@@ -2861,6 +3136,7 @@ export class App<
     const uiCsp = docsContentSecurityPolicy(opts.csp);
 
     this.route({
+      public: true,
       method: "GET",
       path: uiPath,
       operationId: "getAsyncAPIUI",
@@ -3010,6 +3286,22 @@ export class App<
       globalHookLayer,
       ...sources,
     ]);
+    // requireAuth: refuse, at registration, a route that nothing authenticates
+    // and that is not deliberately public. Hooks are captured here, so the
+    // answer cannot change after registration.
+    if (
+      this.options.requireAuth === true &&
+      !securityMarkers.hasAuth &&
+      merged.public !== true
+    ) {
+      throw new Error(
+        `app({ requireAuth: true }) refused route ${merged.method} ${merged.path}: no authentication ` +
+          `hook is in its effective hook chain. Register auth before this route with ` +
+          `app.use(bearerAuth(...) / jwk(...) / basicAuth(...)) or route hooks, wrap a custom check ` +
+          `with markAuthHook(...), or mark the route public: true if it is meant to be open. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
+      );
+    }
     // Capture the decorations of this route's scope at registration time so the
     // dispatch hot path reads the scope-local bag rather than the root app's.
     // `this.decorations` is this scope's own bag (the root's, or the child's
@@ -3520,6 +3812,7 @@ export class App<
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
+      public: true,
       method: "GET",
       path,
       operationId: "metrics",
@@ -3868,6 +4161,7 @@ export class App<
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
+      public: true,
       method: "GET",
       path,
       operationId: isHealth ? "healthcheck" : "readinesscheck",
@@ -3966,6 +4260,7 @@ export class App<
     const includeReportBody = opts.logCspReportBodies ?? !this.isProduction();
 
     this.route({
+      public: true,
       method: "POST",
       path,
       operationId: "cspReport",
@@ -4579,6 +4874,9 @@ export class App<
         request.headers,
         this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT,
       );
+      if (this.hostMatcher !== undefined && !this.hostAllowed(request.url)) {
+        throw new BadRequestError("Invalid Host header");
+      }
       this.assertTrustProxyConfigured(request);
       this.assertBootGuards();
       if (globalHooks.onRequest !== undefined) {

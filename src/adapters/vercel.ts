@@ -50,8 +50,13 @@ export type RouteHandlers = Record<(typeof NEXT_METHODS)[number], WebHandler>;
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns A {@link WebHandler} delegating to {@link App.fetch}.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toWebHandler(app: App): WebHandler {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   return async (req) => {
     const res = await app.fetch(req);
     const telemetry = app.telemetry;
@@ -73,6 +78,8 @@ export function toWebHandler(app: App): WebHandler {
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns A {@link FetchHandler} object suitable as the module's `export default`.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toFetchHandler(app: App): FetchHandler {
   return { fetch: toWebHandler(app) };
@@ -84,6 +91,8 @@ export function toFetchHandler(app: App): FetchHandler {
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns A {@link RouteHandlers} record mapping every supported HTTP method to the same {@link WebHandler}.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toRouteHandlers(app: App): RouteHandlers {
   const handler = toWebHandler(app);

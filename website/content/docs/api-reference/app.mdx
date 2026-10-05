@@ -111,6 +111,7 @@ app.ready(): Promise<void>
 app.fetch(req: Request): Promise<Response>
 app.request(input: string | URL | Request, init?: RequestInit): Promise<Response>
 app.introspect(): IntrospectedRoute[]
+app.assertSecureConfig(opts?: { production?: boolean }): readonly SecureConfigIssue[]  // run the boot guards now; throws in production
 app.shutdown(timeoutMs?: number, reason?: string): Promise<void>
 ```
 

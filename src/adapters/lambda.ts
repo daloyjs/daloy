@@ -170,8 +170,13 @@ const TEXT_TYPE_RE =
  *
  * @param app - The DaloyJS {@link App} that serves each translated request.
  * @returns A {@link LambdaHandler} that converts the event to a `Request`, calls {@link App.fetch}, and emits the matching v1.0/v2.0 response shape.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toLambdaHandler(app: App): LambdaHandler {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   return async (event) => {
     let request: Request;
     try {
@@ -200,8 +205,13 @@ export function toLambdaHandler(app: App): LambdaHandler {
  * @param app - The DaloyJS {@link App} that serves each translated request.
  * @returns A response-streaming Lambda handler for Function URLs, API Gateway streaming proxy integrations, or `InvokeWithResponseStream`.
  * @throws {Error} If the AWS Lambda response-streaming globals are unavailable.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function toLambdaStreamHandler(app: App): LambdaStreamHandler {
+  // Refuse an insecure configuration at cold start (and so at deploy time
+  // where the platform validates startup) instead of on the first request.
+  app.assertSecureConfig();
   const runtime = lambdaStreamingRuntime();
   return runtime.streamifyResponse(async (event, rawStream) => {
     let request: Request;

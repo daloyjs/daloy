@@ -139,8 +139,16 @@ export interface NodeServerHandle {
  * @param app - The DaloyJS {@link App} whose `fetch` (and WebSocket routes) serve requests.
  * @param opts - Listener, timeout, proxy-trust, and hardening options; see {@link NodeServerOptions}.
  * @returns A {@link NodeServerHandle} exposing the Node `Server`, the `port`, and a graceful `close()`.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle {
+  // Refuse an insecure configuration now, before listening, instead of on the
+  // first request; then install the development-only Host allowlist.
+  app.assertSecureConfig();
+  (app as unknown as Record<symbol, (() => void) | undefined>)[
+    Symbol.for("daloyjs.app.listenerDevHosts")
+  ]?.();
   const trustProxy = opts.trustProxy === true;
   const requestedBufferCap =
     typeof opts.bufferedBodyMaxBytes === "number" && opts.bufferedBodyMaxBytes >= 0

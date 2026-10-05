@@ -18,6 +18,7 @@ export type {
   PluginExtension,
   ShutdownEvent,
   SecurityPreset,
+  SecureConfigIssue,
 } from "./app.js";
 export {
   getConnInfo,

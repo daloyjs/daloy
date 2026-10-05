@@ -44,8 +44,16 @@ export interface DenoServerHandle {
  * @param opts - Listener/TLS/shutdown options; see {@link DenoServeOptions}.
  * @returns A {@link DenoServerHandle} whose `shutdown()` drains in-flight requests.
  * @throws Error when the Deno runtime (`globalThis.Deno.serve`) is not detected.
+ * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
+ *   violation, so an insecure route table fails at startup, not on the first request.
  */
 export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
+  // Refuse an insecure configuration now, before listening, instead of on the
+  // first request; then install the development-only Host allowlist.
+  app.assertSecureConfig();
+  (app as unknown as Record<symbol, (() => void) | undefined>)[
+    Symbol.for("daloyjs.app.listenerDevHosts")
+  ]?.();
   const D = (
     globalThis as {
       Deno?: {

@@ -147,6 +147,8 @@ pnpm exec daloy doctor --audit-secrets
 
 Warning-level findings are advisory and exit 0. In JSON mode, `ok` is only true when there are no findings at all.
 
+`doctor` also runs the production [boot guards](/docs/security/boot-guards#when-the-guards-run) through `app.assertSecureConfig()`, whatever the current environment, and reports each violation as an error (`bootGuard.shadow-auth`, `bootGuard.session-without-csrf`, ...), so CI fails before a deploy does. In production it warns with `allowedHosts.unset` when the app accepts any `Host` header.
+
 ## `daloy diff`: OpenAPI change gate
 
 `daloy diff <baseline> <current>` compares two OpenAPI 3.1 JSON files, reports added, removed, and changed operations, and exits 1 when it detects a breaking change:
