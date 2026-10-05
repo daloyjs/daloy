@@ -117,7 +117,7 @@ test("[headers] frame-ancestors * or a bare scheme does not count as clickjackin
 
 // ---------- 2. production warnings ----------
 
-const SECRET = "s3ss10n-s3cr3t-that-is-long-enough-xyz";
+const SECRET = "unit-test-session-secret-0123456789"; // >= 32 chars
 
 test("[warn] production logs the in-memory session store once, not with a real store", () => {
   const { logger, warns } = capture();

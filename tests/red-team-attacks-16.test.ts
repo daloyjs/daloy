@@ -177,7 +177,7 @@ test("[hs-key] random keys pass in production and weak keys stay usable in devel
 
 // ---------- 3. session cookie flags ----------
 
-const SECRET = "s3ss10n-s3cr3t-that-is-long-enough-xyz";
+const SECRET = "unit-test-session-secret-0123456789"; // >= 32 chars
 
 test("[session] httpOnly: false is refused in every environment", () => {
   assert.throws(
