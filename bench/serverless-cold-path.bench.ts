@@ -2,7 +2,8 @@
  * Daloy serverless cold-path benchmark.
  * Run with: pnpm bench:serverless
  *
- * Measures shipped-JavaScript import time plus route registration, first
+ * Measures shipped-JavaScript import time (the `@daloyjs/core/app` deep entry
+ * and the `@daloyjs/core` barrel) plus route registration, first
  * dispatch, and warm dispatch. Every scenario sample runs in a fresh Node
  * process so one scenario's JIT and singleton initialization cannot make a
  * later scenario look artificially cold or fast.
@@ -27,6 +28,7 @@ if (!existsSync(distAppPath)) {
 }
 
 const appSpecifier = pathToFileURL(distAppPath).href;
+const indexSpecifier = pathToFileURL(resolve(root, "dist/index.js")).href;
 
 type Sample = {
   registerMs: number;
@@ -158,6 +160,7 @@ function printRows(rows: Row[]): void {
 }
 
 const importApp = measureImport(appSpecifier);
+const importIndex = measureImport(indexSpecifier);
 const importZod = measureImport("zod");
 const scenarios = routeCounts.flatMap((routes) => [
   { label: "full-contract", routes, withSchemas: true },
@@ -195,6 +198,11 @@ console.log(
     `(range ${formatNumber(Math.min(...importApp))}–${formatNumber(Math.max(...importApp))})`
 );
 console.log(
+  `median import dist/index.js (barrel): ${formatNumber(median(importIndex))} ms ` +
+    `(range ${formatNumber(Math.min(...importIndex))}–${formatNumber(Math.max(...importIndex))}; ` +
+    `deep entry saves ${formatNumber(median(importIndex) - median(importApp))} ms)`
+);
+console.log(
   `median import zod: ${formatNumber(median(importZod))} ms ` +
     `(range ${formatNumber(Math.min(...importZod))}–${formatNumber(Math.max(...importZod))})`
 );
@@ -224,7 +232,7 @@ writeFileSync(
         gitDirty: gitStatus.status === 0 ? gitStatus.stdout.trim().length > 0 : "unknown",
       },
       config: { importSamples, scenarioSamples, warmRequests },
-      imports: { app: importApp, zod: importZod },
+      imports: { app: importApp, index: importIndex, zod: importZod },
       rows,
     },
     null,

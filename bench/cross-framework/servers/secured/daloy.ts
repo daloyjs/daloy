@@ -21,9 +21,13 @@ const app = new App({ logger: false });
 app.use(cors({ origin: ["http://127.0.0.1"], credentials: false }));
 app.use(rateLimit({ max: Number.MAX_SAFE_INTEGER, windowMs: 60_000 })); // effectively unlimited; we want the hook cost, not the deny path
 
+// Peers verify the signature only, so skip the audience check for parity.
+// Since 1.5.4 production refuses a verifier without an audience unless this
+// is opted into explicitly.
 const verifier = createJwtVerifier({
   algorithms: ["HS256"],
   key: HS256_KEY,
+  allowAnyAudience: true,
 });
 
 app.use({

@@ -2,9 +2,10 @@
  * Cross-framework benchmark data for the landing-page charts.
  *
  * Every number here is copied verbatim from the repository's own benchmark
- * suite under `bench/cross-framework/lib/results*.json`. The runs were executed
- * on a single Apple M3 Max (16 cores, 64 GiB) under Node v24.3.0 (the suite's
- * `.nvmrc` baseline) in August 2026 against the stable `@daloyjs/core` 1.1.0.
+ * suite under `bench/cross-framework/results*.json`. The runs were executed
+ * on a single Apple M3 Max (16 cores, 64 GiB) in October 2026 under Node v26.4.0
+ * against `@daloyjs/core` 1.5.4 (main at a4092bb2). The other frameworks'
+ * versions come from the suite's committed lockfile.
  * They are a point-in-time snapshot, not a continuously updated leaderboard —
  * see {@link BENCH_NOTES} for why these are deliberately *not* an
  * apples-to-apples comparison.
@@ -12,9 +13,9 @@
 
 /** Provenance shown alongside the charts so readers can reproduce the numbers. */
 export const BENCH_META = {
-  machine: "Apple M3 Max · 16 cores · Node v24.3.0",
-  ranAt: "August 2026",
-  coreVersion: "@daloyjs/core 1.1.0 (stable)",
+  machine: "Apple M3 Max · 16 cores · Node v26.4.0",
+  ranAt: "October 2026",
+  coreVersion: "@daloyjs/core 1.5.4",
   source: "bench/cross-framework",
 } as const
 
@@ -44,7 +45,7 @@ export const INSTALL_FOOTPRINT_BYTES: FootprintRow[] = [
   { framework: "koa", minimal: 794585, secure: 1261564 },
   { framework: "hono", minimal: 1583476, secure: 1583476 },
   { framework: "elysia", minimal: 1455717, secure: 1864781 },
-  { framework: "daloy", minimal: 1992920, secure: 1992920 },
+  { framework: "daloy", minimal: 2510171, secure: 2510171 },
   { framework: "express", minimal: 2053007, secure: 2899418 },
   { framework: "fastify", minimal: 7226919, secure: 8412454 },
   { framework: "nest", minimal: 13840039, secure: 17227486 },
@@ -73,7 +74,7 @@ export const DEPENDENCY_COUNT: FootprintRow[] = [
  */
 export const BUNDLE_GZIP_BYTES: FootprintRow[] = [
   { framework: "hono", minimal: 11039, secure: 16773 },
-  { framework: "daloy", minimal: 44829, secure: 49362 },
+  { framework: "daloy", minimal: 61963, secure: 69113 },
   { framework: "koa", minimal: 76682, secure: 102214 },
   { framework: "elysia", minimal: 131474, secure: 139879 },
   { framework: "fastify", minimal: 170051, secure: 213986 },
@@ -98,14 +99,14 @@ export type MiddlewareThroughputRow = {
  * Throughput (requests/sec, 100 connections, mean of 5×10s runs after a 15s
  * warmup) with a comparable middleware stack on both frameworks. This is the
  * fair throughput comparison: when both sides actually do per-request work,
- * DaloyJS leads Hono by ~37% on the GET routes and ~76% on the POST body
+ * DaloyJS leads Hono by ~27% on the GET routes and ~58% on the POST body
  * route — while also Zod-validating the request body on `echo`. Both
  * frameworks returned zero non-2xx responses on every scenario in this run.
  */
 export const MIDDLEWARE_THROUGHPUT_RPS: MiddlewareThroughputRow[] = [
-  { scenario: "Static route", daloy: 23636, hono: 17166 },
-  { scenario: "Dynamic route", daloy: 23217, hono: 16954 },
-  { scenario: "POST + body", daloy: 20724, hono: 11766 },
+  { scenario: "Static route", daloy: 25211, hono: 19675 },
+  { scenario: "Dynamic route", daloy: 24709, hono: 19488 },
+  { scenario: "POST + body", daloy: 22514, hono: 14284 },
 ]
 
 /**
@@ -115,7 +116,7 @@ export const MIDDLEWARE_THROUGHPUT_RPS: MiddlewareThroughputRow[] = [
 export const BENCH_NOTES: string[] = [
   "Apples vs oranges, not apples to apples. These are different tools doing different amounts of work. On every request, DaloyJS validates the body against your Zod or Valibot schema and runs secure headers, a request ID, body-size limits, and request timeouts, all out of the box. The 'minimal' apps for the other frameworks do almost none of this, and even 'secure parity' rarely matches it one for one. So part of every DaloyJS number is security and validation you would otherwise have to build yourself.",
   "Footprint methodology differs: DaloyJS is one zero-dependency package, while the others resolve transitive trees whose exact size depends on when the lockfile was generated.",
-  "Throughput is workload-shaped: with a comparable middleware stack on both sides, DaloyJS comes out ~37% ahead of Hono on these GET routes and ~76% ahead on the POST body route — and DaloyJS is additionally Zod-validating that body. Real services are usually bound by database and I/O time, not framework dispatch, so these micro-numbers rarely predict production.",
+  "Throughput is workload-shaped: with a comparable middleware stack on both sides, DaloyJS comes out ~27% ahead of Hono on these GET routes and ~58% ahead on the POST body route — and DaloyJS is additionally Zod-validating that body. Real services are usually bound by database and I/O time, not framework dispatch, so these micro-numbers rarely predict production.",
   "Different target runtimes: some frameworks (e.g. Elysia) are tuned for Bun but are measured here under their Node adapters for a fair single-runtime baseline.",
-  "Single machine, single moment: one Apple M3 Max, Node v24.3.0, August 2026, against the stable @daloyjs/core 1.1.0. Your hardware, runtime, and versions will move these numbers.",
+  "Single machine, single moment: one Apple M3 Max, Node v26.4.0, October 2026, against @daloyjs/core 1.5.4, with other background load on the machine (the two frameworks were measured back to back, so the comparison holds better than the absolute numbers). Your hardware, runtime, and versions will move these numbers.",
 ]
