@@ -592,7 +592,7 @@ export interface RouteDefinition<
    *   path: "/__admin/reindex",
    *   internal: true,
    *   responses: { 204: { description: "Started" } },
-   *   handler: () => ({ status: 204 }),
+   *   handler: () => ({ status: 204, body: undefined }),
    * });
    *
    * await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));

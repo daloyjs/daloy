@@ -793,8 +793,10 @@ export interface DocsRouteOptions {
   /** Page `<title>`. Defaults to the resolved OpenAPI `info.title`. */
   title?: string;
   /**
-   * Force the docs to mount regardless of `NODE_ENV`. When `"auto"` (default
-   * for the object form), behaves like the top-level `docs: "auto"` setting.
+   * Whether the docs mount. Defaults to `true` for the object form, so
+   * `docs: { ... }` mounts in production too (and logs a
+   * `docs.public_in_production` warning there). Pass `"auto"` to mount only
+   * outside production, like the top-level `docs: "auto"` setting.
    */
   enabled?: boolean | "auto";
   /**
@@ -1811,6 +1813,13 @@ export class App<
    * Updated only when {@link decorate} mutates the bag.
    */
   private decorationsCount: number = 0;
+  /**
+   * True once a route was registered on this scope while it had no
+   * decorations. Such a route captured `undefined` instead of the bag, so a
+   * later first `decorate()` here would never reach it; {@link decorate}
+   * refuses that case instead of failing silently.
+   */
+  private routesCapturedNoDecorations = false;
   private installedPlugins = new Set<string>();
   private closeHooks: Array<() => void | Promise<void>> = [];
   private closeHooksRun = false;
@@ -3074,6 +3083,17 @@ export class App<
     this.mountDocs(resolvedOpts);
   }
 
+  /**
+   * Register a framework-owned route (docs, AsyncAPI, probes, metrics, CSP
+   * reports). These never read user decorations, so they do not count toward
+   * the {@link decorate} "routes registered before the first decoration" refusal.
+   */
+  private frameworkRoute(def: any): void {
+    const captured = this.routesCapturedNoDecorations;
+    this.route(def);
+    this.routesCapturedNoDecorations = captured;
+  }
+
   private mountDocs(opts: DocsRouteOptions): void {
     if (this.isProduction()) {
       this.log.warn(
@@ -3135,7 +3155,7 @@ export class App<
           : {}),
       });
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path: openapiPath,
@@ -3155,7 +3175,7 @@ export class App<
     });
 
     if (openapiYamlPath) {
-      this.route({
+      this.frameworkRoute({
         public: true,
         method: "GET",
         path: openapiYamlPath,
@@ -3201,7 +3221,7 @@ export class App<
         : {}),
     });
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path: docsPath,
@@ -3323,7 +3343,7 @@ export class App<
     const generate = async (): Promise<Record<string, unknown>> =>
       structuredClone(cachedDocument().doc);
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path: jsonPath,
@@ -3342,7 +3362,7 @@ export class App<
     });
 
     if (yamlPath) {
-      this.route({
+      this.frameworkRoute({
         public: true,
         method: "GET",
         path: yamlPath,
@@ -3372,7 +3392,7 @@ export class App<
 
     const uiCsp = docsContentSecurityPolicy(opts.csp);
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path: uiPath,
@@ -3547,6 +3567,7 @@ export class App<
     // `Object.assign` skipped for the common no-decoration case.
     const decorations =
       this.decorationsCount === 0 ? undefined : this.decorations;
+    if (decorations === undefined) this.routesCapturedNoDecorations = true;
     this.router.add(
       def.method,
       fullPath,
@@ -4062,7 +4083,7 @@ export class App<
       : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path,
@@ -4419,7 +4440,7 @@ export class App<
       : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "GET",
       path,
@@ -4518,7 +4539,7 @@ export class App<
     // default so violations are debuggable.
     const includeReportBody = opts.logCspReportBodies ?? !this.isProduction();
 
-    this.route({
+    this.frameworkRoute({
       public: true,
       method: "POST",
       path,
@@ -4776,15 +4797,18 @@ export class App<
    * Each route binds to its scope's decorations when it is registered, so
    * **decorate before registering the routes that consume the value** (the same
    * ordering Fastify requires). Adding a decoration to a scope that already had
-   * at least one is picked up by that scope's existing routes; but the first
-   * decoration added to a scope *after* its routes were registered will not
-   * reach them.
+   * at least one is picked up by that scope's existing routes. The first
+   * decoration added to a scope *after* routes were registered on it could
+   * not reach them, so that call throws instead of failing silently.
    *
    * @param key - Property name on `ctx.state`.
    * @param value - Value bound to that property on every request.
    * @param opts - Pass `{ override: true }` to replace an existing decoration (logged as a warning).
    * @returns This `App` instance for chaining.
    * @throws Error if `key` is already decorated and `opts.override` is not `true`.
+   * @throws Error if this is the scope's first decoration and routes were
+   *   already registered on it (they would never see the value). Decorate
+   *   before registering routes; for per-request values, set `ctx.state` in a hook.
    */
   decorate<K extends string, V>(
     key: K,
@@ -4810,6 +4834,14 @@ export class App<
       this.log.warn(
         { event: "decorate.override", key },
         `decorate("${key}") replaced an existing decoration.`,
+      );
+    }
+    if (this.decorationsCount === 0 && this.routesCapturedNoDecorations) {
+      throw new Error(
+        `decorate(): "${key}" is the first decoration on this app scope, but routes were ` +
+          `already registered on it and would never see the value. Call decorate() before ` +
+          `registering routes (and never inside a per-request fetch/handler wrapper); for a ` +
+          `per-request value, set ctx.state in a preBody hook instead.`,
       );
     }
     const hadKey = Object.prototype.hasOwnProperty.call(this.decorations, key);
@@ -5103,18 +5135,8 @@ export class App<
     // constructed with `{ logger: false }`. noopLogger.child() returns
     // itself, so the binding is wasted work on every request.
     const baseLog = this.log;
-    const log =
-      baseLog === noopLogger
-        ? noopLogger
-        : baseLog.child({
-            requestId,
-            method: request.method,
-            // Never bind the raw request URL: query strings commonly carry
-            // OAuth codes, API keys, and signed-URL tokens. sanitizeUrlForLog
-            // keeps origin+path and redacts sensitive query values so 4xx/5xx
-            // lines cannot become a credential sink under the field name `url`.
-            url: sanitizeUrlForLog(request.url),
-          });
+    let log =
+      baseLog === noopLogger ? noopLogger : requestLogger(baseLog, requestId, request);
     const stripFingerprint = this.options.stripServerHeaders !== false;
     // One timer per request bounds hooks, body read and handler together. It
     // is created at the first asynchronous step, so a fully synchronous
@@ -5401,8 +5423,18 @@ export class App<
               : (deadline ??= new RequestDeadline(timeoutMs, request)).race(preBodyResult))
           : preBodyResult;
         const overriddenId = state.requestId;
-        if (typeof overriddenId === "string" && overriddenId.length > 0) {
+        if (
+          typeof overriddenId === "string" &&
+          overriddenId.length > 0 &&
+          overriddenId !== requestId
+        ) {
           requestId = overriddenId;
+          // Rebind the request logger so its lines carry the same id as the
+          // x-request-id header. Only when the id really changed.
+          if (log !== noopLogger) {
+            log = requestLogger(baseLog, requestId, request);
+            state.log = log;
+          }
         }
         if (preBody instanceof Response) {
           if (
@@ -5454,8 +5486,18 @@ export class App<
         // `requestId()` Hooks bundle replaces the framework-generated value
         // with a trusted incoming header or a user-supplied generator).
         const overriddenId = state.requestId;
-        if (typeof overriddenId === "string" && overriddenId.length > 0) {
+        if (
+          typeof overriddenId === "string" &&
+          overriddenId.length > 0 &&
+          overriddenId !== requestId
+        ) {
           requestId = overriddenId;
+          // Rebind the request logger so its lines carry the same id as the
+          // x-request-id header. Only when the id really changed.
+          if (log !== noopLogger) {
+            log = requestLogger(baseLog, requestId, request);
+            state.log = log;
+          }
         }
         if (before instanceof Response) {
           // A cache hit or an idempotent replay answers here; it must not
@@ -6423,6 +6465,25 @@ function finishFinalize(
     }
   }
   return res;
+}
+
+/**
+ * Build the per-request child logger bound to a request id, method, and a
+ * sanitized URL. Never bind the raw request URL: query strings commonly carry
+ * OAuth codes, API keys, and signed-URL tokens, so `sanitizeUrlForLog` keeps
+ * origin + path and redacts sensitive query values.
+ *
+ * @param base - The App's root logger.
+ * @param requestId - The id to bind (also sent as `x-request-id`).
+ * @param request - The incoming request.
+ * @returns A child logger for this request.
+ */
+function requestLogger(base: Logger, requestId: string, request: Request): Logger {
+  return base.child({
+    requestId,
+    method: request.method,
+    url: sanitizeUrlForLog(request.url),
+  });
 }
 
 function isPromiseLike<T = unknown>(

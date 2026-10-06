@@ -36,7 +36,9 @@ export interface RequestIdOptions {
 /**
  * Generate or accept a stable `X-Request-ID` for every request. The id is
  * stamped on `ctx.state.requestId`, mirrored on outgoing response headers,
- * and available to handlers/middleware for log correlation.
+ * and available to handlers/middleware for log correlation. Without
+ * `trustIncoming` or a custom `generator`, it keeps the id the framework
+ * already assigned, so the request logger's `requestId` matches the header.
  *
  * Pass `trustIncoming: true` only when the upstream proxy is trusted to
  * sanitize/replace the header — otherwise a client could pollute your logs
@@ -59,7 +61,16 @@ export function requestId(opts: RequestIdOptions = {}): Hooks {
   return {
     preBody(ctx) {
       const incoming = opts.trustIncoming ? ctx.request.headers.get(header) : null;
-      const id = incoming && /^[A-Za-z0-9._-]{1,200}$/.test(incoming) ? incoming : gen();
+      // Without a trusted incoming id or a custom generator, keep the id the
+      // framework already assigned, so the request logger and the header agree
+      // and no second id is generated.
+      const existing = (ctx.state as Record<string, unknown>).requestId;
+      const id =
+        incoming && /^[A-Za-z0-9._-]{1,200}$/.test(incoming)
+          ? incoming
+          : opts.generator === undefined && typeof existing === "string" && existing.length > 0
+            ? existing
+            : gen();
       (ctx.state as Record<string, unknown>).requestId = id;
       ctx.set.headers.set(header, id);
     },

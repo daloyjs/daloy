@@ -19,6 +19,22 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Fixed
 
+- Log lines and the `x-request-id` header now carry the same request id when
+  `requestId()` is installed. The request logger was bound to the framework's
+  id before hooks ran, while `requestId()` generated a second id for the
+  header. `requestId()` now keeps the framework's id unless it trusts an
+  incoming header or has a custom `generator`, and the framework rebinds
+  `ctx.state.log` whenever a hook really changes the id.
+
+- `app.decorate()` now throws when it is the first decoration on a scope that
+  already has routes registered. Routes capture their scope's decorations when
+  they are registered, so that value never reached them and handlers silently
+  read `undefined`. The usual way to hit this was decorating inside a Worker or
+  Lambda wrapper on every request. Decorate before registering routes, and set
+  per-request values on `ctx.state` in a hook. Framework-owned routes (docs,
+  AsyncAPI, health probes, metrics, CSP reports) do not count, so
+  `new App({ docs: true })` followed by `app.decorate(...)` still works.
+
 - Rejections that happen before a route is matched now carry the App-level
   `cors()` policy (from `app.use(cors(...))` or `new App({ hooks })`): a `Host`
   outside `allowedHosts` (`400`), a header flood (`431`), the production `500`

@@ -102,13 +102,14 @@ Plugin descriptors can declare operational metadata that DaloyJS checks at regis
 
 - `dependencies`: prerequisite plugin names that must already be registered.
 - `seed`: a differentiator for mounting the same named plugin more than once with different configuration.
-- `stateful`: production guard for plugins that mutate shared state. Anonymous stateful plugins are refused unless you give them a name.
+- `stateful`: production guard for plugins that mutate shared state. In production (with `secureDefaults` on), an anonymous stateful plugin is refused until you give it a name.
 
 ```ts
 app.register({
   name: "redis-connection",
   stateful: true,
   register(app) {
+    // Scoped: visible only to routes this plugin registers itself.
     app.decorate("redis", redis);
   },
 });
@@ -131,6 +132,24 @@ app.register({ name: "metrics", seed: "public", register: publicMetrics });
 ## Decorators
 
 Decorate the app to inject shared resources into every handler's `state`. Decorations added at the root are visible inside plugins. Decorations added inside a plugin stay scoped to that plugin and never leak sideways to sibling plugins or back up to the root. Reusing a key throws unless you pass `{ override: true }` deliberately.
+
+Decorate before you register the routes that read the value: each route captures its scope's decorations when it is registered. Since 1.5.5, the first `decorate()` on a scope that already has routes throws instead of leaving those handlers reading `undefined`. That also catches decorating inside a per-request Worker or Lambda wrapper. For a value that changes per request, set it on `ctx.state` in a `preBody` hook.
+
+There is no opt-out of that scoping. A `decorate()` call inside a registered plugin's `register(app)` is visible only to routes that same plugin registers; routes defined on the root app read `undefined`. To share a resource such as a database client with every route, decorate the root app: write the setup as a plain function that takes the root app and call it directly instead of through `app.register()`.
+
+```ts
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function databasePlugin(app: App) {
+  const db = await openDatabase();
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await db.close();
+  });
+}
+
+await databasePlugin(app); // before the routes and plugins that read state.db
+```
 
 Each route binds to its scope's decorations when it is registered, so **decorate before registering the routes that read it** (the same ordering Fastify requires). Declare root-level decorations before the plugins and groups that depend on them, and a plugin's own decorations before that plugin's routes.
 
