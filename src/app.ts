@@ -793,10 +793,11 @@ export interface DocsRouteOptions {
   /** Page `<title>`. Defaults to the resolved OpenAPI `info.title`. */
   title?: string;
   /**
-   * Whether the docs mount. Defaults to `true` for the object form, so
-   * `docs: { ... }` mounts in production too (and logs a
-   * `docs.public_in_production` warning there). Pass `"auto"` to mount only
-   * outside production, like the top-level `docs: "auto"` setting.
+   * Whether the docs mount. Defaults to `"auto"` for the object form (since
+   * 1.5.5): mounted outside production only, like the top-level
+   * `docs: "auto"`, so customizing the UI never publishes the route map by
+   * accident. Pass `true` to mount in production too (a
+   * `docs.public_in_production` warning is logged there), or `false` to skip.
    */
   enabled?: boolean | "auto";
   /**
@@ -849,9 +850,9 @@ export interface AsyncAPIRouteOptions {
    */
   configuration?: { [key: string]: ScalarJsonValue | undefined };
   /**
-   * Force the routes to mount regardless of `NODE_ENV`. When `"auto"` (default
-   * for the object form), skips mounting in production — same semantics as
-   * {@link DocsRouteOptions.enabled}.
+   * Whether the routes mount. Defaults to `"auto"` for the object form (since
+   * 1.5.5): skipped in production. Pass `true` to mount in production too —
+   * same semantics as {@link DocsRouteOptions.enabled}.
    */
   enabled?: boolean | "auto";
   /**
@@ -3074,7 +3075,7 @@ export class App<
       resolvedOpts = {};
     } else {
       // object form
-      const enabled = raw.enabled ?? true;
+      const enabled = raw.enabled ?? "auto";
       if (enabled === false) return;
       if (enabled === "auto" && this.isProduction()) return;
       resolvedOpts = raw;
@@ -3291,7 +3292,7 @@ export class App<
       if (this.isProduction()) return;
       resolvedOpts = {};
     } else {
-      const enabled = raw.enabled ?? true;
+      const enabled = raw.enabled ?? "auto";
       if (enabled === false) return;
       if (enabled === "auto" && this.isProduction()) return;
       resolvedOpts = raw;

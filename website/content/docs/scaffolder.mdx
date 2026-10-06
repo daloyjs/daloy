@@ -108,7 +108,7 @@ Run `create-daloy --list-templates` to inspect the available starters without cr
 
 A production-ready Node.js HTTP server using `@daloyjs/core` with `secureHeaders`, `requestId`, `rateLimit`, hardened install settings (`pnpm-workspace.yaml` plus an `.npmrc` mirror), a sample `GET /healthz` route, a contract-first `GET /books/:id` route with Zod validation, and Hey API codegen wired to `pnpm gen`.
 
-Like FastAPI, every scaffolded project also exposes API documentation out of the box in development: `/docs` serves a Scalar API reference UI and `/openapi.json` serves the live OpenAPI 3.1 spec generated from your route definitions. Templates set `docs: "auto"`, so a production deploy does not publish them unless you set `docs: true`. The dev server logs both URLs at startup. Pass `docs: { ui: "swagger" }` on the `App` constructor to switch to Swagger UI instead.
+Like FastAPI, every scaffolded project also exposes API documentation out of the box in development: `/docs` serves a Scalar API reference UI and `/openapi.json` serves the live OpenAPI 3.1 spec generated from your route definitions. Templates set `docs: "auto"`, so a production deploy does not publish them unless you set `docs: true`. The dev server logs both URLs at startup. Pass `docs: { ui: "swagger" }` on the `App` constructor to switch to Swagger UI instead (the object form also stays off in production unless you add `enabled: true`).
 
 ### `cloudflare-worker`
 

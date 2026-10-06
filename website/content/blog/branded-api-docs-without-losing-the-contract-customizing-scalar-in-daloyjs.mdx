@@ -58,6 +58,7 @@ import { App } from "@daloyjs/core";
 
 export const app = new App({
   docs: {
+    enabled: true,                          // serve in production too (since 1.5.5 the object form defaults to "auto")
     path: "/docs",
     openapiPath: "/openapi.json",
     ui: "scalar",

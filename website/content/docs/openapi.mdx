@@ -64,7 +64,7 @@ const app = new App({
 });
 ```
 
-Use `docs: "auto"` to mount only when the App is not in production (the `create-daloy` templates default to this, so a deployed API does not publish its schema), or leave it off (the default) and mount manually with the helpers below. Customize paths, UI, and tags via the object form:
+Use `docs: "auto"` to mount only when the App is not in production (the `create-daloy` templates default to this, so a deployed API does not publish its schema), or leave it off (the default) and mount manually with the helpers below. Customize paths, UI, and tags via the object form. Since 1.5.5 the object form behaves like `"auto"` unless you set `enabled`, so customizing the UI never publishes your route map in production by accident; set `enabled: true` for a public API that should serve its docs in production:
 
 ```ts
 new App({
@@ -80,7 +80,7 @@ new App({
       hideTestRequestButton: true,
     },
     tags: ["Docs"],                   // default: ["Docs"], pass [] to omit
-    enabled: "auto",                  // true | false | "auto" (off in production)
+    enabled: "auto",                  // default "auto" (off in production); true | false
   },
 });
 ```

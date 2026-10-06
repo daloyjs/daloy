@@ -191,3 +191,12 @@ test("asyncapi works even with no WS channels (empty channels object)", async ()
   assert.equal(doc.asyncapi, "3.0.0");
   assert.deepEqual(doc.channels ?? {}, {});
 });
+
+test("asyncapi: { ... } without enabled defaults to 'auto': not mounted in production", async () => {
+  const prod = withChannel(new App({ logger: false, production: true, asyncapi: { yamlPath: false } }));
+  assert.equal((await prod.request("/asyncapi.json")).status, 404);
+  const forced = withChannel(
+    new App({ logger: false, production: true, asyncapi: { enabled: true, yamlPath: false } }),
+  );
+  assert.equal((await forced.request("/asyncapi.json")).status, 200);
+});

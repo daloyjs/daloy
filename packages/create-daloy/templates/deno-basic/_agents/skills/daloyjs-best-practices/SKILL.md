@@ -110,8 +110,8 @@ definitions:
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
-`openapiYamlPath: false` to disable just the YAML route, `docs: true` to
-also mount them in production, or `docs: false` to disable all three.
+`openapiYamlPath: false` to disable just the YAML route, `docs: true` (or
+`enabled: true` in the object form) to also mount them in production, or `docs: false` to disable all three.
 For hand-rolled mounting, `openapiToYAML` is exported from
 `@daloyjs/core/openapi`.
 

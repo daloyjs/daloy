@@ -464,6 +464,27 @@ test("docs: { enabled: 'auto' } object form respects production flag", async () 
   assert.equal((await prod.request("/docs")).status, 404);
 });
 
+test("docs: { ... } without enabled defaults to 'auto': not mounted in production", async () => {
+  const prod = withRoute(
+    new App({ logger: false, docs: { ui: "swagger", path: "/reference" }, production: true })
+  );
+  assert.equal((await prod.request("/reference")).status, 404);
+  assert.equal((await prod.request("/openapi.json")).status, 404);
+
+  const dev = withRoute(
+    new App({ logger: false, docs: { ui: "swagger", path: "/reference" }, production: false })
+  );
+  assert.equal((await dev.request("/reference")).status, 200);
+});
+
+test("docs: { enabled: true } still publishes the docs in production", async () => {
+  const prod = withRoute(
+    new App({ logger: false, docs: { enabled: true, ui: "swagger" }, production: true })
+  );
+  assert.equal((await prod.request("/docs")).status, 200);
+  assert.equal((await prod.request("/openapi.json")).status, 200);
+});
+
 test("docs: true with no openapi options falls back to default info", async () => {
   const app = withRoute(new App({ logger: false, docs: true }));
   const spec = await app.request("/openapi.json");

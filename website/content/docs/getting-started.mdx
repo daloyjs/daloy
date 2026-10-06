@@ -173,7 +173,7 @@ const app = new App({
 
 Same URL (`GET /docs`), same live `/openapi.json` and `/openapi.yaml` endpoints, same CSP handling, only the rendered HTML changes. You can also keep both: leave the auto-mounted route on Scalar and expose a second Swagger route yourself with `swaggerUiHtml()` (see the [OpenAPI guide](/docs/openapi) for the manual recipe).
 
-Want a custom path? Use the object form: `docs: { ui: "swagger", path: "/reference" }`. Want it only in development? Use `docs: "auto"`: it skips the mount when `production: true`. Need full control? Set `docs: false` and mount your own routes with `generateOpenAPI()` and `swaggerUiHtml() / scalarHtml()`: see the [OpenAPI guide](/docs/openapi).
+Want a custom path? Use the object form: `docs: { ui: "swagger", path: "/reference" }`. The object form mounts only outside production unless you add `enabled: true` (since 1.5.5), the same as `docs: "auto"`, which skips the mount when `production: true`. Need full control? Set `docs: false` and mount your own routes with `generateOpenAPI()` and `swaggerUiHtml() / scalarHtml()`: see the [OpenAPI guide](/docs/openapi).
 
 Both `swaggerUiHtml()` and `scalarHtml()` load their default assets from the jsDelivr CDN, so a strict Content-Security-Policy must allow those assets or the docs UI can render blank. The auto-mounted route and `htmlResponse()` both add a compatible CSP automatically. If you build your own response, import `docsContentSecurityPolicy` from `@daloyjs/core/docs` and pass the result as the response header:
 

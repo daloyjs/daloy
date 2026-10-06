@@ -116,7 +116,7 @@ printStartupBanner({
 });
 ```
 
-The UI page ships the same hardened response as the OpenAPI docs: a strict Content-Security-Policy that only allows the CDN asset origin (jsDelivr by default) plus `connect-src 'self'` so the component can fetch the served spec, `nosniff`, and `no-referrer`. Pin Subresource Integrity hashes or point at self-hosted assets via the `assets` option (`asyncapiScriptUrl` / `asyncapiScriptIntegrity` / `asyncapiStyleUrl` / `asyncapiStyleIntegrity`) for supply-chain hardening, exactly as with the OpenAPI docs UIs. Use `asyncapi: "auto"` to mount everywhere except production.
+The UI page ships the same hardened response as the OpenAPI docs: a strict Content-Security-Policy that only allows the CDN asset origin (jsDelivr by default) plus `connect-src 'self'` so the component can fetch the served spec, `nosniff`, and `no-referrer`. Pin Subresource Integrity hashes or point at self-hosted assets via the `assets` option (`asyncapiScriptUrl` / `asyncapiScriptIntegrity` / `asyncapiStyleUrl` / `asyncapiStyleIntegrity`) for supply-chain hardening, exactly as with the OpenAPI docs UIs. Use `asyncapi: "auto"` to mount everywhere except production. The object form behaves the same way unless you set `enabled: true` (since 1.5.5).
 
 The WebSocket route itself keeps the normal production guardrails. If you run with secure defaults in production, each `app.ws()` route still needs an `allowedOrigins` policy or an explicit `acknowledgeCrossOriginUpgrade: true`. AsyncAPI generation is descriptive. It never relaxes Cross-Site WebSocket Hijacking defenses.
 
