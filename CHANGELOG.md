@@ -17,6 +17,16 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Fixed
+
+- Rejections that happen before a route is matched now carry the App-level
+  `cors()` policy (from `app.use(cors(...))` or `new App({ hooks })`): a `Host`
+  outside `allowedHosts` (`400`), a header flood (`431`), the production `500`
+  for an unconfigured proxy, and an `onError` response for any of them. A
+  browser reported these as a generic "CORS error". A route-level-only
+  `cors()` still cannot apply before routing. Disallowed origins still get no
+  `Access-Control-Allow-Origin`, and `except()` path exemptions are respected.
+
 ## [1.5.4] - 2026-10-05
 
 ### Security

@@ -2758,6 +2758,27 @@ export class App<
   }
 
   /**
+   * Apply the App-level `cors()` policy (from `new App({ hooks })` or a
+   * root-level `app.use(cors(...))`) to a response produced before any route
+   * context existed: a `400` for a disallowed `Host`, a `431` header flood,
+   * the production `500` for an unconfigured proxy, and other rejections that
+   * happen before routing. Without it a browser reports those as a generic
+   * "CORS error". Route-level `cors()` cannot apply here, because no route has
+   * been matched. Same decorator as the route path: disallowed origins still
+   * get no `Access-Control-Allow-Origin`, and an `except()` path exemption is
+   * respected. Error path only, so it costs nothing on successful requests.
+   */
+  private applyAppCorsPolicy(request: Request, res: Response): void {
+    const decorate = corsDecoratorFromHooks([this.options.hooks ?? {}, ...this.groupHooks]);
+    if (decorate === undefined) return;
+    try {
+      decorate(request, res.headers);
+    } catch {
+      // A hook-supplied Response with immutable headers keeps them as-is.
+    }
+  }
+
+  /**
    * A route that requires authentication was about to run (or answer from a
    * cache / replay) although no authentication hook ran and let the request
    * through, typically because `except()` exempted the path or a permissive
@@ -5570,6 +5591,7 @@ export class App<
       }
       if (handled instanceof Response) {
         if (ctx) copyContextHeaders(ctx, handled);
+        else this.applyAppCorsPolicy(request, handled);
         if (!handled.headers.has("x-request-id"))
           handled.headers.set("x-request-id", requestId);
         return finalizeResponse(
@@ -5605,6 +5627,7 @@ export class App<
           },
         });
         if (ctx) copyContextHeaders(ctx, res);
+        else this.applyAppCorsPolicy(request, res);
         return finalizeResponse(
           res,
           ctx,
@@ -5629,6 +5652,7 @@ export class App<
         requestId,
       });
       if (ctx) copyContextHeaders(ctx, res);
+      else this.applyAppCorsPolicy(request, res);
       if (!res.headers.has("x-request-id"))
         res.headers.set("x-request-id", requestId);
       return finalizeResponse(
