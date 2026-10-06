@@ -342,6 +342,7 @@ new App({
     path: "/reference",
     openapiPath: "/spec.json",
     openapiYamlPath: "/spec.yaml", // or `false` to disable the YAML route
+    enabled: "auto", // default: off in production; `true` to publish there too
     scalar: {
       theme: "kepler",
       customCss: ":root { --scalar-color-accent: #2563eb; }",
@@ -593,7 +594,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is at **`1.5.4`** — the public API is frozen and follows SemVer from here: no `1.x` minor changes the API, and any deprecation gets at least one minor cycle before removal. `@daloyjs/core` (npm), `create-daloy` (npm), and [`@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) (JSR) ship together at matching versions.
+DaloyJS is at **`1.5.5`** — the public API is frozen and follows SemVer from here: no `1.x` minor changes the API, and any deprecation gets at least one minor cycle before removal. `@daloyjs/core` (npm), `create-daloy` (npm), and [`@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) (JSR) ship together at matching versions.
 
 The release-candidate train that led here was largely adversarial: `rc.1` through `rc.9` carried remediations from live over-the-wire engagements against realistic multi-tenant apps, and the findings clustered in one place worth naming — **composition**, not individual modules. A `responseCache()` mounted ahead of the network-identity gates silently disabled them; the same order left `rateLimit()` never counting the requests a cache hit or an idempotent replay served; a forwarded-header resolver read the one `X-Forwarded-For` slot an attacker controls; `idempotency()` replayed a stored `Set-Cookie`. Each is fixed, each has a regression test, and several are now production refuse-to-boot guards so the unsafe wiring does not ship quietly. See the [CHANGELOG](CHANGELOG.md) for the full train and [boot guards](https://daloyjs.dev/docs/security/boot-guards) for the orders the framework now refuses.
 
@@ -674,7 +675,7 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 ### First-party middleware
 
 - `secureHeaders` with strict CSP baseline, per-request **nonces**, **Trusted Types** (`require-trusted-types-for 'script'`), `frame-ancestors`, `cross-origin-opener-policy` / `cross-origin-resource-policy`, and reporting endpoints.
-- `cors` with explicit-allowlist enforcement. From 1.5.4 a route's policy also reaches responses that end a request early (auth `401`/`403`, `413`/`415`/`422` body errors); unreleased on `main`, the App-level policy also covers rejections before routing (`400` unknown `Host`, `431`, the unconfigured-proxy `500`).
+- `cors` with explicit-allowlist enforcement. From 1.5.4 a route's policy also reaches responses that end a request early (auth `401`/`403`, `413`/`415`/`422` body errors); from 1.5.5 the App-level policy also covers rejections before routing (`400` unknown `Host`, `431`, the unconfigured-proxy `500`).
 - `csrf` with **double-submit cookie** (default) and **Fetch-Metadata** (`Sec-Fetch-Site`-based, tokenless) strategies; timing-safe verification.
 - `rateLimit` with a fixed-window counter + `Retry-After`, per-client-IP default key, shared `groupId` buckets, IPv6 `/64` client grouping (`ipv6Subnet`), and a Redis-backed store at `@daloyjs/core/rate-limit-redis`.
 - `loadShedding()` event-loop-pressure middleware (auto-`503` + `Retry-After`).

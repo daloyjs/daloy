@@ -17,6 +17,16 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-10-06
+
+### Changed
+
+- The object form of `docs` and `asyncapi` now defaults to `enabled: "auto"`,
+  so `docs: { ui: "swagger" }` mounts outside production only, like
+  `docs: "auto"`. Before, customizing the docs UI also published the full
+  route map in production, with only a log warning. Set `enabled: true` to
+  serve the docs in production. `docs: true` is unchanged.
+
 ### Fixed
 
 - Log lines and the `x-request-id` header now carry the same request id when
@@ -42,6 +52,9 @@ For the forward-looking plan and the full thematic release log, see
   browser reported these as a generic "CORS error". A route-level-only
   `cors()` still cannot apply before routing. Disallowed origins still get no
   `Access-Control-Allow-Origin`, and `except()` path exemptions are respected.
+
+- `create-daloy --help` now shows the real `--package-manager` default (the
+  package manager that ran the CLI, else pnpm) and the `--pm` alias.
 
 ## [1.5.4] - 2026-10-05
 
@@ -3809,7 +3822,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.4...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.5...HEAD
+[1.5.5]: https://github.com/daloyjs/daloy/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/daloyjs/daloy/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/daloyjs/daloy/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/daloyjs/daloy/compare/v1.5.1...v1.5.2
