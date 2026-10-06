@@ -88,37 +88,42 @@ export async function createDsqlClient() {
 import type { App } from "@daloyjs/core";
 import { createDsqlClient } from "./dsql.ts";
 
-export const dsqlPlugin = {
-  name: "dsql",
-  async register(app: App) {
-    const client = await createDsqlClient();
-    app.decorate("db", client);
-    app.onClose(async () => {
-      await client.end();
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function dsqlPlugin(app: App) {
+  const client = await createDsqlClient();
+  app.decorate("db", client);
+  app.onClose(async () => {
+    await client.end();
+  });
+}
 ```
 
 ## 5. Lambda pattern (per-invocation)
 
-On the [Lambda adapter](/docs/adapters), create the client inside the handler and close it at the end so the IAM token doesn't expire between cold starts:
+On the [Lambda adapter](/docs/adapters), create a client per request and close it when the response is done, so the IAM token doesn't expire between invocations of a warm container. Use hooks rather than `app.decorate()`: `decorate()` is for values fixed at startup, it throws if the same key is set twice, and it must run before the routes are registered. Register the hooks before your routes:
 
 ```ts
+import { App } from "@daloyjs/core";
 import { toLambdaHandler } from "@daloyjs/core/lambda";
 import { createDsqlClient } from "./db/dsql.ts";
 
-const daloyHandler = toLambdaHandler(app);
+const app = new App();
 
-export const handler = async (event) => {
-  const db = await createDsqlClient();
-  app.decorate("db", db);
-  try {
-    return await daloyHandler(event);
-  } finally {
-    await db.end();
-  }
-};
+app.use({
+  // A fresh client (and IAM token) for each request.
+  preBody: async (ctx) => {
+    ctx.state.db = await createDsqlClient();
+  },
+  // Runs last, on success and error paths alike.
+  onResponse: async (_res, ctx) => {
+    await ctx?.state.db?.end();
+  },
+});
+
+// ...register routes that read state.db
+
+export const handler = toLambdaHandler(app);
 ```
 
 ## 6. Augment app state

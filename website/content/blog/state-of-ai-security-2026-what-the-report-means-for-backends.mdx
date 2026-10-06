@@ -288,7 +288,10 @@ app.route({
         .strict(),
     },
   },
-  handler: async ({ params, body }) => billing.setPlan(params.id, body),
+  handler: async ({ params, body }) => ({
+    status: 200,
+    body: await billing.setPlan(params.id, body),
+  }),
 });
 ```
 
@@ -299,8 +302,9 @@ On the false-positive problem, the report's lesson is to favor automated gates t
 ```bash
 # The report's clearest signal: automated gates in CI beat manual
 # review, and tools that serve devs AND security beat single-audience
-# tools. A DaloyJS repo leans into both. These run in CI and in the
-# framework's own publish pipeline, and they fail closed.
+# tools. The DaloyJS repo leans into both. These run in the framework's
+# own CI and publish pipeline (they are not copied into scaffolded apps),
+# and they fail closed.
 
 pnpm verify:no-lifecycle-scripts   # no transitive postinstall hooks
 pnpm verify:known-dep-names        # no slopsquatted / hallucinated names
@@ -330,7 +334,7 @@ If you want the whole thing on one screen, here is the report's pain mapped to w
                     found:
                       "AI code skips input validation and mass-assigns fields",
                     daloy:
-                      "The request schema runs before the handler. .strict() rejects unknown keys with a 400, so role or isAdmin cannot be smuggled into a write.",
+                      "The request schema runs before the handler. .strict() rejects unknown keys with a 422, so role or isAdmin cannot be smuggled into a write.",
                   },
                   {
                     found: "AI code returns whole records and leaks fields",
@@ -347,7 +351,7 @@ If you want the whole thing on one screen, here is the report's pain mapped to w
                     found:
                       "False-positive fatigue (65% bypass or dismiss checks)",
                     daloy:
-                      "The verify:* gates are binary pass/fail with a named offender. No 'severity: medium, 14 findings' queue to learn to ignore.",
+                      "The framework's own verify:* CI gates are binary pass/fail with a named offender. No 'severity: medium, 14 findings' queue to learn to ignore.",
                   },
                   {
                     found:

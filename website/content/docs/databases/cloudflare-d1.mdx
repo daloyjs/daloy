@@ -42,20 +42,20 @@ export interface Env {
 
 ## 3. Decorate the app per-request
 
-D1 bindings live on `env`, not `process.env`, so decorate inside the Worker's `fetch` handler and call `app.fetch(req)` directly:
+D1 bindings live on `env`, not `process.env`. Import `env` from `cloudflare:workers` and decorate the app with the binding once, before you register routes. Do not decorate inside the Worker's `fetch` handler: `decorate()` throws on the second request, and a decoration added after the routes were registered never reaches them.
 
-<FlowDiagram title="Per-request binding flow" numbered steps={[
+<FlowDiagram title="Binding flow" numbered steps={[
           {
-            label: "Worker fetch(req, env)",
+            label: "import { env } from \"cloudflare:workers\"",
             detail: "env.DB is the D1 binding",
             tone: "accent",
           },
           {
             label: "app.decorate('db', env.DB)",
-            detail: "attach the binding to app state",
+            detail: "once, before the routes",
           },
           {
-            label: "app.fetch(req)",
+            label: "toFetchHandler(app)",
             detail: "route handler reads state.db",
           },
           {
@@ -63,15 +63,20 @@ D1 bindings live on `env`, not `process.env`, so decorate inside the Worker's `f
             detail: "query D1, no network driver",
             tone: "success",
           },
-        ]} caption="D1 bindings live on env, not process.env, so decorate the app inside the Worker fetch handler on every request before calling app.fetch(req)." />
+        ]} caption="D1 bindings live on env, not process.env, so import env from cloudflare:workers and decorate the app with env.DB before registering routes." />
 
 ```ts
 import { z } from "zod";
+import { env } from "cloudflare:workers";
 import { App, secureHeaders } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
 import type { Env } from "./types/env.ts";
 
 const app = new App();
 app.use(secureHeaders());
+// Decorate before the routes: a route captures its decorations when it is
+// registered, and decorate() throws if called again on a later request.
+app.decorate("db", (env as Env).DB);
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
@@ -92,12 +97,7 @@ app.get(
   },
 );
 
-export default {
-  async fetch(req: Request, env: Env) {
-    app.decorate("db", env.DB);
-    return app.fetch(req);
-  },
-};
+export default toFetchHandler(app);
 ```
 
 ## 4. Augment app state

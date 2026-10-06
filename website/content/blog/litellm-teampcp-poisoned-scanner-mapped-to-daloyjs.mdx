@@ -137,10 +137,11 @@ The other half of this defense is the 24-hour `minimum-release-age` cooldown. Th
 
 ## Stage 3: Persistence and lateral movement
 
-<StageCard stage="Persistence + Kubernetes worm" litellm="Wrote ~/.config/sysmon/sysmon.py, registered a 'sysmon.service' systemd user unit polling https://checkmarx.zone/raw every 5 minutes. If a Kubernetes service-account token was present, deployed privileged 'node-setup-*' pods to every node in kube-system." daloyjs="Once the payload can't run at install time, none of this happens on a build runner, the systemd / pod-deployment behavior never gets a chance. For the runtime side, harden-runner runs in egress-audit mode on every job, so the first 'curl POST to models.litellm.cloud' lands in the workflow log. The publish job specifically sets disable-sudo: true so a runtime payload can't elevate even if one did slip through." />
+<StageCard stage="Persistence + Kubernetes worm" litellm="Wrote ~/.config/sysmon/sysmon.py, registered a 'sysmon.service' systemd user unit polling https://checkmarx.zone/raw every 5 minutes. If a Kubernetes service-account token was present, deployed privileged 'node-setup-*' pods to every node in kube-system." daloyjs="Once the payload can't run at install time, none of this happens on a build runner, the systemd / pod-deployment behavior never gets a chance. For the runtime side, harden-runner runs on every job (audit mode on CI and scanner jobs, block mode with an endpoint allowlist on the publish jobs), so the first 'curl POST to models.litellm.cloud' lands in the workflow log. The publish job specifically sets disable-sudo: true so a runtime payload can't elevate even if one did slip through." />
 
 ```yaml
-# Every job (scanner OR publish) starts with harden-runner in audit mode.
+# Every CI and scanner job starts with harden-runner in audit mode (the
+# publish jobs go further: egress-policy: block plus an endpoint allowlist).
 # That alone would have flagged 'curl POST to models.litellm.cloud' as
 # anomalous egress - that domain was registered the day before the
 # compromise.
@@ -206,6 +207,6 @@ A determined attacker may still find another way. Security is never finished. Th
 
 The repository already used SHA-pinned actions, isolated OIDC publishing, environment approval, ignored lifecycle scripts, zero runtime dependencies, a 24-hour release-age floor, verification gates, and egress logging. The LiteLLM attack path would fail at several independent steps.
 
-Open `.github/workflows/` in the repo, run `pnpm verify` locally, look at the commit SHAs on every `uses:` line. The receipts are in the workflow files.
+Open `.github/workflows/` in the repo, run the `pnpm verify:*` gates locally, look at the commit SHAs on every `uses:` line. The receipts are in the workflow files.
 
 <p className="text-sm text-muted-foreground">Related reading on this blog:{" "}<Link href="/blog/supply-chain-hardening-for-typescript-libraries">Supply-chain hardening for TypeScript libraries</Link>{", "}<Link href="/blog/secure-by-default">Secure by Default</Link>{", "}<Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">Vibe coding security</Link>{", "}<Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">Scaffolding a production-ready DaloyJS app in 60 seconds</Link>{". "}Relevant docs:{" "}<Link href="/docs/security">/docs/security</Link>{", "}<Link href="/docs/security/supply-chain">supply chain</Link>.</p>

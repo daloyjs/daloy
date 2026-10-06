@@ -88,15 +88,14 @@ import * as schema from "./schema.ts";
 const client = postgres(process.env.DATABASE_URL!, { max: 10, prepare: false });
 export const db = drizzle(client, { schema });
 
-export const drizzlePlugin = {
-  name: "drizzle",
-  async register(app: App) {
-    app.decorate("db", db);
-    app.onClose(async () => {
-      await client.end({ timeout: 5 });
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function drizzlePlugin(app: App) {
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await client.end({ timeout: 5 });
+  });
+}
 ```
 
 ## 4. Augment app state types
@@ -124,7 +123,7 @@ import { drizzlePlugin } from "./db/drizzle.ts";
 import { users } from "./db/schema.ts";
 
 const app = new App();
-app.register(drizzlePlugin);
+await drizzlePlugin(app);
 
 const UserSchema = z.object({
   id: z.uuid(),
@@ -194,15 +193,19 @@ Drizzle is the easiest path to running DaloyJS against a real database on the ed
 
 ```ts
 // Cloudflare Workers + D1
+import { env } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
+import { App } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-export default {
-  fetch(req: Request, env: Env, ctx: ExecutionContext) {
-    const db = drizzle(env.DB);
-    // app.decorate("db", db) per request, or build the App per-request.
-    return app.fetch(req, env, ctx);
-  },
-};
+const app = new App();
+// Decorate once, before the routes. Calling decorate() inside the Worker
+// fetch handler throws on the second request.
+app.decorate("db", drizzle((env as Env).DB));
+
+// ...register routes that read state.db
+
+export default toFetchHandler(app);
 ```
 
 Compare with [Prisma](/docs/orm/prisma), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) if you are working with document databases.

@@ -89,44 +89,43 @@ export interface BraintreeClient {
   parseWebhook(signature: string, payload: string): Promise<unknown>;
 }
 
-export const braintreePlugin = {
-  name: "braintree",
-  register(app: App) {
-    const client: BraintreeClient = {
-      gateway,
-      async clientToken(customerId) {
-        const res = await gateway.clientToken.generate(
-          customerId ? { customerId } : {},
-        );
-        return res.clientToken;
-      },
-      async sale(input) {
-        const result = await gateway.transaction.sale({
-          amount: input.amount,
-          paymentMethodNonce: input.paymentMethodNonce,
-          deviceData: input.deviceData,
-          orderId: input.orderId,
-          customerId: input.customerId,
-          options: {
-            submitForSettlement: input.submitForSettlement ?? true,
-          },
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function braintreePlugin(app: App) {
+  const client: BraintreeClient = {
+    gateway,
+    async clientToken(customerId) {
+      const res = await gateway.clientToken.generate(
+        customerId ? { customerId } : {},
+      );
+      return res.clientToken;
+    },
+    async sale(input) {
+      const result = await gateway.transaction.sale({
+        amount: input.amount,
+        paymentMethodNonce: input.paymentMethodNonce,
+        deviceData: input.deviceData,
+        orderId: input.orderId,
+        customerId: input.customerId,
+        options: {
+          submitForSettlement: input.submitForSettlement ?? true,
+        },
+      });
+      if (!result.success) {
+        // result.message + result.errors.deepErrors() carry the details.
+        throw Object.assign(new Error(result.message), {
+          code: "BRAINTREE_SALE_FAILED",
+          errors: result.errors?.deepErrors?.() ?? [],
         });
-        if (!result.success) {
-          // result.message + result.errors.deepErrors() carry the details.
-          throw Object.assign(new Error(result.message), {
-            code: "BRAINTREE_SALE_FAILED",
-            errors: result.errors?.deepErrors?.() ?? [],
-          });
-        }
-        return { id: result.transaction.id, status: result.transaction.status };
-      },
-      parseWebhook(signature, payload) {
-        return gateway.webhookNotification.parse(signature, payload);
-      },
-    };
-    app.decorate("braintree", client);
-  },
-};
+      }
+      return { id: result.transaction.id, status: result.transaction.status };
+    },
+    parseWebhook(signature, payload) {
+      return gateway.webhookNotification.parse(signature, payload);
+    },
+  };
+  app.decorate("braintree", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -146,7 +145,7 @@ import { braintreePlugin } from "./plugins/braintree.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(braintreePlugin);
+braintreePlugin(app);
 
 app.post(
   "/checkout/client-token",

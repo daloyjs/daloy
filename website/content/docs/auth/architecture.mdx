@@ -189,7 +189,7 @@ app.use(
 app.get(
   "/orders",
   {
-    hooks: requireScopes("orders:read"),
+    hooks: requireScopes(["orders:read"]),
     responses: { 200: { description: "ok" } },
   },
   () => ({ status: 200, body: { orders: [] } }),
@@ -200,7 +200,7 @@ The `jwk()` middleware enforces an asymmetric-only algorithm allowlist (it refus
 
 ## Recommended architecture 2: browser app (the BFF pattern) [#bff]
 
-If a browser app needs users to log in, do **not** hold access or refresh tokens in JavaScript. Run a thin server-side **back-end-for-frontend** (BFF): it performs the authorization-code + PKCE flow with the IdP, keeps the resulting tokens in a signed, encrypted `session()` cookie, and exposes only same-origin endpoints to the browser. Protect every state-changing route with `csrf()` because the browser now authenticates with a cookie.
+If a browser app needs users to log in, do **not** hold access or refresh tokens in JavaScript. Run a thin server-side **back-end-for-frontend** (BFF): it performs the authorization-code + PKCE flow with the IdP, keeps the resulting tokens in a server-side `session()` store that the browser reaches only through a signed (HMAC-SHA256) session-id cookie, and exposes only same-origin endpoints to the browser. Protect every state-changing route with `csrf()` because the browser now authenticates with a cookie.
 
 ```ts
 import { App, csrf } from "@daloyjs/core";
@@ -208,7 +208,9 @@ import { session } from "@daloyjs/core";
 
 const app = new App();
 
-// Tokens from the IdP live here, server-side and encrypted, never in the browser.
+// Tokens from the IdP live here, in the server-side session store, never in the browser.
+// The cookie carries only a signed session id. Pass a shared `store` in production;
+// the default in-memory store is per-process.
 app.use(session({ secret: process.env.SESSION_SECRET! }));
 
 // The browser authenticates with a cookie, so guard mutations against CSRF.
@@ -240,7 +242,7 @@ app.use(csrf());
           {
             from: "BFF (DaloyJS)",
             to: "Browser",
-            label: "Set signed, encrypted session cookie",
+            label: "Set signed session-id cookie",
             detail: "tokens stay server-side. The cookie holds only a session id",
             kind: "response",
           },
@@ -263,7 +265,7 @@ app.use(csrf());
             label: "Return data. The access token is never exposed",
             kind: "response",
           },
-        ]} caption="Because the browser now authenticates with a cookie, every state-changing route is protected with csrf(). Access and refresh tokens live only in the encrypted session, never in JavaScript." />
+        ]} caption="Because the browser now authenticates with a cookie, every state-changing route is protected with csrf(). Access and refresh tokens live only in the server-side session store, never in JavaScript." />
 
 The login/callback routes themselves drive the OIDC flow against your provider. See [sessions](/docs/security/session) and [CSRF](/docs/security/csrf) for the building blocks.
 
@@ -276,14 +278,14 @@ The login/callback routes themselves drive the OIDC flow against your provider. 
 | `bearerAuth()` | `@daloyjs/core` | Validate opaque or custom Bearer tokens with your own hook |
 | `requireScopes()` | `@daloyjs/core` | Authorize a route by scope or permission |
 | `basicAuth()` | `@daloyjs/core` | HTTP Basic for simple internal cases |
-| `session()` | `@daloyjs/core` | Signed, encrypted cookie session for a BFF / relying party |
+| `session()` | `@daloyjs/core` | Signed session-id cookie plus a pluggable server-side store, for a BFF / relying party |
 | `csrf()` | `@daloyjs/core` | CSRF protection for cookie-authenticated, state-changing routes |
 | `createJwtSigner()` | `@daloyjs/core` | Mint your own JWTs for service-to-service or a tiny first-party issuer |
 
 ## What we recommend [#recommendations]
 
 - Default to a resource server. Verify JWTs with `jwk()`, pin an asymmetric algorithm allowlist, enforce `issuer` + `audience`, and gate routes with `requireScopes()`.
-- Use the BFF pattern for browser logins. Run authorization-code + PKCE on the server, keep tokens in a `session()` cookie, never expose them to JavaScript, and protect mutations with `csrf()`.
+- Use the BFF pattern for browser logins. Run authorization-code + PKCE on the server, keep tokens in the server-side `session()` store behind a signed session-id cookie, never expose them to JavaScript, and protect mutations with `csrf()`.
 - Bring an IdP you do not operate unless you have a strong reason not to: managed for speed, self-hosted open source for control and data residency.
 - Never build your own authorization server.
 - Service-to-service / internal traffic: use `bearerAuth()` with a verified token, or `createJwtSigner()` + `jwk()` when both sides speak JWT. See the [internal-service preset](/docs/security/internal-service-preset).

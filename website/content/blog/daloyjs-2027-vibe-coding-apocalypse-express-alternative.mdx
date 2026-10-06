@@ -137,10 +137,10 @@ app.route({
   method: "POST",
   path: "/import",
   operationId: "import",
-  request: { json: z.object({ url: z.url() }) },
+  request: { body: z.object({ url: z.url() }) },
   responses: { 200: { description: "ok" } },
-  handler: async ({ request }) => {
-    const { url } = await request.json();
+  handler: async ({ body }) => {
+    const { url } = body;
     const upstream = await safeFetch(url); // refuses 169.254.169.254
     return { status: 200 as const, body: await upstream.text() };
   },
@@ -159,7 +159,8 @@ import { requireScopes, every } from "@daloyjs/core";
 
 // Verify tokens against your identity provider's JWKS.
 const auth = jwk({
-  jwksUri: "https://your-tenant.auth-provider.com/.well-known/jwks.json",
+  jwks: "https://your-tenant.auth-provider.com/.well-known/jwks.json",
+  algorithms: ["RS256", "ES256"],
   issuer: "https://your-tenant.auth-provider.com/",
   audience: "https://api.yourapp.com",
 });
@@ -180,7 +181,7 @@ app.route({
   },
   handler: async ({ params }) => {
     // ... by the time you are here, the token is verified and scoped
-    return { status: 204 as const };
+    return { status: 204 as const, body: undefined };
   },
 });
 ```
@@ -198,6 +199,9 @@ One route definition gives you a typed client with zero codegen:
 ```ts
 import { createClient } from "@daloyjs/core/client";
 
+// The client reads routes from the app's *type*, so build the app with
+// chained calls (new App().route({...}).route({...})) or registerRoutes([...]).
+// Separate app.route(...) statements on a const do not widen its type.
 const client = createClient(app, { baseUrl: "http://localhost:3000" });
 
 const r = await client.getBookById({ params: { id: "1" } });
@@ -215,7 +219,7 @@ const app = new App({
 });
 ```
 
-That mounts an interactive Scalar UI at `/docs`, plus the JSON and YAML specs, with a strict CSP. Switch to Swagger UI or Redoc with one word (`ui: "swagger"`). The docs are always contract-accurate because they are generated from the same route definitions that run your server. They cannot go stale. If you omit the `info` block, DaloyJS reads your `package.json` for the title and version. Less boilerplate, fewer things to forget.
+That mounts an interactive Scalar UI at `/docs`, plus the JSON and YAML specs, with a strict CSP. Switch to Swagger UI or Redoc with one word (`ui: "swagger"`). The docs are always contract-accurate because they are generated from the same route definitions that run your server. They cannot go stale. If you omit the `info` block, DaloyJS falls back to the top-level `title` / `version` App options, then to `"DaloyJS API"` / `"0.0.0"`. It does not read `package.json`, so set one or the other before you publish.
 
 A fuller route includes auth, validation, and typed error responses:
 
@@ -410,7 +414,7 @@ pnpm create daloy@latest my-api
 pnpm create daloy@latest my-api --with-ci --code-owner @acme/security
 ```
 
-You get a working project with the secure middleware stack already wired, `docs: true` on, a runtime template of your choice, and containers that ship with a non-root user, `tini` as PID 1, a `HEALTHCHECK`, and `STOPSIGNAL SIGTERM`. The `--with-ci` bundle even signs your pushed images with Sigstore Cosign and attaches an SBOM attestation, so your consumers can verify the image instead of trusting the registry. The scaffolder applies those operational details before the first request ships.
+You get a working project with the secure middleware stack already wired, `docs: "auto"` (docs everywhere except production), a runtime template of your choice, and containers that ship with a non-root user, `tini` as PID 1, a `HEALTHCHECK`, and `STOPSIGNAL SIGTERM`. The `--with-ci` bundle even signs your pushed images with Sigstore Cosign and attaches an SBOM attestation, so your consumers can verify the image instead of trusting the registry. The scaffolder applies those operational details before the first request ships.
 
 ## Why I think this is the right bet for 2027
 

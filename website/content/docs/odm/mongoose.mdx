@@ -66,16 +66,15 @@ export const db = { connection, User };
 import type { App } from "@daloyjs/core";
 import { connection, db } from "./mongoose.ts";
 
-export const mongoosePlugin = {
-  name: "mongoose",
-  async register(app: App) {
-    await connection.connect(process.env.MONGODB_URI!);
-    app.decorate("db", db);
-    app.onClose(async () => {
-      await connection.disconnect();
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function mongoosePlugin(app: App) {
+  await connection.connect(process.env.MONGODB_URI!);
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await connection.disconnect();
+  });
+}
 ```
 
 ## 4. Augment app state types
@@ -107,7 +106,7 @@ const UserSchema = z.object({
 });
 
 const app = new App();
-app.register(mongoosePlugin);
+await mongoosePlugin(app);
 
 app.get(
   "/users/:id",

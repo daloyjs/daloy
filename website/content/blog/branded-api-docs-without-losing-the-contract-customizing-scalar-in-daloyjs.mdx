@@ -141,7 +141,7 @@ export const RENDERED = `<!-- The single line that lands in the browser. Yes, ju
   data-url="/openapi.json"
   data-configuration='{"theme":"deepSpace","layout":"modern","hideTestRequestButton":true,"showOperationId":true,"defaultOpenFirstTag":true,"favicon":"/static/brand/favicon.svg","customCss":":root{--scalar-color-1:#0b1020;--scalar-color-accent:#ff6a3d;}","url":"/openapi.json"}'>
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>`;
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5" integrity="sha384-..." crossorigin="anonymous"></script>`;
 
 export const PER_ENV = `// One pattern I use a lot: dev gets all the toys, prod gets the brand
 // chrome and nothing dangerous. No NODE_ENV ifs inside the template,
@@ -180,7 +180,8 @@ export const CUSTOM_ROUTE = `// You need a function-valued option (a plugin, an 
 //
 // Drop the auto-mount and use scalarHtml() directly. Same generator,
 // same CSP, same nonce handling - just rendered by a route you control.
-import { App, scalarHtml, htmlResponse } from "@daloyjs/core";
+import { App } from "@daloyjs/core";
+import { scalarHtml, htmlResponse } from "@daloyjs/core/docs";
 
 export const app = new App({ docs: false });
 
@@ -213,7 +214,9 @@ import { app } from "../src/app.ts";
 
 test("docs page renders Scalar with our brand config", async () => {
   const res = await app.request("/docs");
-  const body = await res.text();
+  // The config JSON sits in an HTML attribute, so its quotes arrive
+  // escaped as &quot;. Unescape them before matching.
+  const body = (await res.text()).replaceAll("&quot;", '"');
 
   assert.equal(res.status, 200);
   assert.match(body, /id="api-reference"/);

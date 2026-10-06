@@ -35,7 +35,7 @@ That list maps cleanly onto what an HTTP framework can enforce at the request bo
 
 ## Layered defense: the deployment layer must stand alone
 
-<RequirementCard requirement="Report: 'Each layer must function independently. The deployment-time layer cannot rely on the model behaving.'" framework="The DaloyJS constructor ships secure-by-default for the deployment layer: 1 MiB body limit, 30s request timeout, prod-mode 5xx redaction, prototype-pollution-safe JSON parse, CRLF / header-splitting refusal, path-traversal rejection, method-confusion 405 (not 404), 415 on unsupported content types, __Host- / Secure / HttpOnly / SameSite=Lax cookies. None of these depend on the model behaving, they hold even when the calling agent is fully compromised." user="Decide what the runtime layer does when the deployment layer fires: page someone, drop the request, fail open, fail closed. The framework gives you the signal. The runbook is yours." />
+<RequirementCard requirement="Report: 'Each layer must function independently. The deployment-time layer cannot rely on the model behaving.'" framework="The DaloyJS constructor ships secure-by-default for the deployment layer: 1 MiB body limit, 30s request timeout, prod-mode 5xx redaction, prototype-pollution-safe JSON parse, CRLF / header-splitting refusal, path-traversal rejection, method-confusion 405 (not 404), 415 on unsupported content types, and session() cookies that default to __Host- / Secure / HttpOnly / SameSite=Lax. None of these depend on the model behaving, they hold even when the calling agent is fully compromised." user="Decide what the runtime layer does when the deployment layer fires: page someone, drop the request, fail open, fail closed. The framework gives you the signal. The runbook is yours." />
 
 ```ts
 // The report's framing: training-time, deployment-time, and
@@ -97,7 +97,7 @@ app.route({
     // to see, even if a junior engineer adds it to the SELECT later.
     200: { description: "queued", body: z.object({ id: z.uuid() }).strict() },
   },
-  handler: async ({ body }) => transfers.queue(body),
+  handler: async ({ body }) => ({ status: 200, body: await transfers.queue(body) }),
 });
 ```
 
@@ -105,7 +105,7 @@ This is the report's main point and the easiest one to get wrong. The temptation
 
 ## Network-level scope control: fetchGuard is one line
 
-<RequirementCard requirement="Report: 'A backend the model can call must not be a path to internal infrastructure or the cloud metadata service.'" framework="fetchGuard() is a default-deny outbound wrapper around fetch / undici / Bun.fetch / Workers fetch. Cloud metadata IPs, localhost, RFC 1918 private ranges, link-local, and IPv6 equivalents are blocked. Redirects are re-validated against the same allow-list, so an attacker can't bounce off a public URL into the metadata service. ipRestriction() does the same job for inbound traffic on admin / kill-switch surfaces." user="Write the allow-list. fetchGuard refuses to start without one, there is no '*' default. That refusal is on purpose. The most common AI tool SSRF is a 'we'll lock it down later' that never gets locked down." />
+<RequirementCard requirement="Report: 'A backend the model can call must not be a path to internal infrastructure or the cloud metadata service.'" framework="fetchGuard() returns a guarded fetch function that your tools call instead of the global fetch. Cloud metadata IPs, localhost, RFC 1918 private ranges, link-local, and IPv6 equivalents are blocked, and the metadata floor survives allowAddresses and every allow* class flag (only a host you list in allowHosts skips the checks). Every redirect hop is re-validated, so an attacker can't bounce off a public URL into the metadata service. ipRestriction() does the same job for inbound traffic on admin / kill-switch surfaces." user="Write the host allow-list. fetchGuard blocks internal targets but lets public hosts through, so 'only these APIs' is a check you write before calling it. It is also opt-in: it does not patch the global fetch, so a tool that calls plain fetch() is unguarded. The most common AI tool SSRF is a 'we'll lock it down later' that never gets locked down." />
 
 ```ts
 // "Network-level scope control" from the report's minimum
@@ -113,33 +113,40 @@ This is the report's main point and the easiest one to get wrong. The temptation
 // AI tool is weaponised: prompt-inject a URL, the tool fetches it,
 // the metadata service hands back IAM credentials, game over.
 //
-// fetchGuard() is default-deny on:
+// fetchGuard() returns a fetch function that blocks:
 //   - cloud metadata (169.254.169.254, fd00:ec2::254)
 //   - localhost (127.0.0.0/8, ::1)
 //   - private ranges (10/8, 172.16/12, 192.168/16, fc00::/7)
 //   - link-local (169.254/16, fe80::/10)
-// It also follows redirects through the same allow-list, so an
-// attacker can't bounce off a public URL into the metadata IP.
+// It re-validates every redirect hop, so an attacker can't bounce
+// off a public URL into the metadata IP. Public hosts are allowed,
+// so the "only these APIs" list is your own check.
 import { App, fetchGuard, ipRestriction } from "@daloyjs/core";
 
 export const app = new App();
 
-app.use(fetchGuard({
-  allow: [
-    "https://api.openai.com",
-    "https://api.stripe.com",
-    "https://*.s3.amazonaws.com",
-  ],
-}));
+// maxRedirects: 0 so a redirect cannot carry the call to a public
+// host that is not on the list below.
+const safeFetch = fetchGuard({ maxRedirects: 0 }); // blocks private, loopback, link-local and metadata targets
+const ALLOWED_HOSTS = new Set(["api.openai.com", "api.stripe.com"]);
+
+export async function toolFetch(url: string, init?: RequestInit) {
+  if (!ALLOWED_HOSTS.has(new URL(url).hostname)) {
+    throw new Error("host not on the tool allow-list");
+  }
+  return safeFetch(url, init);
+}
 
 // And the admin / kill-switch surface is scoped to the operator
 // network, not the model-facing one.
-app.use("/admin/*", ipRestriction({ allow: ["10.0.0.0/8"] }));
+app.group("/admin", { hooks: ipRestriction({ allow: ["10.0.0.0/8"] }) }, (admin) => {
+  // admin.route({ ... })
+});
 ```
 
 ## Inference / execution separation: two Apps, two deploys
 
-<RequirementCard requirement="Report: 'The process that talks to the model is not the process that touches production state.'" framework="DaloyJS Apps are cheap. The recommended pattern is two of them: a model-facing tool surface (public, schema-validated, rate-limited) and an execution app (internal-only, ipRestriction'd, behind short-lived JWTs). The tool surface forwards to the execution app over the internal network. A successful prompt injection lands the attacker in a process with no database credentials, no filesystem, and a fetchGuard allow-list of two domains." user="Decide the split. 'Anything that mutates state' is a fine starting boundary. Move the line as your blast-radius tolerance changes. The framework doesn't care which side a route lives on." />
+<RequirementCard requirement="Report: 'The process that talks to the model is not the process that touches production state.'" framework="DaloyJS Apps are cheap. The recommended pattern is two of them: a model-facing tool surface (public, schema-validated, rate-limited) and an execution app (internal-only, ipRestriction'd, behind short-lived JWTs). The tool surface forwards to the execution app over the internal network. A successful prompt injection lands the attacker in a process with no database credentials, no filesystem, and a fetchGuard-wrapped fetch behind a two-domain host check." user="Decide the split. 'Anything that mutates state' is a fine starting boundary. Move the line as your blast-radius tolerance changes. The framework doesn't care which side a route lives on." />
 
 ```ts
 // "Separation of inference and execution", the report's way of
@@ -151,7 +158,7 @@ app.use("/admin/*", ipRestriction({ allow: ["10.0.0.0/8"] }));
 // scoped, rate-limited). The execution app owns the side effects,
 // runs behind ipRestriction, and only accepts traffic from the
 // internal VPC.
-import { App, ipRestriction, jwt } from "@daloyjs/core";
+import { App, ipRestriction, jwk } from "@daloyjs/core";
 
 // --- model-facing tool surface (public deploy) ---
 export const toolApp = new App();
@@ -160,63 +167,59 @@ toolApp.route({
   path: "/tools/refund",
   operationId: "refund",
   request: { body: refundSchema },
+  responses: { 200: { description: "forwarded" } },
   handler: async ({ body }) => {
     // No DB. No filesystem. Just a signed forward to the execution
     // app over the internal network. The model can't reach prod
     // even if it gets the entire process to RCE.
-    return execClient.post("/exec/refund", body);
+    await execClient.post("/exec/refund", body);
+    return { status: 200 as const, body: undefined };
   },
 });
 
 // --- execution app (internal-only deploy) ---
 export const execApp = new App();
 execApp.use(ipRestriction({ allow: ["10.0.0.0/8"] }));
-execApp.use(jwt({
-  algorithms: ["RS256", "ES256"],   // 'none' impossible
-  jwksUri: process.env.INTERNAL_JWKS_URI!,
-  maxTokenAgeSeconds: 5 * 60,       // 5-min tokens, not year-long keys
+execApp.use(jwk({
+  algorithms: ["RS256", "ES256"],   // 'none' and HS* impossible
+  jwks: process.env.INTERNAL_JWKS_URI!,
+  audience: "exec-app",             // required in production
+  maxLifetimeSeconds: 5 * 60,       // 5-min tokens, not year-long keys
 }));
 ```
 
 ## Full observability and emergency controls, the receipts and the big red button
 
-<RequirementCard requirement="Report: 'When the model goes off the rails you need the receipts and a way to stop it.'" framework="Per-request structured logs with a correlated ULID requestId. RFC 9457 problem+json errors carrying the same requestId. loadShedding sheds the cheapest traffic first when the event loop or queue is saturated. gracefulShutdown drains in-flight requests on SIGTERM. A killswitch is one ipRestriction line on / and a redeploy." user="Wire the structured log stream to your SIEM (Datadog, CloudWatch, Loki, whatever). Decide the load-shedding thresholds for your workload. The framework gives you the primitives. The dashboards and the on-call rotation are yours." />
+<RequirementCard requirement="Report: 'When the model goes off the rails you need the receipts and a way to stop it.'" framework="Per-request structured logs with a correlated requestId (a UUID, also sent as x-request-id). RFC 9457 problem+json errors carrying the same id in instance. loadShedding answers 503 + Retry-After when event-loop delay, utilization, or memory crosses a threshold. The Node adapter's serve() drains in-flight requests on SIGTERM / SIGINT. A killswitch is one ipRestriction line on / and a redeploy." user="Wire the structured log stream to your SIEM (Datadog, CloudWatch, Loki, whatever). Decide the load-shedding thresholds for your workload. The framework gives you the primitives. The dashboards and the on-call rotation are yours." />
 
 ```ts
 // "Full observability and emergency controls", when the model
 // goes off the rails at 3am you need (a) the receipts and (b) a
 // big red button. DaloyJS gives you both as primitives.
-import {
-  App,
-  requestId,
-  structuredLogger,
-  loadShedding,
-  gracefulShutdown,
-} from "@daloyjs/core";
+import { App, createLogger, loadShedding } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
 
-export const app = new App();
+export const app = new App({ logger: createLogger({ level: "info" }) });
 
-// (a) The receipts: every request gets a ULID-shaped id that
+// (a) The receipts: every request gets an id (x-request-id) that
 // flows into the structured log line AND the problem+json error
-// body. One ID, one drill-down.
-app.use(requestId());
-app.use(structuredLogger({ destination: process.stdout }));
+// body (as instance). One ID, one drill-down.
 
 // (b) The emergency controls:
-//   - loadShedding sheds the cheapest traffic first when the
-//     event loop or queue is saturated (returns 503 + Retry-After)
-//   - gracefulShutdown drains in-flight requests on SIGTERM and
-//     refuses new ones, so a "stop the agent" deploy doesn't kill
-//     a transaction half-way through
-app.use(loadShedding({ maxQueueDepth: 100, maxEventLoopDelayMs: 50 }));
-gracefulShutdown(app, { drainMs: 15_000 });
+//   - loadShedding returns 503 + Retry-After when event-loop
+//     delay (or utilization / memory) crosses the threshold
+//   - serve() drains in-flight requests on SIGTERM / SIGINT,
+//     so a "stop the agent" deploy doesn't kill a transaction
+//     half-way through
+app.use(loadShedding({ maxEventLoopDelayMs: 50 }));
+serve(app, { port: 3000, shutdownTimeoutMs: 15_000 });
 ```
 
 ## Prompt injection: the HTTP boundary owns the blast radius
 
 Prompt injection lives in the model layer, so an HTTP framework cannot solve it. The framework can limit the *blast radius* of a successful prompt injection: how much damage the model can do once it has been convinced to call your tool with attacker-shaped input.
 
-<RequirementCard requirement="Report: 'Constraints must be enforced. Many leading models still fall to prompt injection in a handful of tries.'" framework="The route IS the constraint. Strongly typed inputs, bounded numbers, bounded strings, enum'd choices, .strict() bodies. Response schemas bounded too, so a successful injection can't read fields the contract didn't promise. RFC 9457 errors so the model gets a structured 400 it can self-correct from, not a vague 500 it will retry with progressively weirder inputs." user="Resist the urge to add a free-form 'action' field 'just for flexibility'. Free-form fields are the entire prompt-injection attack surface. If a tool needs flexibility, ship more tools, not wider tools." />
+<RequirementCard requirement="Report: 'Constraints must be enforced. Many leading models still fall to prompt injection in a handful of tries.'" framework="The route IS the constraint. Strongly typed inputs, bounded numbers, bounded strings, enum'd choices, .strict() bodies. Response schemas bounded too, so a successful injection can't read fields the contract didn't promise. RFC 9457 errors so the model gets a structured 422 it can self-correct from, not a vague 500 it will retry with progressively weirder inputs." user="Resist the urge to add a free-form 'action' field 'just for flexibility'. Free-form fields are the entire prompt-injection attack surface. If a tool needs flexibility, ship more tools, not wider tools." />
 
 ```ts
 // Prompt injection doesn't live "at the HTTP layer", it lives in
@@ -232,6 +235,7 @@ Prompt injection lives in the model layer, so an HTTP framework cannot solve it.
 app.route({
   method: "POST",
   path: "/tools/search-docs",
+  operationId: "searchDocs",
   request: {
     body: z.object({
       query: z.string().min(1).max(280),
@@ -252,13 +256,13 @@ app.route({
       }).strict(),
     },
   },
-  handler: async ({ body }) => docs.search(body),
+  handler: async ({ body }) => ({ status: 200, body: await docs.search(body) }),
 });
 ```
 
 ## Data processing guarantees, prod-mode redaction is on by default
 
-<RequirementCard requirement="Report: 'The backend should not become a path to internals via verbose error messages or leaked stack traces.'" framework="In production, DaloyJS redacts 5xx response bodies by default, keeping stack traces, internal hostnames, and DB error messages off the wire. The agent sees a problem+json with a requestId. Your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)." user="Don't paste raw error.message into a 200 response 'so the agent can self-correct'. The agent will self-correct from a 400 problem+json with a documented type URL just as well, and the type URL doesn't leak your DB schema." />
+<RequirementCard requirement="Report: 'The backend should not become a path to internals via verbose error messages or leaked stack traces.'" framework="In production, DaloyJS redacts 5xx response bodies by default, keeping stack traces, internal hostnames, and DB error messages off the wire. The agent sees a problem+json with a requestId. Your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)." user="Don't paste raw error.message into a 200 response 'so the agent can self-correct'. The agent will self-correct from a 422 problem+json with a documented type URL just as well, and the type URL doesn't leak your DB schema." />
 
 ```ts
 // "Data processing guarantees", the report's way of saying:
@@ -273,17 +277,15 @@ HTTP/1.1 500 Internal Server Error
 content-type: application/problem+json
 
 {
-  "type": "https://daloyjs.dev/problems/internal-server-error",
+  "type": "https://daloyjs.dev/errors/internal",
   "title": "Internal Server Error",
   "status": 500,
-  "detail": "An internal error occurred. Reference requestId for diagnosis.",
-  "instance": "/tools/refund",
-  "requestId": "01J9XP4M2K3W7Z8V0YQHB6T5RC"
+  "instance": "urn:request:0219df15-0d62-4a57-a728-b017926ebfd6"
 }
 
 // Same incident in your structured log line - what your team sees:
 {
-  "level":"error","requestId":"01J9XP4M2K3W7Z8V0YQHB6T5RC",
+  "level":"error","requestId":"0219df15-0d62-4a57-a728-b017926ebfd6",
   "route":"/tools/refund","method":"POST","status":500,
   "error":{"name":"PgError","code":"23505","message":"...","stack":"..."},
   "userId":"u_8281","ip":"10.0.1.42","ms":127
@@ -302,35 +304,35 @@ import {
   App,
   secureHeaders,
   requestId,
-  structuredLogger,
+  createLogger,
   rateLimit,
   fetchGuard,
   loadShedding,
-  gracefulShutdown,
   ipRestriction,
-  jwt,
+  jwk,
 } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
 
-export const app = new App();
+export const app = new App({ logger: createLogger({ level: "info" }) });
 
 // Abuse prevention
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
-app.use(loadShedding({ maxQueueDepth: 100, maxEventLoopDelayMs: 50 }));
+app.use(loadShedding({ maxEventLoopDelayMs: 50 }));
 
-// Network-level scope control
-app.use(fetchGuard({ allow: ["https://api.openai.com", "https://api.stripe.com"] }));
+// Network-level scope control: tools call safeFetch, never fetch.
+// (Add your own hostname allow-list check in front of it.)
+export const safeFetch = fetchGuard({ maxRedirects: 0 });
 
 // Full observability + emergency controls
 app.use(secureHeaders());
 app.use(requestId());
-app.use(structuredLogger());
-gracefulShutdown(app, { drainMs: 15_000 });
 
 // Identity + privilege (every tool authenticates)
-app.use(jwt({
+app.use(jwk({
   algorithms: ["RS256", "ES256"],
-  jwksUri: process.env.JWKS_URI!,
-  maxTokenAgeSeconds: 15 * 60,
+  jwks: process.env.JWKS_URI!,
+  audience: "tool-api",
+  maxLifetimeSeconds: 15 * 60,
 }));
 
 // Independent verification: the route schema is the contract,
@@ -352,12 +354,19 @@ app.route({
       body: z.object({ id: z.uuid() }).strict(),
     },
   },
-  handler: async ({ body, ctx }) => refunds.create(ctx.user, body),
+  handler: async ({ body, state }) => ({
+    status: 200,
+    body: await refunds.create(state.user, body),
+  }),
 });
 
 // Inference / execution separation: the admin + side-effect
 // surface lives behind ipRestriction on a separate deploy.
-app.use("/admin/*", ipRestriction({ allow: ["10.0.0.0/8"] }));
+app.group("/admin", { hooks: ipRestriction({ allow: ["10.0.0.0/8"] }) }, (admin) => {
+  // admin.route({ ... })
+});
+
+serve(app, { port: 3000, shutdownTimeoutMs: 15_000 }); // drains on SIGTERM
 ```
 
 That's the minimum shape of a DaloyJS app that takes traffic from an autonomous AI system in production. About fifty lines. Zero runtime dependencies on `@daloyjs/core`'s side. Every line maps to a specific item on the report's minimum-safety list.

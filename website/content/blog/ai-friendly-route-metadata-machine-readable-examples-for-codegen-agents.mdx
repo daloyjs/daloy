@@ -80,7 +80,7 @@ app.route({
   request: { body: z.object({ title: z.string().min(1) }) },
   responses: {
     201: { description: "Created", body: Book },
-    400: { description: "Invalid" },
+    422: { description: "Invalid" },
   },
   meta: {
     description: "Create a book record.",
@@ -93,8 +93,9 @@ app.route({
       },
       missingTitle: {
         summary: "Validation failure",
-        request:  { body: { title: "" } },
-        response: { status: 400 },
+        // No request.body here: request examples must pass the schema
+        // too, so an invalid body would fail 'daloy inspect --check'.
+        response: { status: 422 },
       },
     },
     extensions: {
@@ -129,17 +130,20 @@ export const BUILD_TIME_VALIDATION = `# What 'pnpm daloy inspect --check' does t
 #     There is no "examples drift" surface to monitor; it is a build
 #     failure.
 #
-# CI gate (verbatim from the create-daloy template):
+# CI gate (create-daloy templates wire it up as 'pnpm contract'):
 #
 #   $ pnpm daloy inspect --check
-#   ✓ 14 routes
-#   ✓ 38 examples validated
-#   ✓ no contract issues
+#   (route table)
+#   Contract checks: 14 routes · 0 errors · 0 warnings
+#   OK.
 #
 # Bad example, same gate:
 #
 #   $ pnpm daloy inspect --check
-#   ✗ POST /books · example 'happy' · response.body.id is required
+#   (route table)
+#   Contract checks: 14 routes · 1 error · 0 warnings
+#     [error] POST /books: meta.examples["happy"].response.body violates schema for 201: ...
+#   FAIL.
 #   exit 1`;
 
 export const OPENAPI_OUT = `{
@@ -158,8 +162,7 @@ export const OPENAPI_OUT = `{
             "application/json": {
               "schema": { "type": "object", "properties": { "title": { "type": "string" } } },
               "examples": {
-                "happy":        { "summary": "Standard create",    "value": { "title": "Dune" } },
-                "missingTitle": { "summary": "Validation failure", "value": { "title": ""     } }
+                "happy":        { "summary": "Standard create",    "value": { "title": "Dune" } }
               }
             }
           }
@@ -169,14 +172,14 @@ export const OPENAPI_OUT = `{
             "description": "Created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Book" },
+                "schema": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
                 "examples": {
                   "happy": { "summary": "Standard create", "value": { "id": "1", "title": "Dune" } }
                 }
               }
             }
           },
-          "400": { "description": "Invalid" }
+          "422": { "description": "Invalid" }
         }
       }
     }
@@ -222,8 +225,8 @@ export const ROUTES_JSON = `{
       "tags":        ["Books", "AI"],
       "request":  { "body": { "type": "object", "properties": { "title": { "type": "string" } } } },
       "responses": {
-        "201": { "description": "Created", "body": { "$ref": "#/schemas/Book" } },
-        "400": { "description": "Invalid" }
+        "201": { "description": "Created", "body": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } } },
+        "422": { "description": "Invalid" }
       },
       "examples": {
         "happy": {
@@ -263,7 +266,7 @@ routes:
           properties:
             id:    { type: string }
             title: { type: string }
-      "400":
+      "422":
         description: Invalid
     examples:
       happy:
@@ -290,9 +293,9 @@ export const WHY_EXAMPLES = `# Schema and examples give codegen agents different
 # The example { id: "1", title: "Dune" } tells the agent that this API
 # uses short opaque ids. Downstream call sites can copy that convention.
 #
-# The 'missingTitle' example also records which validation rule fires
-# on an empty string, so a generated form can add the correct guard
-# before a user reports the bug.
+# The 'missingTitle' example also records that a bad create answers
+# 422, so a generated client can handle that path before a user
+# reports the bug.
 #
 # x-codegen-hint: "books-table" carries project-specific conventions.
 # SDK builders, OpenAPI overlays, and prompt templates can read it.
@@ -362,8 +365,8 @@ export const WHY_THIS_HELPS = `# Concretely: what changes for the codegen agent.
 #   Agent reads the validated response example and knows ids are
 #   short strings, not UUIDs, and there is NO 'createdAt' field.
 #   Agent writes the test using the 'missingTitle' example for the
-#   400 path, because that example told it which validation rule
-#   fires on empty input.
+#   422 path, because that example told it the route answers 422
+#   on bad input.
 #   PR review checks the handler, not the fetch call.
 #
 # This is the PR difference I see when the agent has routes.json

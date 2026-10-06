@@ -71,7 +71,8 @@ I have reviewed variations of this diff many times. The API works, the demo pass
 The best framework for AI-generated backend code makes the obvious code path the safer one. DaloyJS is contract-first, runtime portable, and security-minded by default. The route definition is the source of truth for validation, handler types, OpenAPI, docs, and typed clients.
 
 ```ts
-import { App, BadRequestError, rateLimit, requestId, secureHeaders, z } from "@daloyjs/core";
+import { z } from "zod";
+import { App, BadRequestError, rateLimit, requestId, secureHeaders } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const OrderInput = z

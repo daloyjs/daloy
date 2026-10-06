@@ -53,7 +53,7 @@ const dangerous = '{ "user": "alice", "__proto__": { "isAdmin": true } }';
 const safe = safeJsonParse(dangerous) as { user: string };
 
 console.log(safe.user);                 // "alice"
-// @ts-expect-error - isAdmin never made it through the reviver
+// isAdmin never made it through the reviver
 console.log(({} as any).isAdmin);       // undefined`;
 
 export const SECURE_HEADERS = `// src/app.ts
@@ -67,15 +67,17 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         "default-src": ["'self'"],
+        // the nonce is appended to script-src / style-src only when declared
+        "script-src": ["'self'"],
         "img-src": ["'self'", "data:"],
         "connect-src": ["'self'", "https://api.example.com"],
         // 'self' + nonce; no 'unsafe-inline', no 'unsafe-eval'.
       },
       nonce: true,
+      // Lock down DOM sinks. Modern browsers will reject string-to-HTML
+      // assignments unless they come from a Trusted Types policy.
+      trustedTypes: { policies: ["default"] },
     },
-    // Lock down DOM sinks. Modern browsers will reject string-to-HTML
-    // assignments unless they come from a Trusted Types policy.
-    trustedTypes: { policies: ["default"] },
   }),
 );
 
@@ -115,9 +117,9 @@ export const BASIC_AUTH = `// src/admin.ts
 import { basicAuth, timingSafeEqual } from "@daloyjs/core";
 
 // Use timingSafeEqual - never raw string ===.
-app.use(
-  "/admin",
-  basicAuth({
+// app.use() takes no path; scope the hook with app.group().
+app.group("/admin", {
+  hooks: basicAuth({
     realm: "admin",
     verify: (user, pass) => {
       const okUser = timingSafeEqual(user, process.env.ADMIN_USER!);
@@ -127,7 +129,9 @@ app.use(
       return okUser && okPass ? { sub: "admin" } : false;
     },
   }),
-);`;
+}, (admin) => {
+  // admin.route({ ... }) for every /admin route
+});`;
 
 export const SESSION_EXAMPLE = `// src/app.ts
 import { App, session } from "@daloyjs/core";
@@ -175,9 +179,9 @@ app.use(
     trustProxyHeaders: true, // only with a sanitizing proxy in front!
     store: redisRateLimitStore({
       client: ioredisAdapter(redis),
-      keyPrefix: "myapp:rl:",
+      prefix: "myapp:rl:",
       // fail-open by default; flip to fail-closed if you prefer:
-      // onError: () => "block",
+      // onError: () => "fail-closed",
     }),
   }),
 );`;
@@ -217,7 +221,7 @@ content-type: application/problem+json
   "title": "Payload Too Large",
   "status": 413,
   "detail": "Body exceeds 1048576 bytes",
-  "instance": "urn:request:01J9X8Q2..."
+  "instance": "urn:request:3f2b9c1e-..."
 }
 ```
 
@@ -260,25 +264,25 @@ Here's the same 500 from the same handler, dev versus prod, side by side. The di
 ```bash
 # Same handler. Same crash. Different NODE_ENV.
 
-# NODE_ENV !== "production"
+# NODE_ENV === "development" (or "test")
 {
-  "type": "about:blank",
+  "type": "https://daloyjs.dev/errors/internal",
   "title": "Internal Server Error",
   "status": 500,
-  "detail": "TypeError: Cannot read properties of undefined (reading 'id') at handler (src/routes/orders.ts:42:18)",
-  "instance": "urn:request:01J9..."
+  "detail": "Cannot read properties of undefined (reading 'id')",
+  "instance": "urn:request:3f2b9c1e-..."
 }
 
-# NODE_ENV === "production"
+# NODE_ENV === "production" (or unset)
 {
-  "type": "about:blank",
+  "type": "https://daloyjs.dev/errors/internal",
   "title": "Internal Server Error",
   "status": 500,
-  "instance": "urn:request:01J9..."
+  "instance": "urn:request:3f2b9c1e-..."
 }
 ```
 
-The `instance` field is a request URN, which means your on-call engineer can grep for it in logs without the user ever being shown anything sensitive. The dev version keeps the stack because dev you wants to know. Prod you doesn't leak.
+The `instance` field is a request URN, which means your on-call engineer can grep for it in logs without the user ever being shown anything sensitive. The dev version keeps the error message because dev you wants to know. Prod you doesn't leak.
 
 ## Part 2: Opt-in upgrades worth turning on today
 
@@ -286,7 +290,7 @@ These stay out of the default constructor because each application needs its own
 
 ### secureHeaders(): CSP nonce + Trusted Types
 
-<DefenseCard name="secureHeaders()" on="opt-in" status="adds CSP, HSTS, X-Frame-Options, COOP/CORP, Referrer-Policy, Permissions-Policy" trigger="Default CSP is default-src 'self'; frame-ancestors 'none'. Pass nonce: true to mint a per-request nonce, exposed as ctx.state.cspNonce. Trusted Types is one flag." />
+<DefenseCard name="secureHeaders()" on="always" status="adds CSP, HSTS, X-Frame-Options, COOP/CORP, Referrer-Policy, Permissions-Policy" trigger="Auto-installed by new App() since 0.16; the CSP nonce and Trusted Types upgrades are the opt-in part. Default CSP is default-src 'self'; frame-ancestors 'none'. Pass nonce: true to mint a per-request nonce, exposed as ctx.state.cspNonce. Trusted Types is one flag." />
 
 If your app renders any HTML at all, even one server-rendered template, even one error page, you want CSP, and you want it with a real nonce, not the `unsafe-inline` escape hatch that half the internet runs on. Here's how you get the strict version, with Trusted Types on top to harden DOM sinks against XSS:
 
@@ -397,7 +401,7 @@ If you only remember one section of this post, remember this one.
 </tr>
 <tr>
 <td className="px-4 py-2 font-mono">secureHeaders()</td>
-<td className="px-4 py-2">opt-in</td>
+<td className="px-4 py-2">always on (nonce + Trusted Types opt-in)</td>
 <td className="px-4 py-2">strict CSP + HSTS + COOP/CORP</td>
 <td className="px-4 py-2">-</td>
 </tr>

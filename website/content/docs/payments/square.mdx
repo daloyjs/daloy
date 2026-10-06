@@ -89,76 +89,75 @@ export interface SquareClientWrapper {
   }): Promise<{ id: string; status: string }>;
 }
 
-export const squarePlugin = {
-  name: "square",
-  register(app: App) {
-    const client: SquareClientWrapper = {
-      raw: square,
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function squarePlugin(app: App) {
+  const client: SquareClientWrapper = {
+    raw: square,
 
-      async createPayment({
+    async createPayment({
+      sourceId,
+      amountMinor,
+      currency,
+      idempotencyKey = randomUUID(),
+      locationId = process.env.SQUARE_LOCATION_ID!,
+      referenceId,
+      note,
+      autocomplete = true,
+    }) {
+      const { payment } = await square.payments.create({
         sourceId,
-        amountMinor,
-        currency,
-        idempotencyKey = randomUUID(),
-        locationId = process.env.SQUARE_LOCATION_ID!,
+        idempotencyKey,
+        amountMoney: { amount: amountMinor, currency },
+        locationId,
         referenceId,
         note,
-        autocomplete = true,
-      }) {
-        const { payment } = await square.payments.create({
-          sourceId,
-          idempotencyKey,
-          amountMoney: { amount: amountMinor, currency },
-          locationId,
-          referenceId,
-          note,
-          autocomplete,
-        });
-        if (!payment) throw new Error("Square returned no payment");
-        return {
-          id: payment.id!,
-          status: payment.status!,
-          orderId: payment.orderId,
-          receiptUrl: payment.receiptUrl,
-        };
-      },
+        autocomplete,
+      });
+      if (!payment) throw new Error("Square returned no payment");
+      return {
+        id: payment.id!,
+        status: payment.status!,
+        orderId: payment.orderId,
+        receiptUrl: payment.receiptUrl,
+      };
+    },
 
-      verifyWebhookSignature(rawBody, signatureHeader) {
-        if (!signatureHeader) return false;
-        return WebhooksHelper.verifySignature({
-          requestBody: rawBody,
-          signatureHeader,
-          signatureKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
-          notificationUrl: process.env.SQUARE_WEBHOOK_URL!,
-        });
-      },
+    verifyWebhookSignature(rawBody, signatureHeader) {
+      if (!signatureHeader) return false;
+      return WebhooksHelper.verifySignature({
+        requestBody: rawBody,
+        signatureHeader,
+        signatureKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
+        notificationUrl: process.env.SQUARE_WEBHOOK_URL!,
+      });
+    },
 
-      async getPayment(paymentId) {
-        const { payment } = await square.payments.get({ paymentId });
-        if (!payment) throw new Error(`Square payment ${paymentId} not found`);
-        return {
-          id: payment.id!,
-          status: payment.status!,
-          amountMinor: payment.amountMoney!.amount!,
-          currency: payment.amountMoney!.currency!,
-        };
-      },
+    async getPayment(paymentId) {
+      const { payment } = await square.payments.get({ paymentId });
+      if (!payment) throw new Error(`Square payment ${paymentId} not found`);
+      return {
+        id: payment.id!,
+        status: payment.status!,
+        amountMinor: payment.amountMoney!.amount!,
+        currency: payment.amountMoney!.currency!,
+      };
+    },
 
-      async refund({ paymentId, amountMinor, currency, idempotencyKey = randomUUID(), reason }) {
-        const { refund } = await square.refunds.refundPayment({
-          paymentId,
-          idempotencyKey,
-          amountMoney: { amount: amountMinor, currency },
-          reason,
-        });
-        if (!refund) throw new Error("Square returned no refund");
-        return { id: refund.id!, status: refund.status! };
-      },
-    };
+    async refund({ paymentId, amountMinor, currency, idempotencyKey = randomUUID(), reason }) {
+      const { refund } = await square.refunds.refundPayment({
+        paymentId,
+        idempotencyKey,
+        amountMoney: { amount: amountMinor, currency },
+        reason,
+      });
+      if (!refund) throw new Error("Square returned no refund");
+      return { id: refund.id!, status: refund.status! };
+    },
+  };
 
-    app.decorate("square", client);
-  },
-};
+  app.decorate("square", client);
+}
 
 export { SquareError };
 
@@ -212,7 +211,7 @@ import { squarePlugin, SquareError } from "./plugins/square.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(squarePlugin);
+squarePlugin(app);
 
 app.post(
   "/checkout/square",

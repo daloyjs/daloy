@@ -46,7 +46,7 @@ APP_URL=https://your-app.example.com
 
 ## 4. Plugin
 
-We wrap two things here: `createPaymentPage`'s positional-array+callback shape into a Promise with named args, and the IPN signature check into a one-call helper. `setConfig` is module-global, so we only call it once at register time.
+We wrap two things here: `createPaymentPage`'s positional-array+callback shape into a Promise with named args, and the IPN signature check into a one-call helper. `setConfig` is module-global, so we only call it once, at module load.
 
 ```ts
 // src/plugins/paytabs.ts
@@ -126,66 +126,65 @@ function pageArgs(input: Parameters<PayTabsClient["createPaymentPage"]>[0]) {
   };
 }
 
-export const paytabsPlugin = {
-  name: "paytabs",
-  register(app: App) {
-    const client: PayTabsClient = {
-      createPaymentPage(input) {
-        const a = pageArgs(input);
-        return new Promise((resolve, reject) => {
-          PayTabs.createPaymentPage(
-            a.methods,
-            a.transaction,
-            a.cart,
-            a.customer,
-            a.shipping,
-            a.urls,
-            a.lang,
-            (response: PayTabsResponse) => {
-              if (response?.redirect_url) resolve(response);
-              else reject(Object.assign(new Error("paytabs createPaymentPage failed"), { response }));
-            },
-            a.frame,
-          );
-        });
-      },
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function paytabsPlugin(app: App) {
+  const client: PayTabsClient = {
+    createPaymentPage(input) {
+      const a = pageArgs(input);
+      return new Promise((resolve, reject) => {
+        PayTabs.createPaymentPage(
+          a.methods,
+          a.transaction,
+          a.cart,
+          a.customer,
+          a.shipping,
+          a.urls,
+          a.lang,
+          (response: PayTabsResponse) => {
+            if (response?.redirect_url) resolve(response);
+            else reject(Object.assign(new Error("paytabs createPaymentPage failed"), { response }));
+          },
+          a.frame,
+        );
+      });
+    },
 
-      queryTransaction(tranRef) {
-        return new Promise((resolve, reject) => {
-          PayTabs.queryTransaction(tranRef, (response: PayTabsResponse) => {
+    queryTransaction(tranRef) {
+      return new Promise((resolve, reject) => {
+        PayTabs.queryTransaction(tranRef, (response: PayTabsResponse) => {
+          if (response) resolve(response);
+          else reject(new Error("paytabs queryTransaction failed"));
+        });
+      });
+    },
+
+    refund({ tranRef, amount, currency, cartId, description }) {
+      return new Promise((resolve, reject) => {
+        PayTabs.refund(
+          tranRef,
+          [amount, currency, cartId, description],
+          (response: PayTabsResponse) => {
             if (response) resolve(response);
-            else reject(new Error("paytabs queryTransaction failed"));
-          });
-        });
-      },
+            else reject(new Error("paytabs refund failed"));
+          },
+        );
+      });
+    },
 
-      refund({ tranRef, amount, currency, cartId, description }) {
-        return new Promise((resolve, reject) => {
-          PayTabs.refund(
-            tranRef,
-            [amount, currency, cartId, description],
-            (response: PayTabsResponse) => {
-              if (response) resolve(response);
-              else reject(new Error("paytabs refund failed"));
-            },
-          );
-        });
-      },
+    verifyIpnSignature(rawBody, signatureHeader) {
+      if (!signatureHeader) return false;
+      const expected = createHmac("sha256", process.env.PAYTABS_SERVER_KEY!)
+        .update(rawBody)
+        .digest("hex");
+      const a = Buffer.from(signatureHeader);
+      const b = Buffer.from(expected);
+      return a.length === b.length && timingSafeEqual(a, b);
+    },
+  };
 
-      verifyIpnSignature(rawBody, signatureHeader) {
-        if (!signatureHeader) return false;
-        const expected = createHmac("sha256", process.env.PAYTABS_SERVER_KEY!)
-          .update(rawBody)
-          .digest("hex");
-        const a = Buffer.from(signatureHeader);
-        const b = Buffer.from(expected);
-        return a.length === b.length && timingSafeEqual(a, b);
-      },
-    };
-
-    app.decorate("paytabs", client);
-  },
-};
+  app.decorate("paytabs", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -237,7 +236,7 @@ import { paytabsPlugin } from "./plugins/paytabs.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(paytabsPlugin);
+paytabsPlugin(app);
 
 app.post(
   "/checkout/paytabs",

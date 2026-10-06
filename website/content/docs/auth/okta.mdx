@@ -100,23 +100,22 @@ export interface Principal {
 
 const expectedAudience = process.env.OKTA_AUDIENCE!;
 
-export const oktaPlugin = {
-  name: "okta",
-  register(app: App) {
-    app.decorate("verifier", {
-      async verify(token: string): Promise<Principal> {
-        const { claims } = await verifier.verifyAccessToken(token, expectedAudience);
-        const scopes = Array.isArray(claims.scp)
-          ? (claims.scp as string[])
-          : typeof claims.scp === "string"
-            ? (claims.scp as string).split(" ")
-            : [];
-        const groups = Array.isArray(claims.groups) ? (claims.groups as string[]) : [];
-        return { sub: String(claims.sub), scopes, groups, claims };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function oktaPlugin(app: App) {
+  app.decorate("verifier", {
+    async verify(token: string): Promise<Principal> {
+      const { claims } = await verifier.verifyAccessToken(token, expectedAudience);
+      const scopes = Array.isArray(claims.scp)
+        ? (claims.scp as string[])
+        : typeof claims.scp === "string"
+          ? (claims.scp as string).split(" ")
+          : [];
+      const groups = Array.isArray(claims.groups) ? (claims.groups as string[]) : [];
+      return { sub: String(claims.sub), scopes, groups, claims };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -137,7 +136,7 @@ import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-app.register(oktaPlugin);
+oktaPlugin(app);
 
 app.get(
   "/items",

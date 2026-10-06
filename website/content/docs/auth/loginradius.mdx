@@ -131,27 +131,26 @@ export interface Principal {
   profile: LoginRadiusProfile;
 }
 
-export const loginRadiusPlugin = {
-  name: "loginradius",
-  register(app: App) {
-    app.decorate("verifier", {
-      async verify(token: string): Promise<Principal> {
-        const tokenInfo =
-          await loginRadius.authenticationApi.authValidateAccessToken(token);
-        const profile =
-          await loginRadius.authenticationApi.getProfileByAccessToken(token);
-        const primaryEmail = profile.Email?.find((email) => email.Value)?.Value;
-        return {
-          sub: String(profile.Uid ?? profile.ID ?? tokenInfo.access_token),
-          email: primaryEmail,
-          roles: Array.isArray(profile.Roles) ? profile.Roles : [],
-          tokenInfo,
-          profile,
-        };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function loginRadiusPlugin(app: App) {
+  app.decorate("verifier", {
+    async verify(token: string): Promise<Principal> {
+      const tokenInfo =
+        await loginRadius.authenticationApi.authValidateAccessToken(token);
+      const profile =
+        await loginRadius.authenticationApi.getProfileByAccessToken(token);
+      const primaryEmail = profile.Email?.find((email) => email.Value)?.Value;
+      return {
+        sub: String(profile.Uid ?? profile.ID ?? tokenInfo.access_token),
+        email: primaryEmail,
+        roles: Array.isArray(profile.Roles) ? profile.Roles : [],
+        tokenInfo,
+        profile,
+      };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -172,7 +171,7 @@ import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-app.register(loginRadiusPlugin);
+loginRadiusPlugin(app);
 
 app.get(
   "/me",

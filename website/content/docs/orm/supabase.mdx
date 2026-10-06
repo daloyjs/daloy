@@ -73,12 +73,11 @@ export const serviceClient: Db = createClient<Database>(
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
-export const supabasePlugin = {
-  name: "supabase",
-  register(app: App) {
-    app.decorate("supabase", serviceClient);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function supabasePlugin(app: App) {
+  app.decorate("supabase", serviceClient);
+}
 ```
 
 ## 4. Augment app state types
@@ -105,7 +104,7 @@ import { supabasePlugin } from "./db/supabase.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(supabasePlugin);
+supabasePlugin(app);
 
 const UserSchema = z.object({
   id: z.uuid(),

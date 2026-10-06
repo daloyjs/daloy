@@ -88,36 +88,35 @@ export interface AdyenClient {
   verifyWebhookItem(item: Types.notification.NotificationRequestItem): boolean;
 }
 
-export const adyenPlugin = {
-  name: "adyen",
-  register(app: App) {
-    const adyen: AdyenClient = {
-      createSession({ amount, reference, returnUrl, countryCode, shopperReference, shopperEmail }) {
-        return checkout.PaymentsApi.sessions({
-          merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
-          amount,
-          reference,
-          returnUrl,
-          countryCode,
-          shopperReference,
-          shopperEmail,
-        });
-      },
-      getPaymentMethods({ amount, countryCode, channel }) {
-        return checkout.PaymentsApi.paymentMethods({
-          merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
-          amount,
-          countryCode,
-          channel,
-        });
-      },
-      verifyWebhookItem(item) {
-        return validator.validateHMAC(item, process.env.ADYEN_HMAC_KEY!);
-      },
-    };
-    app.decorate("adyen", adyen);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function adyenPlugin(app: App) {
+  const adyen: AdyenClient = {
+    createSession({ amount, reference, returnUrl, countryCode, shopperReference, shopperEmail }) {
+      return checkout.PaymentsApi.sessions({
+        merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+        amount,
+        reference,
+        returnUrl,
+        countryCode,
+        shopperReference,
+        shopperEmail,
+      });
+    },
+    getPaymentMethods({ amount, countryCode, channel }) {
+      return checkout.PaymentsApi.paymentMethods({
+        merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT!,
+        amount,
+        countryCode,
+        channel,
+      });
+    },
+    verifyWebhookItem(item) {
+      return validator.validateHMAC(item, process.env.ADYEN_HMAC_KEY!);
+    },
+  };
+  app.decorate("adyen", adyen);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -140,7 +139,7 @@ import { adyenPlugin } from "./plugins/adyen.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(adyenPlugin);
+adyenPlugin(app);
 
 app.post(
   "/checkout/session",

@@ -253,4 +253,4 @@ Store errors propagate to `autoBan()`: a failed ban check fails closed, while a 
 
 - It does not pool connections for you. Reuse a single client across requests. Do not create one per call.
 - It does not synchronize clocks. The reset timestamp returned to clients is computed from the local time plus the Redis-reported TTL, which is good enough for `Retry-After` but not for fine-grained billing.
-- It does not implement sliding windows. The semantics match the in-process store: a fixed window of `windowMs` with token-bucket-style counting.
+- It does not implement sliding windows. The semantics match the in-process store: a fixed window of `windowMs` with a per-key request counter that resets when the window ends.

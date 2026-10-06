@@ -93,13 +93,10 @@ export interface TokenVerifier {
   verify(token: string): Promise<Principal>;
 }
 
-export function authPlugin(verifier: TokenVerifier) {
-  return {
-    name: "auth",
-    register(app: App) {
-      app.decorate("verifier", verifier);
-    },
-  };
+// Call this on the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function authPlugin(app: App, verifier: TokenVerifier) {
+  app.decorate("verifier", verifier);
 }
 
 export function requireAuth(...required: string[]): Hooks {
@@ -348,7 +345,7 @@ export function buildApp(
   app.use(requestId());
   app.use(secureHeaders());
   app.use(rateLimit({ windowMs: 60_000, max: 120 }));
-  app.register(authPlugin(demoVerifier));
+  authPlugin(app, demoVerifier);
   app.decorate("projects", projects);
 
   app.get(

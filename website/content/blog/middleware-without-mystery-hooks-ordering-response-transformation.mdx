@@ -35,7 +35,7 @@ export interface Hooks {
   beforeHandle?: (ctx: BaseContext)                    => void | Response | Promise<void | Response>;
   afterHandle?:  (ctx: BaseContext, result: unknown)   => void | unknown | Promise<void | unknown>;
   onSend?:       (res: Response, ctx?: BaseContext)    => void | Response | Promise<void | Response>;
-  onResponse?:   (res: Response)                       => void | Promise<void>;
+  onResponse?:   (res: Response, ctx?: BaseContext)    => void | Promise<void>;
   onError?:      (err: unknown, ctx?: BaseContext)     => void | Response | Promise<void | Response>;
 }
 //
@@ -101,6 +101,7 @@ app.use({
 app.route({
   method: "GET",
   path: "/x",
+  responses: { 200: { description: "OK" } },
   handler: async () => {
     console.log("[7] handler runs");
     return { status: 200, body: { ok: true } };
@@ -131,7 +132,7 @@ export function maintenanceMode(opts: { enabled: () => boolean }): Hooks {
   return {
     beforeHandle(ctx) {
       if (!opts.enabled()) return;            // <- void: continue the pipeline
-      if (ctx.route?.path === "/healthz") return; // <- let liveness through
+      if (ctx.routePath === "/healthz") return; // <- let liveness through
       return new Response(
         JSON.stringify({
           type:   "https://daloyjs.dev/errors/service-unavailable",
@@ -187,9 +188,11 @@ export function stampServerTiming(): Hooks {
     },
     onSend(res, ctx) {
       // Mutate in place - no need to return a new Response.
-      const elapsed = performance.now() - (ctx?.state._startedAt ?? 0);
+      const startedAt = (ctx?.state._startedAt as number | undefined) ?? 0;
+      const elapsed = performance.now() - startedAt;
       res.headers.set("server-timing", \`app;dur=\${elapsed.toFixed(1)}\`);
-      res.headers.set("x-request-id", ctx?.requestId ?? "unknown");
+      // (DaloyJS already sends x-request-id; this just shows where it lives.)
+      res.headers.set("x-request-id", String(ctx?.state.requestId ?? "unknown"));
     },
   };
 }
@@ -235,19 +238,21 @@ export const ON_ERROR = `// onError, runs on the error path before the response 
 
 app.use({
   onError(err, ctx) {
-    // 1. Always log. The framework will not double-log.
-    ctx?.log.error(
+    // 1. Log with the context you care about. Heads-up: if you fall through,
+    //    the framework logs the error too (5xx at error, 4xx at warn).
+    const log = ctx?.state.log as Logger | undefined;
+    log?.error(
       {
         err,
-        requestId: ctx.requestId,
-        route: ctx.route?.operationId,
+        requestId: ctx?.state.requestId,
+        route: ctx?.routePath,
       },
       "unhandled",
     );
 
     // 2. Translate a specific upstream library error into a domain HttpError.
     if (err instanceof PaymentGatewayTimeout) {
-      return new ServiceUnavailableError("Payments are slow right now").toResponse();
+      return new HttpError(503, { title: "Payments are slow right now" }).toResponse();
     }
 
     // 3. Anything else: fall through. The framework wraps unknown errors as
@@ -263,7 +268,7 @@ export const AFTER_HANDLE = `// afterHandle, transform the handler's return valu
 export function redactEmail(): Hooks {
   return {
     afterHandle(ctx, result) {
-      if (!ctx.route?.path.startsWith("/v1/search")) return; // narrow scope
+      if (!ctx.routePath?.startsWith("/v1/search")) return; // narrow scope
       // result is whatever the handler returned: { status, body, headers? }.
       // Return a new value, or undefined to leave it alone.
       const shaped = result as { status: number; body: Array<{ email?: string }> };
@@ -306,7 +311,7 @@ export const observability = {
 app.register(observability, {
   prefix: "/_ops",            // every route inside lives under /_ops
   hooks: { /* extra hooks just for this plugin's scope */ },
-  auth: false,                // turn off global auth inside the plugin
+  tags: ["ops"],              // OpenAPI tags for every route inside
 });`;
 
 export const RECIPE_TABLE = `# What goes where, print this out, tape it to your monitor.
@@ -426,7 +431,7 @@ There are six hooks. They fire in the order they appear in the code, in the orde
               </>
             } />
 
-<HookCard step="7" name="onResponse" signature="(res: Response) => void | Promise<void>" canReturn="nothing (the response already left)" description={
+<HookCard step="7" name="onResponse" signature="(res: Response, ctx?) => void | Promise<void>" canReturn="nothing (the response already left)" description={
               <>
                 Fire-and-forget observer. By design, it cannot change the
                 response, the bytes are already on the wire. This is your
@@ -480,7 +485,7 @@ The maintenance-window pattern, written once, applied globally, with an escape h
 
 Server-Timing on every response, including errors and preflights. Notice the pattern: stash the start time in `ctx.state` from `beforeHandle`, read it from `onSend`. Mutate the response headers in place, no need to return a new `Response`:
 
-<EditorFrame files={["src/middleware/server-timing.ts"]} activeFile="src/middleware/server-timing.ts" status="mutate res.headers in place · ctx.requestId on every response">
+<EditorFrame files={["src/middleware/server-timing.ts"]} activeFile="src/middleware/server-timing.ts" status="mutate res.headers in place · ctx.state.requestId on every response">
 <CodeBlock language="ts" code={ON_SEND_HEADERS} />
 </EditorFrame>
 

@@ -26,7 +26,7 @@ DaloyJS is a great fit for this style because [plugins are encapsulated](/docs/p
 
 ## Reference folder structure
 
-This is the layout we recommend for new projects. `create-daloy` can scaffold a small version of it, and it scales cleanly from one module to dozens.
+This is the layout we recommend for new projects. `create-daloy` scaffolds a flat starter (a single app file plus a runtime entrypoint, such as `src/build-app.ts` and `src/index.ts` in the Node template) that you grow into this layout as modules appear, and it scales cleanly from one module to dozens.
 
 ```text
 src/
@@ -83,7 +83,7 @@ src/
 │
 ├── platform/                # wiring only - no domain logic
 │   ├── modules.ts           # ordered list of modules to register
-│   ├── openapi.ts           # generateOpenAPI(app) -> openapi.json
+│   ├── openapi.ts           # generateOpenAPI(app, { info }) -> openapi.json
 │   └── client.ts            # in-process typed client wiring
 │
 └── tests/
@@ -163,6 +163,7 @@ import { createBookRoute } from "./routes/create-book.ts";
 
 import { CatalogService } from "./domain/catalog-service.ts";
 import { BookRepo }       from "./infra/book-repo.ts";
+import type { Database }  from "../../shared/db/client.ts";
 
 // The literal tuple is the module's public HTTP surface.
 export const catalogRoutes = [
@@ -171,8 +172,10 @@ export const catalogRoutes = [
   createBookRoute,
 ] as const;
 
-export function installCatalog(app: App) {
-  app.decorate("catalog", new CatalogService(new BookRepo(app.state.db)));
+// App has no public `state`: decorations are only readable as ctx.state inside
+// handlers, so pass shared resources such as the db client in explicitly.
+export function installCatalog(app: App, db: Database) {
+  app.decorate("catalog", new CatalogService(new BookRepo(db)));
 }
 ```
 
@@ -210,9 +213,11 @@ import { App } from "@daloyjs/core";
 import { catalogRoutes, installCatalog } from "./modules/catalog";
 import { identityRoutes, installIdentity } from "./modules/identity";
 import { orderRoutes, installOrders } from "./modules/orders";
+import { openDatabase } from "./shared/db/client";
 
+const db = await openDatabase(process.env.DATABASE_URL!);
 const base = new App({ docs: true });
-installCatalog(base);
+installCatalog(base, db);
 installIdentity(base);
 installOrders(base);
 
@@ -305,7 +310,7 @@ export const app = new App({ bodyLimitBytes: 1 << 20 });
 
 app.use(requestId());
 app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 600 })); // global unless you configure keyGenerator or trustProxyHeaders
+app.use(rateLimit({ windowMs: 60_000, max: 600 })); // per client IP (TCP peer, or resolved via behindProxy); one shared bucket only when the runtime exposes no peer
 
 app.decorate("db",     await openDatabase(env.DATABASE_URL));
 app.decorate("logger", createLogger({ level: env.LOG_LEVEL }));

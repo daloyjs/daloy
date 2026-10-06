@@ -54,12 +54,11 @@ import type { App } from "@daloyjs/core";
 
 export const sql = neon(process.env.DATABASE_URL!);
 
-export const neonPlugin = {
-  name: "neon",
-  register(app: App) {
-    app.decorate("sql", sql);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function neonPlugin(app: App) {
+  app.decorate("sql", sql);
+}
 ```
 
 ## 4. Pooled WebSocket client (Node)
@@ -71,15 +70,14 @@ import type { App } from "@daloyjs/core";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 
-export const neonPoolPlugin = {
-  name: "neon-pool",
-  async register(app: App) {
-    app.decorate("db", pool);
-    app.onClose(async () => {
-      await pool.end();
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function neonPoolPlugin(app: App) {
+  app.decorate("db", pool);
+  app.onClose(async () => {
+    await pool.end();
+  });
+}
 ```
 
 ## 5. Augment app state
@@ -107,7 +105,7 @@ import { neonPlugin } from "./db/neon.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(neonPlugin);
+neonPlugin(app);
 
 const UserSchema = z.object({ id: z.uuid(), email: z.email() });
 
@@ -133,18 +131,20 @@ app.get(
 
 ## Cloudflare Workers
 
-Use the HTTP `neon()` client and pass the connection string from the worker environment instead of `process.env`. Because this example reads `env`, wrap the Worker `fetch` handler and call `app.fetch(req)` after decorating state:
+Use the HTTP `neon()` client and read the connection string from the Worker environment instead of `process.env`. Import `env` from `cloudflare:workers` and decorate the app before registering routes (decorating inside the Worker `fetch` handler throws on the second request):
 
 ```ts
+import { env } from "cloudflare:workers";
 import { neon } from "@neondatabase/serverless";
+import { App } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-export default {
-  async fetch(req: Request, env: { DATABASE_URL: string }) {
-    const sql = neon(env.DATABASE_URL);
-    app.decorate("sql", sql);
-    return app.fetch(req);
-  },
-};
+const app = new App();
+app.decorate("sql", neon((env as { DATABASE_URL: string }).DATABASE_URL));
+
+// ...register routes that read state.sql
+
+export default toFetchHandler(app);
 ```
 
 ## With Drizzle ORM

@@ -103,15 +103,15 @@ Full guidance: [/docs/security/sql-injection](/docs/security/sql-injection) and 
 
 ## Risk 2: Path traversal
 
-<RiskCard risk="Aikido: '..serving up /etc/passwd to anyone who tries.'" framework="The router rejects '..' segments, '//', encoded NULs, and percent-encoded traversal sequences before the route is matched. Returns 400 with no handler invocation." user="Constrain :param shapes with a Zod regex anyway. Defense in depth costs you one line." />
+<RiskCard risk="Aikido: '..serving up /etc/passwd to anyone who tries.'" framework="The router rejects '..' segments, '//', encoded NULs, and percent-encoded traversal sequences before the route is matched. Returns 404 with no handler invocation." user="Constrain :param shapes with a Zod regex anyway. Defense in depth costs you one line." />
 
 ```ts
 // The router rejects path traversal before any handler runs.
 //
-//   GET /files/..%2F..%2Fetc%2Fpasswd      -> 400
-//   GET /files/%00secret.txt               -> 400
-//   GET /files//etc/passwd                 -> 400
-//   GET /files/%2e%2e/secret                -> 400
+//   GET /files/..%2F..%2Fetc%2Fpasswd      -> 404
+//   GET /files/%00secret.txt               -> 404
+//   GET /files//etc/passwd                 -> 404
+//   GET /files/%2e%2e/secret                -> 404
 //
 // You don't have to remember this in every route. The router does.
 // (See /docs/security/runtime-protections for the full list.)
@@ -126,7 +126,10 @@ app.route({
     }),
   },
   responses: { 200: { description: "ok" } },
-  handler: async ({ params }) => readFile(params.name),
+  handler: async ({ params }) => ({
+    status: 200,
+    body: await readFile(params.name),
+  }),
 });
 ```
 
@@ -164,11 +167,12 @@ The full reasoning behind each gate is in ["Supply-chain hardening for TypeScrip
 // The "Tea app" lesson, never leave an admin route mounted on the
 // public app without auth + network restriction. Daloy gives you both
 // as boring middleware so the wrong default is hard to type.
-import { App, ipRestriction, basicAuth, timingSafeEqual } from "@daloyjs/core";
+import { App, every, ipRestriction, basicAuth, timingSafeEqual } from "@daloyjs/core";
 
 export const adminApp = new App();
 
-adminApp.use(
+// app.use() takes one hooks bundle; every() runs both in order.
+adminApp.use(every(
   ipRestriction({ allow: ["10.0.0.0/8"] }),
   basicAuth({
     realm: "admin",
@@ -178,7 +182,7 @@ adminApp.use(
         ? { sub: "admin" }
         : false,
   }),
-);
+));
 
 // Keep the admin app off the public deploy entirely when you can -
 // /docs/security/admin-panels has the full pattern (separate process,
@@ -195,27 +199,25 @@ This is the same pattern as Risk 1, applied to *every* input surface, not just b
 
 ## Risk 6, Agentic coding doing things the prompt didn't ask for
 
-<RiskCard risk="Aikido / Replit story: 'the AI started lying about unit tests, ignored code freezes, and eventually deleted the entire SaaStr production database.'" framework="fetchGuard(), explicit egress allow-list, default-deny on cloud metadata and RFC1918. requestTimeoutMs + bodyLimitBytes, bounded resource use. Per-request structured logs with correlated request IDs go to your SIEM, so 'the AI agent did what?!' becomes a query, not an archeology dig. The scaffolder ships an AGENTS.md and a daloyjs-best-practices SKILL.md so the agent reads the rules before it writes code." user="Don't give the production-DB password to the agent. Run agentic tools against a sandbox account. Treat AI commits like junior-dev commits, review them. The framework cannot stop you from handing your prod credentials to a model." />
+<RiskCard risk="Aikido / Replit story: 'the AI started lying about unit tests, ignored code freezes, and eventually deleted the entire SaaStr production database.'" framework="fetchGuard(), a guarded fetch that refuses cloud metadata, loopback, and RFC1918 targets by default. requestTimeoutMs + bodyLimitBytes, bounded resource use. Per-request structured logs with correlated request IDs go to your SIEM, so 'the AI agent did what?!' becomes a query, not an archeology dig. The scaffolder ships an AGENTS.md and a daloyjs-best-practices SKILL.md so the agent reads the rules before it writes code." user="Don't give the production-DB password to the agent. Run agentic tools against a sandbox account. Treat AI commits like junior-dev commits, review them. The framework cannot stop you from handing your prod credentials to a model." />
 
 ```ts
 // "AI agents that can install dependencies, run tests, refactor files,
 // and update infrastructure" - Aikido's exact words - also tend to write
-// handlers that call any URL the prompt suggests. fetchGuard() turns that
-// into an explicit egress allow-list with default-deny on cloud metadata
-// IPs (169.254.169.254), localhost, and RFC1918 ranges.
-import { App, fetchGuard } from "@daloyjs/core";
+// handlers that call any URL the prompt suggests. fetchGuard() returns a
+// guarded fetch (it is not middleware and does not patch globalThis.fetch)
+// that refuses cloud metadata IPs (169.254.169.254), localhost, and
+// RFC1918 ranges, and re-checks every redirect hop.
+import { fetchGuard } from "@daloyjs/core";
 
-export const app = new App();
+export const safeFetch = fetchGuard();
+// Default-blocked ranges (for clarity):
+// 169.254.0.0/16, 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12,
+// 192.168.0.0/16, ::1, fc00::/7. Cloud metadata stays blocked
+// even if you pass allowPrivate / allowLinkLocal.
 
-app.use(fetchGuard({
-  allow: [
-    "https://api.stripe.com",
-    "https://*.s3.amazonaws.com",
-  ],
-  // Default-blocked ranges (for clarity):
-  // 169.254.0.0/16, 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12,
-  // 192.168.0.0/16, ::1, fc00::/7
-}));
+// In a handler: use safeFetch for every URL that came from a user or a model.
+// await safeFetch(url); // throws SsrfBlockedError on a blocked target
 ```
 
 The "agent reads the rules before it writes code" piece is covered in ["Designing for Coding Agents"](/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills). The point of scaffolding AGENTS.md is exactly the "PromptBOM" idea the Aikido post pitches at the end, give the agent provenance and rules *before* it generates, not after.
@@ -243,7 +245,8 @@ The article's most useful line: "Treat AI code like a junior developer wrote it.
 //    that helps enumeration tools.
 // 8. Unsupported content types on body routes: 415. No silent JSON-parse
 //    of a text/plain payload.
-// 9. Cookies default to __Host- prefix, Secure, HttpOnly, SameSite=Lax.
+// 9. session() and csrf() cookies (once you add them) default to the
+//    __Host- prefix, Secure, SameSite=Lax (session: HttpOnly too).
 //
 // All of the above are the constructor:
 new App();
@@ -253,7 +256,7 @@ new App();
 
 - Destructive database privileges can still ruin production from inside a handler. Give agents read replicas and least-privilege database roles.
 - AI-generated business logic still needs review. Typed routes, typed clients, and OpenAPI give reviewers and SAST tools a structured surface to inspect.
-- Authentication remains an explicit per-route decision because some routes are public. Daloy provides `jwt()`, `basicAuth()`, `bearerAuth()`, `session()`, and the [auth-slice pattern](/docs/security/auth-slice).
+- Authentication remains an explicit per-route decision because some routes are public. Daloy provides `jwk()`, `basicAuth()`, `bearerAuth()`, `session()`, and the [auth-slice pattern](/docs/security/auth-slice).
 - AI moderation and runtime intrusion detection need separate systems. Daloy provides the event stream a detector consumes.
 
 ## A vibe-coder prompt I would actually use
@@ -267,13 +270,13 @@ new App();
 //    to a separate adminApp on a different deploy. Add secureHeaders(),
 //    rateLimit(), and fetchGuard() in app.ts. Never read process.env at
 //    module top-level for secrets; read inside the handler so the boot
-//    guards catch missing values. Run 'pnpm verify' in CI."
+//    guards catch missing values. Scaffold with --with-ci."
 //
 // That is the entire delta between "vibe-coded app that ships" and
 // "vibe-coded app that doesn't end up on a breach blog."
 ```
 
-That paragraph plus `pnpm create daloy@latest` is the entire setup. The scaffolded project ships with the verify gates wired into CI, the AGENTS.md the model needs, the security docs linked from the README, and the secure-by-default constructor. The sales rep at 1am has to actively work to disable any of it.
+That paragraph plus `pnpm create daloy@latest` is the entire setup. The scaffolded project ships with a hardened CI bundle (`--with-ci`, on by default: lockfile-source check, CodeQL, OSV, secret scanning, Scorecard), the AGENTS.md the model needs, the security docs linked from the README, and the secure-by-default constructor. The sales rep at 1am has to actively work to disable any of it.
 
 ## What DaloyJS covers
 

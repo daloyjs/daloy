@@ -55,15 +55,14 @@ export const db: Client = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-export const tursoPlugin = {
-  name: "turso",
-  async register(app: App) {
-    app.decorate("db", db);
-    app.onClose(async () => {
-      db.close();
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function tursoPlugin(app: App) {
+  app.decorate("db", db);
+  app.onClose(async () => {
+    db.close();
+  });
+}
 ```
 
 ## 4. Augment app state
@@ -88,7 +87,7 @@ import { tursoPlugin } from "./db/turso.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(tursoPlugin);
+await tursoPlugin(app);
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 

@@ -90,31 +90,30 @@ import type { App } from "@daloyjs/core";
 
 const client = new SESv2Client({ region: process.env.AWS_REGION });
 
-export const sesPlugin = {
-  name: "ses",
-  register(app: App) {
-    app.decorate("email", {
-      async send({ to, subject, text, html }) {
-        const input: SendEmailCommandInput = {
-          FromEmailAddress: process.env.SES_FROM_ADDRESS!,
-          Destination: { ToAddresses: [to] },
-          Content: {
-            Simple: {
-              Subject: { Data: subject, Charset: "UTF-8" },
-              Body: {
-                ...(text ? { Text: { Data: text, Charset: "UTF-8" } } : {}),
-                ...(html ? { Html: { Data: html, Charset: "UTF-8" } } : {}),
-              },
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function sesPlugin(app: App) {
+  app.decorate("email", {
+    async send({ to, subject, text, html }) {
+      const input: SendEmailCommandInput = {
+        FromEmailAddress: process.env.SES_FROM_ADDRESS!,
+        Destination: { ToAddresses: [to] },
+        Content: {
+          Simple: {
+            Subject: { Data: subject, Charset: "UTF-8" },
+            Body: {
+              ...(text ? { Text: { Data: text, Charset: "UTF-8" } } : {}),
+              ...(html ? { Html: { Data: html, Charset: "UTF-8" } } : {}),
             },
           },
-        };
-        const out = await client.send(new SendEmailCommand(input));
-        return { id: out.MessageId ?? "" };
-      },
-    });
-    app.onClose(() => client.destroy());
-  },
-};
+        },
+      };
+      const out = await client.send(new SendEmailCommand(input));
+      return { id: out.MessageId ?? "" };
+    },
+  });
+  app.onClose(() => client.destroy());
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -140,7 +139,7 @@ import { sesPlugin } from "./plugins/ses.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-app.register(sesPlugin);
+sesPlugin(app);
 
 app.post(
   "/notify",

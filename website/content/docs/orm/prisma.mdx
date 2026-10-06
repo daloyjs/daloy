@@ -103,16 +103,15 @@ export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === "production" ? ["error"] : ["query", "error"],
 });
 
-export const prismaPlugin = {
-  name: "prisma",
-  async register(app: App) {
-    await prisma.$connect();
-    app.decorate("db", prisma);
-    app.onClose(async () => {
-      await prisma.$disconnect();
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function prismaPlugin(app: App) {
+  await prisma.$connect();
+  app.decorate("db", prisma);
+  app.onClose(async () => {
+    await prisma.$disconnect();
+  });
+}
 ```
 
 ## 4. Augment app state types
@@ -148,7 +147,7 @@ const UserSchema = z.object({
 const app = new App();
 app.use(requestId());
 app.use(secureHeaders());
-app.register(prismaPlugin);
+await prismaPlugin(app);
 
 app.get(
   "/users/:id",

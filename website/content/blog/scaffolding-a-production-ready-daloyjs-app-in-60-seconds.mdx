@@ -35,9 +35,9 @@ pnpm create daloy@latest my-api
 cd my-api
 pnpm dev
 # -> server up at http://localhost:3000
-# -> /docs serving Swagger UI
+# -> /docs serving the Scalar API reference (outside production)
 # -> /openapi.json serving the contract
-# -> secure headers, CSRF, session, rate-limit middleware preloaded`;
+# -> requestId, secureHeaders, rateLimit middleware preloaded`;
 
 export const INTERACTIVE_FLOW = `$ pnpm create daloy@latest
 
@@ -46,7 +46,7 @@ export const INTERACTIVE_FLOW = `$ pnpm create daloy@latest
   ?  Project name › my-api
   ?  Template
      ▸ node-basic         Traditional REST API with secure defaults and Hey API codegen
-       vercel        Catch-all Vercel route with Node.js migration notes
+       vercel             Catch-all Vercel Functions REST API on the Node.js runtime (Fluid Compute)
        cloudflare-worker  Worker entrypoint with wrangler dev/deploy scripts
        bun-basic          Bun-native server with \`bun --hot\`, \`bun test\`, and Hey API codegen
        deno-basic         Deno-native server with \`deno task dev\`, \`deno test\`, and \`npm:\` imports
@@ -75,62 +75,65 @@ pnpm create daloy@latest [project-name] [options]
 
   --template <name>          node-basic | vercel | cloudflare-worker | bun-basic | deno-basic
                              (default: node-basic)
-  --package-manager <pm>     pnpm | npm | yarn | bun       (default: pnpm)
+  --package-manager <pm>     pnpm | npm | yarn | bun
+                             (alias --pm; default: the package manager
+                             that ran this CLI, else pnpm)
   --list-templates           Print available templates and exit.
   --install / --no-install   Install deps after scaffolding.
                              (default: Y, except pnpm - N to respect
-                             minimumReleaseAge + onlyBuiltDependencies)
+                             minimumReleaseAge + ignore-scripts review)
   --git / --no-git           Initialize a git repository.
   --minimal                  Strip the bookstore + OpenAPI docs demo routes.
   --with-ci / --no-ci        Add hardened GitHub Actions + governance files.
                              (default: Y)
+  --with-deploy / --no-deploy  Add starter deploy.yml workflow(s).
+                             (default: inherits --with-ci)
   --code-owner <owner>       CODEOWNERS owner for --with-ci, e.g. @acme/security.
   --force                    Overwrite an existing non-empty directory.
   --yes, -y                  Accept all defaults; never prompt.
-  --help, -h                 Print this help.`;
+  --help, -h                 Print this help.
+  --version, -v              Print version.`;
 
-export const MINIMAL_VS_DEMO = `# What you get out of the box
+export const MINIMAL_VS_DEMO = `# What you get out of the box (node-basic)
 
   WITHOUT --minimal (the default)        |   WITH --minimal
   -------------------------------------- + --------------------------------------
-  src/app.ts                              |   src/app.ts
+  src/build-app.ts                        |   src/build-app.ts
     + buildApp()                          |     + buildApp()
-    + secureHeaders, csrf, session,       |     + secureHeaders, csrf, session,
-      rateLimit, cors, requestId,         |       rateLimit, cors, requestId,
-      tracing, logger                     |       tracing, logger
+    + requestId, secureHeaders,           |     + requestId, secureHeaders,
+      rateLimit                           |       rateLimit
+    + GET /healthz                        |     + GET /healthz
+    + GET /books/:id  (Zod + NotFound)    |
+    + docs: "auto"                        |
                                           |
-  src/routes/                             |   src/routes/
-    + books.ts        (CRUD bookstore)    |     + health.ts   (GET /healthz)
-    + authors.ts      (relationships)     |
-    + reviews.ts      (rating validation) |
-    + health.ts       (GET /healthz)      |
-                                          |
-  src/schemas/                            |   src/schemas/
-    + book.ts, author.ts, review.ts       |     (empty - add your own)
+  src/index.ts      (serve + banner)      |   src/index.ts      (serve + banner)
+  scripts/dump-openapi.ts                 |   scripts/dump-openapi.ts
                                           |
   tests/                                  |   tests/
-    + books.test.ts, authors.test.ts      |     + health.test.ts
+    + healthz.test.ts, contract.test.ts   |     + healthz.test.ts, contract.test.ts
                                           |
-  openapi.json on /openapi.json           |   openapi.json on /openapi.json
-  Swagger UI on /docs                     |   Swagger UI on /docs
+  /openapi.json, /openapi.yaml            |   (no auto-mounted docs routes;
+  Scalar API reference on /docs           |    pnpm gen still writes the spec)
+  (outside production)                    |
 
-The bookstore demo exists to show every contract-first pattern at once
-(validation, relationships, errors, pagination, testing). When you've read
-it twice, --minimal strips it so you can start your own app cleanly.`;
+The bookstore route exists to show the contract-first pattern in one
+place (validation, typed errors, a stable operationId). When you've read
+it, --minimal strips it so you can start your own app cleanly.`;
 
 export const RUNTIME_TEMPLATES = `# Same app shape, five entry files.
 
-node-basic/src/index.ts          -> \`serve()\` from @daloyjs/core/node
-bun-basic/src/index.ts           -> Bun.serve(handle.url) with \`bun --hot\`
-deno-basic/main.ts               -> Deno.serve(handle.url) with deno.json tasks
-cloudflare-worker/src/index.ts   -> export default { fetch: handle.fetch }
-vercel/api/[...path].ts     -> export const config = { runtime: "edge" }
+node-basic/src/index.ts          -> serve() from @daloyjs/core/node
+bun-basic/src/index.ts           -> serve() from @daloyjs/core/bun (logs handle.url), \`bun --hot\`
+deno-basic/src/main.ts           -> serve() from @daloyjs/core/deno (onListen), deno.json tasks
+cloudflare-worker/src/index.ts   -> export default toFetchHandler(app)   (@daloyjs/core/cloudflare)
+vercel/api/index.ts              -> export default toFetchHandler(app)   (@daloyjs/core/vercel, Node.js runtime)
 
-The buildApp() in src/app.ts is byte-identical across all five templates.
-That is on purpose - and it's the same property the "Same App on Five
-Runtimes" post explored. Pick the one that matches where you deploy today;
-you can copy the buildApp() to a different template tomorrow without
-touching a single route or schema file.`;
+node-basic, bun-basic, and deno-basic share the same src/build-app.ts
+buildApp() shape; the Worker and Vercel templates build the same kind of
+App inline in their entry file. That is on purpose - and it's the same
+property the "Same App on Five Runtimes" post explored. Pick the one that
+matches where you deploy today; you can move your routes to a different
+template tomorrow without touching a single route or schema.`;
 
 export const AGENTS_DROPIN = `# my-api/ (relevant excerpts)
 
@@ -138,39 +141,42 @@ AGENTS.md                              # short, opinionated, agent-facing
 .agents/
   skills/
     daloyjs-best-practices/
-      SKILL.md                         # the full workflow (~600 lines)
+      SKILL.md                         # the full workflow (~460 lines)
+      references/                      # mcp.md, ci-workflows.md (read on demand)
+.vscode/
+  mcp.json
 src/
-  app.ts                               # buildApp() with secure defaults
-  routes/
-    health.ts                          # GET /healthz
-.github/
-  copilot-instructions.md              # points at AGENTS.md
+  build-app.ts                         # buildApp() with secure defaults + GET /healthz
+  index.ts                             # serve() + startup banner
+.github/                               # with --with-ci (the default)
   workflows/
     ci.yml          codeql.yml         deploy.yml
     zizmor.yml      scorecard.yml      vuln-scan.yml
     container-scan.yml                 dast.yml
+    opengrep.yml    osv-scan.yml       secret-scan.yml
+    eol-scan.yml
   dependabot.yml
   CODEOWNERS
 SECURITY.md
 .npmrc                                 # ignore-scripts, minimum-release-age, ...
-pnpm-workspace.yaml                    # blockExoticSubdeps, strictDepBuilds, ...
+pnpm-workspace.yaml                    # blockExoticSubdeps, ignoreScripts, ...
 package.json`;
 
 export const AGENTS_MD_EXCERPT = `# AGENTS.md (excerpt)
 
 A [DaloyJS](https://daloyjs.dev) Node.js REST API. **Contract-first**:
-every route declares its method, path, body, params, and response schemas
-inline; OpenAPI, validation, types, and a typed fetch SDK fall out of that
-single declaration. Do not introduce parallel schema sources.
+routes are defined with validation schemas (Zod in this template; DaloyJS
+also supports Standard Schema-compatible validators) and OpenAPI 3.1 is
+generated from them.
 
-## Quick rules
+## Core rules
 
-1. Routes live in src/routes/<resource>.ts and register themselves on the
-   shared \`app\`.
-2. Schemas are JSON Schema objects, NOT zod (zod stays on the frontend if
-   you want it).
-3. Every mutating route requires a session OR an explicit \`csrf({ ... })\`
-   bypass with a reason.
+1. The route definition is the contract: \`app.get(path, contract, handler)\`
+   shorthand, or \`app.route({...})\` for reusable \`defineRoute()\` contracts.
+2. Validate every input with Zod or another Standard Schema-compatible
+   validator. For Zod object schemas, use \`.strict()\`.
+3. Keep \`requestId()\`, \`secureHeaders()\`, and \`rateLimit()\` enabled.
+   They are the project's secure defaults.
 4. Throw typed errors (NotFoundError, BadRequestError, ...) from
    @daloyjs/core - never return raw error responses.
 
@@ -180,12 +186,16 @@ testing patterns, security guidance, and deployment notes - read
 
 export const STARTUP_BANNER = `// src/index.ts, what pnpm dev actually prints
 import { serve } from "@daloyjs/core/node";
-import { printStartupBanner } from "@daloyjs/core";
-import { buildApp } from "./app.js";
+import { printStartupBanner } from "@daloyjs/core/banner";
+import { buildApp } from "./build-app.ts";
 
 const app = buildApp();
-const { url } = await serve(app, { port: Number(process.env.PORT ?? 3000) });
+const port = Number(process.env.PORT ?? 3000);
 
+// serve() returns a handle synchronously ({ server, port, close }), no URL.
+serve(app, { port });
+
+const url = \`http://localhost:\${port}\`;
 printStartupBanner({
   name: "my-api",
   version: process.env.npm_package_version,
@@ -217,18 +227,24 @@ export const WITH_CI_FILES = `# pnpm create daloy@latest my-api --with-ci
 
 .github/
   workflows/
-    ci.yml            # pnpm install --frozen-lockfile --ignore-scripts; typecheck; test; verify lockfile
+    ci.yml            # frozen install; lockfile sources; typecheck; contract; test; build; audit
     codeql.yml        # TS/JS static analysis
-    deploy.yml        # manual-only app deployment starter
+    deploy.yml        # manual-only app deployment starter (--with-deploy, inherits --with-ci)
     scorecard.yml     # weekly OpenSSF Scorecard
     zizmor.yml        # workflow lint on every push/PR
     vuln-scan.yml     # checks for known vulnerabilities
+    osv-scan.yml      # OSV-Scanner over the lockfile
+    opengrep.yml      # SAST rules
+    secret-scan.yml   # leaked-credential scan
+    dast.yml          # dynamic scan against the running app
+    eol-scan.yml      # flags end-of-life runtimes
     container-scan.yml # runs Trivy scans on your dockerfile
   dependabot.yml      # weekly bumps, grouped per ecosystem
   CODEOWNERS          # assigns ownership to the repo owner 
 SECURITY.md           # disclosure policy + supported versions
 scripts/
-  verify-lockfile-sources.mjs # catches non-npm registry / git / tarball drift`;
+  verify-lockfile-sources.mjs # catches non-npm registry / git / tarball drift
+  verify-runtime-eol.mjs      # backs eol-scan.yml`;
 
 Hi, Devlin. Ten years of fullstack, currently in Norway. I have spent a frankly embarrassing amount of my career on the first sixty seconds of a project, the part where you go from *I have an idea* to *I have a running server with tests, types, OpenAPI, and a CI pipeline*. First-run friction kills projects before they start; a clean first minute is how you keep going.
 
@@ -240,7 +256,7 @@ Hi, Devlin. Ten years of fullstack, currently in Norway. I have spent a frankly 
 <CodeBlock language="bash" code={ONE_LINER} />
 </EditorFrame>
 
-That's the entire story for most people. One command. You get an HTTP server, an OpenAPI document, Swagger UI, hardened security middleware preloaded (CSRF, sessions, secure headers, rate limit), a sensible folder structure, and a CI pipeline that's pinned and sandboxed. The scaffolder is opinionated *for* you so you can start making the opinionated decisions about your *own* app.
+That's the entire story for most people. One command. You get an HTTP server, an OpenAPI document, a Scalar API reference, hardened security middleware preloaded (request IDs, secure headers, rate limit), a sensible folder structure, and a CI pipeline that's pinned and sandboxed. The scaffolder is opinionated *for* you so you can start making the opinionated decisions about your *own* app.
 
 ## The interactive flow, when you don't pass arguments
 
@@ -250,7 +266,7 @@ If you skip the project name, `create-daloy` walks you through a tiny terminal w
 <CodeBlock language="bash" code={INTERACTIVE_FLOW} />
 </EditorFrame>
 
-One detail worth pointing out: when the package manager is `pnpm`, `--install` defaults to *N*. That's on purpose. The scaffolded project ships a `.npmrc` with `minimum-release-age=1440` and a `pnpm-workspace.yaml` with `blockExoticSubdeps: true` and `strictDepBuilds: true`. The first install needs to *honor those*, not race past them. So we let you `cd` in, look at the files, and run `pnpm install` deliberately. Five seconds slower; way fewer surprises.
+One detail worth pointing out: when the package manager is `pnpm`, `--install` defaults to *N*. That's on purpose. The scaffolded project ships a `.npmrc` with `minimum-release-age=1440` and a `pnpm-workspace.yaml` with `blockExoticSubdeps: true` and `ignoreScripts: true`. The first install needs to *honor those*, not race past them. So we let you `cd` in, look at the files, and run `pnpm install` deliberately. Five seconds slower; way fewer surprises.
 
 ## The full flag surface
 
@@ -260,7 +276,7 @@ One detail worth pointing out: when the package manager is `pnpm`, `--install` d
 
 ## --minimal vs the bookstore demo
 
-By default the scaffold drops in a small *bookstore* API, books, authors, reviews, that exercises every contract-first pattern we want you to copy: nested resources, JSON Schema validation, pagination, typed errors, integration tests. Read it twice, then either delete the routes by hand or pass `--minimal` and start from a single `/healthz` route.
+By default the scaffold drops in a tiny *bookstore* demo, one `GET /books/:id` route, that shows the contract-first pattern we want you to copy: a Zod params and response schema, a stable `operationId`, and a typed `NotFoundError`, plus the auto-mounted docs. Read it, then either delete it by hand or pass `--minimal` and start from a single `/healthz` route.
 
 <EditorFrame files={["FILES.md"]} activeFile="FILES.md" status="bookstore demo on the left · --minimal on the right">
 <CodeBlock language="bash" code={MINIMAL_VS_DEMO} />
@@ -268,7 +284,7 @@ By default the scaffold drops in a small *bookstore* API, books, authors, review
 
 ## The five runtime templates
 
-DaloyJS is runtime-portable, and the scaffolder is where that promise becomes a directory you can `cd` into. The `buildApp()` in `src/app.ts` is byte-identical across every template, the only thing that changes is the entrypoint file that hands a `Request` to that app:
+DaloyJS is runtime-portable, and the scaffolder is where that promise becomes a directory you can `cd` into. The app is built the same way in every template (`buildApp()` in `src/build-app.ts` for Node, Bun, and Deno; inline in the entry file for Workers and Vercel), and the main thing that changes is the entrypoint that hands a `Request` to that app:
 
 <EditorFrame files={["TEMPLATES.md"]} activeFile="TEMPLATES.md" status="same buildApp() · five different entrypoints">
 <CodeBlock language="bash" code={RUNTIME_TEMPLATES} />
@@ -276,13 +292,13 @@ DaloyJS is runtime-portable, and the scaffolder is where that promise becomes a 
 
 <TemplateCard name="node-basic" tag="--template node-basic" blurb="Default. Long-lived Node process, classic REST API shape, Hey API codegen wired in. Pick this when you're deploying to a normal container, a VM, or a Node-on-rails platform." entrypoint="serve(app), from @daloyjs/core/node" />
 
-<TemplateCard name="bun-basic" tag="--template bun-basic" blurb="Bun-native. Uses bun --hot for dev, bun test for testing, and the same buildApp() handed to Bun.serve(). Fast cold start, identical handler code." entrypoint="Bun.serve({ fetch: handle.url })" />
+<TemplateCard name="bun-basic" tag="--template bun-basic" blurb="Bun-native. Uses bun --hot for dev, bun test for testing, and the same buildApp() handed to serve() from @daloyjs/core/bun. Fast cold start, identical handler code." entrypoint="serve(app), from @daloyjs/core/bun" />
 
-<TemplateCard name="deno-basic" tag="--template deno-basic" blurb="Deno-native. deno.json with tasks, npm: imports for @daloyjs/core, no node_modules. The only template with no package.json, which is exactly the point." entrypoint="Deno.serve(handle.url)" />
+<TemplateCard name="deno-basic" tag="--template deno-basic" blurb="Deno-native. deno.json with tasks and an import map for @daloyjs/core (served from JSR as @daloyjs/daloy since 1.5.4; npm: specifiers before that), no node_modules. The only template with no package.json, which is exactly the point." entrypoint="serve(app), from @daloyjs/core/deno" />
 
-<TemplateCard name="cloudflare-worker" tag="--template cloudflare-worker" blurb="Workers entrypoint with wrangler dev / wrangler deploy scripts and an env-typed config. Pairs with the KV session store from the sessions post." entrypoint="export default { fetch: handle.fetch }" />
+<TemplateCard name="cloudflare-worker" tag="--template cloudflare-worker" blurb="Workers entrypoint with wrangler dev / wrangler deploy scripts and a minimal wrangler.toml. Pairs with the KV session store from the sessions post." entrypoint="export default toFetchHandler(app)" />
 
-<TemplateCard name="vercel" tag="--template vercel" blurb="Catch-all api/[...path].ts that delegates to a single buildApp(). Comes with a short migration note covering Vercel's three handler shapes." entrypoint='export const config = { runtime: "edge" }' />
+<TemplateCard name="vercel" tag="--template vercel" blurb="Catch-all api/index.ts (vercel.json rewrites every path to it) on Vercel's Node.js runtime. The comments explain the Edge alternative (toWebHandler) if you really need it." entrypoint="export default toFetchHandler(app)" />
 
 ## The AGENTS.md drop-in (for the agent in the room)
 
@@ -292,7 +308,7 @@ One of the things I personally enjoy about the 2026 ecosystem is that *every* pr
 <CodeBlock language="bash" code={AGENTS_DROPIN} />
 </EditorFrame>
 
-`AGENTS.md` is short and opinionated, it's the two-page summary every agent should read first. The real meat is in `.agents/skills/daloyjs-best-practices/SKILL.md`, which is the full \~600-line workflow doc: how to add a route, schema conventions, the testing recipe, security defaults, deployment notes per runtime. An agent that follows it produces code that looks like the rest of the codebase, which is the only kind of agent output that ages well.
+`AGENTS.md` is short and opinionated, it's the two-page summary every agent should read first. The real meat is in `.agents/skills/daloyjs-best-practices/SKILL.md`, which is the full \~460-line workflow doc: how to add a route, schema conventions, the testing recipe, security defaults, deployment notes per runtime. An agent that follows it produces code that looks like the rest of the codebase, which is the only kind of agent output that ages well.
 
 <EditorFrame files={["my-api/AGENTS.md"]} activeFile="my-api/AGENTS.md" status="short · opinionated · agent-facing">
 <CodeBlock language="bash" code={AGENTS_MD_EXCERPT} />

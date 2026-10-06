@@ -199,9 +199,10 @@ When a response schema is declared, DaloyJS validates the handler return before 
 
 ## Body limits and content types
 
+The `bodyLimitBytes` App option (default 1 MiB) caps the declared Content-Length and the streamed size of every request body -\> **413**. Since 1.5.4 this applies on every route, including bodies a handler reads itself from `ctx.request`; the cap is checked lazily, when the body is read.
+
 When a route declares `request.body`, DaloyJS also enforces:
 
-- Content-Length and streamed size against `app.bodyLimitBytes` -\> **413**.
 - Content-Type against the route's `accepts` list, or global `allowedContentTypes` if set -\> **415**.
 - Default accepted body types: `application/json`, `application/x-www-form-urlencoded`, and `multipart/form-data`.
 - Prototype-pollution-safe parsing for JSON, query strings, urlencoded forms, and multipart forms.

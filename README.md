@@ -77,8 +77,8 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 
 ```
 framework test suite passing · ≥90% line + function coverage / ≥92% branch coverage · typechecks on TypeScript 7 with `strict: true`
-runs on Node, Bun, Deno, Cloudflare, Vercel
-~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
+runs on Node, Bun, Deno, Cloudflare, Vercel, Fastly, Lambda
+~25M static-route ops/sec · ~2.2M dynamic-route ops/sec on M-class CPU
 ```
 
 ---
@@ -186,7 +186,7 @@ For maintainers, the safe rule is: use one publish path per version. Either publ
 
 ```ts
 import { z } from "zod";
-import { App, NotFoundError, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
+import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const app = new App({ bodyLimitBytes: 1024 * 1024, requestTimeoutMs: 5_000 });
@@ -291,7 +291,7 @@ For TypeScript consumers in the same monorepo you can skip codegen entirely and 
 ```ts
 import { createInProcessClient } from "@daloyjs/core/client";
 const client = createInProcessClient(app);
-const r = await client.getBookById({ params: { id: "1" } });
+const r = await client.getBooksById({ params: { id: "1" } }); // operationId derived from GET /books/:id
 //    ^? { status: 200; body: { id: string; title: string } } | { status: 404; ... }
 ```
 
@@ -396,7 +396,7 @@ import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/cor
 import { generateOpenAPI } from "@daloyjs/core/openapi";
 ```
 
-The UI is always contract-accurate — never stale. `create-daloy` templates opt in with `docs: true`.
+The UI is always contract-accurate — never stale. `create-daloy` templates opt in with `docs: "auto"`, so docs mount everywhere except production.
 
 If you omit `openapi.info`, the portable defaults are `DaloyJS API` / `0.0.0`.
 Set `openapi.info` (or the top-level `title`, `version`, and `description`) for
@@ -449,7 +449,7 @@ deployment.
 | **CSRF**                             | First-party `csrf()` ships two strategies: **double-submit cookie** (default) and **Fetch-Metadata** (`Sec-Fetch-Site`-based, tokenless); both with timing-safe verification.                                                                                                                                                                               |
 | **Information disclosure (5xx)**     | 5xx problem+json `detail` is redacted unless the environment is explicitly development or test; an unset `NODE_ENV` redacts too.                                                                                                                                                                                                                                                                                        |
 | **Credential timing attacks**        | First-party `timingSafeEqual()` helper for tokens & signatures.                                                                                                                                                                                                                                                                                             |
-| **Brute-force / scraping**           | First-party `rateLimit()` with token-bucket + `Retry-After`; Node/Bun/Deno scaffolded apps enable it.                                                                                                                                                                                                                                                       |
+| **Brute-force / scraping**           | First-party `rateLimit()` with a fixed-window counter + `Retry-After`, keyed per client IP by default; Node/Bun/Deno scaffolded apps enable it.                                                                                                                                                                                                         |
 | **Method confusion**                 | Real **405** with `Allow` header, not a misleading 404.                                                                                                                                                                                                                                                                                                     |
 | **CORS misconfig**                   | First-party `cors()` requires an explicit allowlist and throws for `*` with credentials; from 1.5.4 it also refuses `credentials: true` with an origin list or predicate that allows every origin or `"null"`.                                                                                                                                                 |
 | **Request correlation**              | First-party `requestId()` uses cryptographic ids; scaffolded apps enable it.                                                                                                                                                                                                                                                                                |
@@ -490,13 +490,13 @@ for the full picture, plus the per-provider guides under [`/docs/auth`](https://
 
 ```text
 $ pnpm bench
-static route lookup         25,810,420 ops/sec
-dynamic 4-segment lookup     2,105,121 ops/sec
-miss                         7,742,635 ops/sec
+static route lookup         25,024,295 ops/sec
+dynamic 4-segment lookup     2,198,274 ops/sec
+miss                         8,203,816 ops/sec
 ```
 
 - After traversal checks, exact static routes resolve with an allocation-free
-  `Map.get` fast path — **~26M ops/sec**.
+  `Map.get` fast path — **~25M ops/sec**.
 - Dynamic routes walk a segment trie in path-length time without backtracking;
   overlapping routes can require visiting additional branches.
 - Body parsing is lazy and only runs when a route declares a body schema.
@@ -508,9 +508,11 @@ miss                         7,742,635 ops/sec
 For deployments where every millisecond of startup matters (Lambda, Vercel, Cloudflare Workers, Fastly Compute), import `App` from the deep entry point instead of the barrel:
 
 ```ts
-import { App } from "@daloyjs/core/app"; // ~13 ms faster cold start than "@daloyjs/core"
+import { App } from "@daloyjs/core/app"; // ~10 ms faster to import than "@daloyjs/core"
 import { serve } from "@daloyjs/core/node";
 ```
+
+The saving is measured by `pnpm bench:serverless` (median fresh-process import: about 19.5 ms for `dist/app.js` versus 29.3 ms for the barrel on an Apple M3 Max with Node v26.4.0). It is a one-off cost per cold start, not per request.
 
 `@daloyjs/core/app` resolves to the **same `App` class with the same constructor defaults** — auto `secureHeaders`, request ids, body limits, request timeouts, prototype-pollution guards, problem+json redaction, and the boot guards behave exactly as with the barrel import. (`fetchGuard()` is never wired automatically: it is an opt-in wrapper you import and call for outbound requests, and it does not patch the global `fetch`.) The deep import only skips loading unrelated peripheral modules (`jwk`, `jwt`, `multipart`, `websocket`, `streaming`, `compression`, `subdomains`, etc.) that the barrel re-exports for convenience. If you use any of those, import them directly from their own subpaths (`@daloyjs/core/jwk`, `@daloyjs/core/multipart`, …) so each one is paid for only when used.
 
@@ -652,6 +654,8 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 - *Every environment:* `cors({ origin: "*", credentials: true })`; from 1.5.4 also `credentials: true` with an origin predicate or list that allows every origin (detected by probing a canary origin) or allows `"null"`.
 - *Every environment, 1.5.4:* invalid numeric limits (`NaN`, `Infinity`, negatives, non-integers, strings) for `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys`, `jsonMaxDepth`, and `rateLimit()` `windowMs` / `max`; and a `/0` range (`0.0.0.0/0`, `::/0`) in `behindProxy: { cidrs }` or a guard's `trustedProxies`, which would trust every peer.
 - *Production, 1.5.4:* `jwk()` and `createJwtVerifier()` without an `audience`, unless `allowAnyAudience: true` is passed (for a single-tenant private identity provider).
+- *Production, 1.5.4:* `createJwtSigner()` / `createJwtVerifier()` with an HS* key that meets the 32-byte floor but is guessable: a single repeated byte, a short repeated pattern, a known placeholder, or fewer than 8 distinct byte values.
+- *Every environment, 1.5.4:* `session()` with `cookieOptions.httpOnly: false`; in production also `cookieOptions.secure: false`, unless `allowInsecureCookie: true` is set for a genuinely plain-HTTP deployment.
 - Not a boot guard, but related: in production, a request carrying a forwarded or client-IP header (`X-Forwarded-*`, `X-Real-IP`, and vendor headers `CF-Connecting-IP` / `Fly-Client-IP` / `True-Client-IP`) gets a `500` until `behindProxy` is set. The check is per request, so the app still starts.
 - **Shadow auth**: a route that declares an `auth:` requirement (advertised as protected in the OpenAPI `security` list) but installs no authentication hook to enforce it. Built-in auth middlewares (`bearerAuth` / `basicAuth` / `jwk` / `httpSignatureAuth` / `clientCertAuth`) satisfy the guard automatically; mark a custom auth hook (or upstream-gateway-enforced auth) with `markAuthHook()`. The boot check sees that an auth-marked hook is *present*; from 1.5.4 a request-time check also confirms it *ran*, so `except(() => true, bearerAuth(...))` or `some(auth, permissiveHook)` no longer lets a protected route through: production answers `500` instead of running the handler.
 - **Unauthenticated MCP**: an `mcpRoutes()` endpoint with no auth hook — MCP tools are model-controlled and side-effecting. Opt out for a genuinely public server with `mcpRoutes(path, handler, { public: true })`. Same presence-not-execution limit as shadow auth.
@@ -670,9 +674,9 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 ### First-party middleware
 
 - `secureHeaders` with strict CSP baseline, per-request **nonces**, **Trusted Types** (`require-trusted-types-for 'script'`), `frame-ancestors`, `cross-origin-opener-policy` / `cross-origin-resource-policy`, and reporting endpoints.
-- `cors` with explicit-allowlist enforcement.
+- `cors` with explicit-allowlist enforcement. From 1.5.4 a route's policy also reaches responses that end a request early (auth `401`/`403`, `413`/`415`/`422` body errors); unreleased on `main`, the App-level policy also covers rejections before routing (`400` unknown `Host`, `431`, the unconfigured-proxy `500`).
 - `csrf` with **double-submit cookie** (default) and **Fetch-Metadata** (`Sec-Fetch-Site`-based, tokenless) strategies; timing-safe verification.
-- `rateLimit` with token-bucket + `Retry-After`, shared `groupId` buckets, IPv6 `/64` client grouping (`ipv6Subnet`), and a Redis-backed store at `@daloyjs/core/rate-limit-redis`.
+- `rateLimit` with a fixed-window counter + `Retry-After`, per-client-IP default key, shared `groupId` buckets, IPv6 `/64` client grouping (`ipv6Subnet`), and a Redis-backed store at `@daloyjs/core/rate-limit-redis`.
 - `loadShedding()` event-loop-pressure middleware (auto-`503` + `Retry-After`).
 - `loginThrottle()` credential-entry preset and `rotateSession()` privilege-change session rotation.
 - `ipRestriction()` with CIDR-aware IPv4 / IPv6 allow / deny lists.
@@ -698,7 +702,7 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 - `botGuard()` bot / User-Agent management at `@daloyjs/core/bot-guard`: the in-app equivalent of Nginx/WAF bot rules. Blocks empty/missing `User-Agent` (default on) and known-abusive `User-Agent` strings / `RegExp`s, and **verifies declared crawlers** — a request claiming to be Googlebot/Bingbot is confirmed via reverse-DNS + forward-confirm (the method Google and Bing document), so a spoofed `User-Agent` can't impersonate a trusted crawler. Ships `GOOGLEBOT` / `BINGBOT` / `WELL_KNOWN_BOTS` presets and accepts custom `VerifiedBotRule`s. Allowlist-first (`allowUserAgents` bypasses every rule), secure-by-default (`verifiedBots` refuses to construct without an IP source; unverifiable crawlers blocked unless `blockUnverifiableBots: false`), subdomain-boundary-safe domain matching, per-IP verification cache to keep DNS off the hot path, `mode: "log"` monitor mode, `onBlock` callback, and a pluggable `BotResolver` (default lazy `node:dns/promises`). Zero runtime dependencies.
 - `ipReputation()` IP reputation / dynamic denylist feed at `@daloyjs/core/ip-reputation`: wires pluggable, periodically-refreshed abuse feeds (Tor exit lists, Spamhaus DROP, cloud-abuse ranges, or your own threat intel) into the request path without a redeploy, reusing the same SSRF-grade CIDR matcher as `ipRestriction()`. Ships `urlFeed()` (fetches newline / Spamhaus-DROP-style lists, skips comment lines, keeps good rows from a partially-malformed feed; **SSRF-hardened by default** — the outbound fetch runs through `fetchGuard()`, so a compromised feed host can't redirect it into cloud-metadata / internal space; override via `fetchImpl`) plus a custom `IpReputationFeed` interface. **Fail-open by design** — a feed that can't be loaded (initial or refresh) never blocks traffic; the last-known-good list is retained per feed. Periodic `unref`'d refresh, `mode: "log"` monitor mode, `onMatch` / `onError` callbacks, manual `refresh()` / `stop()` / `has()` / `size` controller, and pluggable IP resolution (`trustProxyHeaders` / `resolveIp`). Zero runtime dependencies.
 - `geoBlock()` GeoIP / geo-blocking at `@daloyjs/core/geo-block`: country allow/deny middleware that maps the client IP to an ISO 3166-1 alpha-2 country and rejects (or logs) traffic from countries you don't serve. **No bundled GeoIP database and no runtime dependency** — supply either an operator-owned `lookupCountry(ip)` (a MaxMind / `ip2location` reader, or your own table, reusing the trusted-proxy `X-Forwarded-For` / `X-Real-IP` IP resolution) or a `resolveCountry(ctx)` that reads an edge-injected header (`CF-IPCountry`, `CloudFront-Viewer-Country`, `x-vercel-ip-country`). Deny wins over allow (least privilege); **allow-lists fail closed** on an unknown country while deny-only fails open (overridable via `allowUnknownCountry`). Country codes are validated at construction so typos throw instead of silently never matching. `mode: "log"` monitor mode with an `onBlock` decision hook (`denied_country` / `not_in_allowlist` / `unknown_country`), the resolved country stamped on `ctx.state.geo` for allowed requests, and a `403` problem+json rejection that never echoes the country/IP. Zero runtime dependencies.
-- `concurrencyLimit()` per-route / per-client concurrency limits + queueing at `@daloyjs/core/concurrency-limit`: HAProxy `maxconn`/queue parity at the app layer. Bounds in-flight requests through a surface with a per-bucket semaphore (`maxConcurrent`), a bounded FIFO queue (`maxQueue`) with an optional `queueTimeoutMs`, and a fast `503` + `Retry-After` once the queue is full or the wait times out. Partition the budget with `scope`: `"global"` (default), `"route"` (per method + matched route template), `"client"` (per identity, needs `trustProxyHeaders`/`keyGenerator`), or a custom function (`undefined` skips limiting, fail-open). Acquires in `beforeHandle` and releases in `onSend`, so slots are freed on success, error, and short-circuit paths alike — never leaked. `onReject` observability hook, configurable `retryAfterSeconds`/`message`. Complements the `maxConnections` socket cap and `loadShedding()`. Zero runtime dependencies. HAProxy `maxconn`/queue parity at the app layer. Bounds in-flight requests through a surface with a per-bucket semaphore (`maxConcurrent`), a bounded FIFO queue (`maxQueue`) with an optional `queueTimeoutMs`, and a fast `503` + `Retry-After` once the queue is full or the wait times out. Partition the budget with `scope`: `"global"` (default), `"route"` (per method + matched route template), `"client"` (per identity, needs `trustProxyHeaders`/`keyGenerator`), or a custom function (`undefined` skips limiting, fail-open). Acquires in `beforeHandle` and releases in `onSend`, so slots are freed on success, error, and short-circuit paths alike — never leaked. `onReject` observability hook, configurable `retryAfterSeconds`/`message`. Complements the `maxConnections` socket cap and `loadShedding()`. Zero runtime dependencies.
+- `concurrencyLimit()` per-route / per-client concurrency limits + queueing at `@daloyjs/core/concurrency-limit`: HAProxy `maxconn`/queue parity at the app layer. Bounds in-flight requests through a surface with a per-bucket semaphore (`maxConcurrent`), a bounded FIFO queue (`maxQueue`) with an optional `queueTimeoutMs`, and a fast `503` + `Retry-After` once the queue is full or the wait times out. Partition the budget with `scope`: `"global"` (default), `"route"` (per method + matched route template), `"client"` (per identity, needs `trustProxyHeaders`/`keyGenerator`), or a custom function (`undefined` skips limiting, fail-open). Acquires in `beforeHandle` and releases in `onSend`, so slots are freed on success, error, and short-circuit paths alike — never leaked. `onReject` observability hook, configurable `retryAfterSeconds`/`message`. Complements the `maxConnections` socket cap and `loadShedding()`. Zero runtime dependencies.
 - `requestDecompression()` inbound decompression-bomb guard at `@daloyjs/core/request-decompression`: core is safe by omission (it never decompresses request bodies), so this is the opt-in middleware for services that must accept compressed uploads. Inflates `gzip` / `deflate` bodies behind two caps enforced **during** inflation so a zip bomb is aborted before it is fully materialised: an absolute `maxDecompressedBytes` (required) and an expansion-ratio `maxRatio` (default `100`), both rejecting with `413`. The compressed upload itself is bounded by `maxCompressedBytes` (default 1 MiB) before a byte is inflated. Unknown, non-allowlisted, runtime-unsupported, or **layered** (`gzip, gzip`) encodings are refused `415`; malformed streams `400`; bodyless / uncompressed / `identity` / `GET` / `HEAD` traffic passes through untouched. Runs in `onRequest` and stashes the inflated bytes so schema-validated bodies and raw-body handlers both see the decompressed payload. `onBomb` observability hook, exported `decompressRequestBody()` for custom flows. Built on web-standard `DecompressionStream` (brotli excluded — not in the spec). Zero runtime dependencies.
 - `waf()` opt-in WAF-lite signature/anomaly inbound-inspection middleware at `@daloyjs/core/waf`: a first-party defense-in-depth layer for teams without an edge WAF (it does **not** replace ModSecurity / a CDN WAF). Wires DaloyJS' high-confidence injection signatures — SQLi, XSS, NoSQL-operator injection (reusing `hasMongoOperatorKeys` for a structural body check), and command injection — into a single scored inbound-inspection pass over the decoded path, the raw + decoded query string, an opt-in header allowlist, and the validated body. Each rule that fires adds an anomaly `score`; reaching `blockThreshold` (default `5`) rejects with a generic `403` (block mode) or merely reports via `onMatch` (log mode) so operators can tune against real traffic first. Per-rule enable/disable + score overrides, inspection-surface toggles, control-character-stripped log samples, and bounded scanning (`maxValueLength` / `maxBodyNodes`) keep a hostile payload from becoming CPU-DoS. The `403` body never names the rule that fired. Zero runtime dependencies.
 - Built-in docs UI Subresource Integrity (SRI): the default Scalar / Swagger UI / Redoc / AsyncAPI assets use version-exact URLs with matching SHA-384 hashes and `crossorigin="anonymous"`, so a poisoned CDN asset cannot execute. `DocsAssetOptions` supports validated URL/hash overrides or self-hosting; malformed SRI values throw a `TypeError` instead of silently weakening the page. Zero runtime dependencies.
@@ -732,9 +736,9 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 - `app.healthcheck()` / `app.readinesscheck()` primitives with bearer-token auth and per-IP rate limit.
 - `disconnectStatusCode: 499` default for client-aborted requests.
 - `defineConfig({ schema, source })` boot-time typed configuration validation.
-- `app({ behindProxy })` declarative model (replaces `trustProxy`); `behindProxy.hops` collapses to the `(N+1)`-from-rightmost slot.
+- `new App({ behindProxy })` declarative model (the preferred replacement for the Node adapter's `trustProxy`, which is still honoured); `behindProxy.hops` collapses to the `(N+1)`-from-rightmost slot.
 - Adapter-independent `ConnInfo` abstraction: `getConnInfo()`, lazy `ctx.remoteAddress`, `ctx.remotePort` — populated by the Node, Bun, Deno, and Lambda adapters from the real peer socket / event source, never from spoofable headers.
-- `daloy doctor` production-posture validator with `--audit-secrets` and `--audit-defaults` (flags wildcard-credentials CORS, > 24h CORS `maxAge`, > 25 MiB blanket body limits, zero `idleTimeoutMs` in production, and unsafe opt-ins).
+- `daloy doctor` production-posture validator with `--audit-secrets` and `--audit-defaults` (flags > 24h CORS `maxAgeSeconds`, > 25 MiB blanket body limits, disabled or oversized header-count / JSON key / JSON depth limits, 2xx responses without a body schema, and unsafe opt-ins; a zero `requestTimeoutMs` is an error. Wildcard-credentials CORS is refused when `cors()` is constructed, so it never reaches the doctor).
 - PSL-aware `subdomains()` helper with a `≤ 90 days` snapshot guard.
 - Secure-by-default multitenancy via `tenancy()` + `tenantScope()`: pluggable tenant resolution (subdomain / header / path / JWT claim / custom), refuse-unresolved + format-validated ids + no-enumeration `404` by default, a key helper that partitions `rateLimit` / `concurrencyLimit` / `idempotency` per tenant, and automatic per-tenant `responseCache` partitioning backed by a boot guard.
 - `defineDependency()` typed-DI helper with per-request deduplication.

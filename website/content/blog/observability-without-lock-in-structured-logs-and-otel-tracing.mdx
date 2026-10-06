@@ -46,10 +46,10 @@ export const PAIN = `# A real observability stack failure mode, lightly fictiona
 # small contracts, your choice of implementation, zero global patching.`;
 
 export const LOGGER_BASIC = `// src/log.ts, boot a structured JSON logger.
-import { createLogger } from "@daloyjs/core";
+import { createLogger, type LogLevel } from "@daloyjs/core";
 
 export const log = createLogger({
-  level: process.env.LOG_LEVEL ?? "info",
+  level: (process.env.LOG_LEVEL ?? "info") as LogLevel,
   bindings: {
     service: "books-api",
     env: process.env.NODE_ENV ?? "development",
@@ -84,8 +84,8 @@ const app = new App({ logger: log });
 //   new App({ logger: noopLogger })`;
 
 export const REQUEST_ID = `// src/app.ts, request IDs are the spine of observability.
-import { App, requestId, timing } from "@daloyjs/core";
-import { log } from "./log.js";
+import { App, requestId, timing, type Logger } from "@daloyjs/core";
+import { log } from "./log.ts";
 
 const app = new App({ logger: log });
 
@@ -99,7 +99,7 @@ app.use(requestId({ trustIncoming: false }));
 // Network tab shows your handler time without any client code.
 app.use(timing());
 
-// Inside a handler, use ctx.log (the framework already created a
+// Inside a handler, use ctx.state.log (the framework already created a
 // child logger bound to the request id) instead of the top-level log.
 app.route({
   method: "GET",
@@ -107,29 +107,24 @@ app.route({
   operationId: "listBooks",
   responses: { 200: { description: "ok" } },
   handler: async (ctx) => {
-    ctx.log.info({ event: "list_books" }, "listing books");
+    // ctx.state is a loose bag (unknown values), so narrow the logger once.
+    (ctx.state.log as Logger).info({ event: "list_books" }, "listing books");
     // ↑ every log line for this request carries requestId in the JSON
     return { status: 200, body: { items: [] } };
   },
 });`;
 
-export const LOG_OUTPUT = `// Output for one request, note the shared requestId across lines.
-{"level":"info","time":"2026-06-03T08:42:11.108Z","service":"books-api",
- "requestId":"01HZQ4M8Z1F7E0SE0EH7E3WJW2","method":"GET","path":"/books",
- "msg":"request received"}
-
+export const LOG_OUTPUT = `// Output for one request: every line you log carries the requestId.
+// (DaloyJS does not write an access-log line per request by default;
+// add an onResponse hook if you want one.)
 {"level":"info","time":"2026-06-03T08:42:11.110Z","service":"books-api",
- "requestId":"01HZQ4M8Z1F7E0SE0EH7E3WJW2","event":"list_books",
+ "requestId":"0219df15-0d62-4a57-a728-b017926ebfd6","event":"list_books",
  "msg":"listing books"}
-
-{"level":"info","time":"2026-06-03T08:42:11.114Z","service":"books-api",
- "requestId":"01HZQ4M8Z1F7E0SE0EH7E3WJW2","status":200,"durationMs":6,
- "msg":"request handled"}
 
 // Server-Timing on the wire (DevTools Network tab -> Timing):
 HTTP/1.1 200 OK
 content-type: application/json; charset=utf-8
-x-request-id: 01HZQ4M8Z1F7E0SE0EH7E3WJW2
+x-request-id: 0219df15-0d62-4a57-a728-b017926ebfd6
 server-timing: app;dur=5.91`;
 
 export const OTEL_BASIC = `// src/tracing.ts, bring your own OTel tracer.
@@ -141,7 +136,7 @@ import { App, otelTracing } from "@daloyjs/core";
 // 1. Wire your OTel SDK exactly as the OTel docs say (node SDK, edge
 //    SDK, sdk-trace-base + a custom exporter, etc.). DaloyJS does not
 //    care which one - it never touches the global provider.
-import "./otel-bootstrap.js"; // <- your code; calls trace.setGlobalTracerProvider(...)
+import "./otel-bootstrap.ts"; // <- your code; calls trace.setGlobalTracerProvider(...)
 
 const tracer = trace.getTracer("books-api", "1.0.0");
 
@@ -179,8 +174,7 @@ export const OTEL_LIFECYCLE = `# The four-hook lifecycle, in order, for a single
 
 export const SEMANTIC_ATTRS = `// Add app-specific semantic attributes inside a handler.
 // Use the OTel convention names so your existing dashboards work.
-import type { Context } from "@daloyjs/core";
-import type { TracingSpan } from "@daloyjs/core";
+import type { Logger, TracingSpan } from "@daloyjs/core";
 
 app.route({
   method: "GET",
@@ -195,7 +189,7 @@ app.route({
 
     // Bonus: tie the request id and the trace together. Anyone reading
     // logs in Datadog can jump to the matching trace in Jaeger.
-    ctx.log.info({ event: "get_book", bookId: ctx.params.id });
+    (ctx.state.log as Logger).info({ event: "get_book", bookId: ctx.params.id });
 
     return { status: 200, body: { id: ctx.params.id } };
   },
@@ -262,7 +256,7 @@ export const CUSTOM_EXPORTER = `// otelTracing() is just hooks. You can compose 
 // the same layer - wrap startSpan to also push to your sink, or wrap
 // otelTracing's onSend hook to also emit a log line.
 import { otelTracing } from "@daloyjs/core";
-import type { Hooks } from "@daloyjs/core";
+import type { Hooks, Logger } from "@daloyjs/core";
 
 const tracing = otelTracing({ tracer });
 
@@ -271,7 +265,7 @@ const tracingWithAccessLog: Hooks = {
   onSend(res, ctx) {
     tracing.onSend?.(res, ctx);             // keep span termination
     if (!ctx) return;
-    ctx.log.info({
+    (ctx.state.log as Logger).info({
       event: "access",
       status: res.status,
       method: ctx.request.method,
@@ -356,7 +350,7 @@ export const CHECKLIST = `# Pre-flight observability checklist for any service.
 # 1) requestId() at the top of the chain. trustIncoming=false unless
 #    your edge proxy validates and rewrites the header.
 # 2) createLogger with bindings: { service, env, region, version }.
-#    Use ctx.log inside handlers, not the top-level instance.
+#    Use ctx.state.log inside handlers, not the top-level instance.
 # 3) timing() so the Network tab shows handler latency without
 #    instrumentation in the frontend.
 # 4) otelTracing({ tracer, spanName }) - TEMPLATE the span name. Raw
@@ -398,7 +392,7 @@ For pino in production, the shape is intentionally compatible:
 
 ## Request IDs are the spine
 
-<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="requestId() + timing() + ctx.log child logger">
+<EditorFrame files={["src/app.ts"]} activeFile="src/app.ts" status="requestId() + timing() + ctx.state.log child logger">
 <CodeBlock language="ts" code={REQUEST_ID} />
 </EditorFrame>
 

@@ -80,10 +80,14 @@ const AvatarUpload = multipartObject(
     }),
     alt: z.string().min(1).max(140),         // <- non-file fields use Zod (or any
                                              //   Standard-Schema-compatible lib)
-    isPrimary: z.coerce.boolean().default(false),
+    isPrimary: z.enum(["true", "false"]).default("false").transform((v) => v === "true"), // z.coerce.boolean() would turn "false" into true
   },
   { strict: true },                          // reject unknown form fields
 );
+
+// bodyLimitBytes defaults to 1 MiB for the WHOLE request, so raise it above
+// the per-file cap or a 2 MB avatar gets a 413 before fileField() ever runs.
+const app = new App({ bodyLimitBytes: 6 * 1024 * 1024 });
 
 app.route({
   method: "POST",
@@ -101,7 +105,7 @@ app.route({
     // body.file is a Web File / Blob - every runtime has it.
     // body.alt is a string. body.isPrimary is a real boolean.
     const url = await uploadToObjectStorage({
-      stream: body.file.stream(),            // <- streams. no buffer-the-world.
+      stream: body.file.stream(),            // <- hand it on as a stream (the body was read up to bodyLimitBytes)
       type:   body.file.type,
       size:   body.file.size,
       name:   body.file.name ?? "avatar",
@@ -123,10 +127,11 @@ curl -sS -X POST http://localhost:3000/avatars \\
   "status": 422,
   "detail": "Invalid body",
   "errors": [
-    { "path": "file", "message": "File type \\"video/quicktime\\" not in accept list: image/png, image/jpeg, image/webp" },
-    { "path": "file", "message": "File name \\"vacation.mov\\" rejected by filename matcher" }
+    { "path": "file", "message": "File type \\"video/quicktime\\" not in accept list: image/png, image/jpeg, image/webp" }
   ]
 }
+# fileField() stops at the first failing rule (size, then type, then
+# filename), so you get one entry per field, not one per rule.
 # Zero handler code involved. The framework rejected the request before
 # a single byte hit your business logic. Memory-safe by construction.`;
 
@@ -135,6 +140,10 @@ fileField({
   maxBytes: 10 * 1024 * 1024,                // hard cap on file.size
   accept:   ["image/*", "application/pdf"],  // exact or "type/*" wildcard
   filename: (name) => name.length <= 200,    // your custom predicate
+  magicBytes: true,                          // sniff PNG/JPEG/GIF/WebP/PDF/ZIP/GZIP
+                                             //   signatures derived from accept
+  rejectScriptableImages: true,              // refuse SVG/MVG/PostScript (on by
+                                             //   default whenever magicBytes is set)
   optional: true,                            // accept null/undefined as well
   format:   "binary",                        // OpenAPI hint, default "binary"
 });
@@ -144,28 +153,36 @@ fileField({
 //   accept: ["image/*"]    ✓ matches image/jpeg, image/webp, image/svg+xml
 //   accept: ["*/*"]        ✓ matches anything (use sparingly; mostly for tests)`;
 
-export const MULTIPLE_FILES = `// For an array of files, wrap fileField() in your validator's array
-// helper. Standard Schema is the only contract - Zod, Valibot, ArkType
-// all work. Per-file rules still apply to every entry.
+export const MULTIPLE_FILES = `// Update (1.5.4): the multipart parser keeps ONE value per field name, so
+// <input type="file" multiple /> sending three parts named "images" only
+// hands you the last one. Give each file its own field name instead, and
+// cap the count with the app-level multipart limits.
 import { z } from "zod";
-import { fileField, multipartObject } from "@daloyjs/core";
+import { App, fileField, multipartObject } from "@daloyjs/core";
 
-const GalleryUpload = multipartObject({
-  // Browsers send <input type="file" multiple /> as a single field with
-  // multiple parts. Whatever runtime adapter you're on, FormData.getAll()
-  // gives you an array - and the framework hands it to your array schema.
-  images: z.array(
-    fileField({
-      maxBytes: 20 * 1024 * 1024,
-      accept: ["image/*"],
-    }),
-  ).min(1).max(50),
-  albumId: z.uuid(),
+const image = () => fileField({ maxBytes: 20 * 1024 * 1024, accept: ["image/*"] });
+const optionalImage = () =>
+  fileField({ maxBytes: 20 * 1024 * 1024, accept: ["image/*"], optional: true });
+
+const GalleryUpload = multipartObject(
+  {
+    image0: image(),           // at least one
+    image1: optionalImage(),
+    image2: optionalImage(),
+    albumId: z.uuid(),
+  },
+  { strict: true },
+);
+
+// Count caps live on the app, next to bodyLimitBytes:
+const app = new App({
+  bodyLimitBytes: 64 * 1024 * 1024,
+  multipart: { maxFiles: 3, maxFields: 10 },
 });
 
 // In your handler:
-//   for (const img of body.images) {
-//     await uploadToObjectStorage({ stream: img.stream(), ... });
+//   for (const img of [body.image0, body.image1, body.image2]) {
+//     if (img) await uploadToObjectStorage({ stream: img.stream(), ... });
 //   }`;
 
 export const STREAMING = `// Streaming is the whole point. file.stream() returns a Web standard
@@ -197,7 +214,7 @@ await body.file.stream().pipeTo(
   Writable.toWeb(createWriteStream("/var/data/" + key)),
 );
 
-// 4) Forward to another service over HTTP - no buffering at all:
+// 4) Forward to another service over HTTP as a stream:
 await fetch(\`\${UPSTREAM}/store/\${key}\`, {
   method: "PUT",
   headers: { "content-type": body.file.type, "content-length": String(body.file.size) },
@@ -208,7 +225,8 @@ await fetch(\`\${UPSTREAM}/store/\${key}\`, {
 
 export const OPENAPI_OUTPUT = `// generated/openapi.json, what the spec looks like for the AvatarUpload route.
 // Notice the "multipart/form-data" content type and the "binary" format hint
-// on the file field. Every OpenAPI tool understands this shape.
+// on the file field. Every OpenAPI tool understands this shape; the x-accept
+// and x-max-bytes extensions carry the fileField() constraints along.
 {
   "paths": {
     "/avatars": {
@@ -221,15 +239,17 @@ export const OPENAPI_OUTPUT = `// generated/openapi.json, what the spec looks li
               "schema": {
                 "type": "object",
                 "required": ["file", "alt"],
+                "additionalProperties": false,
                 "properties": {
-                  "file":      { "type": "string", "format": "binary" },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "x-accept": ["image/png", "image/jpeg", "image/webp"],
+                    "x-max-bytes": 5242880
+                  },
                   "alt":       { "type": "string", "minLength": 1, "maxLength": 140 },
                   "isPrimary": { "type": "boolean", "default": false }
-                },
-                "additionalProperties": false
-              },
-              "encoding": {
-                "file": { "contentType": "image/png, image/jpeg, image/webp" }
+                }
               }
             }
           }
@@ -269,6 +289,8 @@ test("uploadAvatar accepts a PNG and returns a URL", async () => {
 });
 
 test("uploadAvatar rejects a too-big or wrong-type file as RFC 9457 422", async () => {
+  // buildApp() sets bodyLimitBytes above 6 MB. With the 1 MiB default this
+  // request is a 413 from the body limit, not a 422 from fileField().
   const app = buildApp();
   const oversize = new File([new Uint8Array(6 * 1024 * 1024)], "huge.png", { type: "image/png" });
   const fd = new FormData();
@@ -294,8 +316,9 @@ export const SECURITY_NOTES = `# A small checklist that has saved me from produc
 #    always a misconfigured frontend or an enumeration attempt.
 
 # 4) Trust file.type for routing decisions; DO NOT trust it as a security
-#    boundary. Run server-side magic-byte detection AFTER the upload if
-#    the file ends up rendered or executed. (For static-only uploads to
+#    boundary on its own. Turn on fileField({ magicBytes: true }) so the
+#    signature is sniffed before the handler runs (it also refuses SVG and
+#    other scriptable images by default). (For static-only uploads to
 #    a CDN bucket, the MIME allowlist is enough.)
 
 # 5) Stream. Never new Uint8Array(await file.arrayBuffer()) unless you're
@@ -331,7 +354,7 @@ Three structural problems live in that snippet: the file goes to disk (you have 
 
 Worth pointing at three things in that snippet:
 
-<CheckCard badge="1" title="File fields and form fields coexist"><code>fileField()</code> validates uploads; <code>z.string()</code>{", "}<code>z.coerce.boolean()</code>{", "}and anything else Standard-Schema-shaped validate text fields. One <code>multipartObject()</code> wraps both. You don't split your validation between "the upload library" and "the validation library".</CheckCard>
+<CheckCard badge="1" title="File fields and form fields coexist"><code>fileField()</code> validates uploads; <code>z.string()</code>{", "}<code>z.enum()</code>{", "}and anything else Standard-Schema-shaped validate text fields. One <code>multipartObject()</code> wraps both. You don't split your validation between "the upload library" and "the validation library".</CheckCard>
 
 <CheckCard badge="2" title="strict: true rejects unknown fields">Extra form fields are usually either a misconfigured frontend (silent bugs) or someone fishing for parser behaviour. Reject them. The framework returns RFC 9457 422 with a problem+json body, same shape as every other validation error in the app.</CheckCard>
 
@@ -347,13 +370,13 @@ Notice that the rejection happens *before* the handler runs. By the time your bu
 
 ## fileField(): every option, in one screen
 
-<EditorFrame files={["@daloyjs/core · multipart.ts"]} activeFile="@daloyjs/core · multipart.ts" status="five knobs · no hidden behavior">
+<EditorFrame files={["@daloyjs/core · multipart.ts"]} activeFile="@daloyjs/core · multipart.ts" status="seven knobs · no hidden behavior">
 <CodeBlock language="ts" code={FILE_FIELD_OPTIONS} />
 </EditorFrame>
 
 ## Arrays of files
 
-<EditorFrame files={["src/routes/gallery.ts"]} activeFile="src/routes/gallery.ts" status="wrap fileField in z.array() · per-file rules still apply">
+<EditorFrame files={["src/routes/gallery.ts"]} activeFile="src/routes/gallery.ts" status="one field name per file · per-file rules still apply">
 <CodeBlock language="ts" code={MULTIPLE_FILES} />
 </EditorFrame>
 
@@ -369,7 +392,7 @@ The runtime-portability story for uploads is the same story as for everything el
 
 ## The OpenAPI shape this emits
 
-<EditorFrame files={["generated/openapi.json · /avatars"]} activeFile="generated/openapi.json · /avatars" status="multipart/form-data · type: string + format: binary · encoding.contentType">
+<EditorFrame files={["generated/openapi.json · /avatars"]} activeFile="generated/openapi.json · /avatars" status="multipart/form-data · type: string + format: binary · x-accept + x-max-bytes">
 <CodeBlock language="json" code={OPENAPI_OUTPUT} />
 </EditorFrame>
 

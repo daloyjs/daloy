@@ -77,7 +77,7 @@ app.get(
 );
 ```
 
-`safeRedirect()` returns a Web-standard `Response` with the validated `Location` header and a `Cache-Control: no-store` directive so a per-request redirect is never cached and reused.
+`safeRedirect()` returns a Web-standard `Response` with the validated `Location` header and a `Cache-Control: no-store` directive (unless your `headers` option sets its own `Cache-Control`) so a per-request redirect is never cached and reused.
 
 ## Strict by default
 

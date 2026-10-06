@@ -122,60 +122,59 @@ export interface TapClient {
   verifyWebhookHash(body: TapCharge, signatureHeader: string | null): boolean;
 }
 
-export const tapPlugin = {
-  name: "tap",
-  register(app: App) {
-    const client: TapClient = {
-      createCharge({ amount, currency, description, orderId, customer, source, metadata }) {
-        return call<TapCharge>("/charges", {
-          method: "POST",
-          body: JSON.stringify({
-            amount,
-            currency,
-            description,
-            statement_descriptor: description.slice(0, 22),
-            reference: { transaction: orderId, order: orderId },
-            receipt: { email: !!customer.email, sms: !!customer.phone },
-            customer,
-            source,
-            post: { url: `${process.env.APP_URL}/webhooks/tap` },
-            redirect: { url: `${process.env.APP_URL}/checkout/tap/return?order=${encodeURIComponent(orderId)}` },
-            metadata,
-          }),
-        });
-      },
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function tapPlugin(app: App) {
+  const client: TapClient = {
+    createCharge({ amount, currency, description, orderId, customer, source, metadata }) {
+      return call<TapCharge>("/charges", {
+        method: "POST",
+        body: JSON.stringify({
+          amount,
+          currency,
+          description,
+          statement_descriptor: description.slice(0, 22),
+          reference: { transaction: orderId, order: orderId },
+          receipt: { email: !!customer.email, sms: !!customer.phone },
+          customer,
+          source,
+          post: { url: `${process.env.APP_URL}/webhooks/tap` },
+          redirect: { url: `${process.env.APP_URL}/checkout/tap/return?order=${encodeURIComponent(orderId)}` },
+          metadata,
+        }),
+      });
+    },
 
-      getCharge(id) {
-        return call<TapCharge>(`/charges/${id}`);
-      },
+    getCharge(id) {
+      return call<TapCharge>(`/charges/${id}`);
+    },
 
-      refund({ chargeId, amount, currency, reason, orderId }) {
-        return call("/refunds", {
-          method: "POST",
-          body: JSON.stringify({
-            charge_id: chargeId,
-            amount,
-            currency,
-            reason,
-            reference: { merchant: orderId },
-            post: { url: `${process.env.APP_URL}/webhooks/tap` },
-          }),
-        });
-      },
+    refund({ chargeId, amount, currency, reason, orderId }) {
+      return call("/refunds", {
+        method: "POST",
+        body: JSON.stringify({
+          charge_id: chargeId,
+          amount,
+          currency,
+          reason,
+          reference: { merchant: orderId },
+          post: { url: `${process.env.APP_URL}/webhooks/tap` },
+        }),
+      });
+    },
 
-      verifyWebhookHash(body, signatureHeader) {
-        if (!signatureHeader) return false;
-        const expected = createHmac("sha256", process.env.TAP_SECRET_KEY!)
-          .update(buildHashString(body))
-          .digest("hex");
-        const a = Buffer.from(signatureHeader);
-        const b = Buffer.from(expected);
-        return a.length === b.length && timingSafeEqual(a, b);
-      },
-    };
-    app.decorate("tap", client);
-  },
-};
+    verifyWebhookHash(body, signatureHeader) {
+      if (!signatureHeader) return false;
+      const expected = createHmac("sha256", process.env.TAP_SECRET_KEY!)
+        .update(buildHashString(body))
+        .digest("hex");
+      const a = Buffer.from(signatureHeader);
+      const b = Buffer.from(expected);
+      return a.length === b.length && timingSafeEqual(a, b);
+    },
+  };
+  app.decorate("tap", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -229,7 +228,7 @@ import { tapPlugin } from "./plugins/tap.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(tapPlugin);
+tapPlugin(app);
 
 app.post(
   "/checkout/tap",

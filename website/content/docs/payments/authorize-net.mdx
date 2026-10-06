@@ -135,47 +135,46 @@ function verifyAuthorizeNetSignature(rawBody: Buffer, headerValue: string | null
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export const authorizeNetPlugin = {
-  name: "authorizenet",
-  register(app: App) {
-    const client: AuthorizeNetClient = {
-      async chargeOpaqueData(input) {
-        const req = buildSaleRequest(input);
-        const controller = new ApiControllers.CreateTransactionController(req.getJSON());
-        const raw = (await runController(controller)) as Record<string, unknown>;
-        const response = new ApiContracts.CreateTransactionResponse(raw);
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function authorizeNetPlugin(app: App) {
+  const client: AuthorizeNetClient = {
+    async chargeOpaqueData(input) {
+      const req = buildSaleRequest(input);
+      const controller = new ApiControllers.CreateTransactionController(req.getJSON());
+      const raw = (await runController(controller)) as Record<string, unknown>;
+      const response = new ApiContracts.CreateTransactionResponse(raw);
 
-        const messages = response.getMessages();
-        if (messages?.getResultCode() !== ApiContracts.MessageTypeEnum.OK) {
-          const first = messages?.getMessage()?.[0];
-          throw Object.assign(new Error(first?.getText() ?? "Authorize.Net request failed"), {
-            code: first?.getCode(),
-          });
-        }
+      const messages = response.getMessages();
+      if (messages?.getResultCode() !== ApiContracts.MessageTypeEnum.OK) {
+        const first = messages?.getMessage()?.[0];
+        throw Object.assign(new Error(first?.getText() ?? "Authorize.Net request failed"), {
+          code: first?.getCode(),
+        });
+      }
 
-        const txResp = response.getTransactionResponse();
-        // responseCode "1" = approved. Anything else (2 declined, 3 error, 4 held) is a failure.
-        if (!txResp || txResp.getResponseCode() !== "1") {
-          const err = txResp?.getErrors()?.getError()?.[0];
-          throw Object.assign(new Error(err?.getErrorText() ?? "Transaction not approved"), {
-            code: err?.getErrorCode() ?? "DECLINED",
-            transId: txResp?.getTransId(),
-          });
-        }
+      const txResp = response.getTransactionResponse();
+      // responseCode "1" = approved. Anything else (2 declined, 3 error, 4 held) is a failure.
+      if (!txResp || txResp.getResponseCode() !== "1") {
+        const err = txResp?.getErrors()?.getError()?.[0];
+        throw Object.assign(new Error(err?.getErrorText() ?? "Transaction not approved"), {
+          code: err?.getErrorCode() ?? "DECLINED",
+          transId: txResp?.getTransId(),
+        });
+      }
 
-        return {
-          transId: txResp.getTransId(),
-          authCode: txResp.getAuthCode(),
-          accountNumber: txResp.getAccountNumber(),
-        };
-      },
-      verifyWebhook(headers, rawBody) {
-        return verifyAuthorizeNetSignature(rawBody, headers.get("x-anet-signature"));
-      },
-    };
-    app.decorate("authnet", client);
-  },
-};
+      return {
+        transId: txResp.getTransId(),
+        authCode: txResp.getAuthCode(),
+        accountNumber: txResp.getAccountNumber(),
+      };
+    },
+    verifyWebhook(headers, rawBody) {
+      return verifyAuthorizeNetSignature(rawBody, headers.get("x-anet-signature"));
+    },
+  };
+  app.decorate("authnet", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -198,7 +197,7 @@ import { authorizeNetPlugin } from "./plugins/authorizenet.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(authorizeNetPlugin);
+authorizeNetPlugin(app);
 
 app.post(
   "/checkout",

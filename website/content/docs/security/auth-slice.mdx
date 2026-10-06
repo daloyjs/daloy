@@ -43,12 +43,12 @@ Daloy provides a cohesive set of authentication safeguards. Each one is additive
 
 - `jwk()`: asymmetric-only Bearer-token middleware backed by a JWKS source. Refuses `HS*` at construction, requires a `kid` header that matches a JWK in the set, and cross-checks JWT-header `alg` against the JWK's declared `alg` when both are present.
 - `bearerAuth({ verify })` / `jwk({ verify })`: per-request revalidation hook so revocation lists, token-version counters, and "user changed password since this token was issued" checks can invalidate previously-issued credentials.
-- `basicAuth({ onAuthSuccess })`: typed-context callback that fires after `ctx.state.user.username` is stamped, so handlers do not re-parse the `Authorization` header.
+- `basicAuth({ onAuthSuccess })`: typed-context callback that fires after `ctx.state.user` is stamped (the object `verify` returned, or `{ username }`), so handlers do not re-parse the `Authorization` header.
 - `Cache-Control: no-store` on every first-party auth helper `401` challenge (`bearerAuth()`, `basicAuth()`, `jwk()`) so intermediaries never cache an auth challenge, RFC 9111 §3.5 and audit alignment.
 
 ## 1. `jwk()` middleware
 
-Drop-in Bearer-token middleware backed by a JWKS source. The algorithm allowlist is intentionally narrow: only `RS256` / `RS384` / `RS512`, `PS256` / `PS384` / `PS512`, `ES256` / `ES384` / `ES512`, and `EdDSA`. Symmetric `HS*` algorithms are refused at construction, the classic confused-deputy "HS256 verified with the JWKS public key as the HMAC secret" attack cannot be configured. The middleware is exported from the dedicated subpath `@daloyjs/core/jwk`.
+Drop-in Bearer-token middleware backed by a JWKS source. The algorithm allowlist is intentionally narrow: only `RS256` / `RS384` / `RS512`, `PS256` / `PS384` / `PS512`, `ES256` / `ES384` / `ES512`, and `EdDSA`. Symmetric `HS*` algorithms are refused at construction, the classic confused-deputy "HS256 verified with the JWKS public key as the HMAC secret" attack cannot be configured. The middleware is exported from the dedicated subpath `@daloyjs/core/jwk` and from the package root.
 
 <SequenceDiagram title="Verifying a Bearer token with jwk()" participants={["Client", "jwk() middleware", "IdP JWKS"]} steps={[
           {
@@ -101,7 +101,7 @@ app.use(
 );
 ```
 
-`jwks` accepts a static `JwkSet`, an `https://` URL (with TTL caching and in-flight-promise dedup so a thundering-herd of concurrent requests resolves into a single fetch), or a custom resolver function. `http://` JWKS URLs and non-finite / negative `fetchTtlSeconds` / `maxStaleSeconds` are refused at construction. The middleware stamps `ctx.state.user = { sub, scopes, claims }`. The scope normalizer reads `scope` (RFC 6749 space-separated string), `scp` (Azure AD array), and `scopes` (array) claims and dedupes the result.
+`jwks` accepts a static `JwkSet`, an `https://` URL (with TTL caching and in-flight-promise dedup so a thundering-herd of concurrent requests resolves into a single fetch), or a custom resolver function. `http://` JWKS URLs and non-finite / negative `fetchTtlSeconds` / `maxStaleSeconds` are refused at construction. The middleware stamps `ctx.state.user = { sub, scopes, claims }`. The scope normalizer reads the first non-empty claim of `scope` (RFC 6749 space-separated string), `scp` (Azure AD array), and `scopes` (array), in that order, and dedupes the result.
 
 `maxLifetimeSeconds` is an optional positive integer. The example requires `exp` and rejects tokens whose lifetime exceeds five minutes with `401 invalid_token`. The check is` exp - (iat ?? now) <= maxLifetimeSeconds`, using the verification time when `iat` is absent. It does not renew a token or rotate its signing key. Zero, negative, fractional, and non-finite values are refused at construction. When omitted, there is no lifetime cap and `exp` is validated only when present.
 
@@ -111,7 +111,7 @@ Every JWKS source (object, URL, or resolver function) is read per verification, 
 
 ### Service-to-service policy [#workload-identity-policy]
 
-For machine callers, pin both `issuer` and `audience`, set a short `maxLifetimeSeconds`, and apply `requireScopes()` to protected routes. The issuer check is opt-in. From 1.5.4, `jwk()` and `createJwtVerifier()` refuse to construct in production without an `audience`, unless you pass `allowAnyAudience: true` (meant for a single-tenant private identity provider that mints tokens only for this service); outside production a missing `audience` is still accepted. Use distinct identities and secret stores for each workload and environment; `env: "production"` does not isolate credentials. The `verify` hook below can check whether the verified service identity is still active in your own store. DaloyJS does not inventory service accounts, rotate credentials, detect credential reuse, or automate offboarding. Use an identity provider and secret manager for those lifecycle controls.
+For machine callers, pin both `issuer` and `audience`, set a short `maxLifetimeSeconds`, and apply `requireScopes()` to protected routes. The issuer check is opt-in. From 1.5.4, `jwk()` and `createJwtVerifier()` refuse to construct in production (`NODE_ENV=production`, or `createJwtVerifier({ env: "production" })`) without an `audience`, and an App resolving to production refuses to register such a `jwk()`, unless you pass `allowAnyAudience: true` (meant for a single-tenant private identity provider that mints tokens only for this service); outside production a missing `audience` is still accepted. Use distinct identities and secret stores for each workload and environment; `env: "production"` does not isolate credentials. The `verify` hook below can check whether the verified service identity is still active in your own store. DaloyJS does not inventory service accounts, rotate credentials, detect credential reuse, or automate offboarding. Use an identity provider and secret manager for those lifecycle controls.
 
 ## 2. Per-scheme `verify(credentials, ctx)` hook [#2-per-scheme-verify-credentials-ctx-hook]
 
@@ -159,7 +159,7 @@ app.use(
 
 ## 3. `basicAuth({ onAuthSuccess })` [#3-basicauth]
 
-Fires once `ctx.state.user.username` has been stamped, with the typed `(credentials, ctx)` tuple. The previous idiomatic workaround was a separate `beforeHandle` that re-parsed the `Authorization` header in every handler. That is no longer necessary. The callback runs in `preBody`, so move any logic that requires a validated request body into a later `beforeHandle`.
+Fires once `ctx.state.user` has been stamped (the object `verify` returned, or `{ username }`), with the typed `(credentials, ctx)` tuple. The previous idiomatic workaround was a separate `beforeHandle` that re-parsed the `Authorization` header in every handler. That is no longer necessary. The callback runs in `preBody`, so move any logic that requires a validated request body into a later `beforeHandle`.
 
 ```ts
 import { basicAuth } from "@daloyjs/core";

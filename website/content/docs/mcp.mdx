@@ -118,7 +118,7 @@ const mcp = createMcpHandler({
 </tr>
 <tr>
 <td>Resource not found</td>
-<td><code>-32002</code></td>
+<td><code>-32002</code> in the spec (DaloyJS answers <code>-32602</code> in both eras)</td>
 <td><code>-32602</code></td>
 </tr>
 </tbody>
@@ -628,7 +628,10 @@ On every `tools/call`, DaloyJS validates `params.arguments` against the tool's `
   "id": 1,
   "error": {
     "code": -32602,
-    "message": "Invalid params"
+    "message": "Invalid arguments for tool \"inventory_lookup\": arguments.sku: required property is missing",
+    "data": {
+      "validationErrors": ["arguments.sku: required property is missing"]
+    }
   }
 }
 ```
@@ -651,7 +654,7 @@ const schema = {
 
 // [] means valid; a non-empty array holds human-readable error messages.
 validateMcpInput(schema, { sku: "ABC-1" });        // []
-validateMcpInput(schema, {});                       // ["arguments: missing required property \"sku\""]
+validateMcpInput(schema, {});                       // ["arguments.sku: required property is missing"]
 validateMcpInput(schema, { sku: "", extra: true }); // 2 errors
 ```
 
@@ -762,7 +765,7 @@ app.post(
 
 ## Security checklist
 
-- Put auth in DaloyJS middleware before the MCP route. Bearer tokens, mTLS, IP restrictions, and per-client rate limits all work normally. In production a `secureDefaults` App [refuses to boot](/docs/security/boot-guards#6-unauthenticated-mcp-endpoint) if the `mcpRoutes()` `POST` endpoint has no auth hook. For a genuinely public server, opt out explicitly with `mcpRoutes(path, handler, { public: true })`.
+- Put auth in DaloyJS middleware before the MCP route. Bearer tokens, mTLS, IP restrictions, and per-client rate limits all work normally. In production a `secureDefaults` App [refuses to boot](/docs/security/boot-guards#6-unauthenticated-mcp-endpoint) if the `mcpRoutes()` `POST` endpoint has no auth hook. Since 1.5.4 the auth hook must also run on each request: if it is skipped (for example by an `except()` wrapper), the request is refused with `500` in production and logged as `auth.not_enforced` elsewhere. For a genuinely public server, opt out explicitly with `mcpRoutes(path, handler, { public: true })`.
 - Leave the built-in `Origin` validation alone and prefer adding trusted web apps to `allowedOrigins` over any wildcard CORS layer in front of the endpoint.
 - The advertised `inputSchema` is now [enforced server-side](#input-schema-enforcement) for its supported subset, but it is still not a substitute for full validation: check anything expressed only through `pattern`, `format`, or `anyOf`/`oneOf`/`allOf` inside the handler.
 - Sign and bind `requestState` before it can influence anything. It passes through the client, so an unsigned blob is a request-forgery primitive. Include the authenticated principal, an identifier for the originating request, and a short expiry, and reject state that fails verification. See [multi round-trip requests](#multi-round-trip-requests).

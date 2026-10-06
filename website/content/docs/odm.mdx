@@ -24,7 +24,7 @@ DaloyJS works with document databases the same way it works with SQL databases, 
 
 ## The recommended pattern
 
-Like SQL clients, ODM connections belong in a plugin. Decorate your app with a small database surface and close the connection on shutdown.
+Like SQL clients, ODM connections belong in a setup function you call once with the root app (not through `app.register()`, which would scope the decoration to that plugin's own routes). Decorate the root app with a small database surface and close the connection on shutdown.
 
 <LayerStack title="Where the ODM connection lives" flow="down" layers={[
           {
@@ -36,7 +36,7 @@ Like SQL clients, ODM connections belong in a plugin. Decorate your app with a s
           {
             title: "Database plugin",
             detail: "app.decorate('db', db) plus app.onClose() teardown",
-            items: ["register(app)", "onClose"],
+            items: ["databasePlugin(app)", "onClose"],
           },
           {
             title: "ODM connection & models",
@@ -50,23 +50,23 @@ Like SQL clients, ODM connections belong in a plugin. Decorate your app with a s
             items: ["MongoDB", "Couchbase"],
             tone: "muted",
           },
-        ]} caption="Connections are opened once in a plugin and exposed on state. Handlers read models from state.db, so the connection lifecycle stays in one place and closes cleanly on shutdown." />
+        ]} caption="Connections are opened once in a setup function that decorates the root app, and exposed on state. Handlers read models from state.db, so the connection lifecycle stays in one place and closes cleanly on shutdown." />
 
 ```ts
 // src/db/plugin.ts
 import type { App } from "@daloyjs/core";
 
-export function databasePlugin(db: Database) {
-  return {
-    name: "database",
-    async register(app: App) {
-      app.decorate("db", db);
-      app.onClose(async () => {
-        await db.disconnect();
-      });
-    },
-  };
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function databasePlugin(app: App, db: Database) {
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await db.disconnect();
+  });
 }
+
+// src/server.ts
+databasePlugin(app, db);
 ```
 
 ## Pick your ODM

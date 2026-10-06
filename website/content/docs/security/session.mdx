@@ -16,7 +16,7 @@ keywords:
 
 <blockquote>Session data stays in the configured store. The browser receives a signed identifier, and rotating that identifier after login or a privilege change invalidates the previous session reference.</blockquote>
 
-DaloyJS ships a small, runtime-portable `session()` middleware: a signed`__Host-` cookie carries the session id, the payload lives in a pluggable `SessionStore` (in-memory by default, KV / Redis-shaped stores plug in directly), and per-request mutations are exposed on `ctx.state.session`. There are no adapter-specific code paths - the same middleware runs on Node, Bun, Deno, Cloudflare and Workers because it only uses `WebCrypto` and standard `Set-Cookie` headers.
+DaloyJS ships a small, runtime-portable `session()` middleware: a signed`__Host-` cookie carries the session id, the payload lives in a pluggable `SessionStore` (in-memory by default, KV / Redis-shaped stores plug in directly), and per-request mutations are exposed on `ctx.state.session`. There are no adapter-specific code paths - the same middleware runs on Node, Bun, Deno, Cloudflare Workers, and Vercel because it only uses `WebCrypto` and standard `Set-Cookie` headers.
 
 <AuthRole role="client-rp">
 <p><code>session()</code> is for the server that sits between your frontend and your provider. It holds a session for a user who has{" "}<em>already</em> authenticated somewhere else. It is not a login system: it will not check a password, enrol a second factor, or tell you whether an account is locked. If you find yourself adding those, you have started writing an identity provider.</p>
@@ -122,11 +122,11 @@ app.post(
 Every option is conservative by default, with explicit error messages when a setting would silently weaken security (for example, a non-`/` path on a `__Host-` cookie or `SameSite=None` without `Secure`).
 
 - `cookieName`: `__Host-daloy.sid` - forces `Secure`, `Path=/`, no `Domain`.
-- `cookieOptions`: `{ secure: true, httpOnly: true, sameSite: "Lax", path: "/", maxAgeSeconds: 86_400 }`. From 1.5.4, `httpOnly: false` is refused in every environment, because it would let any XSS read the session id. `secure: false` is refused in production (from `NODE_ENV` or the App's `env`), because the cookie would travel over plain HTTP. It still works behind a TLS-terminating proxy, since the browser sees HTTPS. For a deployment that is genuinely plain HTTP, pass `allowInsecureCookie: true`.
-- `store`: a fresh `MemorySessionStore()` per app. Replace with a KV-backed store in production.
+- `cookieOptions`: `{ secure: true, httpOnly: true, sameSite: "Lax", path: "/" }` with no `maxAgeSeconds`, so the cookie has no `Max-Age` and is a browser-session cookie. The server-side record lifetime is `ttlSeconds` (default `86_400`, one day). From 1.5.4, `httpOnly: false` is refused in every environment, because it would let any XSS read the session id. `secure: false` is refused in production (from `NODE_ENV` or the App's `env`), because the cookie would travel over plain HTTP. It still works behind a TLS-terminating proxy, since the browser sees HTTPS. For a deployment that is genuinely plain HTTP, pass `allowInsecureCookie: true`.
+- `store`: a fresh `MemorySessionStore()` per `session()` call. Replace with a KV-backed store in production; a production App logs a `session.memory_store_in_production` warning when it registers a `session()` that uses the in-memory store.
 - `rolling`: `true` - every authenticated request slides the expiry and re-emits `Set-Cookie`.
 - `saveUninitialized`: `false` - anonymous traffic that never touches the session never writes a cookie or store record.
-- `generateId`: `crypto.randomUUID()` when available, otherwise a base64url-encoded 32-byte random string. Pass your own `generateId` to customize.
+- `generator`: a base64url-encoded 32-byte random string from `crypto.getRandomValues`. Pass your own `generator` to customize.
 
 ## The session API
 
@@ -136,11 +136,11 @@ Inside a handler, `ctx.state.session` exposes:
 - `data: Record<string, unknown>` - payload object. Mutating it through `set` / `delete` marks the session dirty and triggers a single store write in `onSend`.
 - `get<T>(key)` / `set(key, value)` / `delete(key)`.
 - `regenerate({ keepData? })` - issues a new id, destroys the previous store record, and (by default) carries the existing payload over. Call it on login and on privilege escalation to defend against session fixation.
-- `destroy()` - drops server-side state and emits a `Set-Cookie` with `Max-Age=0`. A destroyed session cannot be resurrected by a request that was already in flight when logout ran (since 1.3.7): write-backs of a session loaded from the cookie only succeed if the record still exists, and the middleware remembers ids it destroyed (bounded, for the session TTL) so a concurrent request skips both the store write and the cookie refresh.
+- `destroy()` - drops server-side state and, when the request carried a session cookie, emits a `Set-Cookie` with `Max-Age=0`. A destroyed session cannot be resurrected by a request that was already in flight when logout ran (since 1.3.7): write-backs of a session loaded from the cookie only succeed if the record still exists, and the middleware remembers ids it destroyed (bounded, for the session TTL) so a concurrent request skips both the store write and the cookie refresh.
 
 ## Automatic rotation on privilege changes
 
-`rotateSession()` watches privilege-bearing session values and calls `session.regenerate()` after the handler if they changed. The default watch list covers `userId`, `tenantId`, `roles`, `scopes`, and `isAdmin`. If a handler already calls `regenerate()`, the helper skips itself.
+`rotateSession()` watches privilege-bearing session values and calls `session.regenerate()` after the handler if they changed. The default watch list covers `userId`, `accountId`, `tenantId`, `role`, `roles`, `scopes`, `permissions`, `privileges`, and `isAdmin`. If a handler already calls `regenerate()`, the helper skips itself.
 
 ```ts
 app.use(session({ secret: process.env.SESSION_SECRET! }));
@@ -160,7 +160,7 @@ app.post(
 
 ## Key rotation
 
-Pass an array to `secret`. The first entry is always used to sign new cookies. Any later entry can verify (so older clients keep working until their next request) and triggers a transparent re-sign on the way out.
+Pass an array to `secret`. The first entry is always used to sign new cookies. Any later entry can verify (so older clients keep working until their next request). With `rolling: true` (the default) the cookie is re-emitted on every request, so it is transparently re-signed with the first secret on the way out.
 
 ```ts
 session({

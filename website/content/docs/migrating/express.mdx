@@ -558,7 +558,7 @@ app.register(birdsPlugin, { prefix: "/birds", tags: ["Birds"] });
 await app.ready();
 ```
 
-Plugins also support `app.decorate("db", ...)` to inject shared resources (a database client, a logger) into every handler's `ctx.state`, the clean replacement for Express's habit of hanging things off `app.locals` or `req`. Augment the `AppState` interface and those decorations are fully typed in every handler.
+Use `app.decorate("db", ...)` on the root app to inject shared resources (a database client, a logger) into every handler's `ctx.state`, the clean replacement for Express's habit of hanging things off `app.locals` or `req`. A decoration made inside a registered plugin is visible only to that plugin's own routes, so decorate the root app for anything app-wide. Augment the `AppState` interface and those decorations are fully typed in every handler.
 
 ## Step 6: Request and response object cheat-sheet
 
@@ -582,7 +582,7 @@ Express gives you fat `req` and `res` objects. DaloyJS gives you a typed `ctx` a
 | --- | --- |
 | `res.json(obj)` | `return { status: 200, body: obj }` (JSON inferred) |
 | `res.status(201).json(obj)` | `return { status: 201, body: obj }` |
-| `res.send("text")` | `return { status: 200, body: "text" }` |
+| `res.send("text")` | `return { status: 200, headers: { "content-type": "text/plain" }, body: "text" }` (without a non-JSON `content-type` the string is sent JSON-encoded) |
 | `res.sendStatus(204)` | `return { status: 204, body: undefined }` |
 | `res.set("x-foo", "bar")` | `return { status: 200, headers: { "x-foo": "bar" }, body }` or `ctx.set.headers.set(...)` |
 | `res.redirect("/login")` | `return { status: 302, headers: { location: "/login" }, body: undefined }` |
@@ -621,7 +621,7 @@ app.get(
     const sid = readRequestCookie(ctx.request.headers.get("cookie"), "sid");
     ctx.set.headers.set(
       "set-cookie",
-      serializeCookie("seen", "1", { httpOnly: true, secure: true, sameSite: "lax" }),
+      serializeCookie("seen", "1", { httpOnly: true, secure: true, sameSite: "Lax" }),
     );
     return { status: 200, body: { sid } };
   },
@@ -794,7 +794,8 @@ const app = new App({
       request: { body: Book }, // validation replaces the manual if-check
       responses: {
         201: { description: "Created", body: Book },
-        401: { description: "Unauthorized" },
+        401: { description: "Missing token" },
+        403: { description: "Invalid token" },
         422: { description: "Validation error" },
       },
     },
@@ -846,7 +847,7 @@ See [Testing & contract tests](/docs/testing) for the full patterns, including s
 <dt><strong>"Where did <code>next()</code> go?"</strong></dt>
 <dd>Nowhere, you don't need it. Continuing the pipeline is the default (a hook that returns nothing falls through). To stop early, return a <code>Response</code> from <code>beforeHandle</code>{" "}or throw an error. There is no "forgot to call{" "}<code>next()</code> and the request hangs" failure mode.</dd>
 <dt><strong>"Can I return a string like <code>res.send</code>?"</strong></dt>
-<dd>Yes: <code>return {'{ status: 200, body: "hi" }'}</code>{". "}Objects are serialized as JSON. Strings and buffers are sent as-is. The shape is always <code>{`{ status, body, headers? }`}</code>{"."}</dd>
+<dd>Yes: <code>return {'{ status: 200, body: "hi" }'}</code>{". "}With no <code>content-type</code> header (or a JSON one) the body is serialized as JSON, so a string arrives as a JSON string. Set a non-JSON <code>content-type</code> such as <code>text/plain</code> and strings and buffers are sent as-is. The shape is always <code>{`{ status, body, headers? }`}</code>{"."}</dd>
 <dt><strong>"My Express route used a regex path."</strong></dt>
 <dd>DaloyJS does not accept regex paths by design. Model it as a normal{" "}<code>:param</code> route and validate the param's shape with a schema (<code>z.string().regex(...)</code>), or split into explicit routes.</dd>
 <dt><strong>"I relied on middleware order being exactly my{" "}<code>app.use</code> order."</strong></dt>

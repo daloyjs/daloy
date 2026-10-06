@@ -66,7 +66,7 @@ app.get(
 );
 ```
 
-Each response the cache handles carries an `X-Cache` marker (`HIT`, `MISS`, or `STALE`), plus an `Age` header on a hit, so caches and clients can observe the outcome. A request that bypasses the cache entirely (a non-GET/HEAD method, an `Authorization` header, or a request `Cache-Control: no-store`) passes through unmarked.
+Each response the cache handles carries an `X-Cache` marker (`HIT`, `MISS`, or `STALE`), plus an `Age` header on a hit, so caches and clients can observe the outcome. A request that bypasses the cache entirely (a non-GET/HEAD method, an `Authorization` or `Cookie` header with no `principal` to name the caller, or a request `Cache-Control: no-store`) passes through unmarked.
 
 ## How it works
 
@@ -95,7 +95,7 @@ For an eligible request the middleware derives a cache key and:
             detail: "handler runs, cacheable response stored",
             tone: "muted",
           },
-        ]} caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS). A request that bypasses the cache (non-GET/HEAD, an Authorization header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry." />
+        ]} caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS). A request that bypasses the cache (non-GET/HEAD, an unidentified Authorization or Cookie header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry." />
 
 - Fresh hit: the stored response is served and the handler does *not* run (`X-Cache: HIT`).
 - Stale hit within the SWR window (requires `revalidate`): the stale response is served immediately (`X-Cache: STALE`) while a single, de-duplicated background refresh repopulates the cache.

@@ -89,66 +89,65 @@ export interface StripeClient {
   constructWebhookEvent(rawBody: Buffer | string, signature: string | null): Stripe.Event;
 }
 
-export const stripePlugin = {
-  name: "stripe",
-  register(app: App) {
-    const stripe = getStripe();
-    const wrapped: StripeClient = {
-      raw: stripe,
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function stripePlugin(app: App) {
+  const stripe = getStripe();
+  const wrapped: StripeClient = {
+    raw: stripe,
 
-      async createCheckoutSession({
-        lineItems,
-        successUrl = process.env.STRIPE_SUCCESS_URL!,
-        cancelUrl = process.env.STRIPE_CANCEL_URL!,
-        customerEmail,
-        clientReferenceId,
-        metadata,
-        idempotencyKey = randomUUID(),
-      }) {
-        const session = await stripe.checkout.sessions.create(
-          {
-            mode: "payment",
-            line_items: lineItems,
-            success_url: successUrl,
-            cancel_url: cancelUrl,
-            customer_email: customerEmail,
-            client_reference_id: clientReferenceId,
-            metadata,
-          },
-          { idempotencyKey },
-        );
+    async createCheckoutSession({
+      lineItems,
+      successUrl = process.env.STRIPE_SUCCESS_URL!,
+      cancelUrl = process.env.STRIPE_CANCEL_URL!,
+      customerEmail,
+      clientReferenceId,
+      metadata,
+      idempotencyKey = randomUUID(),
+    }) {
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: "payment",
+          line_items: lineItems,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          customer_email: customerEmail,
+          client_reference_id: clientReferenceId,
+          metadata,
+        },
+        { idempotencyKey },
+      );
 
-        if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL");
-        return { id: session.id, url: session.url };
-      },
+      if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL");
+      return { id: session.id, url: session.url };
+    },
 
-      retrieveCheckoutSession(sessionId) {
-        return stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ["payment_intent", "line_items"],
-        });
-      },
+    retrieveCheckoutSession(sessionId) {
+      return stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ["payment_intent", "line_items"],
+      });
+    },
 
-      async refund({ paymentIntent, amount, idempotencyKey = randomUUID() }) {
-        const refund = await stripe.refunds.create(
-          { payment_intent: paymentIntent, amount },
-          { idempotencyKey },
-        );
-        return { id: refund.id, status: refund.status };
-      },
+    async refund({ paymentIntent, amount, idempotencyKey = randomUUID() }) {
+      const refund = await stripe.refunds.create(
+        { payment_intent: paymentIntent, amount },
+        { idempotencyKey },
+      );
+      return { id: refund.id, status: refund.status };
+    },
 
-      constructWebhookEvent(rawBody, signature) {
-        if (!signature) throw new Error("Missing Stripe-Signature header");
-        return stripe.webhooks.constructEvent(
-          rawBody,
-          signature,
-          process.env.STRIPE_WEBHOOK_SECRET!,
-        );
-      },
-    };
+    constructWebhookEvent(rawBody, signature) {
+      if (!signature) throw new Error("Missing Stripe-Signature header");
+      return stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET!,
+      );
+    },
+  };
 
-    app.decorate("stripe", wrapped);
-  },
-};
+  app.decorate("stripe", wrapped);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -198,7 +197,7 @@ import { stripePlugin } from "./plugins/stripe.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(stripePlugin);
+stripePlugin(app);
 
 app.post(
   "/checkout/stripe",

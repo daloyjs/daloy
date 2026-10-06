@@ -5,7 +5,7 @@ keywords:
   - DaloyJS Node.js adapter
   - Node 24 HTTP server
   - graceful shutdown Node
-  - closeAllConnections
+  - closeIdleConnections
   - keepAliveTimeout
   - trustProxy DaloyJS
   - maxConnections admission control
@@ -85,7 +85,7 @@ await close();
 ## What the adapter wires for you
 
 - `requestTimeout`, `headersTimeout`, and `keepAliveTimeout` set to safe production values. Both request timeouts derive from `connectionTimeoutMs`, and the adapter also lowers Node's connection-check interval to a fraction of that value so a slowloris (a client that stalls or trickles its request headers to hold a socket open) is reaped close to the deadline with a `408`, instead of surviving until Node's default 30 second sweep. Set `connectionTimeoutMs: 0` to disable the timeouts entirely.
-- SIGTERM / SIGINT handlers that call `server.close()` followed by `server.closeAllConnections()` after `shutdownTimeoutMs`: the pattern that became stable in Node 18.2 and is recommended on supported Node versions.
+- SIGTERM / SIGINT handlers (disable with `handleSignals: false`) that run `close()`: `onShutdown` listeners run, idle keep-alive sockets are closed right away with `server.closeIdleConnections()`, in-flight requests get up to `shutdownTimeoutMs` (default 10 seconds) to finish, `onClose` hooks run, then `server.close()` is called and the process exits with code `0`.
 - When `trustProxy: true`, the adapter reads `x-forwarded-proto` and `x-forwarded-host` when constructing the request URL. Leave it off unless TLS is terminated at a known proxy you control. Since 1.3.7 only `http` or `https` is honoured from `x-forwarded-proto`; any other value falls back to the socket's own scheme.
 - One path view for router and middleware (since 1.3.7). The router matches the raw request-target while middleware such as `except()`, tenancy, and the WAF re-parse `request.url`. So the two can never disagree, the adapter canonicalizes a request-target containing `\`, `.`/`..` segments, their `%2e` spellings, or bytes that URL parsing would percent-encode, exactly as `new URL()` would. Ordinary paths skip this with no allocation.
 - `serve()` runs [`app.assertSecureConfig()`](/docs/security/boot-guards#when-the-guards-run) before listening, so in production an insecure route table throws at startup instead of answering `500` to the first request.
@@ -105,7 +105,7 @@ curl -H 'Host: h\health?' http://localhost:3000/admin
 Two rules to avoid the classic 502/504 race:
 
 - Make your load balancer's idle timeout **greater** than DaloyJS's `requestTimeoutMs`.
-- Make DaloyJS's `keepAliveTimeout` **greater** than the load balancer's. The Node adapter does this for you.
+- Make the server's `keepAliveTimeout` **greater** than the load balancer's idle timeout. The Node adapter sets it to 5 seconds and has no option for it, so behind a load balancer with a longer idle timeout (AWS ALB defaults to 60 seconds) raise it on the returned handle: `serve(app).server.keepAliveTimeout = 65_000`.
 
 ## Graceful degradation under overload
 
@@ -139,7 +139,7 @@ When the cap is hit, the overflow socket is refused at the TCP layer. The client
 - `maxConnections` (connection layer) caps how many sockets are ever accepted, keeping the event loop in its measured sweet spot.
 - `loadShedding()` (application layer) sheds requests when an reliable overload signal, event-loop *delay* (queue backlog) or in-flight concurrency, trips a threshold.
 
-A note on the load-shedding signal: event-loop **utilization** is the wrong knob for an always-busy, CPU-bound server, which can sit near 100% utilization while perfectly healthy and would shed good traffic. Event-loop **delay** (how far behind the loop has fallen) is the reliable overload signal. Likewise, `requestTimeoutMs` alone does *not* fix the cliff: it wraps handler execution, not the accept-queue wait where the multi-second tail actually lives.
+A note on the load-shedding signal: event-loop **utilization** is the wrong knob for an always-busy, CPU-bound server, which can sit near 100% utilization while perfectly healthy and would shed good traffic. Event-loop **delay** (how far behind the loop has fallen) is the reliable overload signal. Likewise, `requestTimeoutMs` alone does *not* fix the cliff: it covers hooks, the body read, and the handler once a request is dispatched, not the accept-queue wait where the multi-second tail actually lives.
 
 Treat `maxConnections` as a latency cap, not a throughput knob. Under overload it turns “everyone waits seconds” into “admitted traffic stays fast, overflow is refused fast.”
 
@@ -167,7 +167,7 @@ CMD ["dist/server.js"]
 
 ## Gotchas
 
-- Don't put `process.exit()` in a SIGTERM handler, let `close()` drain. The adapter handles the hard kill after the timeout.
+- Don't put `process.exit()` in a SIGTERM handler, let `close()` drain. With `handleSignals` on (the default), the adapter exits the process itself once `close()` resolves.
 - `serve()` binds to `0.0.0.0` (every interface) by default, which containers need. Pass `hostname: "127.0.0.1"` to keep a local dev server off your network.
 
 ## See also

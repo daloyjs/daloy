@@ -262,7 +262,7 @@ Wire one of those into CI as a soft check (or as a Semgrep / CodeQL rule) and yo
 
 ## Defense in depth: runtime firewalls
 
-Daloy intentionally does **not** ship a heuristic SQLi-detector middleware. Pattern-matching `' OR 1=1 --` on every request body is noisy, false- positives easily on legitimate text (think a blog post about SQL injection…), and gives a false sense of security. If you want a runtime backstop, install a proper in-app firewall that tokenizes queries against your real schema:
+Daloy does not turn on any SQLi pattern matching by default. Pattern-matching `' OR 1=1 --` on every request body is noisy, false- positives easily on legitimate text (think a blog post about SQL injection…), and gives a false sense of security. There is an opt-in, signature-based [`waf()`](/docs/waf) middleware (its `sqli` rule uses curated high-confidence signatures, blocks with a generic `403` by default, and can run in `"log"` mode first) for teams without an edge WAF, but it inspects HTTP inputs, not the queries you build. If you want a runtime backstop that sees the real query, install a proper in-app firewall that tokenizes queries against your real schema:
 
 - [Aikido Zen](https://www.aikido.dev/zen): a Node/Bun-compatible in-app firewall that hooks the driver and blocks requests whose query structure was altered by user input.
 - A reverse-proxy WAF (Cloudflare, AWS WAF, Fastly) for coarse signature matching at the edge. Cheap to deploy, not a substitute for parameterized queries.

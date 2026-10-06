@@ -92,12 +92,11 @@ export interface Principal {
   tokenType: string;
 }
 
-export const clerkPlugin = {
-  name: "clerk",
-  register(app: App) {
-    app.decorate("clerk", clerk);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function clerkPlugin(app: App) {
+  app.decorate("clerk", clerk);
+}
 
 type ClerkTokenType = "session_token" | "oauth_token" | "m2m_token" | "api_key";
 
@@ -148,7 +147,7 @@ import { clerkPlugin, requireClerkAuth } from "./plugins/clerk.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-app.register(clerkPlugin);
+clerkPlugin(app);
 
 app.get(
   "/me",

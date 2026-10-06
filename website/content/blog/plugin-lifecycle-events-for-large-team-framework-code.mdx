@@ -445,7 +445,7 @@ I have watched teams copy this preamble into every route, document it in a wiki,
 
 <EventCard event="onShutdown" fires="when app.shutdown() begins, BEFORE drain">Receives <code>{`{ reason?, timeoutMs }`}</code>{". "}The right place to push metrics, deregister from service discovery, and flush span buffers, everything that needs the network to still work.</EventCard>
 
-<EventCard event="onClose" fires="AFTER in-flight requests drain">Use for releasing resources you paid for at boot:{" "}<code>pool.end()</code>{", "}redis disconnect, queue consumer stop. Errors are caught and logged so one bad cleanup doesn't take down the rest.</EventCard>
+<EventCard event="onClose" fires="AFTER in-flight requests drain">Use for releasing resources you paid for at boot:{" "}<code>pool.end()</code>{", "}redis disconnect, queue consumer stop. Hooks run in order and are awaited. Unlike <code>onShutdown</code> listeners, a throwing <code>onClose</code> hook is not caught: it rejects <code>app.shutdown()</code> and skips the hooks after it, so wrap each cleanup in its own try/catch.</EventCard>
 
 <EventCard event="await app.ready()" fires="resolves when all async plugins finish">Sync plugins also push observer promises here, so it's always safe to call. Standard pattern:{" "}<code>register -\> ready -\> serve</code>.</EventCard>
 

@@ -94,23 +94,22 @@ export interface ShopifyClient {
   };
 }
 
-export const shopifyPlugin = {
-  name: "shopify",
-  register(app: App) {
-    const client: ShopifyClient = {
-      graphql: (query, variables) => shopify.graphql(query, variables) as Promise<never>,
-      verifyWebhook(headers, rawBody) {
-        return {
-          ok: verifyShopifyHmac(rawBody, headers.get("x-shopify-hmac-sha256")),
-          topic: headers.get("x-shopify-topic"),
-          shop: headers.get("x-shopify-shop-domain"),
-          eventId: headers.get("x-shopify-webhook-id"),
-        };
-      },
-    };
-    app.decorate("shopify", client);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function shopifyPlugin(app: App) {
+  const client: ShopifyClient = {
+    graphql: (query, variables) => shopify.graphql(query, variables) as Promise<never>,
+    verifyWebhook(headers, rawBody) {
+      return {
+        ok: verifyShopifyHmac(rawBody, headers.get("x-shopify-hmac-sha256")),
+        topic: headers.get("x-shopify-topic"),
+        shop: headers.get("x-shopify-shop-domain"),
+        eventId: headers.get("x-shopify-webhook-id"),
+      };
+    },
+  };
+  app.decorate("shopify", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -128,7 +127,7 @@ import { shopifyPlugin } from "./plugins/shopify.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(shopifyPlugin);
+shopifyPlugin(app);
 
 const ProductsQuery = /* GraphQL */ `
   query Products($first: Int!, $after: String) {

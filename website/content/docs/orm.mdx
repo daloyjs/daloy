@@ -53,9 +53,9 @@ DaloyJS is database-agnostic. Any SQL client that runs on your target runtime wo
 
 ## The recommended pattern
 
-Wrap the database client in a plugin and register it once at the root of your app. Handlers read it from `state` with full type-safety.
+Wrap the database client in a setup function and call it once with the root app (not through `app.register()`, which would scope the decoration to that plugin's own routes). Handlers read it from `state` with full type-safety.
 
-<LayerStack title="Where the client lives" caption="A plugin decorates one shared client onto app state at startup. Every route handler reaches the same client through state.db, and onClose ties teardown to graceful shutdown." layers={[
+<LayerStack title="Where the client lives" caption="A setup function decorates the root app with one shared client at startup. Every route handler reaches the same client through state.db, and onClose ties teardown to graceful shutdown." layers={[
           {
             title: "Route handler",
             detail: "reads the client off state, type-safe",
@@ -84,21 +84,18 @@ Wrap the database client in a plugin and register it once at the root of your ap
 // src/db/plugin.ts
 import type { App } from "@daloyjs/core";
 
-export function databasePlugin(client: DbClient) {
-  return {
-    name: "database",
-    async register(app: App) {
-      app.decorate("db", client);
-      app.onClose(async () => {
-        await client.$disconnect?.();
-      });
-    },
-  };
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function databasePlugin(app: App, client: DbClient) {
+  app.decorate("db", client);
+  app.onClose(async () => {
+    await client.$disconnect?.();
+  });
 }
 
 // src/server.ts
 const app = new App();
-app.register(databasePlugin(await createClient()));
+databasePlugin(app, await createClient());
 
 app.get(
   "/users/:id",

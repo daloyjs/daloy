@@ -35,30 +35,47 @@ Zero Trust at the application layer requires a chain of *explicit verification p
 
 ```ts
 // src/app.ts
-import { App, jwt, ipRestriction, basicAuth, timingSafeEqual } from "@daloyjs/core";
+import { App, jwk, ipRestriction, basicAuth, every, timingSafeEqual } from "@daloyjs/core";
 
 export const app = new App();
 
-// 1. Every request is authenticated before reaching handlers.
-app.use(jwt({
-  // Rotates from JWKS - no long-lived shared secrets baked into the image.
-  jwksUri: process.env.JWKS_URI!,
-  audience: "api.example.com",
-  issuer: "https://auth.example.com/",
-}));
+// 1. Every API request is authenticated before reaching handlers.
+app.group(
+  "/api",
+  {
+    hooks: jwk({
+      // Rotates from JWKS - no long-lived shared secrets baked into the image.
+      jwks: process.env.JWKS_URI!,
+      algorithms: ["RS256", "ES256"],
+      audience: "api.example.com",
+      issuer: "https://auth.example.com/",
+    }),
+  },
+  (api) => {
+    // api.route({ ... })
+  },
+);
 
-// 2. Admin surfaces are network-fenced AND credentialed.
-app.use(
+// 2. Admin surfaces are network-fenced AND credentialed. (A separate group,
+// because Basic and Bearer both want the same Authorization header.)
+app.group(
   "/admin",
-  ipRestriction({ allow: ["10.0.0.0/8"] }),
-  basicAuth({
-    realm: "admin",
-    verify: (user, pass) =>
-      timingSafeEqual(user, process.env.ADMIN_USER!) &&
-      timingSafeEqual(pass, process.env.ADMIN_PASS!)
-        ? { sub: "admin" }
-        : false,
-  }),
+  {
+    hooks: every(
+      ipRestriction({ allow: ["10.0.0.0/8"] }),
+      basicAuth({
+        realm: "admin",
+        verify: (user, pass) =>
+          timingSafeEqual(user, process.env.ADMIN_USER!) &&
+          timingSafeEqual(pass, process.env.ADMIN_PASS!)
+            ? { sub: "admin" }
+            : false,
+      }),
+    ),
+  },
+  (admin) => {
+    // admin.route({ ... })
+  },
 );
 ```
 
@@ -78,6 +95,7 @@ import {
   secureHeaders,
   rateLimit,
   loadShedding,
+  concurrencyLimit,
   fetchGuard,
   compression,
   cors,
@@ -88,12 +106,13 @@ export const app = new App({
   requestTimeoutMs: 30_000,   // L7: bounded duration
 });
 
-app.use(secureHeaders());     // L7: CSP nonce, Trusted Types, HSTS, X-CTO
+app.use(secureHeaders());     // L7: CSP, HSTS, X-CTO (nonces / Trusted Types opt-in)
 app.use(cors({ origin: ["https://app.example.com"] }));
-app.use(loadShedding({ maxConcurrent: 500 })); // L7: brown-out before OOM
+app.use(loadShedding({ maxEventLoopDelayMs: 200 })); // L7: brown-out before OOM
+app.use(concurrencyLimit({ maxConcurrent: 500 }));   // L7: cap in-flight work
 app.use(rateLimit({ windowMs: 60_000, max: 120 })); // L7: per-IP throttle
-app.use(fetchGuard({ allow: ["https://api.example.com"] })); // L7: egress allow-list
-app.use(compression()); // safe defaults - no Brotli on cookies (BREACH-aware)
+export const safeFetch = fetchGuard(); // L7: egress guard; handlers call safeFetch, not fetch
+app.use(compression()); // BREACH-aware: skips Set-Cookie / auth / session-cookie responses
 ```
 
 For the deep tour of which of these run with `new App()` and which require a flag, see the older ["Secure by Default"](/blog/secure-by-default) post.
@@ -104,32 +123,27 @@ For the deep tour of which of these run with `new App()` and which require a fla
 
 The framework explicitly **does not invent a user system** for you. There is no built-in "forgot password" route silently shipped with every project, no default admin account, no auto-issued bearer token. The thing IAM guides hate most, "the framework's default user table", does not exist here. You bring an IdP and Daloy verifies what it signs.
 
-For the secrets that *do* live in the app (session signing key, basic-auth password, webhook HMAC), the framework supports multi-value rotation: pass an array of secrets and the oldest one is accepted-but-not-issued, so a key rotation is a single deploy with no logout storm.
+For the secrets that *do* live in the app, the session signing key supports multi-value rotation: pass `session({ secret: [newKey, oldKey] })` and the first entry signs new cookies while every entry still verifies, so a key rotation is a single deploy with no logout storm. Basic-auth passwords and webhook HMAC secrets are a single value per check, so during a rotation your `verify` callback (or a second `verifyWebhookSignature()` call) tries the old one too.
 
 ## Principle 4: Segmented network & SSRF protection
 
-<PrincipleCard principle="Limit blast radius; secure ingress AND egress" framework="fetchGuard() egress allow-list with default-deny on cloud metadata IPs (169.254.169.254) and RFC1918 ranges; CORS allow-lists; ipRestriction() for admin surfaces; per-route mount paths so 'public' and 'internal' apps can be split." platform="VPC subnets, security groups, NAT gateways, service mesh mTLS, private endpoints." />
+<PrincipleCard principle="Limit blast radius; secure ingress AND egress" framework="fetchGuard() egress guard with default-deny on cloud metadata IPs (169.254.169.254) and RFC1918 ranges; CORS allow-lists; ipRestriction() for admin surfaces; per-route mount paths so 'public' and 'internal' apps can be split." platform="VPC subnets, security groups, NAT gateways, service mesh mTLS, private endpoints." />
 
 The article spends a lot of words on micro-segmentation. The application-layer analogue, and the one the cloud guide *doesn't* cover, is server-side request forgery. A compromised handler that can `fetch()` anywhere can still reach AWS metadata, your private Redis, your internal admin dashboard, and any IMDSv1 endpoint that didn't get upgraded. `fetchGuard()` is the application-layer firewall:
 
 ```ts
 // fetchGuard() blocks server-side request forgery (SSRF) at the source.
-// It wraps the runtime fetch() so a compromised handler cannot pivot to
-// 169.254.169.254 (cloud metadata) or your private VPC ranges.
-import { App, fetchGuard } from "@daloyjs/core";
+// It returns a wrapped fetch() so a handler that uses it cannot pivot to
+// 169.254.169.254 (cloud metadata) or your private VPC ranges. It does not
+// patch the global fetch: handlers must call safeFetch.
+import { fetchGuard } from "@daloyjs/core";
 
-export const app = new App();
-
-app.use(fetchGuard({
-  // Explicit egress allow-list. Everything else throws.
-  allow: [
-    "https://api.example.com",
-    "https://*.s3.amazonaws.com",
-  ],
-  // Always-blocked ranges (defaults - listed for clarity):
+export const safeFetch = fetchGuard({
+  // Blocked by default (listed for clarity), every redirect hop re-checked:
   // 169.254.0.0/16, 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12,
-  // 192.168.0.0/16, ::1, fc00::/7, etc.
-}));
+  // 192.168.0.0/16, ::1, fc00::/7, etc. Public hosts are allowed, so an
+  // "only these APIs" list is a hostname check you write in front of it.
+});
 ```
 
 See [the fetch-guard docs](/docs/security/fetch-guard) for the full default deny-list and how it composes with timeouts.
@@ -153,7 +167,7 @@ pnpm verify:no-unsafe-buffer
 pnpm verify:no-vulnerable-sandboxes
 pnpm verify:no-encoded-payloads  # base64-blob scanner
 pnpm verify:no-invisible-unicode # bidi / zero-width Trojan Source defense
-pnpm verify:sbom                 # CycloneDX SBOM is generated and signed
+pnpm verify:sbom                 # CycloneDX + SPDX SBOMs match the manifest
 pnpm verify:secret-comparisons   # all secret compares use timingSafeEqual
 ```
 
@@ -167,16 +181,17 @@ CSPM tools want one thing from the application: clean, machine-readable, redacte
 
 ```ts
 // Structured logs with built-in redaction.
-import { logger } from "@daloyjs/core";
+import { App, createLogger } from "@daloyjs/core";
 
-app.use(logger({
-  // Authorization, cookie, set-cookie, x-api-key are redacted by default.
-  // Add anything else your team treats as a secret:
-  redactKeys: ["x-internal-token", "sessionId", "creditCard"],
-  // JSON output - shippable straight into CloudWatch / GCP / Datadog
-  // without a regex-based scrubber in the middle.
-  format: "json",
-}));
+export const app = new App({
+  logger: createLogger({
+    // Authorization, cookie, set-cookie, x-api-key are redacted by default.
+    // Add anything else your team treats as a secret:
+    redact: { keys: ["x-internal-token", "sessionId", "creditCard"] },
+    // One JSON object per line - shippable straight into CloudWatch / GCP /
+    // Datadog without a regex-based scrubber in the middle.
+  }),
+});
 ```
 
 The redactor walks the object graph instead of relying on one string regex, so a secret hiding inside `req.body.user.token` gets redacted the same way an Authorization header does. The list of keys is extensible; the defaults are conservative. If your company adds a new secret-shaped header, you add one string.
@@ -189,14 +204,16 @@ The article says, "assume a breach will happen. Focus on minimizing the impact."
 // Assume-breach defaults that DaloyJS turns on without asking:
 //
 // 1. Production redacts 5xx error bodies - no stack traces over the wire.
-// 2. Cookies default to __Host- prefix, Secure, HttpOnly, SameSite=Lax.
+// 2. session() cookies default to __Host- prefix, Secure, HttpOnly, SameSite=Lax.
 // 3. JSON parser strips __proto__ / constructor / prototype keys.
 // 4. CRLF injection in user-controlled header values is rejected at write time.
 // 5. Path traversal (..%2F, encoded NULs) is rejected before routing.
 // 6. Body limit + request timeout are both enforced, even with no Content-Length.
-// 7. Compression skips secrets-shaped bodies to avoid BREACH-style oracle attacks.
+// 7. compression(), once you add it, skips responses that carry Set-Cookie,
+//    auth, or session cookies to avoid BREACH-style oracle attacks.
 //
-// None of these require a flag. They are the constructor.
+// Apart from adding session() and compression(), none of these require a
+// flag. They are the constructor.
 new App();
 ```
 
@@ -213,7 +230,7 @@ Daloy owns the application-framework controls in this checklist. Cloud-account c
 
 1. `new App()` with no overrides, you already have body limits, request timeouts, problem+json redaction in production, and prototype-pollution-safe JSON.
 2. Add `secureHeaders()`, `rateLimit()`, `loadShedding()`, and `fetchGuard()`: four lines, four layers.
-3. Wire `jwt()` to your IdP's JWKS. Don't pass a static secret. Pin `audience` and `issuer`.
+3. Wire `jwk()` to your IdP's JWKS. Don't pass a static secret. Pin `audience` and `issuer`.
 4. Mount admin under `/admin` with `ipRestriction()` + `basicAuth()` (or move it off the public app entirely).
 5. Turn on the structured logger and point your SIEM at stdout.
 6. Run `pnpm verify:*` in CI and gate merges on it.

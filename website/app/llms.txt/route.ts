@@ -66,7 +66,7 @@ const PROJECT_LINKS: ReadonlyArray<{
     title: "create-daloy scaffolder",
     url: "https://www.npmjs.com/package/create-daloy",
     description:
-      "Scaffold a production-ready project with `pnpm create daloy@latest`; templates for Node.js, Bun, Deno, and Cloudflare Workers.",
+      "Scaffold a production-ready project with `pnpm create daloy@latest`; templates for Node.js, Bun, Deno, Cloudflare Workers, and Vercel.",
   },
   {
     title: 'Why the name "Daloy"?',
@@ -107,7 +107,7 @@ export async function GET(request: Request) {
   const lines: string[] = [
     "# DaloyJS",
     "",
-    "> DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI 3.1 generation, typed client codegen (Hey API), and security-first defaults. It runs on Node.js, Bun, Deno, and Cloudflare Workers.",
+    "> DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI 3.1 generation, typed client codegen (Hey API), and security-first defaults. It runs on Node.js, Bun, Deno, Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda.",
     "",
     `Current release: \`@daloyjs/core@${CORE_PACKAGE_VERSION}\` on npm, published to JSR as \`@daloyjs/daloy\` from the same source. It has zero runtime dependencies. Start a new project with \`pnpm create daloy@latest\`.`,
     "",

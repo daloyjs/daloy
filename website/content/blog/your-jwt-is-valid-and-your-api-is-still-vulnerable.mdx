@@ -41,7 +41,7 @@ app.get(
     responses: { 200: { description: "Project", body: ProjectResponse } },
   },
   async ({ params, state }) => {
-    return state.projects.findById(params.id);
+    return { status: 200, body: await state.projects.findById(params.id) };
   },
 );
 

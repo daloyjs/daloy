@@ -16,7 +16,7 @@ sitemap:
 
 # Email integrations
 
-DaloyJS doesn't ship its own email transport. Send mail by registering a small [plugin](/docs/plugins) that decorates `app.state` with a provider client, then call it from your route handlers. The pages in this section show how to wire up the six most common transactional email providers using their official Node SDKs.
+DaloyJS doesn't ship its own email transport. Send mail with a small [plugin](/docs/plugins) function that decorates the root app with a provider client (handlers read it as `ctx.state.email`), then call it from your route handlers. The pages in this section show how to wire up the six most common transactional email providers using their official Node SDKs.
 
 <BranchDiagram title="One EmailSender, six providers" source={{
           eyebrow: "your app",
@@ -33,7 +33,7 @@ DaloyJS doesn't ship its own email transport. Send mail by registering a small [
           { eyebrow: "inbox-first", label: "Postmark", detail: "postmark" },
           { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
           { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
-        ]} caption="A plugin decorates app.state with a provider client behind a shared EmailSender contract. Route handlers call state.email.send() without depending on which provider is wired in." />
+        ]} caption="A plugin function decorates the root app with a provider client behind a shared EmailSender contract. Route handlers call state.email.send() without depending on which provider is wired in." />
 
 ## Supported providers
 
@@ -59,7 +59,7 @@ Most provider SDKs are HTTPS-based and work on every runtime DaloyJS targets, bu
 
 ## Common pattern
 
-Every guide in this section follows the same three steps: install the SDK, register a DaloyJS plugin that puts the client on `app.state`, then call it inside a validated route handler. The plugin shape is intentionally tiny so you can swap providers without touching business logic:
+Every guide in this section follows the same three steps: install the SDK, call a small plugin function on the root app that decorates it with the client, then call it inside a validated route handler. The plugin shape is intentionally tiny so you can swap providers without touching business logic:
 
 <FlowDiagram title="Wire it up once" numbered steps={[
           {
@@ -69,7 +69,7 @@ Every guide in this section follows the same three steps: install the SDK, regis
           },
           {
             eyebrow: "step 2",
-            label: "Register the plugin",
+            label: "Decorate the root app",
             detail: 'app.decorate("email", sender)',
             tone: "accent",
           },
@@ -79,7 +79,7 @@ Every guide in this section follows the same three steps: install the SDK, regis
             detail: "state.email.send(msg)",
             tone: "success",
           },
-        ]} caption="Every guide in this section follows the same three steps. The plugin puts the client on app.state, then validated route handlers send through it." />
+        ]} caption="Every guide in this section follows the same three steps. The plugin function decorates the root app with the client, then validated route handlers send through it." />
 
 ```ts
 // src/plugins/email.ts
@@ -96,13 +96,10 @@ export interface EmailSender {
   send(msg: EmailMessage): Promise<{ id: string }>;
 }
 
-export function emailPlugin(sender: EmailSender) {
-  return {
-    name: "email",
-    register(app: App) {
-      app.decorate("email", sender);
-    },
-  };
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function emailPlugin(app: App, sender: EmailSender) {
+  app.decorate("email", sender);
 }
 
 declare module "@daloyjs/core" {

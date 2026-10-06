@@ -87,23 +87,22 @@ const mg = mailgun.client({
 
 const DOMAIN = process.env.MAILGUN_DOMAIN!;
 
-export const mailgunPlugin = {
-  name: "mailgun",
-  register(app: App) {
-    app.decorate("email", {
-      async send({ to, subject, text, html }) {
-        const res = await mg.messages.create(DOMAIN, {
-          from: process.env.MAILGUN_FROM!,
-          to: [to],
-          subject,
-          text,
-          html,
-        });
-        return { id: res.id ?? "" };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function mailgunPlugin(app: App) {
+  app.decorate("email", {
+    async send({ to, subject, text, html }) {
+      const res = await mg.messages.create(DOMAIN, {
+        from: process.env.MAILGUN_FROM!,
+        to: [to],
+        subject,
+        text,
+        html,
+      });
+      return { id: res.id ?? "" };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -129,7 +128,7 @@ import { mailgunPlugin } from "./plugins/mailgun.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-app.register(mailgunPlugin);
+mailgunPlugin(app);
 
 app.post(
   "/invites",

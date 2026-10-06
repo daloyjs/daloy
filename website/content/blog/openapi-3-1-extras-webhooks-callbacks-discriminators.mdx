@@ -44,7 +44,7 @@ export const THE_PROBLEM = `# A representative API contract circa "we'll figure 
 export const WEBHOOKS_TOP_LEVEL = `// src/index.ts, top-level webhooks describe events YOU send to consumers.
 // They never become a route on your server. They show up in the OpenAPI
 // document and in every generated client SDK.
-import { App, generateOpenAPI } from "@daloyjs/core";
+import { App } from "@daloyjs/core";
 import { z } from "zod";
 
 const app = new App({
@@ -86,16 +86,22 @@ const app = new App({
   },
 });`;
 
-export const WEBHOOK_CLIENT_USAGE = `// On the CONSUMER's side, the generated SDK contains a typed adapter:
+export const WEBHOOK_CLIENT_USAGE = `// On the CONSUMER's side, Hey API generates the webhook payload TYPE
+// (named {{name}}WebhookPayload by default; check types.gen.ts). It does
+// not generate a receiver, so signature checking is a helper you write
+// or one the API ships next to its SDK:
 //
-//   import { handleInvoicePaidWebhook } from "@yourapi/client";
+//   import type { InvoicePaidWebhookPayload } from "@yourapi/client";
+//   import { verifySignature } from "@yourapi/webhook-signing";
 //
 //   export async function POST(req: Request) {
-//     const { signature, event, error } = await handleInvoicePaidWebhook(req, {
-//       secret: process.env.INVOICE_WEBHOOK_SECRET!,
-//     });
-//     if (error) return error.toResponse();         // <- typed problem+json
-//     // event is fully typed: event.data.amountCents is \`number\`, not \`unknown\`.
+//     const raw = await req.text();
+//     const sig = req.headers.get("x-signature");
+//     if (!(await verifySignature(raw, sig, process.env.INVOICE_WEBHOOK_SECRET!))) {
+//       return new Response(null, { status: 401 });
+//     }
+//     const event = JSON.parse(raw) as InvoicePaidWebhookPayload;
+//     // event is typed: event.data.amountCents is \`number\`, not \`unknown\`.
 //     await db.invoices.update(event.data.invoiceId, { status: "paid" });
 //     return new Response(JSON.stringify({ received: true }));
 //   }
@@ -136,7 +142,7 @@ const paymentCallbacks: CallbackMap = {
       },
       responses: {
         200: { description: "Consumer acknowledged." },
-        4: { description: "We retry 4xx up to 5 times with backoff." },
+        400: { description: "Rejected. We retry up to 5 times with backoff." },
       },
     },
   },
@@ -163,14 +169,15 @@ export const CALLBACK_WHY = `// Why bother spelling this out in the spec?
 //    consumer EXACTLY which field of the request body becomes the URL.
 //    Generated clients can build mock servers around it. Postman renders it.
 //
-// 2. The request/response bodies attached to the callback are validated
-//    types in the generated SDK. The consumer's endpoint receives
-//    "PaymentSettledCallbackBody" - never "unknown" - and gets to use the
-//    framework's response helpers for the 200 ack.
+// 2. The request/response bodies attached to the callback land in the
+//    spec as JSON Schema, so the consumer has the exact shape of what
+//    their endpoint will receive instead of "unknown". (Heads-up: Hey API
+//    does not generate callback types today; derive them from the spec,
+//    or export the Zod schema from a shared package.)
 //
 // 3. Contract tests on the consumer side can pin the EXACT shape they'll
-//    accept: \`expectContract<PaymentSettledCallbackBody>(req.body)\`. If you
-//    bump the API minor version and forget to update the callback, CI fails.
+//    accept against that schema. If you change the callback body, the
+//    spec diff shows it in the PR instead of in a support ticket.
 //
 // 4. Documentation. Your Scalar UI shows the callback as a sub-operation of
 //    POST /payments, with its own example payload and response. Onboarding
@@ -245,20 +252,17 @@ app.route({
 });`;
 
 export const JSON_SCHEMA_OUTPUT = `// What \`BookingEvent\` emits into your OpenAPI spec, the part the generated
-// client SDK reads to produce a real TypeScript tagged union:
+// client SDK reads to produce a real TypeScript tagged union. Variants are
+// inlined; a "mapping" block appears only when you pass one:
+//   discriminatedUnion("type", variants, { mapping: { ... } })
 {
   "oneOf": [
-    { "$ref": "#/components/schemas/BookingCreated" },
-    { "$ref": "#/components/schemas/BookingCancelled" },
-    { "$ref": "#/components/schemas/BookingShipped" }
+    { "type": "object", "properties": { "type": { "const": "booking.created" },   "...": "..." } },
+    { "type": "object", "properties": { "type": { "const": "booking.cancelled" }, "...": "..." } },
+    { "type": "object", "properties": { "type": { "const": "booking.shipped" },   "...": "..." } }
   ],
   "discriminator": {
-    "propertyName": "type",
-    "mapping": {
-      "booking.created":   "#/components/schemas/BookingCreated",
-      "booking.cancelled": "#/components/schemas/BookingCancelled",
-      "booking.shipped":   "#/components/schemas/BookingShipped"
-    }
+    "propertyName": "type"
   }
 }`;
 
@@ -285,8 +289,8 @@ function EventRow({ event }: { event: BookingEvent }) {
 // handle it. That's the entire point.`;
 
 export const WEBHOOK_DISCRIM_COMBO = `// The pattern: ONE webhook entry whose body is a discriminated union over
-// every event type. The generated client gets one typed handler with
-// exhaustive switch coverage instead of N near-identical webhook adapters.
+// every event type. The generated client gets one payload union type with
+// exhaustive switch coverage instead of N near-identical payload types.
 const app = new App({
   openapi: {
     info: { title: "Bookstore API", version: "1.0.0" },
@@ -309,10 +313,12 @@ const app = new App({
 
 // Consumer (Next.js route handler):
 export async function POST(req: Request) {
-  const { event, error } = await handleBookingEventWebhook(req, {
-    secret: process.env.BOOKING_WEBHOOK_SECRET!,
-  });
-  if (error) return error.toResponse();
+  const raw = await req.text();
+  // Your own HMAC check (Hey API generates types, not a receiver):
+  if (!(await verifySignature(raw, req.headers.get("x-signature"), process.env.BOOKING_WEBHOOK_SECRET!))) {
+    return new Response(null, { status: 401 });
+  }
+  const event = JSON.parse(raw) as BookingEventWebhookPayload;
   switch (event.type) {                       // <- exhaustive, type-checked
     case "booking.created":   return ingestCreated(event);
     case "booking.cancelled": return ingestCancelled(event);
@@ -322,14 +328,14 @@ export async function POST(req: Request) {
 
 export const GEN_FLOW = `# The end-to-end loop you actually run:
 pnpm gen:openapi            # dumps your spec to generated/openapi.json
-pnpm gen                    # Hey API codegen -> generated/client/
+pnpm gen                    # gen:openapi + Hey API codegen -> generated/client/
 
 # What ends up on disk:
 generated/
 ├─ openapi.json             # the OpenAPI 3.1 doc (with paths, webhooks, components)
 └─ client/
-   ├─ types.gen.ts          # tagged unions for every discriminatedUnion()
-   ├─ sdk.gen.ts            # typed functions for routes + webhooks + callbacks
+   ├─ types.gen.ts          # tagged unions for every discriminatedUnion(), webhook payload types
+   ├─ sdk.gen.ts            # typed functions for your routes
    └─ client.gen.ts         # the fetch wrapper
 
 # CI gate: spec drift = test failure.
@@ -418,8 +424,8 @@ When you have hand-rolled JSON schemas already (legacy spec migration, third-par
 What lands in the spec is the boring, standards-compliant shape every code generator understands:
 
 <EditorFrame files={[
-              "generated/openapi.json · #/components/schemas/BookingEvent",
-            ]} activeFile="generated/openapi.json · #/components/schemas/BookingEvent" status="oneOf + discriminator.mapping · the canonical 3.1 polymorphic shape">
+              "generated/openapi.json · POST /events/booking requestBody",
+            ]} activeFile="generated/openapi.json · POST /events/booking requestBody" status="oneOf + discriminator · the canonical 3.1 polymorphic shape">
 <CodeBlock language="json" code={JSON_SCHEMA_OUTPUT} />
 </EditorFrame>
 
@@ -431,7 +437,7 @@ And the client SDK, the one Hey API generates for you, picks it up as a real tag
 
 ## The combo: webhooks + discriminatedUnion
 
-I keep recommending this pattern in design reviews: *one* webhook entry whose body is a discriminated union over every event type. The alternative, one webhook per event type, produces an SDK with N near-identical handlers, N opportunities to forget signature verification, and N opportunities to disagree with yourself about retry semantics. The combo collapses all of that to one typed handler with one exhaustive switch:
+I keep recommending this pattern in design reviews: *one* webhook entry whose body is a discriminated union over every event type. The alternative, one webhook per event type, produces an SDK with N near-identical payload types, N receivers on the consumer side, N opportunities to forget signature verification, and N opportunities to disagree with yourself about retry semantics. The combo collapses all of that to one receiver with one exhaustive switch:
 
 <EditorFrame files={["src/index.ts + apps/consumer/route.ts"]} activeFile="src/index.ts + apps/consumer/route.ts" status="one webhook · union body · one consumer handler · exhaustive switch">
 <CodeBlock language="ts" code={WEBHOOK_DISCRIM_COMBO} />
@@ -454,7 +460,7 @@ None of this matters if the spec drifts from the live route table. The disciplin
 ## Caveats
 
 - OpenAPI 3.1 only. Webhooks at the top level and JSON Schema 2020-12 keywords *do not exist* in 3.0. If your generator targets 3.0 you'll silently lose the webhooks block.
-- Discriminator mapping is required by some generators. A few SDK generators won't build proper tagged unions without an explicit mapping. The helpers in DaloyJS emit one by default, keep it.
+- Discriminator mapping is required by some generators. A few SDK generators won't build proper tagged unions without an explicit mapping. The DaloyJS helpers only emit one when you pass it (the `mapping` argument of `discriminator()`, or the `{ mapping }` option of `discriminatedUnion()`), so pass it if your generator needs it.
 - Webhook signing isn't the spec's job. The header lives in the spec. The algorithm and the secret rotation strategy do not. Pick one (HMAC-SHA256 of the raw body, hex), document it in the operation `description`, and ship a signing helper next to the client SDK so consumers don't roll their own.
 
 ## Where to go next

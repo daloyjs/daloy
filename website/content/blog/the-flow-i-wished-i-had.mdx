@@ -102,24 +102,22 @@ These details matter:
 
 ## The typed client: my favorite part
 
-Run `pnpm gen` and you get a real fetch-based SDK, generated from the real OpenAPI spec, which was generated from the real route. The frontend gets generated types and the declared 422 response without asking another team for the shape:
+Run `pnpm gen` and you get a real fetch-based SDK, generated from the real OpenAPI spec, which was generated from the real route. The frontend gets generated types and the declared 404 response without asking another team for the shape:
 
 ```ts
-import { createClient } from "./generated/client/index.js";
+import { getBookById } from "./generated/client/index.js";
 
-const api = createClient({ baseUrl: "http://localhost:3000" });
+// data is typed from the 200 body, error from the declared error responses.
+const { data, error } = await getBookById({ path: { id: "42" } });
 
-// status is a discriminated union, body is narrowed per status.
-const result = await api.getBookById({ params: { id: "42" } });
-
-if (result.status === 200) {
-  console.log(result.body.title); // string - typed.
+if (data) {
+  console.log(data.title); // string - typed.
 } else {
-  console.log("not found"); // 404 branch, also typed.
+  console.log("not found", error); // error branch, also typed.
 }
 ```
 
-That `if (result.status === 200)` branch is a real discriminated union. TypeScript will yell at you, in red, in your editor, before you even reach for `git commit`, if you try to read `result.body.title` from the 404 branch. This is the part where I celebrate and pretend it was always this simple.
+That `data` / `error` split comes straight from the route's declared responses. TypeScript will yell at you, in red, in your editor, before you even reach for `git commit`, if you try to read `data.title` without checking `data` first. (If you prefer a `status` discriminated union, `createClient(app, { baseUrl })` from `@daloyjs/core/client` gives you one, typed off the app itself.) This is the part where I celebrate and pretend it was always this simple.
 
 ## Runtime portability without the PowerPoint slides
 
@@ -135,12 +133,12 @@ import { serve } from "@daloyjs/core/bun";
 serve(app, { port: 3000 });
 
 // cloudflare worker
-import { toFetch } from "@daloyjs/core/fetch";
-export default { fetch: toFetch(app) };
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+export default toFetchHandler(app);
 
-// Vercel / any Web Fetch runtime
-import { toFetch } from "@daloyjs/core/fetch";
-export const GET = toFetch(app);
+// Vercel (Next.js App Router route.ts)
+import { toRouteHandlers } from "@daloyjs/core/vercel";
+export const { GET, POST } = toRouteHandlers(app);
 ```
 
 The core only ever sees `Request` in, `Response` out. Adapters live at the edges where the runtime quirks live. That means when your CFO discovers Cloudflare Workers next quarter, your team changes *one import*, not the shape of your application. Boring and useful at the same time.

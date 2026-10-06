@@ -13,7 +13,7 @@ sitemap:
 
 # Payment & commerce integrations
 
-DaloyJS treats payment providers the same way it treats [email senders](/docs/email) and [database clients](/docs/orm): wrap the provider SDK in a small [plugin](/docs/plugins), attach it to `app.state`, and call it from validated route handlers. That keeps your business logic provider-agnostic so you can swap or A/B providers later.
+DaloyJS treats payment providers the same way it treats [email senders](/docs/email) and [database clients](/docs/orm): wrap the provider SDK in a small [plugin](/docs/plugins) function that decorates the root app (handlers read it from `ctx.state`), and call it from validated route handlers. That keeps your business logic provider-agnostic so you can swap or A/B providers later.
 
 ## Supported providers
 
@@ -31,7 +31,7 @@ DaloyJS treats payment providers the same way it treats [email senders](/docs/em
           { label: "Tap / PayTabs", detail: "REST / paytabs_pt2" },
           { label: "Razorpay", detail: "razorpay" },
           { label: "Square", detail: "square" },
-        ]} caption="Each provider SDK lives behind a small plugin on app.state, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes." />
+        ]} caption="Each provider SDK lives behind a small plugin function that decorates the root app, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes." />
 
 - [Stripe](/docs/payments/stripe): create hosted Checkout Sessions, redirect with `@stripe/stripe-js`, verify `Stripe-Signature` webhooks over the raw body, and use idempotency keys with the official `stripe` Node SDK.
 - [Shopify](/docs/payments/shopify): read products, create orders, and handle Shopify webhooks via the community `shopify-api-node` SDK with the GraphQL Admin API.
@@ -81,7 +81,7 @@ A direct PayPal Checkout guide will land here later. Each provider follows the s
           },
         ]} caption="Every provider guide follows the same four steps, so dropping a new gateway into an existing app never touches your route code." />
 
-Each provider guide implements roughly the same interface on `app.state`:
+Each provider guide implements roughly the same interface on `ctx.state`:
 
 ```ts
 // src/plugins/commerce.ts

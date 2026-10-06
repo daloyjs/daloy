@@ -24,7 +24,7 @@ The Cloudflare adapter exports a Workers module entrypoint: the canonical `expor
           {
             eyebrow: "adapter",
             label: "toFetchHandler(app)",
-            detail: "or app.decorate(env) by hand",
+            detail: "bindings via cloudflare:workers env",
             tone: "muted",
           },
           {
@@ -34,7 +34,7 @@ The Cloudflare adapter exports a Workers module entrypoint: the canonical `expor
             tone: "accent",
           },
           { eyebrow: "platform", label: "Response", tone: "success" },
-        ]} caption="toFetchHandler returns the { fetch } object Workers expect. To reach KV, R2, D1, or secrets, write the module export by hand and app.decorate(env) so bindings land on ctx.state inside every handler." />
+        ]} caption="toFetchHandler returns the { fetch } object Workers expect. To reach KV, R2, D1, or secrets, import env from cloudflare:workers and app.decorate() it before registering routes, so bindings land on ctx.state inside every handler." />
 
 ## When to choose Workers
 
@@ -123,11 +123,12 @@ pnpm wrangler deploy
 
 ## Bindings (env)
 
-`toFetchHandler(app)` only forwards the `Request`. To expose Worker bindings (KV, R2, D1, Durable Objects, Queues, Hyperdrive, secrets) to your handlers, write the module-format export by hand and inject the bindings into the app with `app.decorate(...)`. That's how DaloyJS makes runtime values available on `ctx.state` inside every handler.
+`toFetchHandler(app)` only forwards the `Request`. To expose Worker bindings (KV, R2, D1, Durable Objects, Queues, Hyperdrive, secrets) to your handlers, import `env` from `cloudflare:workers` and pass it to `app.decorate(...)` **before** you register routes. That's how DaloyJS makes runtime values available on `ctx.state` inside every handler.
 
 ```ts
-// src/index.ts
-import { app } from "./server.js";
+// src/server.ts
+import { env } from "cloudflare:workers";
+import { App } from "@daloyjs/core";
 
 export interface Env {
   CACHE: KVNamespace;
@@ -135,21 +136,23 @@ export interface Env {
   SESSION_SECRET: string;
 }
 
-let decorated = false;
+export const app = new App();
+// Decorate before the routes: each route captures its scope's decorations
+// when it is registered, and decorate() throws if a key is set twice.
+app.decorate("env", env as Env);
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // Decorate once per isolate; app.decorate() throws if called twice with
-    // the same key, so guard it.
-    if (!decorated) {
-      app.decorate("env", env);
-      app.decorate("waitUntil", (p: Promise<unknown>) => ctx.waitUntil(p));
-      decorated = true;
-    }
-    return app.fetch(request);
-  },
-};
+// ...register routes below
 ```
+
+```ts
+// src/index.ts
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+import { app } from "./server.js";
+
+export default toFetchHandler(app);
+```
+
+Do not call `app.decorate()` inside the Worker `fetch` handler. It throws on the second request, and a first decoration added after the routes were registered never reaches them. The imported `env` can be read at module scope, but binding I/O (a KV read, a D1 query) still has to happen inside a request, which is where your handlers run.
 
 Inside any route handler, read the binding from `ctx.state.env` (the key you passed to `decorate`):
 
@@ -171,7 +174,7 @@ app.get(
 
 - Workers have no raw TCP. Use **Hyperdrive** for Postgres/MySQL, or HTTP drivers like Neon's serverless driver, PlanetScale's `@planetscale/database`, or Turso/libSQL. See [Database hosting](/docs/databases).
 - Workers have no filesystem. Use [multipart uploads](/docs/multipart) with R2 rather than `node:fs`.
-- For background work, decorate the app with a `waitUntil` wrapper (see the bindings example above): `toFetchHandler` alone does not forward the Worker `ExecutionContext`.
+- For background work, import `waitUntil` from `cloudflare:workers` and call it inside the handler: `toFetchHandler` does not forward the Worker `ExecutionContext` to your routes. (It does use `ctx.waitUntil` itself to flush telemetry.)
 
 ## See also
 

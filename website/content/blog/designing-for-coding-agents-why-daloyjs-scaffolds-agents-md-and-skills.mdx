@@ -112,9 +112,8 @@ export const WHY_SMALL = `# Why is AGENTS.md ~50 lines and not 500?
 # Every coding agent loads SOMETHING into its context on every prompt.
 # The size of that "something" is a non-negotiable cost:
 #
-#   - Copilot / Claude Code / Cursor / Codex / Aider / continue.dev
-#     all auto-discover AGENTS.md (or its older cousin .copilot/
-#     instructions, .cursorrules, etc.) and prepend it to the prompt.
+#   - Most coding agents auto-discover AGENTS.md (or an older,
+#     tool-specific instructions file) and prepend it to the prompt.
 #
 #   - Anything in AGENTS.md eats your effective context window for
 #     EVERY turn. Long files dilute the model's attention; the
@@ -137,7 +136,7 @@ export const SKILL_SHAPE = `# .agents/skills/daloyjs-best-practices/SKILL.md is 
 # both kinds of consumers: humans reviewing in GitHub, and agents
 # pattern-matching for the section they need.
 #
-# Structure of the file (verbatim from the scaffold):
+# Structure of the file (headings from the scaffold, abridged):
 #
 #   # SKILL.md - DaloyJS best practices (Node)
 #
@@ -155,11 +154,14 @@ export const SKILL_SHAPE = `# .agents/skills/daloyjs-best-practices/SKILL.md is 
 #     Every pnpm command, with a one-line explanation. Agents copy
 #     these into their shell tool calls without inventing flags.
 #
-#   ## Adding a route step-by-step
-#   ## Schema conventions
-#   ## Testing patterns
-#   ## Security defaults
-#   ## Deployment notes
+#   ## Workflow: add a new route
+#   ## Validation & schema conventions
+#   ## Error handling
+#   ## Middleware
+#   ## Testing best practices
+#   ## Security best practices
+#   ## Configuration & secrets
+#   ## Pitfalls and guardrails
 #
 # Each H2 is a self-contained chapter. The agent reads the chapter it
 # needs, not the whole file, and the surrounding chapters won't drift
@@ -170,11 +172,11 @@ export const SKILL_PROTOCOL = `// What "the skill protocol" actually means, in 3
 // Different agents discover repo context with different conventions.
 // DaloyJS picks the conventions with the widest blast radius:
 //
-//   AGENTS.md             - universal. Anthropic, GitHub Copilot, Codex,
-//                           Cursor, and Aider all read it (or symlink-
-//                           recognize it). Always-loaded.
+//   AGENTS.md             - the widest-supported convention. Most
+//                           coding agents read it (or can be pointed
+//                           at it). Always-loaded.
 //   .agents/skills/*/SKILL.md
-//                         - Anthropic Skills protocol. Read on demand
+//                         - Agent Skills protocol. Read on demand
 //                           when the prompt matches the "When to use"
 //                           section.
 //
@@ -228,7 +230,8 @@ export const ROUTE_EDIT_EXAMPLE = `// What a coding agent SHOULD do after readin
 // 6. Run pnpm gen && pnpm typecheck && pnpm test (rule 7).
 //
 // The "right" diff, by repo convention:
-import { NotFoundError, z } from "@daloyjs/core";
+import { NotFoundError } from "@daloyjs/core";
+import { z } from "zod";
 
 const Book = z.object({
   id: z.string(),
@@ -257,15 +260,12 @@ app.route({
 //         writes it from buildApp() (project shape rule).`;
 
 export const CARRYING_OVER = `# Want this in your existing (non-scaffolded) DaloyJS project? Copy
-# four files. Total: about 200 lines of prose.
+# two files. Point any tool-specific instructions file at AGENTS.md.
 #
 $ mkdir -p .agents/skills/daloyjs-best-practices
 $ cp node_modules/create-daloy/templates/node-basic/AGENTS.md ./
 $ cp node_modules/create-daloy/templates/node-basic/_agents/skills/daloyjs-best-practices/SKILL.md \\
     .agents/skills/daloyjs-best-practices/SKILL.md
-$ cp node_modules/create-daloy/templates/node-basic/.github/copilot-instructions.md \\
-    .github/copilot-instructions.md
-$ cp node_modules/create-daloy/templates/node-basic/.cursorrules ./
 #
 # Tune AGENTS.md to YOUR repo. Two changes that matter most:
 #
@@ -324,7 +324,7 @@ export const CHECKLIST = `# Pre-flight: is your repo ready for coding agents?
 #    [ ] .copilot-instructions / .cursorrules just import / link to it.
 #    [ ] Agents that don't speak any protocol still get the link.`;
 
-Devlin here again. I want to do something a little forward-looking this time and talk about a part of the DaloyJS scaffolding that almost nobody notices on first install: every project created by `pnpm create daloy` ships with two specific files for coding agents. One short, one long. They're why your Copilot, Claude Code, Cursor, Codex, or continue.dev session starts behaving sensibly inside a DaloyJS project from the first prompt instead of the tenth.
+Devlin here again. I want to do something a little forward-looking this time and talk about a part of the DaloyJS scaffolding that almost nobody notices on first install: every project created by `pnpm create daloy` ships with two specific files for coding agents. One short, one long. They're why your coding agent session starts behaving sensibly inside a DaloyJS project from the first prompt instead of the tenth.
 
 ## The failure mode this fixes
 
@@ -342,7 +342,7 @@ None of this is the model's fault, by the way. The agent did the most plausible 
 
 <TierCard tier="AGENTS.md" size="≈ 50 lines · always loaded">The hard-and-fast rules every editor (human or otherwise) must know before changing a line: package manager, runtime, load-bearing files and middleware, the seven core rules, and a link to{" "}<code>SKILL.md</code>{". "}Pinned to the repo root because every modern coding agent auto-discovers it there.</TierCard>
 
-<TierCard tier=".agents/skills/.../SKILL.md" size="longer · on-demand">The chapter-organized manual: when to use this skill, core principles, project shape, commands, route recipes, schema conventions, testing patterns, security defaults, and deployment notes. Agents that speak the Anthropic Skills protocol load it when the prompt matches the "When to use" section. Agents that don't follow the link from AGENTS.md.</TierCard>
+<TierCard tier=".agents/skills/.../SKILL.md" size="longer · on-demand">The chapter-organized manual: when to use this skill, core principles, project shape, commands, route recipes, schema conventions, testing patterns, security defaults, and deployment notes. Agents that speak the Agent Skills protocol load it when the prompt matches the "When to use" section. Agents that don't follow the link from AGENTS.md.</TierCard>
 
 ## The actual AGENTS.md (annotated)
 
@@ -351,6 +351,8 @@ None of this is the model's fault, by the way. The agent did the most plausible 
 </EditorFrame>
 
 The file stays focused on three things: where the project code lives, the seven non-negotiable rules, and where to read the manual. An ASCII-art architecture diagram, a copied README, and a catalogue of TypeScript gotchas would only bury those instructions.
+
+Update (1.5.4): the template's AGENTS.md has grown to about 80 lines. It now has nine core rules (adding a `pnpm contract` gate and a background-jobs rule) and a short "Secure-by-default (do not let an AI strip these)" list. The shape is the same: short, always loaded, and pointing at the skill.
 
 ## Why "short" is the whole design
 
@@ -384,7 +386,7 @@ The file stays focused on three things: where the project code lives, the seven 
 
 ## Adding this to an existing project
 
-<EditorFrame files={["terminal"]} activeFile="terminal" status="four files · ~200 lines of prose · tune the two sections that matter">
+<EditorFrame files={["terminal"]} activeFile="terminal" status="two files · tune the two sections that matter">
 <CodeBlock language="bash" code={CARRYING_OVER} />
 </EditorFrame>
 

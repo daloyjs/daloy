@@ -94,9 +94,9 @@ app.post(
 
 - Loopback: `127.0.0.0/8`, `::1`. Opt in with `allowLoopback: true` for local-dev fixtures.
 - RFC1918 private: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`. Opt in with `allowPrivate: true`.
-- Link-local (covers every cloud-metadata IP): `169.254.0.0/16`, `fe80::/10`. Opt in with `allowLinkLocal: true`.
+- Link-local (covers every cloud-metadata IP): `169.254.0.0/16`, `fe80::/10`. Opt in with `allowLinkLocal: true`; the metadata addresses in the floor below stay denied even then.
 - IPv6 unique-local: `fc00::/7`. Opt in with `allowUniqueLocal: true`.
-- Always-deny floor (no flag lifts these): `0.0.0.0/8`, `100.64.0.0/10` (CGNAT, Alibaba metadata), `192.0.0.0/24` (Oracle Cloud metadata), all IANA-reserved `TEST-NET` / benchmarking / docs ranges, `224.0.0.0/4` multicast, `240.0.0.0/4` reserved, broadcast `255.255.255.255`, IPv6 `::/128` and `ff00::/8`.
+- Always-deny floor (no flag and no `allowAddresses` range lifts these): `0.0.0.0/8`, `100.64.0.0/10` (CGNAT, Alibaba metadata), `169.254.169.254/32` (AWS / Azure / DigitalOcean / GCP metadata), `169.254.170.2/32` and `169.254.170.23/32` (AWS ECS task metadata / EKS Pod Identity), `192.0.0.0/24` (Oracle Cloud metadata), all IANA-reserved `TEST-NET` / benchmarking / docs ranges, `224.0.0.0/4` multicast, `240.0.0.0/4` reserved, broadcast `255.255.255.255`, IPv6 `::/128`, `ff00::/8` and `fd00:ec2::254/128` (AWS IMDS over IPv6). Your own `denyAddresses` entries join this floor.
 - Protocols other than `http:` / `https:` (`file:`, `data:`, `gopher:`, `ftp:`, `dict:`, `ldap:`).
 
 ### IPv6 forms that embed IPv4
@@ -130,11 +130,12 @@ An in-memory request body (string, `ArrayBuffer` or view, `Blob`, `URLSearchPara
 
 ```ts
 const safeFetch = fetchGuard({
-  // IP / CIDR allowlist (overrides the deny defaults).
+  // IP / CIDR allowlist (lifts the loopback / private / link-local / unique-local
+  // defaults; never the always-deny floor or denyAddresses).
   allowAddresses: ["198.51.100.0/24", "2001:db8::/32"],
   // Hostname allowlist (skips DNS check entirely; useful for known internal services).
   allowHosts: ["api.example.com", "billing.internal"],
-  // Extra deny matchers on top of the floor.
+  // Extra deny matchers on top of the floor (always win over allowAddresses).
   denyAddresses: ["10.6.6.0/24"],
   // Permit loopback for local-dev fixtures only.
   allowLoopback: process.env.NODE_ENV !== "production",
@@ -197,7 +198,7 @@ Blocked requests throw `SsrfBlockedError` with a structured `reason`:
 - `protocol-not-allowed`: URL was `file:`, `data:`, etc.
 - `address-not-allowed`: resolved IP fell in a blocked range.
 - `dns-resolution-failed`: lookup threw or returned no records.
-- `too-many-redirects`: chain exceeded `maxRedirects`.
+- `too-many-redirects`: chain exceeded `maxRedirects` (default `5`).
 - `credentials-in-url`: the URL carried userinfo (`http://user@host/`), a classic SSRF obfuscation. The credentials are stripped from the URL recorded on the error.
 - `invalid-url`: URL or Location header could not be parsed.
 - `redirect-body-not-replayable`: a `307`/`308` redirect needed to resend a streamed request body that was already consumed (since 1.3.7).

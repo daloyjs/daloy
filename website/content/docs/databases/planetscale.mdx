@@ -58,12 +58,11 @@ import type { App } from "@daloyjs/core";
 });
     export type Db = typeof db;
 
-export const planetscalePlugin = {
-  name: "planetscale",
-  register(app: App) {
-    app.decorate("db", db);
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function planetscalePlugin(app: App) {
+  app.decorate("db", db);
+}
 ```
 
 ## 4. Augment app state
@@ -88,7 +87,7 @@ import { planetscalePlugin } from "./db/planetscale.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(planetscalePlugin);
+planetscalePlugin(app);
 
 const UserSchema = z.object({ id: z.string(), email: z.email() });
 
@@ -117,25 +116,33 @@ app.get(
 
 ## Cloudflare Workers
 
-Construct the connection inside the worker handler so it picks up the binding from `env`, then call `app.fetch(req)`. If your app does not need worker bindings, you can export the standard [Cloudflare adapter](/docs/adapters) directly.
+Import `env` from `cloudflare:workers`, construct the connection from it, and decorate the app before registering routes. Do not decorate inside the Worker `fetch` handler: `decorate()` throws on the second request, and a decoration added after the routes were registered never reaches them.
 
 ```ts
+import { env } from "cloudflare:workers";
 import { connect } from "@planetscale/database";
+import { App } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-export default {
-  async fetch(
-    req: Request,
-    env: { DATABASE_HOST: string; DATABASE_USERNAME: string; DATABASE_PASSWORD: string },
-  ) {
-    const db = connect({
-      host: env.DATABASE_HOST,
-      username: env.DATABASE_USERNAME,
-      password: env.DATABASE_PASSWORD,
-    });
-    app.decorate("db", db);
-    return app.fetch(req);
-  },
+const bindings = env as {
+  DATABASE_HOST: string;
+  DATABASE_USERNAME: string;
+  DATABASE_PASSWORD: string;
 };
+
+const app = new App();
+app.decorate(
+  "db",
+  connect({
+    host: bindings.DATABASE_HOST,
+    username: bindings.DATABASE_USERNAME,
+    password: bindings.DATABASE_PASSWORD,
+  }),
+);
+
+// ...register routes that read state.db
+
+export default toFetchHandler(app);
 ```
 
 ## With Drizzle ORM

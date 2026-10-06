@@ -93,23 +93,22 @@ import type { App } from "@daloyjs/core";
 import { MikroORM } from "@mikro-orm/postgresql";
 import config from "../mikro-orm.config.ts";
 
-export const mikroOrmPlugin = {
-  name: "mikro-orm",
-  async register(app: App) {
-    const orm = await MikroORM.init(config);
-    app.decorate("orm", orm);
-    app.onClose(async () => {
-      await orm.close(true);
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function mikroOrmPlugin(app: App) {
+  const orm = await MikroORM.init(config);
+  app.decorate("orm", orm);
+  app.onClose(async () => {
+    await orm.close(true);
+  });
+}
 ```
 
 ## 5. Fork an EntityManager per request
 
 MikroORM relies on an **Identity Map** that is bound to an `EntityManager`. You must *fork* the root EM for every request so identity maps and unit-of-work state do not leak between concurrent handlers. Do it in middleware and expose the forked EM on `state`.
 
-<FlowDiagram numbered title="A forked EntityManager per request" caption="The plugin decorates one root ORM at startup. A beforeHandle hook forks a fresh EntityManager for each request onto state.em, so the identity map and unit-of-work state stay isolated, then a single flush() (or transactional()) persists the changes." steps={[
+<FlowDiagram numbered title="A forked EntityManager per request" caption="The plugin function decorates the root app with one root ORM at startup. A beforeHandle hook forks a fresh EntityManager for each request onto state.em, so the identity map and unit-of-work state stay isolated, then a single flush() (or transactional()) persists the changes." steps={[
           {
             eyebrow: "startup",
             label: "Root ORM",
@@ -178,7 +177,7 @@ import { requestEntityManager } from "./db/middleware.ts";
 import { User } from "./db/entities/User.ts";
 
 const app = new App();
-app.register(mikroOrmPlugin);
+await mikroOrmPlugin(app);
 app.use(requestEntityManager());
 
 const UserSchema = z.object({

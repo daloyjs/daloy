@@ -28,8 +28,11 @@ footerLinks:
 ---
 
 export const ROUTE_FILE = `// apps/api/src/routes/books.ts
+// app.ts registers it with: new App().registerRoutes([getBookByIdRoute] as const)
+// (a separate app.route(...) statement on an imported app would erase the
+// route types that createInProcessClient(app) narrows on).
 import { z } from "zod";
-import { app } from "../app.ts";
+import { defineRoute } from "@daloyjs/core";
 
 const Book = z.object({
   id: z.string(),
@@ -45,7 +48,7 @@ const Problem = z.object({
   detail: z.string().optional(),
 });
 
-app.route({
+export const getBookByIdRoute = defineRoute({
   method: "GET",
   path: "/books/:id",
   operationId: "getBookById",
@@ -119,8 +122,8 @@ test("getBookById - 404 has the Problem body", async () => {
   assert.equal(res.status, 404);
   if (res.status === 404) {
     assert.equal(res.body.status, 404);
-    // @ts-expect-error - title belongs to Book, not Problem
-    res.body.title;
+    // @ts-expect-error - author belongs to Book, not Problem
+    res.body.author;
   }
 });`;
 
@@ -140,7 +143,7 @@ test("every route is a good citizen", async () => {
     // Pretty failure: which route, which check, which message.
     for (const issue of report.issues) {
       console.error(
-        \`  ✗ \${issue.method} \${issue.path}: \${issue.message} (\${issue.code})\`,
+        \`  ✗ [\${issue.level}] \${issue.route}: \${issue.message}\`,
       );
     }
   }
@@ -226,7 +229,7 @@ One route, two declared responses (`200` and `404`), each with a real Zod schema
 ## Three projections, one input
 
 <ProjectionStep index={1} title="generateOpenAPI(app), the spec is a function of the routes" from="app.route({...})" to="generated/openapi.json">
-<p>The registered routes produce the OpenAPI document as a pure function. Call <code>generateOpenAPI(app, ...)</code>{", "}get a fully-formed RFC 3.1 document back, write it wherever you want it.</p>
+<p>The registered routes produce the OpenAPI document as a pure function. Call <code>generateOpenAPI(app, ...)</code>{", "}get a fully-formed OpenAPI 3.1 document back, write it wherever you want it.</p>
 <EditorFrame files={["apps/api/scripts/dump-openapi.ts"]} activeFile="apps/api/scripts/dump-openapi.ts" status="tsx scripts/dump-openapi.ts ✓ wrote 14 KB">
 <CodeBlock language="ts" code={PROJECTION_OPENAPI} />
 </EditorFrame>
@@ -243,7 +246,7 @@ One route, two declared responses (`200` and `404`), each with a real Zod schema
               ]} activeFile="apps/api/tests/books.in-process.test.ts" status="✓ node --test, 2 passing">
 <CodeBlock language="ts" code={PROJECTION_CLIENT} />
 </EditorFrame>
-<p>Two things in that snippet are also the two things I celebrate every time I see them at work. First, the{" "}<code>res.body</code> inside the <code>200</code> branch is narrowed to the <code>Book</code> shape, not the union of every declared response, the actual <code>200</code> one. Second, the{" "}<code>@ts-expect-error</code> comment in the <code>404</code>{" "}branch <em>passes</em>{": "}trying to read <code>title</code> from a{" "}<code>Problem</code> is a compile error, by construction.</p>
+<p>Two things in that snippet are also the two things I celebrate every time I see them at work. First, the{" "}<code>res.body</code> inside the <code>200</code> branch is narrowed to the <code>Book</code> shape, not the union of every declared response, the actual <code>200</code> one. Second, the{" "}<code>@ts-expect-error</code> comment in the <code>404</code>{" "}branch <em>passes</em>{": "}trying to read <code>author</code> from a{" "}<code>Problem</code> is a compile error, by construction.</p>
 </ProjectionStep>
 
 <ProjectionStep index={3} title="runContractTests(app), the guardrails you forgot to write" from="app.route({...})" to="{ ok, checked, issues }">

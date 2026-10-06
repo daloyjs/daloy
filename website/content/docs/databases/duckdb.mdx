@@ -54,19 +54,18 @@ export type DuckDbState = {
   duckdb: DuckDBConnection;
 };
 
-export const duckDbPlugin = {
-  name: "duckdb",
-  async register(app: App) {
-    const path = process.env.DUCKDB_PATH ?? ":memory:";
-    const instance = await DuckDBInstance.fromCache(path);
-    const connection = await instance.connect();
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function duckDbPlugin(app: App) {
+  const path = process.env.DUCKDB_PATH ?? ":memory:";
+  const instance = await DuckDBInstance.fromCache(path);
+  const connection = await instance.connect();
 
-    app.decorate("duckdb", connection);
-    app.onClose(() => {
-      connection.closeSync();
-    });
-  },
-};
+  app.decorate("duckdb", connection);
+  app.onClose(() => {
+    connection.closeSync();
+  });
+}
 ```
 
 ## 3. Augment app state
@@ -93,7 +92,7 @@ import { duckDbPlugin } from "./db/duckdb.ts";
 
 const app = new App();
 app.use(secureHeaders());
-app.register(duckDbPlugin);
+await duckDbPlugin(app);
 
 const SalesSummary = z.object({
   region: z.string(),

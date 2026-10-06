@@ -59,8 +59,8 @@ app.route({
   method: "GET",
   path: "/posts/:slug",
   operationId: "getPost",
-  // .strict() rejects unknown query params before the handler ever sees them.
-  params: z.object({ slug: z.string().min(1).max(120).strict() }),
+  // .strict() rejects unknown keys before the handler ever sees them.
+  request: { params: z.object({ slug: z.string().min(1).max(120) }).strict() },
   responses: { 200: { description: "ok" } },
   handler: async ({ params }) => {
     // Tagged template = parameterised. The slug is bound, not interpolated.
@@ -77,20 +77,23 @@ app.route({
 ```typescript
 // What lets Ghost-style "steal the admin API key, then publish posts
 // with malicious JS" not work against a DaloyJS admin route.
-import { createJwtVerifier } from "@daloyjs/core";
+import { jwk } from "@daloyjs/core";
 
-const verifier = createJwtVerifier({
-  // 1. Alg allowlist - no 'alg: none', no HS256-from-RS256 confusion.
+app.use(jwk({
+  // 1. Alg allowlist - asymmetric only, no 'alg: none', no HS256-from-RS256 confusion.
   algorithms: ["RS256"],
   // 2. JWKS rotation with kid-pinning (src/jwk.ts).
-  jwksUrl: "https://idp.example.com/.well-known/jwks.json",
-  // 3. RSA keys < 2048 bits refused at construction (weak_rsa_key).
-  // 4. Revocation hook - point at Redis/DB; runs LAST so forged tokens
-  //    never get to enumerate the blocklist.
-  isRevoked: async (verified) => redis.sIsMember("revoked:jti", verified.jti),
+  jwks: "https://idp.example.com/.well-known/jwks.json",
+  // 3. RSA keys < 2048 bits are refused (weak_rsa_key).
+  // 4. Revocation hook - point at Redis/DB; runs after the signature and
+  //    claim checks, so forged tokens never get to enumerate the blocklist.
+  //    Returning false answers 403.
+  verify: async (payload) => !(await redis.sIsMember("revoked:jti", String(payload.jti))),
   issuer: "https://idp.example.com/",
-  audience: "https://api.example.com",
-});
+  audience: "https://api.example.com", // required in production
+}));
+// Rolling your own key handling? createJwtVerifier({ algorithms, key, isRevoked })
+// gives you the same checks with isRevoked({ header, payload }).
 
 // 5. All bytes-vs-bytes comparisons go through timingSafeEqual (gated
 //    by verify:secret-comparisons), so leaked-key timing oracles don't
@@ -129,8 +132,8 @@ await navigator.clipboard.writeText(
 ## The new default, in full
 
 ```text
-# What 'app.use(secureHeaders())' actually sends, auto-installed on
-# every App() unless you pass 'secureDefaults: false'.
+# What 'secureHeaders()' actually sends, auto-installed on every App()
+# unless you pass 'secureHeaders: false' or 'secureDefaults: false'.
 content-security-policy: default-src 'self'; frame-ancestors 'none'
 strict-transport-security: max-age=31536000; includeSubDomains
 x-content-type-options: nosniff
@@ -146,13 +149,16 @@ The only changed line is the `permissions-policy` one. Everything else has been 
 If your app is a CMS, an admin UI, or anything else where users click "Copy" buttons, opt back in explicitly, the override fully replaces the default (no merging), so be deliberate:
 
 ```typescript
-import { secureHeaders } from "@daloyjs/core";
+import { App } from "@daloyjs/core";
 
-app.use(secureHeaders({
-  // Keep the camera/mic/geo denials, allow clipboard-write to self.
-  permissionsPolicy:
-    "camera=(), microphone=(), geolocation=(), clipboard-write=(self)",
-}));
+// Override the auto-installed secureHeaders() instead of stacking a second one.
+const app = new App({
+  secureHeaders: {
+    // Keep the camera/mic/geo denials, allow clipboard-write to self.
+    permissionsPolicy:
+      "camera=(), microphone=(), geolocation=(), clipboard-write=(self)",
+  },
+});
 ```
 
 ## What this attack would have needed to do on a DaloyJS app

@@ -229,7 +229,7 @@ Every enqueue sets `tenant` and builds its key with `jobIdempotencyKey({ tenant,
 
 ## Delivery is at-least-once [#delivery-semantics]
 
-A job is delivered at least once. The worker claims a record with an atomic lease (`lockedBy` + `leaseUntil`), runs your handler, then marks it complete. If the process dies between “handler succeeded” and “complete persisted”, the lease expires and another worker runs the handler again. Two enqueues with the same idempotency key and a deep-equal payload return one job (`duplicate: true`). The same key with a different payload throws `JobIdempotencyConflictError`.
+A job is delivered at least once. The worker claims a record with an atomic lease (`lockedBy` + `leaseUntil`), runs your handler, then marks it complete. If the process dies between “handler succeeded” and “complete persisted”, the lease expires and another worker runs the handler again. Two enqueues with the same idempotency key and an identical serialized payload (same values, same key order) return one job (`duplicate: true`). The same key with a different payload throws `JobIdempotencyConflictError`.
 
 Handlers must be idempotent. For side effects that move money or send messages, pass a key through to the downstream API so a duplicate run is a no-op there. With Stripe, that is the `Idempotency-Key` header. The Daloy job key and the Stripe key should be the same natural value.
 
@@ -276,7 +276,7 @@ queued / delayed / running --cancel-> cancelled  (terminal)
 completed / dead / cancelled: no transitions
 ```
 
-Terminal records are not deleted on the spot. `completed`/`cancelled` are retained 24h and `dead` 7d (for inspection) by default, swept lazily on mutating operations. A dead job keeps its `lastError` message. Wire `onDead` to your alerting.
+Terminal records are not deleted on the spot. `completed`/`cancelled` are retained 24h and `dead` 7d (for inspection) by default. `MemoryJobStore` sweeps expired terminal records lazily, when an insert finds the store at capacity. A dead job keeps its `lastError` message. Wire `onDead` to your alerting.
 
 ## API reference
 
@@ -301,7 +301,7 @@ Everything lives at `@daloyjs/core/jobs` and is re-exported from `@daloyjs/core`
 | --- | --- | --- |
 | `name` (required) |  | Handler registry key. Charset `^[a-zA-Z][a-zA-Z0-9._:-]{0,127}$`. |
 | `payload` (required) |  | Plain JSON only. Prototype-pollution keys (`__proto__`, `constructor`, `prototype`) are rejected, never stripped. |
-| `idempotencyKey` |  | Unique per queue. Same key + deep-equal payload returns `{ job, duplicate: true }`. Different payload throws. Build tenant-safe keys with `jobIdempotencyKey`. |
+| `idempotencyKey` |  | Unique per queue. Same key + identical serialized payload (same key order) returns `{ job, duplicate: true }`. Different payload throws. Build tenant-safe keys with `jobIdempotencyKey`. |
 | `queue` | `"default"` | Named partition. |
 | `runAt` / `delayMs` | now | Absolute earliest claim time, or a relative delay (ignored when `runAt` is set). Future times start as `delayed`. |
 | `priority` | 0 | Claim ordering: higher first. |
@@ -319,7 +319,7 @@ Also on the queue: `queue.get(id)` reads one job, `queue.cancel(id)` cancels a n
 | `queue` (required) |  | The `JobQueue` to claim from. |
 | `handlers` (required) |  | Name → handler map, frozen at construction. Unknown job names dead-letter as poison pills (a record no worker can ever run, parked instead of retried). No dynamic registration, no `import(job.name)`. |
 | `queues` | `[queue.defaultQueue]` | Partitions to claim from, in order. |
-| `concurrency` | 1 | Max jobs run in parallel (soft warn above 32). |
+| `concurrency` | 1 | Max jobs run in parallel (soft warn above 32, throws above 1000). |
 | `pollIntervalMs` | 200 | Idle poll cadence. |
 | `workerId` | random UUID | Fencing identity written to `lockedBy`. |
 | `onDead`, `onComplete`, `onFail` |  | Lifecycle callbacks. Wire `onDead` to alerting. |
@@ -552,10 +552,10 @@ This stays on `app.cron()`. It sweeps *this* process's memory, and the other rep
 | Unauthenticated `/jobs` HTTP API | None exists. Status/polling routes are yours to mount, with your auth |
 | Memory store in prod, jobs lost | Warning log from `useJobs`. `strictProduction: true` refuses to boot |
 | Worker runs another tenant's jobs | `tenant` is data. Store filtering is the adapter's job. Memory supports `list({ tenant })` |
-| PII in logs | Log job id, name, queue, attempts. Payloads at debug level only. |
+| PII in logs | Worker log events carry job id, name, queue, and attempt. The framework never logs payloads. |
 | Cross-queue claims | `claim(queue)` only ever claims its own partition |
 
-Config-time throws: `concurrency < 1`, `maxAttempts < 1`, `payloadMaxBytes < 1`, a missing store, `cronEnqueue` before `useJobs`, a handler name outside the charset, or a duplicate `define`. Boot warnings: Memory in production, `startWorker` without handlers, `concurrency > 32`.
+Config-time throws: `concurrency < 1` or above 1000, `maxAttempts < 1`, `payloadMaxBytes < 1`, a missing store, `cronEnqueue` before `useJobs`, a handler name outside the charset, an empty handler registry (including `startWorker: true` without handlers), or a second `useJobs()` call. Boot warnings: Memory in production, `concurrency > 32`.
 
 ## Jobs next to cron, idempotency, and webhooks [#comparison]
 
@@ -597,11 +597,11 @@ Queues borrow vocabulary from three unrelated worlds: Java service loading, dist
 | --- | --- |
 | **At-least-once** | Every enqueued job runs one or more times, never zero. The gap between “handler succeeded” and “completion persisted” is a real crash window, and re-running is how it is closed. There is no exactly-once mode. |
 | **Idempotent handler** | Running it twice leaves the world in the same state as running it once. Not a nice-to-have: it is the price of at-least-once delivery. |
-| **Idempotency key** | The dedupe token on `enqueue`, unique per `(queue, key)`. Same key plus a deep-equal payload returns the existing job with `duplicate: true` instead of creating a second one. |
+| **Idempotency key** | The dedupe token on `enqueue`, unique per `(queue, key)`. Same key plus an identical serialized payload returns the existing job with `duplicate: true` instead of creating a second one. |
 | **Payload fingerprint** | A SHA-256 hex digest of the serialized payload, handed to `JobStore.put` alongside the record. It is how a store detects “same key, different payload” and throws `JobIdempotencyConflictError` without re-hashing anything itself. |
 | **Attempt budget** | `maxAttempts`. Every claim increments `attempts`, including a claim that only happened because a lease expired. When the budget is spent, the next failure is terminal instead of another retry, and so is the next lease expiry (a crash on the final attempt). |
 | **Backoff** | The wait before a failed job becomes claimable again. Exponential here: the ceiling doubles per attempt from `baseDelayMs` until it reaches `maxDelayMs`. |
-| **Full jitter** | The delay is a random point in the whole interval, `random(0, min(maxDelayMs, baseDelayMs * 2^attempt))`, rather than the ceiling itself. Without it, 500 jobs that failed on one outage retry in lockstep and flatten the dependency again the moment it recovers (a *thundering herd*). “Full” distinguishes it from the equal-jitter variant, which randomizes only half the interval. |
+| **Full jitter** | The delay is a random point in the whole interval, `random(0, min(maxDelayMs, baseDelayMs * 2^(attempt - 1)))`, where `attempt` is the 1-based attempt that just failed, rather than the ceiling itself. Without it, 500 jobs that failed on one outage retry in lockstep and flatten the dependency again the moment it recovers (a *thundering herd*). “Full” distinguishes it from the equal-jitter variant, which randomizes only half the interval. |
 | **Dead letter** | The `dead` status: a terminal parking state for a job that spent its attempt budget or threw `JobFatalError`. It is neither retried nor deleted on the spot, and it keeps `lastError` for 7 days so a human can read what happened. Used as a verb too: a job *dead-letters*. |
 | **DLQ** | Dead-letter queue: the broker-native form of the same idea in SQS or Service Bus, where failed messages are moved to a separate physical queue. A DLQ is a place; the DaloyJS `dead` status is a field on the record. An adapter maps one onto the other. |
 | **Redrive** | The SQS term for moving messages back out of a DLQ into the main queue once you have shipped the fix, so they get another run. |

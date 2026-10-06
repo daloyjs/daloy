@@ -53,6 +53,8 @@ const mcp = createMcpHandler({
 });
 
 const app = new App();
+// Update (1.0.0-rc.1): in production an MCP route with no auth hook is refused.
+// Add app.use(bearerAuth({ validate })) first, or pass mcpRoutes("/mcp", mcp, { public: true }).
 for (const route of mcpRoutes("/mcp", mcp)) app.route(route);
 serve(app, { port: 3001 });
 ```

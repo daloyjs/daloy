@@ -55,11 +55,13 @@ app.use(
 );`;
 
 export const SESSION_USAGE = `// src/routes/auth.ts, read and write session data
+import { z } from "zod";
+
 app.route({
   method: "POST",
   path: "/login",
   operationId: "login",
-  body: { type: "object", properties: { username: { type: "string" } }, required: ["username"] },
+  request: { body: z.object({ username: z.string() }) },
   responses: { 200: { description: "ok" } },
   handler: async ({ body, state }) => {
     // ...verify credentials...
@@ -74,7 +76,8 @@ app.route({
   method: "GET",
   path: "/me",
   operationId: "me",
-  responses: { 200: { description: "ok" } },
+  // Every status the handler returns must be declared, or you get a 500.
+  responses: { 200: { description: "ok" }, 401: { description: "unauthenticated" } },
   handler: async ({ state }) => {
     const userId = state.session.get<string>("userId");
     if (!userId) return { status: 401, body: { error: "unauthenticated" } };
@@ -181,7 +184,7 @@ it("creates exactly one record per login", async () => {
   expect(store.size()).toBe(1);
 });`;
 
-export const SESSION_STORE_INTERFACE = `// The entire contract. Three required methods, one optional.
+export const SESSION_STORE_INTERFACE = `// The entire contract. Three required methods, two optional.
 //
 // Sync OR async - return values or promises. The middleware awaits everything.
 
@@ -189,8 +192,10 @@ export interface SessionStore {
   get(sid: string): SessionRecord | null | Promise<SessionRecord | null>;
   set(sid: string, record: SessionRecord): void | Promise<void>;
   destroy(sid: string): void | Promise<void>;
-  /** Optional fast-path; falls back to set() when omitted. */
+  /** Optional fast-path; extends an EXISTING record, never creates one. */
   touch?(sid: string, expiresAt: number): void | Promise<void>;
+  /** Optional (1.3.7+), strongly recommended: write only if the record still exists. */
+  update?(sid: string, record: SessionRecord): boolean | Promise<boolean>;
 }
 
 export interface SessionRecord {
@@ -227,6 +232,14 @@ export class RedisSessionStore implements SessionStore {
 
   async destroy(sid: string): Promise<void> {
     await this.redis.del(this.prefix + sid);
+  }
+
+  // Write-if-exists (SET ... XX), so an in-flight request cannot revive a
+  // session that another instance just logged out.
+  async update(sid: string, record: SessionRecord): Promise<boolean> {
+    const ttlSeconds = Math.max(1, Math.ceil((record.expiresAt - Date.now()) / 1000));
+    const ok = await this.redis.set(this.prefix + sid, JSON.stringify(record), "EX", ttlSeconds, "XX");
+    return ok === "OK";
   }
 
   // Optional: avoid rewriting the whole record on every read when rolling: true.
@@ -272,11 +285,15 @@ export class KvSessionStore implements SessionStore {
     await this.kv.delete(this.prefix + sid);
   }
 
-  // KV doesn't expose a cheap "extend TTL" - fall back to set(). The middleware
-  // does that automatically when touch() is omitted.
+  // KV doesn't expose a cheap "extend TTL" or an atomic write-if-exists, so
+  // touch() and update() are omitted. The middleware then re-reads with get()
+  // before writing back, and logs a one-time warning that cross-instance
+  // logout revocation is best-effort.
 }
 
-// In your Workers entry:
+// In your Workers entry, at module scope and before any routes
+// (not inside the fetch handler):
+// import { env } from "cloudflare:workers";
 // app.use(session({
 //   secret: [env.SESSION_SECRET],
 //   store: new KvSessionStore(env.SESSION_KV),
@@ -336,7 +353,7 @@ This is the feature I wish every web framework had built in, because doing it ba
 - `secret` accepts a string *or* an array.
 - The **first** entry in the array is used to *sign* new cookies.
 - Every entry is tried, in order, to *verify* incoming cookies (timing-safe).
-- Each secret must be a non-empty string of at least 16 characters, the middleware throws at construction if not.
+- Each secret must be a non-empty string of at least 16 characters, the middleware throws at construction if not. (Update (1.5.4): a production App goes further and refuses to boot on a secret under 32 bytes, a single repeated character, or a well-known placeholder.)
 
 Which lines up to a three-deploy rotation with literally zero user impact:
 
@@ -368,13 +385,13 @@ The default store is `MemorySessionStore`. It's a `Map` with TTL handling and tw
 
 ## The SessionStore contract
 
-A production store implements three required methods and one optional method:
+A production store implements three required methods and up to two optional ones:
 
-<EditorFrame files={["@daloyjs/core · session.ts"]} activeFile="@daloyjs/core · session.ts" status="3 required + 1 optional · sync or async">
+<EditorFrame files={["@daloyjs/core · session.ts"]} activeFile="@daloyjs/core · session.ts" status="3 required + 2 optional · sync or async">
 <CodeBlock language="ts" code={SESSION_STORE_INTERFACE} />
 </EditorFrame>
 
-Sync or async. `touch()` is a perf hint for `rolling: true`: if your backend has a cheap "extend the TTL" operation (like Redis `EXPIRE`), implement it. If not, omit it and the middleware will fall back to `set()`. The store contract stays independent of transactions, advisory locks, and cookie handling. The middleware owns those details.
+Sync or async. `touch()` is a perf hint for `rolling: true`: if your backend has a cheap "extend the TTL" operation (like Redis `EXPIRE`), implement it. If not, omit it and the middleware will fall back to a full write-back. Update (1.3.7): stores can also implement `update()`, an atomic write-if-exists (Redis `SET ... XX`). The middleware uses it for every write-back of an existing session, so a request still in flight during logout cannot bring the session back. Without it, `session()` falls back to `get()` then `set()` and logs a one-time warning, because two instances sharing the store keep a narrow race window. The store contract stays independent of transactions, advisory locks, and cookie handling. The middleware owns those details.
 
 ## A Redis store in twenty lines
 

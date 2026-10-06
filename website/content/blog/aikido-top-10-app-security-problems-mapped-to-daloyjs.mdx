@@ -38,12 +38,17 @@ The injection itself happens at your database driver, not at the HTTP layer, so 
 ```ts
 // Mongo / NoSQL operator injection, \$ne, \$gt, \$where as object
 // values - is a one-liner refusal in DaloyJS.
+import { z } from "zod";
 import { assertNoMongoOperators } from "@daloyjs/core";
 
-app.post("/users/login", async (ctx) => {
-  const body = await ctx.req.json();
+app.post("/users/login", {
+  // Deliberately loose body: the shape a NoSQL login handler often gets.
+  request: { body: z.record(z.string(), z.unknown()) },
+  responses: { 200: { description: "ok" } },
+}, async ({ body }) => {
   assertNoMongoOperators(body); // throws on { password: { $ne: null } } etc.
   // proceed with your authenticator
+  return { status: 200, body: { ok: true } };
 });
 ```
 
@@ -51,52 +56,58 @@ For SQL, the framework's contribution is that validated input comes out as the t
 
 ## #2: Cross-site scripting (XSS)
 
-<ThreatCard num={2} threat="Reflected & stored XSS" status="default" framework="secureHeaders() (on the moment you call it) emits a strict CSP with per-request nonces and Trusted Types. JSON responses ship with X-Content-Type-Options: nosniff. The built-in /docs HTML page uses escapeHtml() on every interpolation." user="Sanitize HTML you intentionally render (DOMPurify, sanitize-html). DaloyJS is an API framework, when you do render markup, use the right escaper." />
+<ThreatCard num={2} threat="Reflected & stored XSS" status="default" framework="secureHeaders() is auto-installed by new App() and emits a strict default CSP; per-request nonces and Trusted Types are one opt-in flag each. JSON responses ship with X-Content-Type-Options: nosniff. The built-in /docs HTML page uses escapeHtml() on every interpolation." user="Sanitize HTML you intentionally render (DOMPurify, sanitize-html). DaloyJS is an API framework, when you do render markup, use the right escaper." />
 
 The default response shape is JSON. JSON does not execute. The risk window is your dynamic HTML routes, your SSR layer, and your front-end framework, and Daloy's job there is to make sure the browser's defenses (CSP, Trusted Types, nosniff) are *on* by the time you start rendering. They are.
 
 ## #3: Server-side request forgery (SSRF)
 
-<ThreatCard num={3} threat="SSRF (cloud metadata, internal pivot)" status="opt-in" framework="fetchGuard() wraps globalThis.fetch with an allow-list and a default block list covering 169.254.169.254 (AWS/GCP metadata), 127/8, 10/8, 172.16/12, 192.168/16, ::1, fc00::/7. Redirects are followed manually with re-validation at every hop." user="Add the explicit allow-list of upstream hostnames your service may call. One line." />
+<ThreatCard num={3} threat="SSRF (cloud metadata, internal pivot)" status="opt-in" framework="fetchGuard() returns a guarded fetch with a default block list covering 169.254.169.254 (AWS/GCP metadata), 127/8, 10/8, 172.16/12, 192.168/16, ::1, fc00::/7. It does not patch globalThis.fetch. Redirects are followed manually with re-validation at every hop." user="Route every outbound call that takes a user- or model-supplied URL through the guarded fetch. One line." />
 
 ```ts
 // SSRF defense at the runtime fetch boundary.
-import { App, fetchGuard } from "@daloyjs/core";
+// fetchGuard() is not middleware: it returns a fetch you call yourself.
+import { fetchGuard } from "@daloyjs/core";
 
-export const app = new App();
-
-app.use(fetchGuard({
-  allow: ["https://api.example.com", "https://*.s3.amazonaws.com"],
-  // Default-blocks 169.254.169.254 (cloud metadata),
-  // 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
-  // ::1, fc00::/7. Redirects re-validate at every hop.
-}));
+export const safeFetch = fetchGuard();
+// Default-blocks 169.254.169.254 (cloud metadata),
+// 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+// ::1, fc00::/7. Redirects re-validate at every hop.
+// A blocked target throws SsrfBlockedError.
 ```
 
 This is the one I'm proudest of, because the most-quoted SSRF CVEs of the last five years, Capital One, Shopify, plenty of others , would have failed against a re-validating fetch wrapper. Daloy's does re-validate every hop. A 302 to 169.254.169.254 is just as dead as a direct one.
 
 ## #4: Path traversal
 
-<ThreatCard num={4} threat="Path traversal (../, encoded, double-encoded)" status="default" framework="The router rejects encoded traversal sequences (..%2F, %252F, NUL bytes) before any handler runs. assertSafeRelativePath() and sanitizeFilename() are exported for the rare handler that legitimately accepts paths." user="Don't store secrets in /public or /static. Don't roll your own static file server." />
+<ThreatCard num={4} threat="Path traversal (../, encoded, double-encoded)" status="default" framework="The router rejects encoded traversal sequences (..%2F, NUL bytes) before any handler runs. assertSafeRelativePath() and sanitizeFilename() are exported for the rare handler that legitimately accepts paths." user="Don't store secrets in /public or /static. Don't roll your own static file server." />
 
 ```ts
 // Path traversal payloads are rejected at the routing layer,
 // before any handler runs.
 //
-//   GET /files/..%2F..%2Fetc%2Fpasswd   -> 400 BadRequest
-//   GET /files/..%252F                  -> 400 BadRequest (double-encoded)
-//   GET /files/%00../secret             -> 400 BadRequest (encoded NUL)
+//   GET /files/..%2F..%2Fetc%2Fpasswd   -> 404, no handler runs
+//   GET /files/%00../secret             -> 404 (encoded NUL)
+//   GET /files/..%252F                  -> decoded once, so the param is the
+//                                          literal text "..%2F", never "../"
 //
 // When a handler needs to accept a *user-supplied* file path -
 // download links, attachment storage - use the helpers in @daloyjs/core:
-import { assertSafeRelativePath, sanitizeFilename } from "@daloyjs/core";
+import {
+  assertSafeRelativePath,
+  fileField,
+  multipartObject,
+  sanitizeFilename,
+} from "@daloyjs/core";
 
-app.post("/upload", async (ctx) => {
-  const body = await ctx.req.formData();
-  const file = body.get("file") as File;
-  const name = sanitizeFilename(file.name);   // strips .., /, \, NUL, control chars
+app.post("/upload", {
+  request: { body: multipartObject({ file: fileField() }) },
+  responses: { 204: { description: "stored" } },
+}, async ({ body }) => {
+  const name = sanitizeFilename(body.file.name ?? "upload"); // strips .., /, \, NUL, control chars
   assertSafeRelativePath(name);               // throws on any escape sequence
   // safe to join with your storage root now
+  return { status: 204 };
 });
 ```
 
@@ -108,7 +119,7 @@ Avoid XML parsing when the domain allows it. Daloy does. If your domain forces y
 
 ## #6: Insecure deserialization
 
-<ThreatCard num={6} threat="Insecure deserialization (cookies, bodies, RPC)" status="default" framework="Bodies are JSON-only. The JSON parser strips __proto__ / constructor / prototype keys before validation. Cookies default to __Host- prefix + HttpOnly + SameSite=Lax. Session payloads are MAC'd (timing-safe verify) and rotate signing keys cleanly." user="Don't accept Java-style serialized blobs, BSON from untrusted sources, or YAML !!js/function tags. If you do, validate the shape with a Standard Schema before touching it." />
+<ThreatCard num={6} threat="Insecure deserialization (cookies, bodies, RPC)" status="default" framework="Bodies are JSON-only. The JSON parser strips __proto__ / constructor / prototype keys before validation. session() cookies default to __Host- prefix + HttpOnly + SameSite=Lax. Session payloads are MAC'd (timing-safe verify) and rotate signing keys cleanly." user="Don't accept Java-style serialized blobs, BSON from untrusted sources, or YAML !!js/function tags. If you do, validate the shape with a Standard Schema before touching it." />
 
 ```ts
 // JSON parsing in DaloyJS strips dangerous keys before they reach
@@ -121,8 +132,8 @@ new App();
 // reaches your handler as:
 //   { }
 //
-// The discarded keys are logged at debug level. The empty schema
-// validation result speaks for itself - your code never sees them.
+// The keys are dropped silently by the JSON reviver. Your code
+// never sees them.
 ```
 
 ## #7: Shell / command injection
@@ -135,7 +146,7 @@ new App();
 
 ## #9: Prototype pollution
 
-<ThreatCard num={9} threat="Prototype pollution" status="default" framework="The body parser, query parser, and cookie parser all strip __proto__ / constructor / prototype keys. isForbiddenObjectKey() is exported so middleware authors can do the same. Stripped keys are logged at debug level, silent removal would let the bug hide." user="Don't write your own deep-merge helper. If you need one, lodash >=4.17.21 with the patched merge is fine." />
+<ThreatCard num={9} threat="Prototype pollution" status="default" framework="The JSON body parser, query parser, and urlencoded form parser all strip __proto__ / constructor / prototype keys (cookies are read by name, so there is no cookie object to pollute). isForbiddenObjectKey() is exported so middleware authors can do the same." user="Don't write your own deep-merge helper. If you need one, lodash >=4.17.21 with the patched merge is fine." />
 
 ## #10: Open redirects
 

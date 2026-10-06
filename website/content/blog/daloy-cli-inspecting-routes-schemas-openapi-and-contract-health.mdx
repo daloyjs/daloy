@@ -50,6 +50,8 @@ export const PAIN = `# A PR review you have lived through, probably more than on
 
 export const INSPECT_BASIC = `# Run it from any DaloyJS project. Loads ./src/app.ts (or ./src/build-app.ts,
 # or ./app.ts) through tsx automatically - no build step, no transpile config.
+# Update (1.0.0-rc.2): TS entries now load through Node's built-in type
+# stripping first; tsx is only a fallback when it is installed.
 $ pnpm daloy inspect
 
 METHOD  PATH              OPERATION ID    RESPONSES   TAGS
@@ -85,6 +87,8 @@ export const ENTRY_LOADING = `// What the CLI looks for, in order:
 // TypeScript files are loaded through tsx with zero config. So your
 // src/app.ts that imports zod, your route schemas, your generated
 // types - all of it just works, even though no "build" ever ran.
+// (Update, 1.0.0-rc.2: native Node type stripping first, tsx only as a
+// fallback for enums or extensionless relative imports.)
 
 // Pass a different entry positionally:
 //
@@ -143,15 +147,16 @@ METHOD  PATH                       OPERATION ID    RESPONSES   TAGS
 GET     /v1/orders/admin/dump      -               -           -
 POST    /v1/orders                 createOrder     201         orders
 GET     /v1/orders/:id             getOrder        200,404     orders
-PUT     /v1/orders/:id             create-order    200,404,422 orders
+PUT     /v1/orders/:id             createOrder     200,404,422 orders
+DELETE  /v1/orders/:id             deleteOrder     204,404     orders
 
-4 routes.
+5 routes.
 
-Contract checks: 4 routes · 2 errors · 1 warning
-  [error]   GET /v1/orders/admin/dump: Missing operationId
-  [error]   GET /v1/orders/admin/dump: No responses declared
-  [warning] POST /v1/orders: missing 422 response despite request body schema
-  [error]   PUT /v1/orders/:id: operationId "create-order" is not a valid identifier
+Contract checks: 5 routes · 3 errors · 1 warning
+  [error] GET /v1/orders/admin/dump: Missing operationId
+  [error] GET /v1/orders/admin/dump: No responses declared
+  [error] PUT /v1/orders/:id: Duplicate operationId "createOrder" (also on POST /v1/orders)
+  [warning] DELETE /v1/orders/:id: Body schema declared on DELETE (likely a mistake)
 FAIL.
 
 # Exit code: 1.  Wire this into CI and the bad PR can't merge.`;
@@ -179,20 +184,22 @@ $ pnpm daloy inspect --json --check | jq '
 [
   {
     "level": "error",
-    "count": 2,
+    "count": 3,
     "items": [
       { "level": "error", "route": "GET /v1/orders/admin/dump",
         "message": "Missing operationId" },
       { "level": "error", "route": "GET /v1/orders/admin/dump",
-        "message": "No responses declared" }
+        "message": "No responses declared" },
+      { "level": "error", "route": "PUT /v1/orders/:id",
+        "message": "Duplicate operationId \\"createOrder\\" (also on POST /v1/orders)" }
     ]
   },
   {
     "level": "warning",
     "count": 1,
     "items": [
-      { "level": "warning", "route": "POST /v1/orders",
-        "message": "missing 422 response despite request body schema" }
+      { "level": "warning", "route": "DELETE /v1/orders/:id",
+        "message": "Body schema declared on DELETE (likely a mistake)" }
     ]
   }
 ]
@@ -221,7 +228,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }   # @daloyjs/core needs ^24 || >=26
       - run: pnpm install --frozen-lockfile
 
       # 1) Hard gate: contract issues fail the build.
@@ -252,12 +259,14 @@ export const DEV_HINT = `# Bonus: daloy dev. Same entry-loading logic, but start
 # entry (./src/server.ts, ./src/main.ts, ...) under the host runtime's
 # native watch mode. No nodemon, no per-runtime config:
 #
-#   Node:  node --import tsx --watch <entry>
+#   Node:  node --watch <entry>   (native type stripping; was
+#          node --import tsx --watch before 1.0.0-rc.2)
 #   Bun:   bun --hot <entry>
 #   Deno:  deno run --watch --allow-net --allow-env --allow-read <entry>
 #
-$ pnpm daloy dev
-daloy dev: node -> node --import tsx --watch ./src/server.ts
+# Default entry order: ./src/index.ts, ./src/main.ts, ./src/server.ts, ...
+$ pnpm daloy dev ./src/server.ts
+daloy dev: node → node --watch ./src/server.ts
 
 # Force a different runtime from a package.json script:
 $ daloy dev --runtime bun ./src/server.ts
@@ -321,7 +330,7 @@ The two patterns I use the most: a default export for tiny apps, and a zero-arg 
 
 <FlagCard flag="--method <method>" use="filter to one verb.">Most regressions happen on writes. Running{" "}<code>--method POST</code> at the end of a review is a cheap second pass that has caught me at least once a quarter.</FlagCard>
 
-<FlagCard flag="--check" use="run the contract suite, exit 1 on errors.">Missing operationIds, missing responses, schemas declared without a corresponding response status, invalid identifier casing. Wire it into CI and a bad PR can't merge.</FlagCard>
+<FlagCard flag="--check" use="run the contract suite, exit 1 on errors.">Missing or duplicate operationIds, missing responses, a body schema on GET/HEAD/DELETE (warning), and route examples that don't match their schemas or declared statuses. Wire it into CI and a bad PR can't merge.</FlagCard>
 
 <FlagCard flag="--openapi" use="print the full OpenAPI 3.1 document.">The exact same generator the docs UI and your Hey API codegen use. Pipe to <code>generated/openapi.json</code>{", "}<code>git diff --exit-code</code>{", "}done, your CI now blocks PRs that change the surface without checking in the new spec.</FlagCard>
 
@@ -357,7 +366,7 @@ Two hard gates (`--check` + OpenAPI diff) and one soft helper (sticky PR comment
 
 ## Bonus: daloy dev, same entry-loading logic
 
-<EditorFrame files={["terminal · daloy dev"]} activeFile="terminal · daloy dev" status="node tsx --watch / bun --hot / deno run --watch · auto-detected · --runtime to override">
+<EditorFrame files={["terminal · daloy dev"]} activeFile="terminal · daloy dev" status="node --watch / bun --hot / deno run --watch · auto-detected · --runtime to override">
 <CodeBlock language="bash" code={DEV_HINT} />
 </EditorFrame>
 
@@ -371,7 +380,7 @@ Same auto-detection logic as the inspector. The CLI looks at `globalThis.process
 
 ## Put inspection in CI
 
-API drift rarely announces itself. An operationId changes, a response disappears, or a debug route reaches production. `daloy inspect` turns those changes into a CI failure before merge. It is one command with six flags, and it belongs next to the rest of your pull-request checks.
+API drift rarely announces itself. An operationId changes, a response disappears, or a debug route reaches production. `daloy inspect` turns those changes into a CI failure before merge. It is one command with a handful of flags (these six, plus others like `--ai`, `--asyncapi`, and `--yaml`), and it belongs next to the rest of your pull-request checks.
 
 Closest neighbors: the [OpenAPI 3.1 extras post](/blog/openapi-3-1-extras-webhooks-callbacks-discriminators) for the spec features `--openapi` emits, the [contract-first post](/blog/contract-first-without-the-codegen-dance) for the route definitions that feed the inspector, and the [plugin lifecycle post](/blog/plugin-lifecycle-events-for-large-team-framework-code) for the policy plugin you can pair with `--check` for double enforcement.
 

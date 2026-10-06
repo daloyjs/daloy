@@ -215,8 +215,9 @@ app.use(
 // Step 2: add a SECOND header - Content-Security-Policy-Report-Only - that
 // turns on Trusted Types in observe-only mode. Browsers will fire reports
 // to /__csp-report instead of breaking the page.
+// onSend (not onResponse) is the hook that may mutate outgoing headers.
 const trustedTypesObserve: Hooks = {
-  onResponse(res) {
+  onSend(res) {
     if (!res.headers.has("content-security-policy-report-only")) {
       res.headers.set(
         "content-security-policy-report-only",
@@ -229,18 +230,10 @@ const trustedTypesObserve: Hooks = {
 };
 app.use(trustedTypesObserve);
 
-// Step 3: a tiny endpoint to collect the violation reports.
-app.route({
-  method: "POST",
-  path: "/__csp-report",
-  operationId: "cspReport",
-  responses: { 204: { description: "noted" } },
-  handler: async ({ request, log }) => {
-    const report = await request.json().catch(() => null);
-    log.warn({ kind: "csp-violation", report }, "CSP violation report");
-    return { status: 204 };
-  },
-});`;
+// Step 3: the built-in receiver. Defaults to POST /__csp-report, accepts
+// application/csp-report and application/reports+json, rate-limits per IP,
+// caps the body at 8 KiB, logs each report, and answers 204.
+app.cspReportRoute();`;
 
 export const PROMOTE_TO_ENFORCED = `// Step 4 (later, after the report stream is quiet), flip to enforced.
 // Move the trustedTypes block into the main secureHeaders() call, drop the

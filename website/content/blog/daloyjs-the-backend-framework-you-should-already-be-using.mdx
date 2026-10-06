@@ -30,10 +30,11 @@ import { z } from "zod";
 import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
+// docs: "auto" mounts /docs + /openapi.json outside production (default is off).
+const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000, docs: "auto" });
 
 app.use(requestId());
-app.use(secureHeaders());
+app.use(secureHeaders()); // already auto-installed; explicit here for readability
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 app.route({

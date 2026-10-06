@@ -15,13 +15,13 @@ keywords:
 
 DaloyJS treats `multipart/form-data` as a first-class request shape. Two helpers, `fileField()` and `multipartObject()`, let you describe an upload contract once, get runtime validation (size caps, MIME allowlists, filename matchers), an end-to-end-typed handler, and a correct OpenAPI document with `multipart/form-data` media type and `format: "binary"` file fields.
 
-DaloyJS does not buffer file bodies for you: the runtime `FormData` entry stays a `File` or `Blob`, so handlers can stream it (`file.stream()`) directly to S3, disk, or another upstream.
+Handlers receive each file as the runtime's own `File` or `Blob`, so they can pass it on with `file.stream()` to S3, disk, or another upstream. The request itself is read into memory first, capped at `bodyLimitBytes` (1 MiB by default), and then parsed with the standard `formData()` parser. Raise `bodyLimitBytes` on the App to accept larger uploads, and for very large files have clients upload straight to object storage with a presigned URL instead.
 
 <FlowDiagram title="How an upload is validated" numbered steps={[
           {
             eyebrow: "request",
             label: "multipart/form-data body",
-            detail: "File / Blob entries kept as streams, without buffering",
+            detail: "read up to bodyLimitBytes, parsed to File / Blob entries",
           },
           {
             eyebrow: "app caps",

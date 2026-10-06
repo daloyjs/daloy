@@ -166,6 +166,8 @@ app.use(
   jwk({
     jwks: "https://issuer.example.com/.well-known/jwks.json",
     algorithms: ["RS256"],
+    issuer: "https://issuer.example.com/",
+    audience: "https://api.example.com", // required in production
   }),
 );
 app.use(

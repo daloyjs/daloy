@@ -74,23 +74,22 @@ const FROM = {
   name: process.env.MAILTRAP_FROM_NAME ?? "Acme",
 };
 
-export const mailtrapPlugin = {
-  name: "mailtrap",
-  register(app: App) {
-    app.decorate("email", {
-      async send({ to, subject, text, html }) {
-        const res = await client.send({
-          from: FROM,
-          to: [{ email: to }],
-          subject,
-          text,
-          html,
-        });
-        return { id: res.message_ids?.[0] ?? "" };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function mailtrapPlugin(app: App) {
+  app.decorate("email", {
+    async send({ to, subject, text, html }) {
+      const res = await client.send({
+        from: FROM,
+        to: [{ email: to }],
+        subject,
+        text,
+        html,
+      });
+      return { id: res.message_ids?.[0] ?? "" };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -118,7 +117,7 @@ import { mailtrapPlugin } from "./plugins/mailtrap.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-app.register(mailtrapPlugin);
+mailtrapPlugin(app);
 
 app.post(
   "/feedback",

@@ -160,6 +160,8 @@ app.use(csrf({
 }));
 ```
 
+`ignoreMethods` is for safe methods only. Since 1.5.4, a list that contains `POST`, `PUT`, `PATCH`, or `DELETE` throws at construction in every environment, because exempting a state-changing method switches the protection off for exactly the requests it exists for. To exempt one route, wrap the middleware in `except()` instead.
+
 ## What is *not* covered
 
 - Cross-origin reads. Set a strict CORS allowlist via `cors()` so other origins cannot trigger credentialed reads.
@@ -193,7 +195,7 @@ The `csrf()` middleware also implements the modern **Fetch Metadata** strategy. 
             detail: "cross-site to 403 Forbidden",
             tone: "danger",
           },
-        ]} caption="In fetch-metadata mode there is no cookie. The middleware trusts the browser-attested Sec-Fetch-Site header: same-origin and none pass, cross-site is rejected. A missing header (legacy browser) only passes when Origin or Referer matches allowedOrigins." />
+        ]} caption="In fetch-metadata mode there is no cookie. The middleware trusts the browser-attested Sec-Fetch-Site header: same-origin and none pass, same-site and cross-site are rejected unless Origin matches allowedOrigins. A missing header (legacy browser) only passes when Origin or Referer matches allowedOrigins." />
 
 ```ts
 app.use(csrf({
@@ -206,7 +208,10 @@ app.use(csrf({
 In `"fetch-metadata"` mode the middleware *does not* issue or require a cookie. On mutating requests it accepts the request when:
 
 - `Sec-Fetch-Site` is `same-origin` or `none`, or
+- `Sec-Fetch-Site` is `same-site` or `cross-site` *and* `Origin` matches your `allowedOrigins` list/predicate, or
 - `Sec-Fetch-Site` is missing (legacy browser) *and* `Origin` or `Referer` matches your `allowedOrigins` list/predicate.
+
+Since 1.5.4, an `allowedOrigins` predicate that accepts a probe origin no real allowlist would contain is refused at construction, because it would trust every site. Match origins exactly.
 
 For defense in depth, pass `strategy: "both"`. Mutating requests must then pass *both* the Fetch-Metadata check *and* the double-submit cookie check.
 

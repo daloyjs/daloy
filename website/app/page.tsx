@@ -81,7 +81,7 @@ const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
 
 app.use(requestId());
 app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global unless you configure keyGenerator or trustProxyHeaders
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // per client IP by default; behind a proxy, set behindProxy or keyGenerator
 
 app.get(
   "/books/:id",
@@ -177,7 +177,7 @@ const FEATURES = [
   {
     icon: GlobeIcon,
     title: "Runtime-portable",
-    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers - same app, same tests, five runtimes.",
+    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda - same app, same tests.",
   },
   {
     icon: RocketLaunchIcon,
@@ -660,7 +660,8 @@ export default function HomePage() {
                   alone, no SDK required: Streamable HTTP transport,
                   input-schema validation, and a production boot guard that
                   refuses to start when an MCP endpoint has no auth hook in
-                  its chain. It checks that the hook is there, not that it
+                  its chain. It checks that the hook is there and, in
+                  production, that it ran on each request, not that it
                   rejects anyone, so test your auth too.
                 </p>
                 <Link

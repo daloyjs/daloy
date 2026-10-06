@@ -66,7 +66,7 @@ New to this? Start with [Auth architecture: where DaloyJS fits in OAuth2 & OpenI
 
 ## Common pattern
 
-Each provider page implements the same three steps: install the verifier SDK, register a DaloyJS plugin that decorates the request context with an `auth` object, then guard routes with a small preBody hook (or `beforeHandle` for body-aware guards) that requires a token (and optional scopes).
+Each provider page implements the same three steps: install the verifier SDK, decorate the root app's `ctx.state` with a `verifier` (decorations made inside `app.register()` stay scoped to that plugin's routes), then guard routes with a small preBody hook (or `beforeHandle` for body-aware guards) that requires a token (and optional scopes).
 
 <FlowDiagram numbered title="The same three steps on every provider page" steps={[
           {
@@ -74,8 +74,8 @@ Each provider page implements the same three steps: install the verifier SDK, re
             detail: "pnpm add <provider-sdk>",
           },
           {
-            label: "Register an auth plugin",
-            detail: "decorates ctx with a verifier",
+            label: "Decorate the app with a verifier",
+            detail: "ctx.state.verifier on every route",
           },
           {
             label: "Guard routes",
@@ -103,13 +103,10 @@ export interface TokenVerifier {
   verify(token: string): Promise<Principal>;
 }
 
-export function authPlugin(verifier: TokenVerifier) {
-  return {
-    name: "auth",
-    register(app: App) {
-      app.decorate("verifier", verifier);
-    },
-  };
+// Call this on the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function authPlugin(app: App, verifier: TokenVerifier) {
+  app.decorate("verifier", verifier);
 }
 
 export function requireAuth(...requiredScopes: string[]): Hooks {

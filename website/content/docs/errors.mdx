@@ -28,7 +28,7 @@ DaloyJS errors are first-class. Every thrown `HttpError` serializes to [RFC 9457
           {
             eyebrow: "production",
             label: "Redact 5xx detail",
-            detail: "NODE_ENV=production strips internals",
+            detail: "shown only when env is development or test",
             tone: "muted",
           },
           {
@@ -108,7 +108,7 @@ DaloyJS strips the `detail` field on any 5xx response unless the environment is 
 | `env: "production"`, `production: true`, or `NODE_ENV=production` | redacted |
 | `production: false` with `NODE_ENV` unset | **redacted** |
 
-An unset environment fails closed on purpose. Edge runtimes such as Cloudflare Workers and Deno Deploy have no `NODE_ENV`, and treating that as development would send exception messages to clients. `daloy dev` sets `NODE_ENV=development` for its child process when you haven't set it, so local development still shows the detail. Errors you serialize yourself (for example `ctx.json({ error: err.message })` in a catch block) are not redacted. Throw them instead, or throw an `HttpError` with a safe `detail`.
+An unset environment fails closed on purpose. Edge runtimes such as Cloudflare Workers and Deno Deploy have no `NODE_ENV`, and treating that as development would send exception messages to clients. `daloy dev` sets `NODE_ENV=development` for its child process when you haven't set it, so local development still shows the detail. Errors you serialize yourself (for example a response body built from `err.message` in a catch block) are not redacted. Throw them instead, or throw an `HttpError` with a safe `detail`.
 
 ## Custom error classes
 
@@ -131,7 +131,7 @@ export class QuotaExceededError extends HttpError {
 ```ts
 app.use({
   onError: async (error, ctx) => {
-    logger.error({ err: error, requestId: ctx?.requestId }, "request failed");
+    logger.error({ err: error, requestId: ctx?.state.requestId }, "request failed");
     // return a Response to override; otherwise DaloyJS serializes problem+json
   },
 });

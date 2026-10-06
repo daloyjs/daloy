@@ -39,6 +39,9 @@ Every route definition inherits protections that usually show up as separate pac
 - Timing-safe comparison helpers for tokens and secrets.
 
 ```ts
+// passwordVerify (scrypt, constant-time) lives in @daloyjs/core/hashing.
+import { passwordVerify } from "@daloyjs/core/hashing";
+
 app.route({
   method: "POST",
   path: "/login",
@@ -52,7 +55,7 @@ app.route({
   },
   handler: async ({ body }) => {
     const user = await db.users.findByEmail(body.email);
-    if (!user || !timingSafeEqual(user.passwordHash, hash(body.password))) {
+    if (!user || !(await passwordVerify(body.password, user.passwordHash))) {
       return { status: 401, body: { error: "Invalid credentials" } };
     }
     return { status: 200, body: { token: createToken(user) } };
@@ -72,7 +75,7 @@ minimum-release-age=1440
 verify-store-integrity=true
 ```
 
-\`ignore-scripts=true\` closes the door on a whole class of lifecycle script nonsense. \`minimum-release-age=1440\` gives the ecosystem a day to notice when a freshly published package turns out to be a small crime scene. \`verify-store-integrity=true\` makes sure the bits you install are the bits you meant to install. That is better than explaining to your manager why an innocent \`pnpm install\` had opinions about crypto wallets.
+`ignore-scripts=true` closes the door on a whole class of lifecycle script nonsense. `minimum-release-age=1440` gives the ecosystem a day to notice when a freshly published package turns out to be a small crime scene. `verify-store-integrity=true` makes sure the bits you install are the bits you meant to install. That is better than explaining to your manager why an innocent `pnpm install` had opinions about crypto wallets.
 
 ## Zero runtime dependencies matters
 

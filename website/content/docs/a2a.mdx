@@ -196,7 +196,7 @@ The card response carries `Cache-Control: public, max-age=300` (tune with `cardM
 
 ## Wire format
 
-DaloyJS implements the A2A 1.0 JSON-RPC binding: PascalCase methods, ProtoJSON field names, `SCREAMING_SNAKE` enums, and parts whose member name is the type (`text`, `raw`, `url`, or `data`). The 0.3 `kind` field and `message/send` style names are not accepted.
+DaloyJS implements the A2A 1.0 JSON-RPC binding: PascalCase methods, ProtoJSON field names, `SCREAMING_SNAKE` enums, and parts whose member name is the type (`text`, `raw`, `url`, or `data`). The 0.3 `kind` field is not used to type a part (it is ignored, and a part without a 1.0 member is refused), and 0.3 `message/send` style method names answer `-32601`.
 
 ```http
 POST /a2a HTTP/1.1
@@ -309,7 +309,7 @@ Without a task store the agent is stateless, which fits serverless and edge depl
         ]} caption="A message to a finished task is refused with -32004, and a contextId that does not match the task is refused with -32602, as the spec requires." />
 
 ```ts
-import { createA2aHandler, memoryTaskStore } from "@daloyjs/core";
+import { a2aData, createA2aHandler, memoryTaskStore } from "@daloyjs/core";
 
 const agent = createA2aHandler({
   card,
@@ -473,7 +473,7 @@ propagateTrace: (headers) =>
 
 ## Security checklist
 
-- Authenticate the JSON-RPC route with the `hooks` option or app middleware. In production a `secureDefaults` App [refuses to boot](/docs/security/boot-guards#9-unauthenticated-a2a-endpoint) without it. For a genuinely public, read-only agent, opt out with `a2aRoutes(path, handler, { public: true })`.
+- Authenticate the JSON-RPC route with the `hooks` option or app middleware. In production a `secureDefaults` App [refuses to boot](/docs/security/boot-guards#9-unauthenticated-a2a-endpoint) without it, and since 1.5.4 a request whose auth hook did not actually run (for example because an `except()` wrapper skipped it) is refused with `500` in production and logged as `auth.not_enforced` elsewhere. For a genuinely public, read-only agent, opt out with `a2aRoutes(path, handler, { public: true })`.
 - Keep the card truthful and free of internal details. It is public, and other agents act on it. Do not list operator-only skills.
 - Use an `https:` card URL. In production, registration throws on `http:` for any non-loopback host.
 - Resolve `taskOwner` from the verified identity only, never from a header or message field the caller controls.

@@ -72,54 +72,53 @@ export interface MollieClient {
   verifyWebhook(rawBody: string, signatureHeader: string | null): Promise<"valid" | "legacy" | "invalid">;
 }
 
-export const molliePlugin = {
-  name: "mollie",
-  register(app: App) {
-    const client: MollieClient = {
-      raw: mollie,
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function molliePlugin(app: App) {
+  const client: MollieClient = {
+    raw: mollie,
 
-      async createPayment({ amount, description, redirectUrl, method, metadata, idempotencyKey }) {
-        const res = await mollie.payments.create({
-          idempotencyKey,
-          paymentRequest: {
-            amount,
-            description,
-            redirectUrl,
-            webhookUrl: `${process.env.APP_URL}/webhooks/mollie`,
-            ...(method ? { method } : {}),
-            ...(metadata ? { metadata } : {}),
-          },
-        });
-        return {
-          id: res.id!,
-          status: res.status!,
-          checkoutUrl: res.links?.checkout?.href ?? "",
-        };
-      },
+    async createPayment({ amount, description, redirectUrl, method, metadata, idempotencyKey }) {
+      const res = await mollie.payments.create({
+        idempotencyKey,
+        paymentRequest: {
+          amount,
+          description,
+          redirectUrl,
+          webhookUrl: `${process.env.APP_URL}/webhooks/mollie`,
+          ...(method ? { method } : {}),
+          ...(metadata ? { metadata } : {}),
+        },
+      });
+      return {
+        id: res.id!,
+        status: res.status!,
+        checkoutUrl: res.links?.checkout?.href ?? "",
+      };
+    },
 
-      async getPayment(id) {
-        const res = await mollie.payments.get({ paymentId: id });
-        return {
-          id: res.id!,
-          status: res.status!,
-          amount: res.amount!,
-        };
-      },
+    async getPayment(id) {
+      const res = await mollie.payments.get({ paymentId: id });
+      return {
+        id: res.id!,
+        status: res.status!,
+        amount: res.amount!,
+      };
+    },
 
-      async verifyWebhook(rawBody, signatureHeader) {
-        try {
-          const verified = await validator.validatePayload(rawBody, signatureHeader ?? undefined);
-          return verified ? "valid" : "legacy";
-        } catch (error) {
-          if (error instanceof InvalidSignatureException) return "invalid";
-          throw error;
-        }
-      },
-    };
+    async verifyWebhook(rawBody, signatureHeader) {
+      try {
+        const verified = await validator.validatePayload(rawBody, signatureHeader ?? undefined);
+        return verified ? "valid" : "legacy";
+      } catch (error) {
+        if (error instanceof InvalidSignatureException) return "invalid";
+        throw error;
+      }
+    },
+  };
 
-    app.decorate("mollie", client);
-  },
-};
+  app.decorate("mollie", client);
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -172,7 +171,7 @@ import { molliePlugin } from "./plugins/mollie.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
-app.register(molliePlugin);
+molliePlugin(app);
 
 app.post(
   "/checkout/mollie",

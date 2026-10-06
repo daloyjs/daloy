@@ -135,7 +135,8 @@ const publicStore = redisRateLimitStore({
 
 // SENSITIVE: fail CLOSED. Login, password reset, payment-method add,
 // admin actions. If we can't enforce the limit, we don't process the
-// request. The framework turns the thrown error into 503 problem+json.
+// request. The store rethrows the Redis error and the framework turns it
+// into a 500 problem+json (detail redacted in production).
 const sensitiveStore = redisRateLimitStore({
   client: ioredisAdapter(redis),
   prefix: "rl:sens:",
@@ -155,13 +156,15 @@ app.register(loginPlugin, {
 export const KEY_GENERATOR = `// Key generators decide WHAT you're limiting. Per-IP is the default; it's
 // also the worst at scale (residential proxies, CGNAT, mobile carriers).
 // Layer multiple limits with different keys for the boring-correct setup:
-import type { BaseContext } from "@daloyjs/core";
+import { resolveClientIp, type RateLimitContext } from "@daloyjs/core";
 
-const byIp = (ctx: BaseContext) =>
-  // Only trust XFF if your reverse proxy strips and rewrites it.
-  (ctx.request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "ip:unknown");
+const byIp = (ctx: RateLimitContext) =>
+  // Reads XFF from the RIGHT (the slot your one trusted proxy appended),
+  // never the spoofable leftmost entry. Prefer { cidrs: [...] } when you
+  // know your proxy addresses.
+  "ip:" + (resolveClientIp(ctx.request, { hops: 1 }) ?? "unknown");
 
-const byUser = (ctx: BaseContext) => {
+const byUser = (ctx: RateLimitContext) => {
   const u = ctx.state.user as { id?: string } | undefined;
   return u?.id ? "user:" + u.id : "anon:" + byIp(ctx);
 };
@@ -311,8 +314,10 @@ export const CHECKLIST = `# Pre-flight checklist before shipping the Redis store
 # 6) Trust XFF only if your reverse proxy strips and rewrites it. Else
 #    the limiter is bypassable by anyone willing to set a header.
 #
-# 7) Cap the IP key cardinality. crypto.subtle.digest("SHA-256", ip) and
-#    truncate. Otherwise a botnet with millions of IPs OOMs your Redis.
+# 7) Bound the memory the keys can use. Hashing an IP does not reduce how
+#    many keys there are, so rely on each key expiring with its window,
+#    size Redis for your peak distinct-client count, and alert on memory.
+#    Otherwise a botnet with millions of IPs OOMs your Redis.
 #
 # 8) Don't share Redis with hot caches if you can help it. Or do, but
 #    keep capacity for both. Eviction of a counter mid-window is a real

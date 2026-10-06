@@ -77,25 +77,24 @@ import type { App } from "@daloyjs/core";
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
-export const sendgridPlugin = {
-  name: "sendgrid",
-  register(app: App) {
-    app.decorate("email", {
-      async send({ to, subject, text, html }) {
-        const [res] = await sgMail.send({
-          from: process.env.SENDGRID_FROM!,
-          to,
-          subject,
-          text,
-          html,
-        });
-        // SendGrid returns 202 with an X-Message-Id header on success
-        const id = res.headers["x-message-id"] ?? "";
-        return { id: String(id) };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function sendgridPlugin(app: App) {
+  app.decorate("email", {
+    async send({ to, subject, text, html }) {
+      const [res] = await sgMail.send({
+        from: process.env.SENDGRID_FROM!,
+        to,
+        subject,
+        text,
+        html,
+      });
+      // SendGrid returns 202 with an X-Message-Id header on success
+      const id = res.headers["x-message-id"] ?? "";
+      return { id: String(id) };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -121,7 +120,7 @@ import { sendgridPlugin } from "./plugins/sendgrid.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-app.register(sendgridPlugin);
+sendgridPlugin(app);
 
 app.post(
   "/contact",

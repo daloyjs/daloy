@@ -180,8 +180,8 @@ Same feature with the boring controls bolted into the structure instead of a wik
 
 ```ts
 // Same tool surface, but the route is the contract: principal required,
-// body shape fixed, response shape fixed, rate limited, egress blocked
-// from walking into the metadata service.
+// body shape fixed, response shape fixed, rate limited, outbound calls
+// blocked from walking into the metadata service.
 // Progressive shorthand: app.post(path, contract, handler).
 // Response contracts use body:, and handlers return { status, body }.
 import { z } from "zod";
@@ -194,15 +194,15 @@ import {
   secureHeaders,
 } from "@daloyjs/core";
 
+// fetchGuard() returns a guarded fetch (it is not middleware). Use it for
+// every outbound call: loopback, private, link-local, and cloud-metadata
+// targets throw SsrfBlockedError, and every redirect hop is re-checked.
+export const safeFetch = fetchGuard();
+
 export const app = new App()
   .use(requestId())
   .use(secureHeaders())
   .use(rateLimit({ windowMs: 60_000, max: 30 }))
-  .use(
-    fetchGuard({
-      allow: ["https://api.stripe.com", "https://api.openai.com"],
-    }),
-  )
   // NHI token for the agent, not a shared human password reused across services.
   .use(
     bearerAuth({
@@ -240,7 +240,7 @@ export const app = new App()
   );
 ```
 
-Auth is required, the body is strict, and the response cannot smuggle extra fields. Rate limits bound blast radius. Egress is default-deny so a compromised process does not casually walk into cloud metadata. The agent has an identity you can revoke. That is NHI hygiene at the HTTP layer.
+Auth is required, the body is strict, and the response cannot smuggle extra fields. Rate limits bound blast radius. Outbound calls go through `fetchGuard()`, which refuses private and cloud-metadata targets, so a compromised process does not casually walk into cloud metadata. The agent has an identity you can revoke. That is NHI hygiene at the HTTP layer.
 
 Access control for AI surfaces includes more than "is there an API key." It includes which tools exist, which arguments they accept, and which fields ever leave the process:
 
@@ -353,7 +353,7 @@ Binary gates beat homework. A named failing check is something you fix. A 40-ite
                     found:
                       "Only 37% had sensitive data encrypted at breach time",
                     daloy:
-                      "Your database encryption is still on you. The framework can refuse to log secrets (redactRecord), refuse to emit undeclared response fields, and keep cookies on __Host- + Secure + HttpOnly defaults so session material is harder to steal in transit.",
+                      "Your database encryption is still on you. The framework can refuse to log secrets (redactRecord), refuse to emit undeclared response fields, and keep session() cookies on __Host- + Secure + HttpOnly defaults so session material is harder to steal in transit.",
                   },
                   {
                     found:

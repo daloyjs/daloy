@@ -72,24 +72,23 @@ import type { App } from "@daloyjs/core";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const resendPlugin = {
-  name: "resend",
-  register(app: App) {
-    app.decorate("email", {
-      async send({ to, subject, text, html }) {
-        const { data, error } = await resend.emails.send({
-          from: process.env.RESEND_FROM!,
-          to,
-          subject,
-          text,
-          html,
-        });
-        if (error) throw new Error(error.message);
-        return { id: data?.id ?? "" };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function resendPlugin(app: App) {
+  app.decorate("email", {
+    async send({ to, subject, text, html }) {
+      const { data, error } = await resend.emails.send({
+        from: process.env.RESEND_FROM!,
+        to,
+        subject,
+        text,
+        html,
+      });
+      if (error) throw new Error(error.message);
+      return { id: data?.id ?? "" };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -117,7 +116,7 @@ import { resendPlugin } from "./plugins/resend.ts";
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-app.register(resendPlugin);
+resendPlugin(app);
 
 app.post(
   "/magic-link",

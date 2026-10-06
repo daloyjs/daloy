@@ -80,6 +80,19 @@ export const CreateBook = Book.omit({ id: true }).extend({
   tags: z.array(z.string()).optional(),
 });
 
+/**
+ * RFC 9457 problem body. Declared on error responses so the OpenAPI doc
+ * and the typed client know the error shape.
+ */
+export const Problem = z.object({
+  type:     z.string(),
+  title:    z.string(),
+  status:   z.number().int(),
+  detail:   z.string().optional(),
+  instance: z.string().optional(),
+  errors:   z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+});
+
 export type BookT       = z.infer<typeof Book>;
 export type CreateBookT = z.infer<typeof CreateBook>;`;
 
@@ -98,7 +111,7 @@ for (const seed of [
   { title: "El Filibusterismo", author: "José Rizal", publishedAt: "1891-09-18", pages: 280, tags: ["classic"] },
 ]) {
   const id = randomUUID();
-  store.set(id, { id, tags: [], ...seed });
+  store.set(id, { id, ...seed });
 }`;
 
 export const REGISTER = `// src/routes/books.ts (continued)
@@ -165,7 +178,7 @@ function getById(app: App) {
     },
     responses: {
       200: { description: "Found",     body: Book },
-      404: { description: "Not found" /* problem+json - framework adds it */ },
+      404: { description: "Not found" /* thrown NotFoundError renders problem+json */ },
     },
     handler: async ({ params }) => {
       const book = store.get(params.id);
@@ -191,8 +204,9 @@ function create(app: App) {
           location: { schema: z.string(), description: "URI of the new book" },
         },
       },
-      // No 422 entry needed - the framework registers one automatically for
-      // any route with a validated request, pointing at ProblemDetails.
+      // The 422 problem+json is automatic at runtime. Declaring it puts it
+      // in the OpenAPI doc and gives the typed client a real error type.
+      422: { description: "Validation failed", body: Problem },
     },
     handler: async ({ body }) => {
       const id = randomUUID();
@@ -220,11 +234,12 @@ curl -sS -X POST http://localhost:3000/books \\
   "status": 422,
   "detail": "Invalid body",
   "errors": [
-    { "path": "title",       "message": "String must contain at least 1 character(s)" },
-    { "path": "author",      "message": "Required" },
-    { "path": "publishedAt", "message": "Invalid date" },
-    { "path": "pages",       "message": "Number must be greater than 0" }
-  ]
+    { "path": "title",       "message": "Too small: expected string to have >=1 characters" },
+    { "path": "author",      "message": "Invalid input: expected string, received undefined" },
+    { "path": "publishedAt", "message": "Invalid ISO date" },
+    { "path": "pages",       "message": "Too small: expected number to be >0" }
+  ],
+  "instance": "urn:request:96c8a9d7-1d97-40b7-9998-33c706aedacf"
 }
 # You did not write a single line for this. Schema + framework. Done.`;
 
@@ -236,7 +251,7 @@ import {
   secureHeaders,
 } from "@daloyjs/core";
 
-import { registerBookRoutes } from "./routes/books.js";
+import { registerBookRoutes } from "./routes/books.ts";
 
 export function buildApp(): App {
   const app = new App({
@@ -262,7 +277,7 @@ export default buildApp;`;
 export const ENTRY = `// src/index.ts, boot the HTTP listener. The only file that does I/O.
 import { serve } from "@daloyjs/core/node";
 import { printStartupBanner } from "@daloyjs/core/banner";
-import { buildApp } from "./build-app.js";
+import { buildApp } from "./build-app.ts";
 
 const app  = buildApp();
 const port = Number(process.env.PORT ?? 3000);
@@ -284,7 +299,7 @@ printStartupBanner({
 export const DUMP_OPENAPI = `// scripts/dump-openapi.ts, single source of truth for the spec.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { generateOpenAPI } from "@daloyjs/core";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
 import { buildApp } from "../src/build-app.ts";
 
 const app = buildApp();
@@ -302,12 +317,12 @@ pnpm gen:openapi
 # ─-> Wrote generated/openapi.json
 
 # Step 2: run Hey API codegen against the spec.
-pnpm gen
+pnpm gen:client
 # ─-> generated/client/sdk.gen.ts
 # ─-> generated/client/types.gen.ts
 # ─-> generated/client/client.gen.ts
 
-# The two scripts are also chained on CI as \`pnpm gen:all\`.`;
+# The two scripts are also chained as \`pnpm gen\`.`;
 
 export const USE_CLIENT = `// apps/web/lib/books.ts, frontend consumer of the typed client.
 import { client, listBooks, createBook, getBookById } from "@/generated/client";
@@ -318,14 +333,14 @@ export async function fetchFirstPage() {
   const { data, error } = await listBooks({
     query: { limit: 10, offset: 0 },     // <- typed; required keys complained-about
   });
-  if (error) throw new Error(error.title);
+  if (error) throw error;                  // no error responses declared on listBooks
   return data;                            // <- { items: Book[]; total: number }
 }
 
 export async function addBook(input: Parameters<typeof createBook>[0]["body"]) {
   const { data, error } = await createBook({ body: input });
   if (error) {
-    // \`error\` is ProblemDetails - autocompletes type/title/detail/status.
+    // \`error\` is the declared 422 Problem - autocompletes type/title/detail/status.
     if (error.status === 422) {
       // error.errors is { path; message }[] - straight into react-hook-form.
       return { ok: false as const, fieldIssues: error.errors ?? [] };
@@ -396,7 +411,7 @@ test("GET /books/:id returns 404 problem+json for unknown id", async () => {
 });`;
 
 export const RUN_TESTS = `pnpm test
-# > node --test --import=tsx tests/**/*.test.ts
+# > node --test "tests/**/*.test.ts"
 #
 # ✔ GET /books returns the seeded items (8.4ms)
 # ✔ POST /books creates and round-trips through GET /books/:id (12.1ms)
@@ -410,14 +425,14 @@ export const RUN_TESTS = `pnpm test
 export const SCRIPTS_BLOCK = `// package.json, the muscle memory commands.
 {
   "scripts": {
-    "dev":          "tsx watch src/index.ts",
-    "build":        "tsc -p tsconfig.json",
-    "start":        "node --enable-source-maps dist/index.js",
-    "test":         "node --test --import=tsx 'tests/**/*.test.ts'",
-    "typecheck":    "tsc -p tsconfig.json --noEmit",
-    "gen:openapi":  "tsx scripts/dump-openapi.ts",
-    "gen":          "openapi-ts",
-    "gen:all":      "pnpm gen:openapi && pnpm gen"
+    "dev":          "daloy dev",
+    "build":        "tsc -p tsconfig.build.json",
+    "start":        "node dist/index.js",
+    "test":         "node --test \\"tests/**/*.test.ts\\"",
+    "typecheck":    "tsc --noEmit",
+    "gen:openapi":  "node scripts/dump-openapi.ts",
+    "gen:client":   "openapi-ts",
+    "gen":          "pnpm gen:openapi && pnpm gen:client"
   }
 }`;
 
@@ -437,7 +452,7 @@ One promise up front: every code snippet in here is a thing you can actually pas
 
 <StepCard step={5} title="Mount docs and serve"><code>/docs</code>{", "}<code>/openapi.json</code>{", "}and <code>/openapi.yaml</code> come up automatically when{" "}<code>docs: true</code>.</StepCard>
 
-<StepCard step={6} title="Generate the typed client"><code>pnpm gen:openapi</code> dumps the spec, <code>pnpm gen</code>{" "}turns it into a fully typed <code>fetch</code> SDK.</StepCard>
+<StepCard step={6} title="Generate the typed client"><code>pnpm gen:openapi</code> dumps the spec, <code>pnpm gen:client</code>{" "}turns it into a fully typed <code>fetch</code> SDK.</StepCard>
 
 <StepCard step={7} title="Test everything with app.request()">Test the same App you ship without opening a port or making a network request.</StepCard>
 
@@ -483,7 +498,7 @@ That `z.coerce.number()` is the small kindness that fixes the *every framework o
 <CodeBlock language="ts" code={GET_BY_ID} />
 </EditorFrame>
 
-<EditorFrame files={["src/routes/books.ts"]} activeFile="src/routes/books.ts" status="POST /books · 201 + Location · 422 auto-registered">
+<EditorFrame files={["src/routes/books.ts"]} activeFile="src/routes/books.ts" status="POST /books · 201 + Location · 422 declared">
 <CodeBlock language="ts" code={CREATE_ROUTE} />
 </EditorFrame>
 
@@ -515,11 +530,11 @@ Run `pnpm dev` and visit `http://localhost:3000/docs`: Scalar renders your three
 <CodeBlock language="ts" code={DUMP_OPENAPI} />
 </EditorFrame>
 
-<EditorFrame files={["terminal · zsh"]} activeFile="terminal · zsh" status="two commands · one chained script (gen:all)">
+<EditorFrame files={["terminal · zsh"]} activeFile="terminal · zsh" status="two commands · one chained script (gen)">
 <CodeBlock language="bash" code={GEN_CLIENT} />
 </EditorFrame>
 
-Now switch hats and pretend you're the frontend team. The generated SDK gives you typed function calls for every route, typed bodies, typed responses, and, crucially, a typed `error` field shaped like `ProblemDetails`. Autocomplete owns the rest.
+Now switch hats and pretend you're the frontend team. The generated SDK gives you typed function calls for every route, typed bodies, typed responses, and, crucially, a typed `error` field shaped like the `Problem` schema you declared for the 422. Autocomplete owns the rest.
 
 <EditorFrame files={["apps/web/lib/books.ts"]} activeFile="apps/web/lib/books.ts" status="frontend code · zero hand-written request types">
 <CodeBlock language="ts" code={USE_CLIENT} />

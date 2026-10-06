@@ -98,30 +98,29 @@ export interface Principal {
   claims: JWTPayload;
 }
 
-export const entraPlugin = {
-  name: "entra",
-  register(app: App) {
-    app.decorate("verifier", {
-      async verify(token: string): Promise<Principal> {
-        const { payload } = await jwtVerify(token, jwks, {
-          issuer,
-          audience,
-          algorithms: ["RS256"],
-        });
-        const scp = typeof payload.scp === "string" ? payload.scp.split(" ") : [];
-        const roles = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
-        return {
-          sub: String(payload.sub),
-          oid: payload.oid as string | undefined,
-          tid: payload.tid as string | undefined,
-          scopes: scp,
-          roles,
-          claims: payload,
-        };
-      },
-    });
-  },
-};
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function entraPlugin(app: App) {
+  app.decorate("verifier", {
+    async verify(token: string): Promise<Principal> {
+      const { payload } = await jwtVerify(token, jwks, {
+        issuer,
+        audience,
+        algorithms: ["RS256"],
+      });
+      const scp = typeof payload.scp === "string" ? payload.scp.split(" ") : [];
+      const roles = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
+      return {
+        sub: String(payload.sub),
+        oid: payload.oid as string | undefined,
+        tid: payload.tid as string | undefined,
+        scopes: scp,
+        roles,
+        claims: payload,
+      };
+    },
+  });
+}
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -144,7 +143,7 @@ import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-app.register(entraPlugin);
+entraPlugin(app);
 
 app.get(
   "/me",

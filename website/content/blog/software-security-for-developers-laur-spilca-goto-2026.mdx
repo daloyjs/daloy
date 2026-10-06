@@ -40,8 +40,8 @@ You cannot motivate your way out of this. You have to make the secure path the l
 
 ```bash
 # The "developers avoid security because it feels like a tax" problem,
-# answered with CI gates instead of good intentions. Every create-daloy
-# project runs these on every PR. A failure blocks merge.
+# answered with CI gates instead of good intentions. The DaloyJS repo
+# runs these on every PR. A failure blocks merge.
 pnpm verify:secret-comparisons   # all secret compares use timingSafeEqual, not ===
 pnpm verify:no-leaked-credentials
 pnpm verify:no-remote-exec       # no curl|sh, no eval(fetch(...))
@@ -68,45 +68,51 @@ const back = Buffer.from(encoded, "base64").toString();    // "hunter2"  <- triv
 
 // HASHING: one-way, no key, you cannot get the input back.
 //   For PASSWORDS use a slow, salted KDF, never a bare SHA-256.
-import { hash, verify } from "@daloyjs/core/password"; // argon2id under the hood
-const stored = await hash("hunter2");          // $argon2id$v=19$m=...,t=...,p=...
-const ok = await verify("hunter2", stored);    // true, constant-time compare
+import { passwordHash, passwordVerify } from "@daloyjs/core/hashing"; // scrypt under the hood
+const stored = await passwordHash("hunter2");          // $scrypt$N=131072,r=8,p=1$...
+const ok = await passwordVerify("hunter2", stored);    // true, constant-time compare
 
 // ENCRYPTION: reversible, WITH a key. This is the actual lock.
-import { seal, open } from "@daloyjs/core/crypto"; // AEAD (XChaCha20-Poly1305)
-const box = await seal(secretKey, "card: 4111 1111 1111 1111");
-const plain = await open(secretKey, box);
+// DaloyJS ships no encryption helper; use WebCrypto AEAD (AES-GCM) directly.
+const iv = crypto.getRandomValues(new Uint8Array(12));
+const box = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, secretKey,
+  new TextEncoder().encode("card: 4111 1111 1111 1111"));
+const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, secretKey, box);
 ```
 
-DaloyJS does not try to teach you the difference in a tooltip. It just refuses to hand you the wrong tool with a friendly name. Passwords go through a salted argon2id KDF. Secrets at rest go through AEAD with a key. There is no `encrypt()` helper that just base64-encodes and lets you tell your boss it is secure. The vocabulary is enforced by the API surface.
+DaloyJS does not try to teach you the difference in a tooltip. It just refuses to hand you the wrong tool with a friendly name. Passwords go through a salted scrypt KDF (`passwordHash()`). Secrets at rest go through AEAD with a key, using the platform's WebCrypto. There is no `encrypt()` helper that just base64-encodes and lets you tell your boss it is secure. The vocabulary is enforced by the API surface.
 
 ## 3. Do not reinvent established security standards
 
 Spilca hammers this and he is right. Every time a developer writes their own token format, their own MAC, their own "fast" password hash, they are signing up to lose a fight that brilliant cryptographers spent decades winning. The famous JWT `alg: none` disaster exists because people hand-parsed tokens and forgot the one step that mattered: checking the signature.
 
-So DaloyJS ships the boring standard versions and makes the custom path the awkward one. JWT verification goes through a vetted library with JWKS rotation. CSRF is double-submit plus Fetch-Metadata, which I wrote about in [CSRF in 2026](/blog/csrf-in-2026-double-submit-and-fetch-metadata), not a scheme I invented. Sessions are signed cookies with the right prefixes already on.
+So DaloyJS ships the boring standard versions and makes the custom path the awkward one. JWT verification goes through a strict, dependency-free WebCrypto verifier with JWKS rotation. CSRF is double-submit plus Fetch-Metadata, which I wrote about in [CSRF in 2026](/blog/csrf-in-2026-double-submit-and-fetch-metadata), not a scheme I invented. Sessions are signed cookies with the right prefixes already on.
 
 ```ts
 // "Don't reinvent established security standards." - the whole panel,
 // repeatedly. DaloyJS does not give you a homemade token format, a custom
 // MAC, or a "fast" password hash. It gives you the boring standard ones
 // and makes the dangerous custom path the hard one to type.
-import { App, jwt, session, csrf, secureHeaders } from "@daloyjs/core";
+import { App, jwk, session, csrf, secureHeaders } from "@daloyjs/core";
 
 const app = new App();
 
-// JWT verification uses a vetted library + JWKS rotation, not a
+// JWT verification is a strict WebCrypto verifier + JWKS rotation, not a
 // hand-parsed "split on dots and base64-decode" routine that forgets
 // to check the signature (the classic alg:none footgun).
-app.use(jwt({ jwksUri: process.env.JWKS_URI! }));
+app.use(jwk({
+  jwks: process.env.JWKS_URI!,
+  algorithms: ["RS256", "ES256"],
+  audience: "my-api",
+}));
 
-// Sessions are signed + (optionally) encrypted cookies with the
+// Sessions are signed cookies (the data lives server-side) with the
 // __Host- prefix, Secure, HttpOnly, SameSite=Lax already set.
 app.use(session({ secret: process.env.SESSION_SECRET! }));
 
 // CSRF is double-submit + Fetch-Metadata, not a token scheme you invented
 // at 2am. See /blog/csrf-in-2026-double-submit-and-fetch-metadata.
-app.use(csrf());
+app.use(csrf({ strategy: "both" }));
 
 app.use(secureHeaders());
 ```
@@ -130,7 +136,7 @@ new App();
 //  - path traversal ('..' , '//', %2e%2e, %00) rejected before routing
 //  - 5xx bodies redacted in production (no stack traces to the attacker)
 //  - real 405 with Allow, not an enumeration-friendly 404
-//  - cookies default __Host- + Secure + HttpOnly + SameSite=Lax
+//  - session() cookies default __Host- + Secure + HttpOnly + SameSite=Lax
 //
 // And a declared body schema is enforced before the handler runs.
 // (A route with no body schema still gets the raw ctx.request.)
@@ -149,29 +155,29 @@ DaloyJS does not invent its own transport, that would violate rule 3. It assumes
 // DaloyJS does not invent its own transport. It runs behind real TLS and
 // gives you the request-side primitives that assume a PKI exists:
 //
-//  - fetchGuard() does egress allow-listing AND validates the upstream
-//    certificate chain (no "rejectUnauthorized: false" escape hatch in
-//    the public API).
+//  - fetchGuard() blocks internal egress targets and keeps the runtime's
+//    upstream certificate-chain validation (no "rejectUnauthorized: false"
+//    escape hatch in the public API).
 //  - mTLS client-cert auth is a first-party middleware, not a snowflake.
-import { App, fetchGuard, clientCert } from "@daloyjs/core";
+import { App, fetchGuard, clientCertAuth } from "@daloyjs/core";
 
 const app = new App();
 
-// Mutual TLS: trust a CA, map the cert subject to a principal. The chain
-// is verified by the platform's PKI, you don't parse ASN.1 by hand.
+// Mutual TLS: the TLS terminator verifies the chain against your CA,
+// then the middleware pins issuer and SAN. You don't parse ASN.1 by hand.
 app.use(
-  clientCert({
-    ca: process.env.CLIENT_CA_PEM!,
-    toPrincipal: (cert) => ({ sub: cert.subject.CN }),
+  clientCertAuth({
+    allowIssuerCNs: ["acme-internal-ca"],
+    allowSANs: ["URI:spiffe://acme/svc-a"],
   }),
 );
 
-app.use(fetchGuard({ allow: ["https://api.stripe.com"] }));
+export const safeFetch = fetchGuard(); // outbound calls go through this
 ```
 
 ## What a framework cannot cover
 
-- Understanding *why* a standard works. A framework can pick argon2id for you. It cannot make you understand what a salt is for, and the day you need to debug something, that understanding is the whole game. Watch the talk for that part.
+- Understanding *why* a standard works. A framework can pick a salted scrypt KDF for you. It cannot make you understand what a salt is for, and the day you need to debug something, that understanding is the whole game. Watch the talk for that part.
 - Threat modeling your specific domain. No default knows that *your* admin route leaks tenant data across customers. That is human work.
 - Caring. The framework removes the easy excuses, but it cannot make you read the CVE. Spilca's whole pitch is that security is a literacy, not a library, and he is correct.
 

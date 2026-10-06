@@ -127,7 +127,7 @@ assertCookieAttributes({
 });
 ```
 
-Common refusals: `sameSite: "None"` without `secure: true`, a `__Host-` cookie with a `Domain` or a non-root `path`, and (in production) a `__Secure-` cookie without `secure: true`.
+Common refusals: `sameSite: "None"` without `secure: true`, a `__Host-` cookie with a `Domain`, a non-root `path`, or `secure: false`, and a `__Secure-` cookie without `secure: true`. The prefix refusals apply in every environment; `isProduction` only changes the error message.
 
 For client-readable tokens such as a CSRF mirror, set `httpOnly: false` explicitly. Everything else stays locked down.
 

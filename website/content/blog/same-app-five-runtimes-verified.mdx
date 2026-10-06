@@ -37,6 +37,8 @@ export const app = new App({
   bodyLimitBytes: 256 * 1024,
   requestTimeoutMs: 5_000,
   production: process.env.NODE_ENV === "production",
+  // Mounts /openapi.json + /docs (off by default); the receipts below hash it.
+  docs: true,
 });
 
 app.use(requestId());
@@ -134,24 +136,26 @@ interface MyEnv {
   KV: KVNamespace;
 }
 
-// Background work that must outlive the response: ctx.waitUntil.
-app.use(async (ctx, next) => {
-  const start = Date.now();
-  const res = await next();
-  const env = ctx.platform.env as MyEnv | undefined;
-  const wait = ctx.platform.ctx?.waitUntil;
-  if (env && wait) {
-    wait(
-      env.ANALYTICS.writeDataPoint({
-        blobs: [ctx.request.method, new URL(ctx.request.url).pathname],
-        doubles: [Date.now() - start, res.status],
-      }),
-    );
-  }
-  return res;
-});
+const handler = toFetchHandler<MyEnv>(app);
 
-export default toFetchHandler<MyEnv>(app);`;
+// Background work that must outlive the response: ctx.waitUntil.
+// The adapter does not hand env/ctx to the App (app.use() takes Hooks,
+// not (ctx, next) middleware), so wrap the Worker entry instead.
+export default {
+  async fetch(request: Request, env: MyEnv, ctx: ExecutionContext) {
+    const start = Date.now();
+    const res = await handler.fetch(request, env, ctx);
+    const path = new URL(request.url).pathname;
+    // Analytics Engine writes are already non-blocking.
+    env.ANALYTICS.writeDataPoint({
+      blobs: [request.method, path],
+      doubles: [Date.now() - start, res.status],
+    });
+    // Anything that returns a promise goes through waitUntil.
+    ctx.waitUntil(env.KV.put(\`last-hit:\${path}\`, String(Date.now())));
+    return res;
+  },
+};`;
 
 export const VERCEL_THREE = `// 1) Vercel function, runtime: "edge"
 // apps/bookstore/api/[...path].ts
@@ -239,7 +243,7 @@ One `App` instance, two routes, the usual `requestId()` + `secureHeaders()` pair
               "WebSocket upgrade via server.upgrade() when routes exist",
               "Dev error pages with development: true",
             ]} gotchas={[
-              "No auto SIGTERM hook, Bun handles process lifecycle itself",
+              "Update (1.0.0): SIGTERM / SIGINT now drain gracefully by default, like Node (handleSignals: false to opt out)",
               "idleTimeout is in seconds, not milliseconds",
               "Bun's process.env polyfill is great; resist the urge to import bun:*",
             ]} />
@@ -274,7 +278,7 @@ Deno's permission model is the bit I miss the moment I'm back on Node. `--allow-
 <RuntimeCard name="Cloudflare Workers" importPath="@daloyjs/core/cloudflare" handles={[
               "Returns the { fetch } object Workers want, export default it",
               "Generic over your Env bindings: toFetchHandler<MyEnv>(app)",
-              "Surfaces ctx.waitUntil / passThroughOnException through ctx.platform",
+              "Uses ctx.waitUntil to flush OTLP telemetry after the response",
               "No process to crash, errors are returned as Response objects",
             ]} gotchas={[
               "No node:* imports, your shared code must stay portable",
@@ -286,7 +290,7 @@ Deno's permission model is the bit I miss the moment I'm back on Node. `--allow-
 <CodeBlock language="ts" code={WORKER_ENTRY} />
 </EditorFrame>
 
-`ctx.waitUntil` is the Cloudflare detail that most frameworks make awkward. The pattern you want is "respond to the user immediately, finish the analytics write in the background". If you skip `waitUntil`, the Worker isolate may be killed the instant the response is sent, and your background promise dies with it. The middleware above does it the right way: the response goes out, the analytics write keeps the isolate alive just long enough to land.
+`ctx.waitUntil` is the Cloudflare detail that most frameworks make awkward. The pattern you want is "respond to the user immediately, finish the analytics write in the background". If you skip `waitUntil`, the Worker isolate may be killed the instant the response is sent, and your background promise dies with it. The wrapper above does it the right way: the response goes out, the analytics write keeps the isolate alive just long enough to land.
 
 ## 5. Vercel: same app, three shapes
 
@@ -418,7 +422,7 @@ Runtime portability depends on two rules in the shared application file: it neve
 
 Operationally, you can run the same suite of tests against an in-process client in CI (fast), against a Bun process on a preview environment (also fast), against a Workers deployment in canary (cheap to spin up, very real edge), and against your Node prod cluster (the boring grown-up). All five are the same code. The difference is one import.
 
-To try it now, `pnpm create daloy@latest` ships templates for Node, Bun, Deno, and Cloudflare Workers Edge out of the box. Pick one, deploy it, then point a different adapter at the same `src/app.ts` the next morning. The scaffolding has done the boring parts for you.
+To try it now, `pnpm create daloy@latest` ships templates for Node, Bun, Deno, Cloudflare Workers Edge, and Vercel out of the box. Pick one, deploy it, then point a different adapter at the same `src/app.ts` the next morning. The scaffolding has done the boring parts for you.
 
 Thanks for reading. Now if you'll excuse me, the sun in Oslo is being aggressive about not setting tonight, and I have five curls to run against five deployments to make sure this blog post stays true.
 

@@ -104,7 +104,7 @@ The route shape does the same job. The contract is the gate before the handler. 
 ```ts
 // Same feature, but the path of least resistance is the guarded one.
 // Progressive shorthand: app.post(path, contract, handler).
-// Unknown keys die with 400. Response fields you did not declare cannot leave.
+// Unknown keys die with 422. Response fields you did not declare cannot leave.
 // Handlers return { status, body }; response contracts use body:, not schema:.
 import { z } from "zod";
 import { App, jwk, rateLimit } from "@daloyjs/core";
@@ -199,6 +199,8 @@ Her homework is better than any framework pitch: change one default in one activ
 # Pick one. Flip it. Leave a comment so future-you does not undo it.
 
 # 1) CI that always runs security-ish gates
+#    (these verify:* gates come from the DaloyJS repo itself; a
+#    create-daloy --with-ci app ships only verify:lockfile of the three)
 pnpm typecheck && pnpm test
 pnpm verify:no-lifecycle-scripts
 pnpm verify:known-dep-names

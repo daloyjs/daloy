@@ -33,6 +33,7 @@ import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
 export const app = new App({
   bodyLimitBytes: 1 << 20,   // 1 MiB
   requestTimeoutMs: 5_000,   // 5s
+  docs: "auto",              // /openapi.json + /docs, outside production
 });
 
 app.use(requestId());
@@ -102,12 +103,12 @@ import { serve } from "@daloyjs/core/deno";
 serve(app, { port: 3000 });
 
 // cloudflare workers
-import { toFetch } from "@daloyjs/core/fetch";
-export default { fetch: toFetch(app) };
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+export default toFetchHandler(app);
 
-// Vercel / any Web Fetch runtime
-import { toFetch } from "@daloyjs/core/fetch";
-export const GET = toFetch(app);`;
+// Vercel (Next.js App Router route.ts)
+import { toRouteHandlers } from "@daloyjs/core/vercel";
+export const { GET, POST } = toRouteHandlers(app);`;
 
 export const CONTRACT_TEST = `// tests/books.contract.test.ts
 import { test } from "node:test";
@@ -137,7 +138,7 @@ It's called **DaloyJS**. The pitch fits on one line:
 
 <blockquote>One route definition, many runtimes, and as little ceremony as we can get away with.</blockquote>
 
-Translated into engineering: a single `app.route({...})` call is the source of truth for *validation*, *TypeScript types*, *OpenAPI*, the *typed client*, and your *contract tests*. And that same `app` runs on Node, Bun, Deno, Cloudflare and Workers, the same file, no rewrites, no "works on my Node version" magic.
+Translated into engineering: a single `app.route({...})` call is the source of truth for *validation*, *TypeScript types*, *OpenAPI*, the *typed client*, and your *contract tests*. And that same `app` runs on Node, Bun, Deno, Cloudflare Workers, and Vercel, the same file, no rewrites, no "works on my Node version" magic.
 
 If that paragraph already made you go "wait, really?", the rest of this post is the proof. With code. In a fake editor, because I've been told my blog posts are easier to read when they look a bit more like an IDE and a bit less like a wall of grey.
 
@@ -246,7 +247,7 @@ pnpm dev
 
 # in another tab
 curl http://localhost:3000/openapi.json | jq '.info.title'
-# "my-api"
+# "DaloyJS API" (set `title` on the App to change it)
 ```
 
 Then open [Getting started](/docs/getting-started), poke at `/openapi.json`, change one field in the route and watch the typed client complain at you in red squiggles. If something breaks, please tell me, the only way a framework earns the right to exist is by surviving other people's real code.
