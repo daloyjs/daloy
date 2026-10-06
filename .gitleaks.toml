@@ -18,6 +18,8 @@ regexTarget = "match"
 paths = [
   '''(?:^|/)website/content/docs/tutorials/bookstore\.mdx$''',
   '''(?:^|/)website/content/docs/tutorials/multi-user-api\.mdx$''',
+  # The same tutorials before they moved to MDX (still in git history).
+  '''(?:^|/)website/app/docs/tutorials/(?:bookstore|multi-user-api)/page\.tsx$''',
   '''(?:^|/)workshop/src/challenges/4-hour/(?:coding-steps/exercise-4-steps|instructions/(?:challenge-2-bug|exercise-4))\.md$''',
   '''(?:^|/)workshop/src/challenges/8-hour/(?:coding-steps/exercise-6-steps|instructions/(?:challenge-1-feature|exercise-5|exercise-6))\.md$''',
 ]
@@ -37,6 +39,20 @@ paths = [
 ]
 regexes = [
   '''(?i)(?:sec-websocket-key["': =]+|acceptKey,?\s*)(?:"|')?(?:dGhlIHNhbXBsZSBub25jZQ==|s3pPLMBiTxaQ9kYGzzhZRbK\+xOo=)(?:"|')?''',
+]
+
+[[allowlists]]
+description = "Allow the fake session-secret fixture that red-team rounds 16 and 17 used before they switched to the shared unit-test fixture (still in git history)."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(?:^|/)tests/red-team-attacks-1[67]\.test\.ts$''',
+]
+# Character-class split so this config file's raw text is not itself
+# credential-shaped, as with the fixtures below.
+regexes = [
+  '''s3ss10n-s3cr3t-that-is-long-enough-xy[z]''',
 ]
 
 [[allowlists]]
