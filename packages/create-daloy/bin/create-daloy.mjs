@@ -415,7 +415,7 @@ ${heading("Usage")}
 
 ${heading("Options")}
   ${color(COLORS.green, "--template <name>")}          ${TEMPLATES.join(" | ")}  ${color(COLORS.dim, "(default: node-basic)")}
-  ${color(COLORS.green, "--package-manager <pm>")}     ${PACKAGE_MANAGERS.join(" | ")}  ${color(COLORS.dim, "(default: pnpm)")}
+  ${color(COLORS.green, "--package-manager <pm>")}     ${PACKAGE_MANAGERS.join(" | ")}  ${color(COLORS.dim, "(alias --pm; default: the package manager that ran this CLI, else pnpm)")}
   ${color(COLORS.green, "--list-templates")}           Print available templates and exit.
   ${color(COLORS.green, "--install / --no-install")}   Install dependencies after scaffolding. ${color(COLORS.dim, "(default: Y, except pnpm \u2014 N to respect minimumReleaseAge + ignore-scripts review)")}
   ${color(COLORS.green, "--git / --no-git")}           Initialize a git repository.
