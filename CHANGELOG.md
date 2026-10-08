@@ -17,6 +17,26 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- WebSocket routes now enforce `request.body` on every inbound message. Text
+  frames are parsed with the prototype-pollution-safe, structure-bounded JSON
+  parser and validated before `message()` runs, and the validated value
+  arrives typed as its fourth argument. Bad JSON or a schema failure closes
+  the socket with `1007`; a binary frame closes it with `1003`. Async schemas
+  keep arrival order. Routes without `request.body` are unchanged. New
+  exports: `validateWebSocketMessage`, `WebSocketMessageBody`,
+  `WebSocketMessageValidation`.
+- Mounting the AsyncAPI surface in production now logs
+  `asyncapi.public_in_production`, matching the `docs` warning.
+
+### Fixed
+
+- The AsyncAPI docs said non-JSON-Schema validators "still validate at
+  runtime" for WebSocket messages; nothing did. The AsyncAPI and WebSocket
+  pages now say which schemas are enforced and that app-level hooks do not
+  run on WebSocket upgrades.
+
 ## [1.5.5] - 2026-10-06
 
 ### Changed

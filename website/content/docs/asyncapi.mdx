@@ -118,7 +118,17 @@ printStartupBanner({
 
 The UI page ships the same hardened response as the OpenAPI docs: a strict Content-Security-Policy that only allows the CDN asset origin (jsDelivr by default) plus `connect-src 'self'` so the component can fetch the served spec, `nosniff`, and `no-referrer`. Pin Subresource Integrity hashes or point at self-hosted assets via the `assets` option (`asyncapiScriptUrl` / `asyncapiScriptIntegrity` / `asyncapiStyleUrl` / `asyncapiStyleIntegrity`) for supply-chain hardening, exactly as with the OpenAPI docs UIs. Use `asyncapi: "auto"` to mount everywhere except production. The object form behaves the same way unless you set `enabled: true` (since 1.5.5).
 
-The WebSocket route itself keeps the normal production guardrails. If you run with secure defaults in production, each `app.ws()` route still needs an `allowedOrigins` policy or an explicit `acknowledgeCrossOriginUpgrade: true`. AsyncAPI generation is descriptive. It never relaxes Cross-Site WebSocket Hijacking defenses.
+Mounting the AsyncAPI surface in production (`asyncapi: true` or `enabled: true`) logs an `asyncapi.public_in_production` warning at startup, the same way `docs` does: the routes are public and exempt from `requireAuth`, so anyone can read your channel map. Fine for a public API. Otherwise keep the default `"auto"` or put auth in front.
+
+## What protects the channels themselves
+
+The AsyncAPI routes are ordinary HTTP routes, so your global hooks (rate limits, secure headers, WAF, logging) run on them like on any REST endpoint. **The WebSocket channels they describe are different.** The runtime adapter handles the RFC 6455 upgrade before the HTTP pipeline, so app-level hooks and middleware (`app.use`, `rateLimit`, auth hooks, WAF, IP restriction) do not run on an upgrade request. Each channel is protected by its own route options instead:
+
+- `allowedOrigins` (or `acknowledgeCrossOriginUpgrade: true`) against Cross-Site WebSocket Hijacking, required in production under secure defaults.
+- `beforeUpgrade` for auth and `wsRateLimit()` for throttling (or `acknowledgeUnauthenticated: true` for a public channel), also required in production.
+- `request.body` for inbound message validation, plus `maxPayloadLength`, `idleTimeout`, and backpressure limits.
+
+AsyncAPI generation is descriptive. It never mounts a socket and never relaxes any of these defenses. See [WebSockets](/docs/websocket) for the full list.
 
 ## Describing the messages
 
@@ -149,7 +159,16 @@ app.ws("/chat/:room", {
 });
 ```
 
-Schemas that expose a `toJSONSchema()` method are converted to JSON Schema for the message payload. Zod 4 schemas expose that method directly. Other validators may need the same adapter they use for OpenAPI output. Anything else still validates at runtime, but the generated AsyncAPI payload falls back to a permissive `{}` placeholder rather than throwing.
+Schemas that expose a `toJSONSchema()` method are converted to JSON Schema for the message payload. Zod 4 schemas expose that method directly. Other validators may need the same adapter they use for OpenAPI output. For anything else, the generated AsyncAPI payload falls back to a permissive `{}` placeholder rather than throwing.
+
+### Which schemas are enforced
+
+The two inbound schemas look alike in the document but behave differently at runtime:
+
+- `request.body` is **enforced** (since 1.6.0). Every inbound message is parsed as JSON, validated, and handed to `message()` as its fourth argument. A message that fails is never delivered: the socket closes with `1007` (bad JSON or schema failure) or `1003` (binary frame). See [Validating inbound messages](/docs/websocket#validating-inbound-messages).
+- `meta.receive` and `meta.send` are **documentation only**. Use `meta.receive` when the wire format is not JSON (a binary protocol, for example) and you validate inside `message()` yourself.
+
+Outbound messages are never validated, so `meta.send` describes what you intend to send, not what the runtime checks.
 
 ## Generated document shape
 

@@ -438,6 +438,10 @@ All built-in middleware emitting headers from config (`basicAuth` realm, `csrf` 
 
 `app.ws()` refuses-at-registration in production unless `allowedOrigins` is set (`"same-origin"`, allowlist, or predicate) or `acknowledgeCrossOriginUpgrade: true`. The Origin check runs **before** `beforeUpgrade`. Closes the Storybook [CVE-2026-27148](https://www.aikido.dev/blog/storybooks-websockets-attack) class.
 
+#### WebSocket trust boundary
+
+The runtime adapter handles the RFC 6455 upgrade before the HTTP pipeline, so app-level hooks (`app.use`, `rateLimit`, auth hooks, WAF, IP restriction) do **not** run on an upgrade. Each route carries its own controls: the Origin policy above, `beforeUpgrade` (required in production, or `acknowledgeUnauthenticated: true`) for auth and `wsRateLimit()`, and payload / idle / backpressure limits. From 1.6.0, a route's `request.body` schema is enforced on every inbound message: text is parsed with `safeJsonParseLimited` (prototype-pollution keys stripped, key count and depth bounded) and validated; failures close with `1007`, binary frames with `1003`, and the handler never sees them. Close reasons are fixed strings, so validator details never reach the peer. `meta.receive` / `meta.send` stay documentation only. Mounting `/asyncapi` in production logs `asyncapi.public_in_production`. Regressions in [`tests/websocket-message-validation.test.ts`](tests/websocket-message-validation.test.ts).
+
 #### Scripted carding / card-testing
 
 Three primitives close the script-driven half end-to-end:

@@ -36,6 +36,7 @@ import { rateLimit, type RateLimitOptions } from "./middleware.js";
 import { getFileFieldOptions } from "./multipart.js";
 import { Router, type RouteMatch } from "./router.js";
 import type { StandardSchemaV1 } from "./schema.js";
+import { safeJsonParseLimited } from "./security.js";
 import type { AppState, BaseContext, PathString, PathParams } from "./types.js";
 /** RFC 6455 magic GUID used to compute `Sec-WebSocket-Accept`. */
 export const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -177,6 +178,9 @@ export interface WebSocketMeta {
    * Schema describing messages the **server receives from clients** (inbound).
    * Surfaced as the payload of the AsyncAPI `receive` operation. Defaults to
    * {@link WebSocketHandler.request}'s `body` schema when omitted.
+   *
+   * Documentation only: unlike `request.body`, this schema is **not**
+   * enforced at runtime. Declare `request.body` to validate inbound messages.
    */
   receive?: StandardSchemaV1;
   /**
@@ -195,9 +199,35 @@ export interface WebSocketMeta {
  * - `open`/`message`/`close`/`error`/`drain` follow Bun's signature so the
  *   same handler runs on both Node and Bun.
  */
-export interface WebSocketHandler<P extends string = string, S = AppState, TData = unknown> {
-  /** Optional schema used for payload-size consistency checks. */
-  request?: { body?: StandardSchemaV1 };
+/**
+ * Type of the validated inbound message handed to
+ * {@link WebSocketHandler.message} as its fourth argument: the schema output
+ * when `request.body` is declared, otherwise `undefined`.
+ *
+ * @since 1.6.0
+ */
+export type WebSocketMessageBody<B> = [B] extends [StandardSchemaV1]
+  ? StandardSchemaV1.InferOutput<B>
+  : [B] extends [undefined]
+    ? undefined
+    : unknown;
+
+export interface WebSocketHandler<
+  P extends string = string,
+  S = AppState,
+  TData = unknown,
+  B extends StandardSchemaV1 | undefined = StandardSchemaV1 | undefined,
+> {
+  /**
+   * Inbound message contract. When `body` is set, every inbound message is
+   * enforced before {@link WebSocketHandler.message} runs (since 1.6.0):
+   * text frames are parsed with the prototype-pollution-safe, structure-bounded
+   * JSON parser and validated against the schema; binary frames are refused.
+   * A rejected message closes the connection with `1003` (binary) or `1007`
+   * (invalid JSON or schema failure) and never reaches `message()`. The
+   * schema's declared max size also caps `maxPayloadLength`.
+   */
+  request?: { body?: B };
   /**
    * Optional contract/documentation metadata consumed by the built-in
    * AsyncAPI generator ({@link generateAsyncAPI}). Purely descriptive.
@@ -286,11 +316,17 @@ export interface WebSocketHandler<P extends string = string, S = AppState, TData
   ): Response | string | undefined | Promise<Response | string | undefined>;
   /** Called once after the upgrade completes and the connection is open. */
   open?(conn: WebSocketConnection<TData>, ctx: WebSocketContext<P, S>): void | Promise<void>;
-  /** Called for each complete inbound message; `data` is a string for text frames, bytes for binary (`isBinary: true`). */
+  /**
+   * Called for each complete inbound message; `data` is a string for text
+   * frames, bytes for binary (`isBinary: true`). When `request.body` is
+   * declared, `body` is the validated schema output (and only messages that
+   * passed validation arrive here); otherwise it is `undefined`.
+   */
   message?(
     conn: WebSocketConnection<TData>,
     data: string | Uint8Array | ArrayBuffer,
-    isBinary: boolean
+    isBinary: boolean,
+    body: WebSocketMessageBody<B>
   ): void | Promise<void>;
   /** Called when the connection closes, with the RFC 6455 close code and reason. */
   close?(conn: WebSocketConnection<TData>, code: number, reason: string): void | Promise<void>;
@@ -478,10 +514,132 @@ function copyWsRateLimitHeaders(headers: Headers, response: Response): void {
  * @param handler The {@link WebSocketHandler} to type-check; returned as-is.
  * @returns The same handler object, with `P`/`S`/`TData` inferred.
  */
-export function defineWebSocket<P extends string, S = AppState, TData = unknown>(
-  handler: WebSocketHandler<P, S, TData>
-): WebSocketHandler<P, S, TData> {
+export function defineWebSocket<
+  P extends string,
+  S = AppState,
+  TData = unknown,
+  B extends StandardSchemaV1 | undefined = undefined,
+>(handler: WebSocketHandler<P, S, TData, B>): WebSocketHandler<P, S, TData, B> {
   return handler;
+}
+
+/** Outcome of {@link validateWebSocketMessage}. */
+export type WebSocketMessageValidation =
+  | { ok: true; value: unknown }
+  | { ok: false; code: number; reason: string };
+
+const WS_INVALID_JSON: WebSocketMessageValidation = {
+  ok: false,
+  code: WS_CLOSE_CODE.INVALID_PAYLOAD,
+  reason: "invalid JSON message",
+};
+const WS_SCHEMA_FAILED: WebSocketMessageValidation = {
+  ok: false,
+  code: WS_CLOSE_CODE.INVALID_PAYLOAD,
+  reason: "message failed schema validation",
+};
+const WS_BINARY_REFUSED: WebSocketMessageValidation = {
+  ok: false,
+  code: WS_CLOSE_CODE.UNSUPPORTED_DATA,
+  reason: "binary messages are not accepted",
+};
+
+function toWebSocketValidation(
+  result: StandardSchemaV1.Result<unknown>
+): WebSocketMessageValidation {
+  return result.issues ? WS_SCHEMA_FAILED : { ok: true, value: result.value };
+}
+
+/**
+ * Enforce a WebSocket route's `request.body` schema on one inbound message.
+ * Adapters call this before dispatching to `message()`.
+ *
+ * Text frames are parsed with {@link safeJsonParseLimited} (prototype-pollution
+ * keys stripped, key-count and depth bounded) and then validated. Binary
+ * frames are refused because the schema describes JSON messages. Close
+ * reasons are fixed strings so validator issue details never reach the peer.
+ *
+ * @param schema The route's `request.body` Standard Schema.
+ * @param data The reassembled message payload.
+ * @param isBinary Whether the message arrived in binary frames.
+ * @returns The validated value, or the close code (`1003`/`1007`) and reason
+ *   to fail the connection with. A `Promise` only when the schema validates
+ *   asynchronously.
+ * @since 1.6.0
+ */
+export function validateWebSocketMessage(
+  schema: StandardSchemaV1,
+  data: string | Uint8Array | ArrayBuffer,
+  isBinary: boolean
+): WebSocketMessageValidation | Promise<WebSocketMessageValidation> {
+  if (isBinary || typeof data !== "string") return WS_BINARY_REFUSED;
+  let parsed: unknown;
+  try {
+    parsed = safeJsonParseLimited(data);
+  } catch {
+    return WS_INVALID_JSON;
+  }
+  // An empty text frame parses to `undefined`; let the schema decide.
+  let result: StandardSchemaV1.Result<unknown> | Promise<StandardSchemaV1.Result<unknown>>;
+  try {
+    result = schema["~standard"].validate(parsed);
+  } catch {
+    return WS_SCHEMA_FAILED;
+  }
+  if (result instanceof Promise) {
+    return result.then(toWebSocketValidation, () => WS_SCHEMA_FAILED);
+  }
+  return toWebSocketValidation(result);
+}
+
+/**
+ * Per-connection ordering queue for {@link validateWebSocketMessage}. Sync
+ * validations deliver inline; once an async validation is pending, later
+ * messages queue behind it so `message()` still sees them in arrival order.
+ *
+ * @internal Adapter plumbing shared by the Node and Bun adapters.
+ */
+export class WebSocketMessageGate {
+  private pending: Promise<void> | undefined;
+
+  constructor(
+    private readonly schema: StandardSchemaV1,
+    private readonly deliver: (
+      result: WebSocketMessageValidation,
+      data: string | Uint8Array | ArrayBuffer,
+      isBinary: boolean
+    ) => void
+  ) {}
+
+  /**
+   * Validate one inbound message and hand the outcome to `deliver`, in order.
+   *
+   * @param data The reassembled message payload.
+   * @param isBinary Whether the message arrived in binary frames.
+   */
+  push(data: string | Uint8Array | ArrayBuffer, isBinary: boolean): void {
+    const run = (): void | Promise<void> => {
+      const result = validateWebSocketMessage(this.schema, data, isBinary);
+      if (result instanceof Promise) {
+        return result.then((r) => this.deliver(r, data, isBinary));
+      }
+      this.deliver(result, data, isBinary);
+    };
+    if (this.pending === undefined) {
+      const out = run();
+      if (out instanceof Promise) this.track(out);
+      return;
+    }
+    this.track(this.pending.then(run));
+  }
+
+  private track(p: Promise<void>): void {
+    const guarded = p.catch(() => undefined);
+    this.pending = guarded;
+    void guarded.then(() => {
+      if (this.pending === guarded) this.pending = undefined;
+    });
+  }
 }
 
 // ---------- WebSocket route registry ----------

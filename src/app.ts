@@ -21,7 +21,7 @@ import {
   UnsupportedMediaTypeError,
   ValidationError,
 } from "./errors.js";
-import { validate } from "./schema.js";
+import { validate, type StandardSchemaV1 } from "./schema.js";
 import {
   readBodyLimited,
   safeJsonParse,
@@ -3307,6 +3307,13 @@ export class App<
    * lazy-generation, CDN-hosted-UI, SRI/CSP-hardened posture.
    */
   private mountAsyncAPI(opts: AsyncAPIRouteOptions): void {
+    if (this.isProduction()) {
+      this.log.warn(
+        { event: "asyncapi.public_in_production" },
+        "AsyncAPI docs (/asyncapi, /asyncapi.json) are mounted in production and public: anyone can read the " +
+          "full WebSocket channel map. Fine for a public API; otherwise drop asyncapi in production or put auth in front.",
+      );
+    }
     const jsonPath = (opts.jsonPath ?? "/asyncapi.json") as PathString;
     const yamlPath =
       opts.yamlPath === false
@@ -3815,11 +3822,28 @@ export class App<
    * `Upgrade: websocket` request to `path`; the adapter performs the RFC 6455
    * handshake and invokes the lifecycle callbacks. Path params (`/chat/:room`)
    * land on `ctx.params`. The handler shape matches Bun's WebSocket API.
+   *
+   * App-level hooks and middleware (`app.use`, `rateLimit`, auth hooks, WAF,
+   * IP restriction) do **not** run on the upgrade request: put auth and rate
+   * limiting in `beforeUpgrade` (see `wsRateLimit`). When `request.body` is
+   * declared, inbound messages are JSON-parsed and validated before
+   * `message()` runs; failures close the socket with `1003`/`1007`.
+   *
+   * @param path Route path; `:param` segments land on `ctx.params`.
+   * @param handler Lifecycle callbacks plus security and limit options.
+   * @returns This app for chaining.
+   * @throws {Error} In production under secureDefaults when the route lacks a
+   *   `beforeUpgrade` / `allowedOrigins` decision (or their acknowledgements),
+   *   or when header-mutating middleware conflicts with the upgrade.
    * @example `app.ws("/echo", { message(c, d) { c.send(d); } });`
    */
-  ws<P extends PathString, TData = unknown>(
+  ws<
+    P extends PathString,
+    TData = unknown,
+    B extends StandardSchemaV1 | undefined = undefined,
+  >(
     path: P,
-    handler: WebSocketHandler<P, any, TData>,
+    handler: WebSocketHandler<P, any, TData, B>,
   ): this {
     const fullPath = joinPath(this.prefix, path) as PathString;
     const production = this.isProduction();

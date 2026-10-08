@@ -81,6 +81,40 @@ app.ws("/chat/:room", chatHandler);
 
 WebSocket paths go through the same router as HTTP routes, so `ctx.params` never holds a `.`/`..` component or a control character (`%00`, `%0A`, ...). WebSocket routes are stricter than HTTP routes in one way: a capture that decodes an encoded `/` or `\` (`%2F`, `%5C`) is never accepted, and there is no `allowEncodedSlash` opt-in. Such an upgrade request is treated as an unknown path.
 
+## Validating inbound messages
+
+Declare `request.body` and Daloy enforces it on every inbound message before `message()` runs (since 1.6.0). Text frames are parsed with the same prototype-pollution-safe, depth- and key-bounded JSON parser as HTTP bodies, then validated against your [Standard Schema](/docs/validation). The validated value arrives as the fourth argument, typed from the schema output:
+
+```ts
+import { z } from "zod";
+
+const ChatMessage = z.object({ text: z.string().max(500) }).strict();
+
+app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
+  beforeUpgrade(req) {
+    if (!req.headers.get("cookie")) return new Response("Unauthorized", { status: 401 });
+  },
+  request: { body: ChatMessage },
+  message(conn, _data, _isBinary, body) {
+    // body is { text: string }; invalid messages never get here
+    conn.send(JSON.stringify({ echo: body.text }));
+  },
+});
+```
+
+A message that fails is not delivered, and the connection closes:
+
+| Inbound message | Close code |
+| --- | --- |
+| Not valid JSON, or too deep/wide for the bounded parser | `1007` (invalid payload) |
+| Valid JSON that fails the schema | `1007` (invalid payload) |
+| A binary frame | `1003` (unsupported data) |
+
+The close reasons are fixed strings, so validator issue details never reach the peer. Messages queued behind a rejected one are dropped. Async schemas are supported, and messages still reach `message()` in arrival order.
+
+Routes without `request.body` behave as before: `message()` gets the raw string or bytes and `body` is `undefined`. Leave it off for binary protocols, validate inside `message()` yourself, and use `meta.receive` to document the format in [AsyncAPI](/docs/asyncapi).
+
 ## Connection API
 
 The `WebSocketConnection` passed to your handlers mirrors the WHATWG `WebSocket` interface where it makes sense on the server side:
@@ -94,6 +128,8 @@ The `WebSocketConnection` passed to your handlers mirrors the WHATWG `WebSocket`
 - `conn.data`: opaque per-connection slot for your app state.
 
 ## Protocol negotiation & upgrade hook [#protocol-negotiation-and-upgrade-hook]
+
+The adapter handles the upgrade before the HTTP pipeline, so **app-level hooks and middleware do not run on WebSocket upgrades**: `app.use()`, `rateLimit()`, auth hooks, WAF, IP restriction, and bot guards configured for your REST routes never see the handshake. Put auth and throttling in `beforeUpgrade` (and use [`wsRateLimit()`](#upgrade-rate-limiting) to share an HTTP rate-limit bucket). In production under secure defaults, `app.ws()` refuses a route with no `beforeUpgrade` unless you pass `acknowledgeUnauthenticated: true`.
 
 Optional `beforeUpgrade(req, ctx)` runs after the path match and Origin policy, but before the 101 response. Return a `Response` to reject (handy for auth or rate-limiting), or return a `string` to pick a subprotocol from `Sec-WebSocket-Protocol`:
 

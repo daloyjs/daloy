@@ -10,6 +10,7 @@ import { setConnInfo } from "../conn-info.js";
 import {
   WS_READY_STATE,
   WS_CLOSE_CODE,
+  WebSocketMessageGate,
   WS_MAX_CONTROL_PAYLOAD,
   encodeSendPayload,
   parseSubprotocols,
@@ -242,6 +243,7 @@ interface BunUpgradeData {
   protocol: string;
   options?: NormalizedWebSocketOptions;
   conn?: BunWebSocketConnection;
+  gate?: WebSocketMessageGate;
 }
 
 async function tryBunUpgrade(
@@ -324,13 +326,21 @@ function buildBunWebSocketConfig(app: App) {
         data.conn.close(WS_CLOSE_CODE.MESSAGE_TOO_BIG, "maxPayloadLength exceeded");
         return;
       }
-      invokeBunHandler(
-        app,
-        data,
-        "WebSocket message() handler failed",
-        () => data.handler.message?.(data.conn!, msg as any, isBinary),
-        true
-      );
+      const schema = data.handler.request?.body;
+      if (schema === undefined) {
+        invokeBunMessage(app, data, msg, isBinary, undefined);
+        return;
+      }
+      data.gate ??= new WebSocketMessageGate(schema, (result, payload, binary) => {
+        const conn = data.conn!;
+        if (conn.readyState !== WS_READY_STATE.OPEN) return;
+        if (!result.ok) {
+          conn.close(result.code, result.reason);
+          return;
+        }
+        invokeBunMessage(app, data, payload, binary, result.value);
+      });
+      data.gate.push(msg, isBinary);
     },
     close(ws: BunNativeWebSocket, code: number, reason: string) {
       const data = ws.data as BunUpgradeData | undefined;
@@ -419,6 +429,22 @@ class BunWebSocketConnection implements WebSocketConnection {
   _markClosed(): void {
     this.readyState = WS_READY_STATE.CLOSED;
   }
+}
+
+function invokeBunMessage(
+  app: App,
+  data: BunUpgradeData,
+  msg: string | Uint8Array | ArrayBuffer,
+  isBinary: boolean,
+  body: unknown
+): void {
+  invokeBunHandler(
+    app,
+    data,
+    "WebSocket message() handler failed",
+    () => data.handler.message?.(data.conn!, msg, isBinary, body),
+    true
+  );
 }
 
 function invokeBunHandler(

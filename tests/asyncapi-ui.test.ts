@@ -200,3 +200,30 @@ test("asyncapi: { ... } without enabled defaults to 'auto': not mounted in produ
   );
   assert.equal((await forced.request("/asyncapi.json")).status, 200);
 });
+
+function captureWarns() {
+  const warns: Array<Record<string, unknown>> = [];
+  const logger = {
+    info: () => {},
+    debug: () => {},
+    error: () => {},
+    warn: (obj: Record<string, unknown>) => warns.push(obj),
+    child: () => logger,
+  };
+  return { logger: logger as never, warns };
+}
+
+test("asyncapi mounted in production logs asyncapi.public_in_production", () => {
+  const { logger, warns } = captureWarns();
+  new App({ logger, env: "production", behindProxy: "none", asyncapi: { enabled: true } });
+  assert.equal(warns.filter((w) => w.event === "asyncapi.public_in_production").length, 1);
+});
+
+test("asyncapi skipped in production (or mounted in development) logs no exposure warning", () => {
+  const prod = captureWarns();
+  new App({ logger: prod.logger, env: "production", behindProxy: "none", asyncapi: "auto" });
+  assert.equal(prod.warns.filter((w) => w.event === "asyncapi.public_in_production").length, 0);
+  const dev = captureWarns();
+  new App({ logger: dev.logger, env: "development", asyncapi: true });
+  assert.equal(dev.warns.filter((w) => w.event === "asyncapi.public_in_production").length, 0);
+});

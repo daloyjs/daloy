@@ -32,6 +32,7 @@ import {
   checkWebSocketOrigin,
   WS_OPCODE,
   WS_CLOSE_CODE,
+  WebSocketMessageGate,
   WS_READY_STATE,
   WS_MAX_CONTROL_PAYLOAD,
   WebSocketProtocolError,
@@ -1342,6 +1343,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
   data: unknown = undefined;
   private sink: FrameSink;
   private closeHandled = false;
+  private gate: WebSocketMessageGate | undefined;
 
   constructor(
     private socket: Duplex,
@@ -1360,9 +1362,9 @@ class NodeWebSocketConnection implements WebSocketConnection {
             buf.buffer instanceof ArrayBuffer
               ? buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
               : new Uint8Array(buf).buffer;
-          void this._invokeMessage(ab, true);
+          this._dispatchMessage(ab, true);
         } else {
-          void this._invokeMessage(ev.data, ev.isBinary);
+          this._dispatchMessage(ev.data, ev.isBinary);
         }
       },
       onPing: (payload) => {
@@ -1499,12 +1501,30 @@ class NodeWebSocketConnection implements WebSocketConnection {
     this._invokeHandler("WebSocket error() handler threw", () => this.handler.error?.(this, err));
   }
 
+  private _dispatchMessage(data: string | Uint8Array | ArrayBuffer, isBinary: boolean): void {
+    const schema = this.handler.request?.body;
+    if (schema === undefined) {
+      void this._invokeMessage(data, isBinary, undefined);
+      return;
+    }
+    this.gate ??= new WebSocketMessageGate(schema, (result, d, binary) => {
+      if (this.readyState !== WS_READY_STATE.OPEN) return;
+      if (!result.ok) {
+        this.close(result.code, result.reason);
+        return;
+      }
+      void this._invokeMessage(d, binary, result.value);
+    });
+    this.gate.push(data, isBinary);
+  }
+
   private async _invokeMessage(
     data: string | Uint8Array | ArrayBuffer,
-    isBinary: boolean
+    isBinary: boolean,
+    body: unknown
   ): Promise<void> {
     try {
-      await this.handler.message?.(this, data, isBinary);
+      await this.handler.message?.(this, data, isBinary, body);
     } catch (err) {
       this.app.log.error({ err }, "WebSocket message() handler failed");
       this._invokeError(err);
