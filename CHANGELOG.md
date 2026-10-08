@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-08
+
 ### Added
 
 - WebSocket routes now enforce `request.body` on every inbound message. Text
@@ -3842,7 +3844,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.5.5...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/daloyjs/daloy/compare/v1.5.5...v1.6.0
 [1.5.5]: https://github.com/daloyjs/daloy/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/daloyjs/daloy/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/daloyjs/daloy/compare/v1.5.2...v1.5.3
