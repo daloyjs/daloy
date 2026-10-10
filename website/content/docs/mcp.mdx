@@ -21,6 +21,8 @@ keywords:
   - x-mcp-header
   - mcpRoutes public
   - MCP auth boot guard
+  - MCP ctx.state
+  - MCP tool authorization
 sitemap:
   priority: 0.8
 ---
@@ -220,6 +222,12 @@ const mcp = createMcpHandler({
   ],
 });
 
+// Fail at startup, not on the first request, if the secret is missing.
+const MCP_TOKEN = process.env.MCP_TOKEN;
+if (!MCP_TOKEN || MCP_TOKEN.length < 32) {
+  throw new Error("MCP_TOKEN must be set to a random value of at least 32 characters.");
+}
+
 const app = new App({
   bodyLimitBytes: 64 * 1024,
   requestTimeoutMs: 10_000,
@@ -229,7 +237,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 app.use(
   bearerAuth({
     realm: "inventory-mcp",
-    validate: (token) => timingSafeEqual(token, process.env.MCP_TOKEN!),
+    validate: (token) => timingSafeEqual(token, MCP_TOKEN),
   })
 );
 
@@ -239,6 +247,42 @@ for (const route of mcpRoutes("/mcp", mcp)) {
 
 serve(app, { port: 3001 });
 ```
+
+When the MCP routes share an app with other routes that need different auth, scope the hook to the transport with `mcpRoutes("/mcp", mcp, { hooks: bearerAuth({ ... }) })`. The hook then runs on `POST` only, the `GET` hint and `OPTIONS` preflight stay credential-free, and the production boot guard is satisfied. Prefer this to a hand-rolled route.
+
+## Who is calling: `ctx.state` [#caller-identity]
+
+Since 1.7.0, `mcpRoutes()` forwards the Daloy `ctx.state` to every tool, resource, and prompt handler as `ctx.state`. Whatever your auth middleware stored after verifying the credential is the caller's identity: `jwk()` puts the verified token on `ctx.state.user` (with `sub` and `scope`), and a custom hook wrapped in `markAuthHook()` can store its own record. Use it for per-tool authorization, tenant scoping, and binding `requestState`.
+
+```ts
+{
+  name: "refund_order",
+  description: "Refund one order. Requires the billing:write scope.",
+  annotations: { destructiveHint: true },
+  inputSchema: {
+    type: "object",
+    properties: { order_id: { type: "string", minLength: 1, maxLength: 64 } },
+    required: ["order_id"],
+    additionalProperties: false,
+  },
+  handler: async (args, ctx) => {
+    // Set by your auth middleware after it verified the token.
+    const user = ctx.state.user as { sub: string; scope?: string } | undefined;
+    if (!user) throw new McpToolError("Not authenticated.");
+    // One token reaching the server must not unlock every tool.
+    if (!user.scope?.split(" ").includes("billing:write")) {
+      throw new McpToolError("This token cannot issue refunds.");
+    }
+    // Scope the lookup to the caller, so a guessed id is not enough.
+    const order = await orders.findForUser(String(args.order_id), user.sub);
+    if (!order) throw new McpToolError("Unknown order.");
+    await order.refund();
+    return `Refunded ${order.id}.`;
+  },
+}
+```
+
+<blockquote><strong>Never take identity from a request header or argument.</strong>{" "}Headers like <code>x-user-id</code>, tool arguments, <code>\_meta.clientInfo</code>, and <code>requestState</code> are all chosen by the caller. Only the verified <code>ctx.state</code> principal is identity. <code>ctx.state</code> is <code>{"{}"}</code> when the handler is called directly or from a hand-rolled route that does not pass it, so treat a missing principal as unauthenticated.</blockquote>
 
 ## Client config
 
@@ -483,6 +527,9 @@ const mcp = createMcpHandler({
         additionalProperties: false,
       },
       handler: async (args, ctx) => {
+        // The principal your auth middleware verified, never a header.
+        const user = ctx.state.user as { sub: string } | undefined;
+        if (!user) throw new McpToolError("Not authenticated.");
         const confirmation = ctx.inputResponses?.confirm as
           | { action?: string }
           | undefined;
@@ -508,7 +555,7 @@ const mcp = createMcpHandler({
             // Opaque to the client, attacker-controlled on the way back.
             // Sign it: this one carries the principal, the target, and an expiry.
             requestState: await signState({
-              sub: ctx.request.headers.get("x-user-id"),
+              sub: user.sub,
               service: args.service,
               exp: Date.now() + 120_000,
             }),
@@ -516,8 +563,10 @@ const mcp = createMcpHandler({
         }
 
         // Retry path. Never trust requestState before verifying it.
+        // verifyState must reject a missing, expired, or tampered value: a
+        // client can send inputResponses on the very first call.
         const state = await verifyState(ctx.requestState);
-        if (state.service !== args.service) {
+        if (state.sub !== user.sub || state.service !== args.service) {
           throw new McpToolError("Request state does not match this call.");
         }
         if (confirmation.action !== "accept") {
@@ -566,7 +615,9 @@ const mcp = createMcpHandler({
 
 DaloyJS enforces the protocol rules around this so your handler cannot get them wrong: an `input_required` result must carry `inputRequests` or `requestState`, it is only valid on `tools/call`, `resources/read`, and `prompts/get` in the modern era, and a request the client did not declare support for is refused with `-32021` (`MissingRequiredClientCapability`) rather than sent to a client that cannot answer it.
 
-<blockquote><strong>Treat <code>requestState</code> as attacker-controlled.</strong>{" "}It round-trips through the client. If it influences authorization, resource access, or business logic, integrity-protect it (HMAC or AEAD), bind it to the authenticated principal <em>and</em> the originating request, give it a short expiry, and reject anything that fails verification. Incoming values are capped at{" "}<code>MCP\_MAX\_REQUEST\_STATE\_LENGTH</code> (8 KiB) so a hostile client cannot force large state parsing.</blockquote>
+<blockquote><strong>Treat <code>requestState</code> as attacker-controlled.</strong>{" "}It round-trips through the client. If it influences authorization, resource access, or business logic, integrity-protect it (HMAC or AEAD), bind it to the authenticated principal from <a href="#caller-identity"><code>ctx.state</code></a> <em>and</em> the originating request, give it a short expiry, and on the retry check that the signed principal equals the current one. Reject anything that fails verification. Incoming values are capped at{" "}<code>MCP\_MAX\_REQUEST\_STATE\_LENGTH</code> (8 KiB) so a hostile client cannot force large state parsing.</blockquote>
+
+<blockquote><strong><code>inputResponses</code> are client assertions, not proof.</strong>{" "}A client, or anyone holding a valid token, can send <code>{'inputResponses: { confirm: { action: "accept" } }'}</code> on the first call without ever showing a prompt. Elicitation is a UX step for honest clients. Do not use it as the only control on a destructive action. Gate the action on the verified principal's permissions, and require a signed <code>requestState</code> so the confirmation is tied to an interim result your server actually issued.</blockquote>
 
 ## State without sessions
 
@@ -665,6 +716,8 @@ Concrete resources cover fixed documents. Resource templates cover families of t
 Templates are not compiled to a regular expression. Since 1.3.7 they are matched in linear time, so a template such as `docs://{name}.{ext}` cannot be driven into catastrophic backtracking (ReDoS) by a crafted URI. Before any lookup, `resources/read` also refuses a `params.uri` longer than `maxResourceUriLength` (default `8192` UTF-16 code units, since 1.3.7) with JSON-RPC `-32602`.
 
 ```ts
+const ALLOWED_TABLES = new Set(["products", "warehouses"]);
+
 const mcp = createMcpHandler({
   serverInfo: { name: "inventory-mcp", version: "1.0.0" },
   resourceTemplates: [
@@ -676,6 +729,9 @@ const mcp = createMcpHandler({
       // {table} and {id} each match one URI segment. The values are raw,
       // untrusted strings: validate them before touching your database.
       read: async (uri, variables) => {
+        if (!ALLOWED_TABLES.has(variables.table) || !/^[A-Za-z0-9_-]{1,64}$/.test(variables.id)) {
+          throw new McpToolError("Unknown record.");
+        }
         const row = await db.findRecord(variables.table, variables.id);
         if (!row) throw new McpToolError(`No record ${variables.id}.`);
         return { uri, mimeType: "application/json", text: JSON.stringify(row) };
@@ -684,6 +740,8 @@ const mcp = createMcpHandler({
   ],
 });
 ```
+
+Variables are passed through exactly as they appear in the URI. They are **not** percent-decoded, and nothing filters their content: `..`, `..%2F..%2Fetc%2Fpasswd`, `__proto__`, and `1' OR '1'='1` all reach `read` unchanged. Allowlist the values you expect, never build a filesystem path from one, and use parameterized queries. If you decode a variable yourself, validate the decoded value, not the raw one.
 
 ```ts
 const mcp = createMcpHandler({
@@ -743,7 +801,11 @@ const mcp = createMcpHandler({
 
 DaloyJS warns in development when a route declares a `2xx` response without a body schema, because OWASP API3 response-field stripping cannot run there (see the [API3 mapping](/docs/security/owasp-api-top-10#api3)). MCP responses are opaque JSON-RPC envelopes produced by `createMcpHandler()`, so the routes from `mcpRoutes()` ship with an envelope schema attached: they do not trip the warning, and the JSON-RPC envelope shows up in your generated OpenAPI document. Framework-mounted routes such as `/openapi.json` and `/docs` acknowledge themselves, so the warning only ever names routes you wrote.
 
-If you mount the MCP handler on a hand-rolled route instead (for example to add extra `beforeHandle` hooks), declare that the opaque body is intentional with `acknowledgeNoResponseBodySchema: true`:
+For extra per-endpoint hooks, use `mcpRoutes(path, handler, { hooks })` rather than a hand-rolled route.
+
+<blockquote><strong>Security:</strong> a hand-rolled route loses what <code>mcpRoutes()</code> sets up. The production auth boot guard only recognizes <code>mcpRoutes()</code> routes, so a hand-rolled <code>POST /mcp</code> with no auth starts cleanly and runs tools for anyone. Tools also see an empty <code>ctx.state</code> unless you pass it. If you must hand-roll, declare <code>auth</code> on the route so the boot guard refuses to start without an auth hook, and forward <code>state</code>.</blockquote>
+
+A hand-rolled route must also declare that the opaque body is intentional with `acknowledgeNoResponseBodySchema: true`:
 
 ```ts
 // Hand-rolled MCP mount (instead of mcpRoutes()): the response is an opaque
@@ -753,22 +815,31 @@ app.post(
   "/mcp",
   {
     operationId: "mcpStreamableHttp",
+    // Makes the production boot guard require an auth hook on this route.
+    auth: { scheme: "bearer" },
     acknowledgeNoResponseBodySchema: true,
     responses: {
       200: { description: "MCP JSON-RPC response" },
       202: { description: "Accepted (notification, no content)" },
     },
   },
-  ({ request }) => mcp(request),
+  // Forward state so tools can read the verified principal.
+  ({ request, state }) => mcp(request, { state }),
 );
 ```
 
 ## Security checklist
 
 - Put auth in DaloyJS middleware before the MCP route. Bearer tokens, mTLS, IP restrictions, and per-client rate limits all work normally. In production a `secureDefaults` App [refuses to boot](/docs/security/boot-guards#6-unauthenticated-mcp-endpoint) if the `mcpRoutes()` `POST` endpoint has no auth hook. Since 1.5.4 the auth hook must also run on each request: if it is skipped (for example by an `except()` wrapper), the request is refused with `500` in production and logged as `auth.not_enforced` elsewhere. For a genuinely public server, opt out explicitly with `mcpRoutes(path, handler, { public: true })`.
+- Prefer `mcpRoutes()` (with `{ hooks }` for endpoint-scoped auth) over a hand-rolled route. A hand-rolled route is invisible to the boot guard unless it declares `auth`.
+- Authorize per tool, not just per server. Read the verified principal from [`ctx.state`](#caller-identity) and check its scopes in each side-effecting tool. Never take identity from a header, an argument, or `clientInfo`.
+- Validate audience and issuer on incoming tokens (for example `jwk({ audience, issuer })`) so a token minted for another service is refused. Do not forward the caller's token to downstream APIs (token passthrough). Call them with the server's own credentials and the caller's identity as data.
+- Tool `annotations` (`readOnlyHint`, `destructiveHint`, and so on) are hints for the client's UI. The server enforces none of them.
+- Treat everything a tool or resource returns as untrusted text for the model. Database rows, web pages, emails, and tickets can carry instructions (indirect prompt injection). Return only the fields the task needs, and never put secrets in results.
+- Fail at startup when a token or key environment variable is missing, instead of discovering it on the first request.
 - Leave the built-in `Origin` validation alone and prefer adding trusted web apps to `allowedOrigins` over any wildcard CORS layer in front of the endpoint.
 - The advertised `inputSchema` is now [enforced server-side](#input-schema-enforcement) for its supported subset, but it is still not a substitute for full validation: check anything expressed only through `pattern`, `format`, or `anyOf`/`oneOf`/`allOf` inside the handler.
-- Sign and bind `requestState` before it can influence anything. It passes through the client, so an unsigned blob is a request-forgery primitive. Include the authenticated principal, an identifier for the originating request, and a short expiry, and reject state that fails verification. See [multi round-trip requests](#multi-round-trip-requests).
+- Sign and bind `requestState` before it can influence anything. It passes through the client, so an unsigned blob is a request-forgery primitive. Include the authenticated principal from `ctx.state`, an identifier for the originating request, and a short expiry, and reject state that fails verification. `inputResponses` are client assertions, not proof that a person approved anything. See [multi round-trip requests](#multi-round-trip-requests).
 - Pin `protocolVersions` to `["2026-07-28"]` once your clients have migrated. Header/body agreement is already enforced in both eras, so this is defense in depth rather than a fix. It means nothing reaches a tool without the full modern contract (required headers, per-request `_meta`, declared capabilities).
 - Never mark a secret with `x-mcp-header`. Mirrored parameter values are visible to every proxy on the path.
 - Re-authorize state handles on every call. Without protocol sessions, a handle passed as a tool argument is a string the model carries. Treat it as a name, not a capability.

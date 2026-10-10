@@ -122,6 +122,16 @@ import {
   createA2aHandler,
   timingSafeEqual,
 } from "@daloyjs/core";
+import { z } from "zod";
+
+// Fail at startup, not on the first request, if the secret is missing.
+const A2A_TOKEN = process.env.A2A_TOKEN;
+if (!A2A_TOKEN || A2A_TOKEN.length < 32) {
+  throw new Error("A2A_TOKEN must be set to a random value of at least 32 characters.");
+}
+
+// Data parts arrive as arbitrary JSON. Validate them before use.
+const StockInput = z.object({ sku: z.string().min(1).max(64) }).strict();
 
 const agent = createA2aHandler({
   card: {
@@ -146,21 +156,22 @@ const agent = createA2aHandler({
   },
   // Your logic. DaloyJS never guesses a skill: you read the message and decide.
   onMessage: async ({ message }) => {
-    const input = message.parts.find((part) => part.data !== undefined)?.data as
-      | { sku?: string }
-      | undefined;
-    if (!input?.sku) return { status: "rejected", message: "Send { sku } as a data part." };
-    const units = await inventory.unitsFor(input.sku);
+    const parsed = StockInput.safeParse(
+      message.parts.find((part) => part.data !== undefined)?.data,
+    );
+    if (!parsed.success) return { status: "rejected", message: "Send { sku } as a data part." };
+    const { sku } = parsed.data;
+    const units = await inventory.unitsFor(sku);
     return {
       status: "completed",
-      artifacts: [{ name: "stock", parts: [a2aData({ sku: input.sku, units })] }],
+      artifacts: [{ name: "stock", parts: [a2aData({ sku, units })] }],
     };
   },
 });
 
 const app = new App();
 const auth = bearerAuth({
-  validate: (token) => timingSafeEqual(token, process.env.A2A_TOKEN!),
+  validate: (token) => timingSafeEqual(token, A2A_TOKEN),
 });
 // Auth covers the JSON-RPC POST only; the Agent Card stays public.
 for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) {
@@ -169,6 +180,8 @@ for (const route of a2aRoutes("/a2a", agent, { hooks: auth })) {
 ```
 
 The route handlers forward the Daloy `ctx.state` to `onMessage`, so the principal your auth middleware stored is available as `ctx.state` inside the handler.
+
+<blockquote><strong>Validate message data.</strong>{" "}DaloyJS validates the A2A envelope, not what is inside a <code>data</code> part. A peer can send <code>{'{ "sku": { "$ne": null } }'}</code> where you expect a string, and a TypeScript cast such as <code>{"data as { sku?: string }"}</code> does not check anything at runtime. Parse every data part with a schema before it reaches a database, a shell, or a model, as the example does with <code>StockInput</code>.</blockquote>
 
 ## The Agent Card
 
@@ -331,13 +344,18 @@ const agent = createA2aHandler({
 ```ts
 import type { A2aTaskStore } from "@daloyjs/core";
 
+// Clients choose taskId when they continue a task, so encode both parts
+// instead of joining them with a separator. With `a2a:${owner}:${taskId}`,
+// owner "a" + taskId "b:t1" and owner "a:b" + taskId "t1" share one key.
+const taskKey = (owner: string, taskId: string) => `a2a:${JSON.stringify([owner, taskId])}`;
+
 const redisTaskStore: A2aTaskStore = {
   async get(owner, taskId) {
-    const raw = await redis.get(`a2a:${owner}:${taskId}`);
+    const raw = await redis.get(taskKey(owner, taskId));
     return raw ? JSON.parse(raw) : undefined;
   },
   async set(owner, task) {
-    await redis.set(`a2a:${owner}:${task.id}`, JSON.stringify(task), { EX: 3600 });
+    await redis.set(taskKey(owner, task.id), JSON.stringify(task), { EX: 3600 });
   },
   // list() is optional. Without it, ListTasks answers -32004.
 };
@@ -435,6 +453,8 @@ The defaults assume the remote agent is not fully trusted, because an Agent Card
 - **Timeouts on every call** (`timeoutMs`, 10 seconds), combined with any `signal` you pass.
 - **Fresh credentials.** Pass `headers` as a function and it runs per request, so short-lived tokens do not go stale in a long-lived client.
 
+The remote agent's reply is as untrusted as any other input. The client caps and parses the response safely, but it does not validate what the artifacts *contain*. Validate artifact data before you act on it or pass it on to your own caller. The example above forwards it unchanged only because it is a pass-through.
+
 `sendMessage` accepts a string, an array of parts, or a full message with `taskId` / `contextId` to continue a task. `getTask`, `cancelTask`, and `listTasks` map to the methods of the same name.
 
 ```ts
@@ -478,5 +498,8 @@ propagateTrace: (headers) =>
 - Use an `https:` card URL. In production, registration throws on `http:` for any non-loopback host.
 - Resolve `taskOwner` from the verified identity only, never from a header or message field the caller controls.
 - Route any fetch of a `url` part through [`fetchGuard()`](/docs/security/fetch-guard) so a peer cannot aim your service at loopback, private, or cloud-metadata addresses.
-- Treat message text and data as untrusted input, especially if your handler passes it to a model. A peer agent is just another client.
+- Treat message text and data as untrusted input, especially if your handler passes it to a model. A peer agent is just another client. Parse every `data` part with a schema; a TypeScript cast validates nothing.
+- Build task-store keys with an unambiguous encoding such as `JSON.stringify([owner, taskId])`. Clients choose `taskId` on follow-up messages, so a plain `owner:taskId` join can collide across owners.
+- Validate artifacts returned by `createA2aClient()` before acting on them or forwarding them. A remote agent's output is untrusted input.
+- Fail at startup when a token environment variable is missing, instead of discovering it on the first request.
 - Rate-limit the endpoint like any other API route, and keep the default `Origin` check. Add trusted browser apps to `allowedOrigins` instead of a wildcard CORS layer.

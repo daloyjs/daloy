@@ -1,5 +1,5 @@
 import { readNodeEnv } from "./internal-env.js";
-import type { PathString, RouteDefinition } from "./types.js";
+import type { Hooks, PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
 import { mediaTypeEssence, safeJsonParse, safeJsonParseLimited } from "./security.js";
 import { compileOriginAllowlist, isAllowedAgentOrigin } from "./origin-allowlist.js";
@@ -293,6 +293,17 @@ export type McpProtocolEra = "modern" | "legacy";
 export interface McpRequestContext {
   /** The original HTTP request received by the DaloyJS route. */
   request: Request;
+  /**
+   * Daloy `ctx.state` from the route that served this request, so a tool can
+   * read the principal your auth middleware verified (for example the
+   * `bearerAuth()` / `jwk()` result) instead of trusting a request header.
+   * Forwarded by {@link mcpRoutes}; `{}` when the handler is called without
+   * state (outside Daloy routes, or a hand-rolled mount that does not pass
+   * it). Treat a missing principal as unauthenticated.
+   *
+   * @since 1.7.0
+   */
+  state: Record<string, unknown>;
   /**
    * Protocol version selected for this call. On a modern request this is the
    * verified `io.modelcontextprotocol/protocolVersion` from `_meta`. On a
@@ -899,15 +910,30 @@ export interface McpHandlerOptions {
 }
 
 /**
+ * Per-call options for an {@link McpHandler}.
+ *
+ * @since 1.7.0
+ */
+export interface McpHandleOptions {
+  /**
+   * Daloy `ctx.state` to expose to tool, resource, and prompt handlers as
+   * {@link McpRequestContext.state}. {@link mcpRoutes} passes it for you; a
+   * hand-rolled route passes `({ request, state }) => mcp(request, { state })`.
+   */
+  state?: Record<string, unknown>;
+}
+
+/**
  * Fetch-compatible handler returned by {@link createMcpHandler}.
  *
  * @param request - Incoming HTTP request for the MCP endpoint.
+ * @param options - Optional per-call options; see {@link McpHandleOptions}.
  * @returns A standard `Response` containing a JSON-RPC response, `202` for
  *   accepted notifications, or `405` for unsupported HTTP methods.
  *
  * @since 1.0.0
  */
-export type McpHandler = (request: Request) => Promise<Response>;
+export type McpHandler = (request: Request, options?: McpHandleOptions) => Promise<Response>;
 
 type JsonRpcMessage = {
   jsonrpc?: unknown;
@@ -1600,7 +1626,11 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
   });
   const serverInfoMeta = Object.freeze({ [MCP_META_KEYS.serverInfo]: options.serverInfo });
 
-  async function handleRpcRequest(message: JsonRpcMessage, request: Request): Promise<Response> {
+  async function handleRpcRequest(
+    message: JsonRpcMessage,
+    request: Request,
+    state: Record<string, unknown>
+  ): Promise<Response> {
     const id = (message.id ?? null) as McpJsonRpcId;
     const method = message.method as string;
     const params = asRecord(message.params);
@@ -1648,6 +1678,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 
     const ctx: McpRequestContext = {
       request,
+      state,
       protocolVersion,
       era,
       id,
@@ -2188,7 +2219,10 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     return undefined;
   }
 
-  const handleMcpRequest = async function handleMcpRequest(request: Request): Promise<Response> {
+  const handleMcpRequest = async function handleMcpRequest(
+    request: Request,
+    handleOptions?: McpHandleOptions
+  ): Promise<Response> {
     // Streamable HTTP requires Origin validation on every request to defeat
     // DNS rebinding; invalid browser origins are refused with 403.
     const origin = request.headers.get("origin");
@@ -2358,7 +2392,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     }
 
     try {
-      return await handleRpcRequest(message, request);
+      return await handleRpcRequest(message, request, handleOptions?.state ?? {});
     } catch (error) {
       return rpcError(
         message.id,
@@ -2397,6 +2431,15 @@ export interface McpRoutesOptions {
    * @defaultValue false
    */
   public?: boolean;
+  /**
+   * Hooks applied to the `POST` transport only (for example
+   * `bearerAuth()` or `rateLimit()`), so per-endpoint auth needs no
+   * hand-rolled route and the `GET` hint and `OPTIONS` preflight stay
+   * credential-free. An auth hook here satisfies the production boot guard.
+   *
+   * @since 1.7.0
+   */
+  hooks?: Hooks;
 }
 
 /**
@@ -2420,8 +2463,12 @@ export interface McpRoutesOptions {
  *
  * @param path - Public MCP endpoint path, usually `"/mcp"`.
  * @param handler - Handler returned by {@link createMcpHandler}.
- * @param options - See {@link McpRoutesOptions}; pass `{ public: true }` to opt
- *   out of the auth boot guard.
+ * The route handlers forward Daloy `ctx.state` to the MCP handler, so tools
+ * read the verified principal as {@link McpRequestContext.state}.
+ *
+ * @param options - See {@link McpRoutesOptions}; pass `{ hooks }` to scope
+ *   auth to the transport, or `{ public: true }` to opt out of the auth boot
+ *   guard.
  * @returns Route definitions for `POST`, `GET`, and `OPTIONS` on the same
  *   path. `POST` is the actual MCP transport; `GET` gives a human-readable
  *   405 hint because this helper does not open server-initiated SSE streams;
@@ -2435,6 +2482,11 @@ export interface McpRoutesOptions {
  * // Authenticated MCP server (satisfies the production boot guard):
  * app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.MCP_TOKEN!) }));
  * for (const route of mcpRoutes("/mcp", mcp)) {
+ *   app.route(route);
+ * }
+ *
+ * // ...or auth scoped to the POST transport only:
+ * for (const route of mcpRoutes("/mcp", mcp, { hooks: bearerAuth({ validate }) })) {
  *   app.route(route);
  * }
  *
@@ -2472,7 +2524,9 @@ export function mcpRoutes(
       // intentionally opaque to Daloy's response serializer.
       acknowledgeNoResponseBodySchema: true,
       responses,
-      handler: ({ request }) => handler(request),
+      ...(options.hooks ? { hooks: options.hooks } : {}),
+      handler: ({ request, state }) =>
+        handler(request, { state: (state ?? {}) as Record<string, unknown> }),
     },
     {
       method: "GET",

@@ -111,6 +111,7 @@ export type {
   McpCacheHints,
   McpContent,
   McpEmbeddedResourceContent,
+  McpHandleOptions,
   McpHandler,
   McpHandlerOptions,
   McpIcon,
