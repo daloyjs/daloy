@@ -17,6 +17,40 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-10
+
+### Added
+
+- MCP tool, resource, and prompt handlers now receive the Daloy `ctx.state`
+  as `ctx.state`, so a tool reads the principal your auth middleware verified
+  (for example `jwk()`'s `ctx.state.user`) instead of trusting a request
+  header. `mcpRoutes()` forwards it automatically; a hand-rolled route passes
+  `mcp(request, { state })`. Direct calls without options see `{}`. New
+  export: `McpHandleOptions`.
+- `mcpRoutes(path, handler, { hooks })` applies hooks such as `bearerAuth()`
+  to the `POST` transport only, matching `a2aRoutes()`. An auth hook there
+  satisfies the production boot guard, and the `GET` hint and `OPTIONS`
+  preflight stay credential-free.
+
+### Fixed
+
+- The MCP docs' multi round-trip example bound the signed `requestState` to
+  the caller-controlled `x-user-id` header. It now binds the verified
+  `ctx.state` principal and checks it on the retry. The MCP page also warns
+  that a hand-rolled `POST /mcp` route is invisible to the auth boot guard
+  unless it declares `auth`, that `inputResponses` are client assertions,
+  and that resource template variables are raw and not percent-decoded, and
+  its checklist adds per-tool authorization, token audience checks, no token
+  passthrough, and indirect prompt injection.
+- The A2A docs now validate `data` parts with a schema instead of a type
+  cast, encode task-store keys unambiguously, and treat artifacts from
+  `createA2aClient()` as untrusted.
+- The OpenAPI and API-versioning docs now gate examples behind
+  `docs: "auto"`, guard the callback example against SSRF with
+  `fetchGuard()`, explain that per-version plugin hooks do not protect other
+  versions, and cover `internal: true`, webhook signing, `Vary` for
+  header-negotiated versions, and retiring old versions.
+
 ## [1.6.0] - 2026-10-08
 
 ### Added
