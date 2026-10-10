@@ -49,7 +49,7 @@ DaloyJS emits a clean **OpenAPI 3.1** document straight from your route definiti
 
 ## One line: auto-mount /docs, /openapi.json, /openapi.yaml [#one-line-auto-mount-docs-openapi-json-openapi-yaml]
 
-FastAPI-style. Pass `docs: true` to the `App` constructor and DaloyJS registers `GET /openapi.json` + `GET /openapi.yaml` (the live spec in both formats) and `GET /docs` (a Scalar API reference UI) for you.
+FastAPI-style. Pass `docs: "auto"` (or `docs: true`) to the `App` constructor and DaloyJS registers `GET /openapi.json` + `GET /openapi.yaml` (the live spec in both formats) and `GET /docs` (a Scalar API reference UI) for you.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -60,11 +60,11 @@ const app = new App({
     servers: [{ url: "https://api.example.com" }],
     securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
   },
-  docs: true, // mounts GET /docs, GET /openapi.json, GET /openapi.yaml
+  docs: "auto", // mounts GET /docs, GET /openapi.json, GET /openapi.yaml outside production
 });
 ```
 
-Use `docs: "auto"` to mount only when the App is not in production (the `create-daloy` templates default to this, so a deployed API does not publish its schema), or leave it off (the default) and mount manually with the helpers below. Customize paths, UI, and tags via the object form. Since 1.5.5 the object form behaves like `"auto"` unless you set `enabled`, so customizing the UI never publishes your route map in production by accident; set `enabled: true` for a public API that should serve its docs in production:
+`docs: "auto"` mounts only when the App is not in production (the `create-daloy` templates default to this, so a deployed API does not publish its schema), or leave it off (the default) and mount manually with the helpers below. Customize paths, UI, and tags via the object form. Since 1.5.5 the object form behaves like `"auto"` unless you set `enabled`, so customizing the UI never publishes your route map in production by accident; set `enabled: true` (or `docs: true`) for a public API that should serve its docs in production:
 
 ```ts
 new App({
@@ -85,6 +85,8 @@ new App({
 });
 ```
 
+<blockquote><strong>Security:</strong> a published spec is a complete map of your attack surface: every path, parameter, auth scheme, and error shape. With <code>docs: true</code> or <code>enabled: true</code> in production, DaloyJS logs <code>docs.public_in_production</code> and serves the spec to anyone who can reach it. That is right for a public API. For anything else, keep <code>"auto"</code>, or put the docs behind authentication (an app-level <code>bearerAuth()</code> without an <code>except()</code> for <code>/docs</code> and <code>/openapi.json</code> covers them). Mark admin, cron, and debugging routes <code>internal: true</code>. They are then left out of the generated document and answer <code>404</code> to network traffic, while <code>app.inject()</code> can still call them. See <a href="/docs/security/admin-panels">Secure admin panels</a>.</blockquote>
+
 ## Pick a UI: Scalar, Swagger UI, or Redoc
 
 Set `ui` to `"scalar"` (default), `"swagger"`, or `"redoc"`. All three render the same live spec, mount on the same paths, and ship the same strict CSP and CDN-hosted assets, so switching is a one-word change. Scalar and Swagger UI include a developer request console for protected routes. Redoc is a read-only reference UI: it displays security requirements, but it does not ship a built-in *Try it* console.
@@ -102,7 +104,7 @@ new App({
 });
 ```
 
-Swagger UI keeps authorizations from its *Authorize* dialog across reloads by default. Scalar automatically selects the first configured OpenAPI security scheme, so the auth form is ready for developers to paste a bearer token or API key. If you want a different Scalar default, set it explicitly:
+Swagger UI keeps authorizations from its *Authorize* dialog across reloads by default. It does this by storing the pasted token in the browser's `localStorage`, as does Scalar with `persistAuth: true`. Any script running on the docs origin can read it, and it survives closing the tab. Paste short-lived, least-privilege test tokens only, never production or admin credentials, and serve docs from a separate origin from any first-party web app. Pass `swagger: { persistAuthorization: false }` to keep tokens in memory only. Scalar automatically selects the first configured OpenAPI security scheme, so the auth form is ready for developers to paste a bearer token or API key. If you want a different Scalar default, set it explicitly:
 
 ```ts
 new App({
@@ -174,25 +176,30 @@ console.log(JSON.stringify(doc, null, 2));
 
 ## Advanced: serve docs from your own route
 
+A hand-rolled docs route is an ordinary route, so `docs: "auto"` gating does not apply to it. Decide yourself whether it should exist in production and whether it needs auth. The same applies to any `/openapi.json` route you serve by hand with `generateOpenAPI()`:
+
 ```ts
 import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
 
-app.get(
-  "/docs",
-  {
-    operationId: "docs",
-    responses: { 200: { description: "API reference" } },
-  },
-  async () => {
-    const html = scalarHtml({
-      specUrl: "/openapi.json",
-      title: "My API",
-      configuration: { theme: "kepler" },
-    });
-    const res = htmlResponse(html);
-    return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
-  },
-);
+// Not covered by `docs: "auto"`, so gate it yourself.
+if (process.env.NODE_ENV !== "production") {
+  app.get(
+    "/docs",
+    {
+      operationId: "docs",
+      responses: { 200: { description: "API reference" } },
+    },
+    async () => {
+      const html = scalarHtml({
+        specUrl: "/openapi.json",
+        title: "My API",
+        configuration: { theme: "kepler" },
+      });
+      const res = htmlResponse(html);
+      return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
+    },
+  );
+}
 ```
 
 `swaggerUiHtml`, `scalarHtml`, and `redocHtml` all return self-contained HTML pages that load their assets from jsDelivr with a strict CSP allowing only that origin. When you hand-roll the route with `redocHtml`, pass `allowBlobWorkers: true` to `htmlResponse` (or `docsContentSecurityPolicy`) so Redoc's `blob:` search worker is allowed by the CSP:
@@ -240,6 +247,7 @@ console.log(`wrote ${out}`);
 - Schema bodies converted via `schema.toJSONSchema?.()` when supported, or a structural fallback.
 - Reusable `components.schemas.Problem` for RFC 9457 errors.
 - `tags`, `summary`, `description`, and per-status `description`.
+- Routes marked `internal: true` are omitted unless you pass `includeInternal: true` (for example, an internal-only contract for your own tooling). Never publish that document.
 
 ## Webhooks
 
@@ -264,16 +272,30 @@ const doc = generateOpenAPI(app, {
 });
 ```
 
+The `webhooks` map only *describes* the operation; it does not deliver or secure anything. For real deliveries, sign each payload so receivers can verify both origin and integrity, and include a timestamp so they can reject replays. A static bearer token alone proves neither. [`createWebhookSender()`](/docs/webhook-delivery) signs, timestamps, retries, and routes every outbound request through `fetchGuard()`. Receivers verify with `verifyWebhookSignature()`. Document the signature headers in the webhook's `description`.
+
 ## Callbacks
 
 **Callbacks** describe out-of-band requests that an operation may trigger on the consumer (e.g. a subscription endpoint that later POSTs to the URL the caller supplied). Attach a `callbacks` map directly to a route or webhook.
 
 ```ts
+import { fetchGuard } from "@daloyjs/core";
+
+// Every request to a caller-supplied URL goes through the SSRF guard.
+const safeFetch = fetchGuard();
+
 app.post(
   "/subscribe",
   {
     operationId: "subscribe",
-    request: { body: z.object({ callbackUrl: z.url() }) },
+    request: {
+      body: z
+        .object({
+          // https only: rejects file:, gopher:, javascript:, and plain http:
+          callbackUrl: z.url({ protocol: /^https$/ }),
+        })
+        .strict(),
+    },
     responses: { 201: { description: "Subscribed" } },
     callbacks: {
       onEvent: {
@@ -293,6 +315,8 @@ app.post(
 );
 ```
 
+<blockquote><strong>Security:</strong> a caller-supplied callback URL is a Server-Side Request Forgery sink. Schema validation is not enough. <code>z.url()</code> on its own accepts <code>http://169.254.169.254/</code> (cloud metadata), <code>http://localhost:6379/</code>, and <code>file:</code>/<code>gopher:</code> URLs, and even <code>{"z.url({ protocol: /^https$/ })"}</code> still accepts <code>https://169.254.169.254/</code> or a hostname that resolves to a private address. Send every callback through <code>safeFetch</code> from <a href="/docs/security/fetch-guard"><code>fetchGuard()</code></a>, which checks the resolved address and every redirect hop. Better still, deliver with <a href="/docs/webhook-delivery"><code>createWebhookSender()</code></a>, which also signs the payload. Consider verifying ownership of the URL, for example with a challenge request, before you store it.</blockquote>
+
 Each callback name maps to one or more runtime expression keys (e.g. `"{$request.body#/callbackUrl}"`), each of which maps to one or more operations keyed by HTTP method. Empty maps and empty arrays are skipped, passing an empty callback never produces a malformed spec.
 
 ## Discriminated unions
@@ -306,8 +330,10 @@ OpenAPI 3.1's `discriminator` is the canonical way to describe tagged unions. Da
 import { z } from "zod";
 import { discriminatedUnion } from "@daloyjs/core";
 
-const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() });
-const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() });
+// .strict() rejects unknown keys (e.g. an injected `isAdmin`) with a 422
+// instead of silently stripping them.
+const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() }).strict();
+const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() }).strict();
 
 const Animal = discriminatedUnion(
   "kind",
@@ -326,4 +352,4 @@ app.post(
 );
 ```
 
-At runtime the wrapper rejects non-objects, missing or non-string discriminators, and unknown discriminator values with a clear Standard Schema issue, then defers to the matching variant's validator for everything else.
+At runtime the wrapper rejects non-objects, missing or non-string discriminators, and unknown discriminator values (including inherited names such as `__proto__`, `constructor`, and `toString`) with a clear Standard Schema issue, then defers to the matching variant's validator for everything else.

@@ -54,16 +54,18 @@ A group prepends its path to every route registered inside the callback. Group t
 import { App } from "@daloyjs/core";
 import { z } from "zod";
 
-const BookV1 = z.object({
-  id: z.string(),
-  title: z.string(),
-});
+const BookV1 = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+  })
+  .strict();
 
 const app = new App({
   openapi: {
     info: { title: "Books API", version: "1.0.0" },
   },
-  docs: true,
+  docs: "auto", // /docs and /openapi.json outside production only
 });
 
 app.group("/api/v1", { tags: ["Books v1"] }, (v1) => {
@@ -89,6 +91,8 @@ app.group("/api/v1", { tags: ["Books v1"] }, (v1) => {
 // OpenAPI path: /api/v1/books
 ```
 
+`docs: "auto"` keeps the docs UI and the spec off in production, so a deployed service does not publish its full route map, deprecated versions included. Use `docs: true` (or `docs: { enabled: true }`) only for an API whose contract is meant to be public. See [OpenAPI generation](/docs/openapi#one-line-auto-mount-docs-openapi-json-openapi-yaml).
+
 Groups are ideal for a small API or a version defined in one module. For a larger public API, prefer one plugin per major version so route ownership and version-specific middleware stay explicit.
 
 ## Organize major versions as plugins [#organize-versions-as-plugins]
@@ -111,16 +115,23 @@ src/
 
 ```ts
 // src/app.ts
-import { App } from "@daloyjs/core";
+import { App, bearerAuth, rateLimit } from "@daloyjs/core";
 import { apiV1 } from "./api/v1/index.js";
 import { apiV2 } from "./api/v2/index.js";
+// Your token check, a stable customer-ID key, and a shared (e.g. Redis) store.
+import { verifyApiToken, customerId, store } from "./security.js";
 
 const app = new App({
   openapi: {
     info: { title: "Books API", version: "2.0.0" },
   },
-  docs: true,
+  docs: "auto",
 });
+
+// Security controls that every version needs go on the app, BEFORE the
+// version plugins, so no version can be mounted without them.
+app.use(bearerAuth({ validate: verifyApiToken }));
+app.use(rateLimit({ windowMs: 60_000, max: 600, keyGenerator: customerId, store }));
 
 app.register(apiV1, {
   prefix: "/api/v1",
@@ -135,7 +146,9 @@ app.register(apiV2, {
 await app.ready();
 ```
 
-Each plugin registers resource paths such as `/books`. The prefix supplied by the application produces `/api/v1/books` and `/api/v2/books`. Plugins also encapsulate hooks and decorations, so a compatibility adapter or limit added to v1 does not leak into v2.
+Each plugin registers resource paths such as `/books`. The prefix supplied by the application produces `/api/v1/books` and `/api/v2/books`. Plugins also encapsulate hooks and decorations, so a compatibility adapter added to v1 does not leak into v2.
+
+<blockquote><strong>Security:</strong> encapsulation cuts both ways. A hook installed <em>inside</em> one version's plugin protects only that version. If <code>bearerAuth()</code> lives only in the v2 plugin, <code>/api/v1/books</code> stays unauthenticated. If each plugin installs its own <code>rateLimit()</code>, every version gets a separate bucket, and a customer can multiply the quota by calling every live version. Install authentication, authorization baselines, and rate limits on the app before registering the version plugins, as shown above. If a version really needs its own limit, give it the same shared store and a key that includes the customer ID. Keep only version-specific contract adapters inside the plugin.</blockquote>
 
 ## When to create a new major version [#when-to-create-a-new-version]
 
@@ -248,11 +261,15 @@ app.get(
 // x-sunset: Wed, 30 Jun 2027 00:00:00 GMT
 ```
 
+`sunset` is advisory. It adds headers and OpenAPI metadata, but the route keeps serving `200` after the date passes. Retirement happens when you remove the route.
+
 1. Ship v2 while v1 remains available.
 2. Publish migration examples and a concrete retirement date.
 3. Mark v1 routes with `sunset`, which also marks them deprecated.
 4. Track usage by version and contact active consumers.
 5. Remove v1 after the date and the promised support window.
+
+<blockquote><strong>Security:</strong> forgotten old versions are a classic attack surface (<a href="/docs/security/owasp-api-top-10">OWASP API9, Improper Inventory Management</a>). Until v1 is removed, it is production code. It must run behind the same authentication, authorization, rate limits, and body limits as the current version and receive every security fix. Never relax a control on a deprecated version because it "is going away". Keep an inventory of live versions, and delete retired routes instead of leaving them mounted but undocumented.</blockquote>
 
 Read [API lifecycle & breaking changes](/docs/api-lifecycle) for the response headers, OpenAPI extensions, CLI diff, and CI gate.
 
@@ -268,7 +285,7 @@ Versioning keeps a customer's integration stable. It does not by itself turn an 
 
 Your application or an external API-management control plane still owns customer onboarding, credential issuance and revocation, plan entitlements, billing, invoices, a developer portal, and durable usage records. Those policies are business-specific and are not a turnkey DaloyJS subsystem.
 
-<blockquote><strong>Security:</strong> a group's <code>auth</code> option documents the OpenAPI security requirement. It does not verify a credential by itself. Install an enforcement hook such as{" "}<code>jwk()</code>{", "}<code>bearerAuth()</code>{", "}or a reviewed custom API-key hook. Key limits by a stable authenticated customer ID. Do not key by the raw secret. Use a shared store when more than one instance serves traffic.</blockquote>
+<blockquote><strong>Security:</strong> a group's <code>auth</code> option documents the OpenAPI security requirement. It does not verify a credential by itself. Install an enforcement hook such as{" "}<code>jwk()</code>{", "}<code>bearerAuth()</code>{", "}or a reviewed custom API-key hook wrapped with <code>markAuthHook()</code>. In production, a route that declares <code>auth</code> without an auth hook in its chain fails closed: <code>serve()</code> refuses to start and <code>app.fetch()</code> returns <code>500</code>. In development, it still serves the request and only logs a warning, so do not treat a working local request as proof of enforcement. Key limits by a stable authenticated customer ID. Do not key by the raw secret. Use a shared store when more than one instance serves traffic.</blockquote>
 
 For the enforcement pieces, continue with [OAuth2/OIDC architecture](/docs/auth/architecture), [JWT and auth safeguards](/docs/security/auth-slice), and the [Redis rate-limit store](/docs/security/rate-limit-redis).
 
@@ -307,5 +324,7 @@ For the enforcement pieces, continue with [OAuth2/OIDC architecture](/docs/auth/
 </tbody>
 </table>
 </div>
+
+If you do negotiate on a header or a media type, the same URL returns different representations. Send `Vary: Accept-Version` (or `Vary: Accept`) on every such response, including errors. Otherwise a CDN or shared cache can serve one version's body to callers of another, which is a cache-poisoning risk. Also reject unknown version values with a `400` instead of falling back silently.
 
 URL path versioning is deliberately boring: it is visible in logs, caches, documentation, generated clients, gateway policies, and support tickets. For a public resource API, that clarity is usually more useful than implicit negotiation.
