@@ -17,6 +17,53 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `rateLimit({ standardHeaders: "draft-8" })` also emits the IETF
+  `RateLimit-Policy: "<max>-in-<window>sec"; q=<max>; w=<window>` and
+  `RateLimit: "<max>-in-<window>sec"; r=<remaining>; t=<seconds to reset>`
+  headers (draft-ietf-httpapi-ratelimit-headers-08). `legacyHeaders: false`
+  drops `X-RateLimit-*`. The option and policy names match express-rate-limit,
+  so clients written against an Express API keep working after a move. No
+  partition key is sent. Defaults are unchanged, and any `standardHeaders`
+  value other than `"draft-8"` throws at construction.
+
+### Fixed
+
+- The Node adapter now aborts `ctx.request.signal` with an `AbortError`
+  `DOMException` when the client disconnects before the response finished.
+  Previously only `requestTimeoutMs` fired it, so a handler that forwarded the
+  signal to `fetch`, a database driver, or an LLM SDK kept that work running
+  (and kept paying for model tokens) after the caller had gone. Works on GET,
+  pre-buffered, and streamed request bodies. The `close` listener is attached
+  only when a handler reads `signal`, so requests that never observe it pay
+  nothing. A disconnect is now also classified as `disconnectStatusCode`
+  (`499`) on Node, as documented.
+- Streamed (chunked or above `bufferedBodyMaxBytes`) request bodies on the Node
+  adapter now have an abortable `signal`; `requestTimeoutMs` previously never
+  reached it.
+- A `requestTimeoutMs` abort that fires before a handler first reads
+  `ctx.request.signal` is no longer lost: the late read returns an already
+  aborted signal with the `TimeoutError` reason.
+
+### Security
+
+- A client can no longer hide a server fault by disconnecting first. When a
+  request fails after the client hung up, only a failure caused by the abort
+  (the signal's own `reason`, or an `AbortError` in the error's `cause`
+  chain) is logged quietly at `info`. Any other error, including an upstream
+  `TimeoutError`, is still logged at `error` with its name, message, and
+  stack under `event: "request.disconnected"`. The response status stays
+  `disconnectStatusCode` (`499`). This path already existed on Bun, Deno, and
+  `app.fetch()` callers; the Node disconnect fix above made it reachable on
+  Node, so it is hardened in the same release.
+- `idempotency()` no longer stores the dispatcher's synthesized disconnect
+  response. It is below `500`, so the default `cacheableStatus` used to cache
+  it, and a client retrying with the same `Idempotency-Key` after a network
+  drop got an empty `499` replayed for the whole TTL instead of a fresh run.
+  The reservation is now released. The marker is internal and cannot be set
+  by handlers.
+
 ## [1.8.0] - 2026-10-11
 
 ### Added

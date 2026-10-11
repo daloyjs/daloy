@@ -33,7 +33,7 @@
  */
 
 import { BadRequestError, ConflictError, HttpError, PayloadTooLargeError } from "./errors.js";
-import { markSchemaValidatedResponse } from "./internal-response.js";
+import { isDisconnectResponse, markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
 import { APP_BODY_LIMIT_HOOK, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
 import type { BaseContext, Hooks } from "./types.js";
@@ -811,7 +811,10 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       // Consume once: a replayed response on a later retry must not re-store.
       delete state[PENDING_STATE_KEY];
 
-      if (!cacheableStatus(res.status)) {
+      // A dispatcher-built disconnect response (`disconnectStatusCode`) is
+      // not a handler outcome. Release so the client's retry runs again
+      // instead of replaying an empty 499 for the whole TTL.
+      if (isDisconnectResponse(res) || !cacheableStatus(res.status)) {
         await store.release(pending.storeKey);
         return undefined;
       }

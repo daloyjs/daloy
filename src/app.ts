@@ -61,7 +61,7 @@ import {
   type OpenAPIInfo,
   type OpenAPIOptions,
 } from "./openapi.js";
-import { isSchemaValidatedResponse } from "./internal-response.js";
+import { isSchemaValidatedResponse, markDisconnectResponse } from "./internal-response.js";
 import {
   asyncapiHtml,
   docsContentSecurityPolicy,
@@ -5682,17 +5682,33 @@ export class App<
         ? 0
         : (this.options.disconnectStatusCode ?? 499);
       if (disconnectCode > 0 && request.signal?.aborted === true) {
-        log.info(
-          { event: "request.disconnected", status: disconnectCode },
-          "Client disconnected before response was sent",
-        );
-        const res = new Response(null, {
+        if (isCausedByAbort(err, request.signal.reason)) {
+          log.info(
+            { event: "request.disconnected", status: disconnectCode },
+            "Client disconnected before response was sent",
+          );
+        } else {
+          // The client is gone, but the handler failed for some other reason.
+          // Keep the error and its stack at `error` level so a client cannot
+          // hide a real fault from logs and alerts by hanging up first.
+          log.error(
+            {
+              event: "request.disconnected",
+              status: disconnectCode,
+              err: serializeErr(err),
+            },
+            "Client disconnected and the handler failed with an error not caused by the abort",
+          );
+        }
+        // Marked so first-party idempotency releases the key instead of
+        // storing this empty response for the client's retry.
+        const res = markDisconnectResponse(new Response(null, {
           status: disconnectCode,
           headers: {
             "content-type": "application/problem+json",
             "x-request-id": requestId,
           },
-        });
+        }));
         if (ctx) copyContextHeaders(ctx, res);
         else this.applyAppCorsPolicy(request, res);
         return finalizeResponse(
@@ -7550,6 +7566,28 @@ class RequestDeadline {
  * @internal
  */
 const OMIT_STACK_IN_LOG = Symbol.for("daloyjs.error.omitStackInLog");
+
+/**
+ * True when `err` is the request's own abort: the signal's `reason` itself
+ * (what `fetch()` rejects with), or an `AbortError` anywhere in a short
+ * `cause` chain (what SDKs that wrap the abort throw). Deliberately does not
+ * accept `TimeoutError`: an upstream call timing out is a server-side fault,
+ * not a client disconnect.
+ *
+ * @param err - The error the handler or a hook threw.
+ * @param reason - `request.signal.reason` of the aborted request.
+ * @returns `true` only when the failure is attributable to the abort.
+ */
+function isCausedByAbort(err: unknown, reason: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; depth < 4; depth++) {
+    if (current === reason) return true;
+    if (typeof current !== "object" || current === null) return false;
+    if ((current as { name?: unknown }).name === "AbortError") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
 
 function serializeErr(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {

@@ -72,6 +72,29 @@ await once(handle.server, "listening");
 const baseUrl = `http://127.0.0.1:${handle.port}`;
 ```
 
+### Cancellation with `request.signal`
+
+On Node, `ctx.request.signal` aborts in two cases:
+
+- **Request timeout.** When `requestTimeoutMs` elapses, the reason is a `TimeoutError`.
+- **Client disconnect.** When the client hangs up before the response finished, the reason is an `AbortError`.
+
+Both cases apply to GET requests, small pre-buffered bodies, and streamed bodies. Bun and Deno abort the platform's own `Request.signal` on disconnect, so the same handler code works there too. Forward the signal to anything that costs money or holds resources:
+
+```ts
+app.post("/ask", contract, async ({ body, request }) => {
+  // Stops the model call if the user closes the tab or the request times out.
+  const { text } = await generateText({
+    model,
+    prompt: body.prompt,
+    abortSignal: request.signal,
+  });
+  return { status: 200 as const, body: { answer: text } };
+});
+```
+
+The adapter attaches its disconnect listener only when a handler reads `signal`, so routes that never read it pay nothing. A response that finished normally never aborts the signal afterwards. Work that fails because of a disconnect is logged as `request.disconnected` with `disconnectStatusCode` (default `499`), not as a `5xx`.
+
 ## `@daloyjs/core/bun` [#daloyjs-core-bun]
 
 ```ts

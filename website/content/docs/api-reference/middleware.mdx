@@ -66,6 +66,16 @@ etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache
 
 A limiter placed before `preBody` auth also counts requests that auth rejects by throwing, so failed credential guesses consume the budget.
 
+By default the limiter sends `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Set `standardHeaders: "draft-8"` to also send the IETF `RateLimit` and `RateLimit-Policy` headers. Add `legacyHeaders: false` to send only the IETF pair. The option names and the policy name match express-rate-limit, so clients written against an Express API keep working after a move to Daloy.
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 120, standardHeaders: "draft-8", legacyHeaders: false }));
+// RateLimit-Policy: "120-in-60sec"; q=120; w=60
+// RateLimit: "120-in-60sec"; r=119; t=60
+```
+
+`t` is the number of seconds until the window resets. No partition key (`pk`) is sent, so the bucket key never leaves the server. Turning headers off never turns enforcement off. Browsers can only read these headers cross-origin when they are listed in `cors({ exposedHeaders })`.
+
 <AutoTypeTable path="src/middleware.ts" name="RateLimitOptions" />
 
 ### `ETagOptions` [#etag-options]

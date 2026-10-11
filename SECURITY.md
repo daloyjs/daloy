@@ -736,6 +736,23 @@ Two further rules apply to whatever is stored:
 If you write your own store-and-replay middleware, partition by caller and strip
 credentials from what you keep. Neither is something a key prefix gives you.
 
+### A client disconnect cannot hide a fault or poison a retry
+
+`ctx.request.signal` aborts when the client hangs up (Node, Bun, Deno) or the
+request times out, and the dispatcher records such a request as
+`disconnectStatusCode` (`499`). Two rules keep a client from turning that into
+a weapon:
+
+- **Logs keep real faults.** Only a failure caused by the abort (the signal's own
+  `reason`, or an `AbortError` in the error's `cause` chain) is logged quietly at
+  `info`. Any other error thrown after the hang-up, including an upstream
+  `TimeoutError`, is logged at `error` with its stack. Otherwise an attacker could
+  trigger a bug and disconnect so the stack trace never reached your alerts.
+- **Retries are not poisoned.** `idempotency()` releases the key instead of
+  storing the synthesized `499`, so a client's retry after a dropped connection
+  runs again rather than replaying an empty response for the whole TTL. The marker
+  that identifies this response is internal and cannot be forged by a handler.
+
 ### DNS rebinding and unauthenticated routes
 
 The cross-origin guard compares `Origin` with the request's own origin, which

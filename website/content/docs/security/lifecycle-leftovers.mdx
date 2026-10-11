@@ -135,6 +135,15 @@ const legacy = new App({ disconnectStatusCode: 0 });
 
 Cannot be silenced to a `2xx` or escalated to a `5xx`: the value is pinned to the `[400, 499]` range (or `0` to keep whatever status the handler produced).
 
+A disconnect cannot hide a real fault. Only a failure caused by the abort itself is logged quietly at `info`: the signal's own `reason` (what `fetch()` rejects with), or an error whose `cause` chain contains an `AbortError`. Any other error thrown after the client left, such as a `TypeError` from a bug or an upstream `TimeoutError`, is logged at `error` with its name, message, and stack. The status is still `499`. To keep your own cancellation quiet, rethrow `request.signal.reason` or pass it as the `cause`:
+
+```ts
+request.signal.addEventListener("abort", () => reject(request.signal.reason), { once: true });
+// or: throw new Error("upstream cancelled", { cause: request.signal.reason });
+```
+
+`idempotency()` never stores this synthesized response. The key's reservation is released, so a client that retries with the same `Idempotency-Key` after a dropped connection gets a fresh run instead of a replayed empty `499`.
+
 ## 4. `defineConfig({ schema, source })` [#4-defineconfig]
 
 Boot-time helper that validates the app's runtime configuration through a Standard Schema (Zod / Valibot / ArkType / TypeBox). Closes the "we shipped to production with `JWT_SECRET=undefined` because the env var wasn't set on the new cluster" class of bugs at the framework boundary, not at every middleware that consumes the secret.

@@ -27,3 +27,33 @@ export function markSchemaValidatedResponse(response: Response): Response {
 export function isSchemaValidatedResponse(response: Response): boolean {
   return schemaValidatedResponses.has(response);
 }
+
+/**
+ * Responses the dispatcher synthesized because the client disconnected
+ * (`disconnectStatusCode`). They carry no handler outcome, so first-party
+ * idempotency must release the reservation instead of storing them: storing
+ * one would replay an empty 499 to the very retry the key exists for.
+ */
+const disconnectResponses = new WeakSet<Response>();
+
+/**
+ * Mark a dispatcher-built client-disconnect response. Internal capability, not
+ * exported from the package barrel, so handlers cannot forge it.
+ *
+ * @param response - The synthesized `disconnectStatusCode` response.
+ * @returns The same response for allocation-free call-site composition.
+ */
+export function markDisconnectResponse(response: Response): Response {
+  disconnectResponses.add(response);
+  return response;
+}
+
+/**
+ * Test whether a response was synthesized for a client disconnect.
+ *
+ * @param response - Response seen by an `onSend` hook.
+ * @returns `true` only for responses marked by the dispatcher.
+ */
+export function isDisconnectResponse(response: Response): boolean {
+  return disconnectResponses.has(response);
+}

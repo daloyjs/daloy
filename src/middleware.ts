@@ -1120,6 +1120,27 @@ export interface RateLimitOptions {
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
   /**
+   * Also emit the IETF `RateLimit` / `RateLimit-Policy` headers
+   * (draft-ietf-httpapi-ratelimit-headers-08), e.g.
+   * `RateLimit-Policy: "100-in-60sec"; q=100; w=60` and
+   * `RateLimit: "100-in-60sec"; r=42; t=17`, where `t` is seconds until the
+   * window resets. The policy name matches express-rate-limit's, so clients
+   * written against it keep working. Off by default. No partition key (`pk`)
+   * is sent, so the bucket key never leaves the server.
+   *
+   * @throws Error at construction for any value other than `"draft-8"`.
+   * @since 1.9.0
+   */
+  standardHeaders?: "draft-8";
+  /**
+   * Emit the `X-RateLimit-Limit` / `X-RateLimit-Remaining` /
+   * `X-RateLimit-Reset` headers. Default: `true`. Set `false` together with
+   * {@link standardHeaders} to send only the IETF headers.
+   *
+   * @since 1.9.0
+   */
+  legacyHeaders?: boolean;
+  /**
    * Share a single bucket across every `rateLimit()` call that declares the
    * same `groupId`. Use this to enforce one combined limit across related
    * routes (e.g. `/login`, `/login/otp`, and `/password-reset` all spend
@@ -1184,8 +1205,9 @@ class MemoryStore implements RateLimitStore {
  * Fixed-window rate limiter. Throws {@link TooManyRequestsError} (mapped to
  * `429`) when a key exceeds `max` requests inside `windowMs`. Adds
  * `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`
- * headers on every response, plus `Retry-After` on `429` responses (unless
- * disabled).
+ * headers on every response (unless `legacyHeaders: false`), the IETF
+ * `RateLimit` / `RateLimit-Policy` headers when `standardHeaders: "draft-8"`,
+ * plus `Retry-After` on `429` responses (unless disabled).
  *
  * The default `store` is an in-memory map that **only** survives within a
  * single process. For multi-instance deployments pass a shared store — the
@@ -1219,7 +1241,8 @@ class MemoryStore implements RateLimitStore {
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
  * @throws Error when `windowMs` is not a positive integer or `max` is not a
  *   non-negative integer (NaN, Infinity, negative or fractional values would
- *   disable the limit; `max: 0` refuses every request).
+ *   disable the limit; `max: 0` refuses every request), or when
+ *   `standardHeaders` is not `"draft-8"`.
  * @since 0.1.0
  */
 export function rateLimit(opts: RateLimitOptions): Hooks {
@@ -1235,6 +1258,21 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
         `would otherwise disable the limit.`,
     );
   }
+  if (opts.standardHeaders !== undefined && opts.standardHeaders !== "draft-8") {
+    throw new Error(
+      `rateLimit(): standardHeaders must be "draft-8" (got ${JSON.stringify(opts.standardHeaders)}).`,
+    );
+  }
+  const legacyHeaders = opts.legacyHeaders !== false;
+  // Static per limiter, so it is built once rather than per request.
+  const policyName =
+    opts.standardHeaders === "draft-8"
+      ? `"${opts.max}-in-${Math.ceil(opts.windowMs / 1000)}sec"`
+      : undefined;
+  const policyHeader =
+    policyName !== undefined
+      ? `${policyName}; q=${opts.max}; w=${Math.ceil(opts.windowMs / 1000)}`
+      : undefined;
   let store: RateLimitStore;
   if (opts.store) {
     store = opts.store;
@@ -1262,9 +1300,16 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
     const key = `${groupPrefix}${keyOf(ctx)}`;
     const { count, resetMs } = await store.hit(key, opts.windowMs);
     const remaining = Math.max(0, opts.max - count);
-    ctx.set.headers.set("x-ratelimit-limit", String(opts.max));
-    ctx.set.headers.set("x-ratelimit-remaining", String(remaining));
-    ctx.set.headers.set("x-ratelimit-reset", String(Math.ceil(resetMs / 1000)));
+    if (legacyHeaders) {
+      ctx.set.headers.set("x-ratelimit-limit", String(opts.max));
+      ctx.set.headers.set("x-ratelimit-remaining", String(remaining));
+      ctx.set.headers.set("x-ratelimit-reset", String(Math.ceil(resetMs / 1000)));
+    }
+    if (policyHeader !== undefined) {
+      ctx.set.headers.set("ratelimit-policy", policyHeader);
+      const resetIn = Math.max(0, Math.ceil((resetMs - Date.now()) / 1000));
+      ctx.set.headers.set("ratelimit", `${policyName}; r=${remaining}; t=${resetIn}`);
+    }
     if (count > opts.max) {
       const retry = Math.ceil((resetMs - Date.now()) / 1000);
       throw new TooManyRequestsError(opts.retryAfter !== false ? retry : undefined);

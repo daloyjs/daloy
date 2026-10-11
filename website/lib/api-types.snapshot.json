@@ -98,6 +98,20 @@
       "description": "When true, set Retry-After header on 429. Default: true."
     },
     {
+      "name": "standardHeaders",
+      "type": "\"draft-8\"",
+      "required": false,
+      "description": "Also emit the IETF `RateLimit` / `RateLimit-Policy` headers (draft-ietf-httpapi-ratelimit-headers-08), e.g. `RateLimit-Policy: \"100-in-60sec\"; q=100; w=60` and `RateLimit: \"100-in-60sec\"; r=42; t=17`, where `t` is seconds until the window resets. The policy name matches express-rate-limit's, so clients written against it keep working. Off by default. No partition key (`pk`) is sent, so the bucket key never leaves the server.\n\n@throws Error at construction for any value other than `\"draft-8\"`.",
+      "since": "1.9.0"
+    },
+    {
+      "name": "legacyHeaders",
+      "type": "boolean",
+      "required": false,
+      "description": "Emit the `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset` headers. Default: `true`. Set `false` together with `standardHeaders` to send only the IETF headers.",
+      "since": "1.9.0"
+    },
+    {
       "name": "groupId",
       "type": "string",
       "required": false,

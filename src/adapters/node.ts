@@ -408,7 +408,7 @@ function dispatchToApp(
 ): void {
   let request: Request;
   try {
-    request = toWebRequest(req, trustProxy, bufferedBody, onBodyPull);
+    request = toWebRequest(req, res, trustProxy, bufferedBody, onBodyPull);
   } catch (e) {
     writeAdapterError(res, e);
     return;
@@ -623,6 +623,37 @@ function writeAdapterError(res: ServerResponse, e: unknown): void {
 }
 
 /**
+ * Build the abort reason used when the client goes away mid-request: an
+ * `AbortError` `DOMException`, the same shape `fetch()` rejects with, so
+ * downstream code that already treats `AbortError` as cancellation needs no
+ * special case.
+ */
+function clientDisconnectedReason(): DOMException {
+  return new DOMException("Client disconnected before the response completed", "AbortError");
+}
+
+/**
+ * Abort `controller` when the client disconnects before the response has been
+ * fully written. Node emits `close` on the `ServerResponse` both after a normal
+ * finish and on a premature socket teardown; only the latter (`writableFinished`
+ * still `false`) is a disconnect. A response that already finished is left
+ * alone, and one that already closed early aborts immediately.
+ *
+ * @param res - The Node response whose lifetime bounds the request.
+ * @param controller - The controller backing the request's `signal`.
+ */
+function watchClientDisconnect(res: ServerResponse, controller: AbortController): void {
+  if (res.writableFinished) return;
+  if (res.closed) {
+    controller.abort(clientDisconnectedReason());
+    return;
+  }
+  res.once("close", () => {
+    if (!res.writableFinished) controller.abort(clientDisconnectedReason());
+  });
+}
+
+/**
  * Lazily-materializing stand-in for an incoming WHATWG `Request`.
  *
  * Constructing a real (undici) `Request` costs ~4µs for GET and far more for
@@ -640,9 +671,12 @@ function writeAdapterError(res: ServerResponse, e: unknown): void {
  *   so nothing hits undici's brand-checked prototype accessors.
  * - `signal` is a lazily-created per-instance `AbortSignal`. The framework
  *   aborts it (via the {@link DALOY_REQUEST_ABORT} hook) when the request
- *   exceeds `requestTimeoutMs`, so a handler that forwards `ctx.request.signal`
- *   to downstream `fetch`/DB calls sees them cancel on timeout. It is still NOT
- *   wired to client socket-disconnect — that teardown never fires the signal.
+ *   exceeds `requestTimeoutMs`, and the adapter aborts it with an `AbortError`
+ *   when the client disconnects before the response finished (see
+ *   {@link watchClientDisconnect}), so a handler that forwards
+ *   `ctx.request.signal` to downstream `fetch`/DB/LLM calls sees them cancel in
+ *   both cases. The `close` listener is only attached once `signal` is read, so
+ *   requests that never observe it pay nothing.
  * - Passing this object directly to `fetch()` is not supported (undici
  *   brand-checks its input) — forward with `request.clone()` instead, which
  *   returns a real `Request`. This mirrors @hono/node-server's shim.
@@ -662,12 +696,22 @@ class LightRequest {
   #bodyBytes: Uint8Array | undefined;
   #real: Request | undefined;
   #controller: AbortController | undefined;
+  #res: ServerResponse;
+  /** Reason recorded by an abort that arrived before `signal` was ever read. */
+  #pendingAbort: { reason: unknown } | undefined;
 
-  constructor(url: string, method: string, headers: Headers, bodyBytes: Uint8Array | undefined) {
+  constructor(
+    url: string,
+    method: string,
+    headers: Headers,
+    bodyBytes: Uint8Array | undefined,
+    res: ServerResponse
+  ) {
     this.#url = url;
     this.#method = method;
     this.#headers = headers;
     this.#bodyBytes = bodyBytes;
+    this.#res = res;
   }
 
   /** Build (once) and return the real undici `Request` for rare surfaces. */
@@ -693,22 +737,29 @@ class LightRequest {
   }
   get signal(): AbortSignal {
     // Lazily created so only handlers that actually read `signal` pay for the
-    // controller. The framework aborts it via the DALOY_REQUEST_ABORT hook
-    // below when the request exceeds `requestTimeoutMs`; client
-    // socket-disconnect is not wired into it.
-    return (this.#controller ??= new AbortController()).signal;
+    // controller and the client-disconnect listener. The framework aborts it
+    // via the DALOY_REQUEST_ABORT hook below when the request exceeds
+    // `requestTimeoutMs`; watchClientDisconnect aborts it on client hang-up.
+    let controller = this.#controller;
+    if (controller === undefined) {
+      controller = this.#controller = new AbortController();
+      if (this.#pendingAbort !== undefined) controller.abort(this.#pendingAbort.reason);
+      else watchClientDisconnect(this.#res, controller);
+    }
+    return controller.signal;
   }
 
   /**
    * Framework abort hook ({@link DALOY_REQUEST_ABORT}). Invoked by the core on
    * request timeout so `ctx.request.signal` fires for cooperative teardown.
-   * A no-op when no handler ever read `signal` — there is no controller to
-   * abort and nothing observing it.
+   * When no handler has read `signal` yet, the reason is recorded so a later
+   * read still observes an aborted signal.
    *
    * @param reason - Abort reason surfaced on `signal.reason` (a `TimeoutError`).
    */
   [DALOY_REQUEST_ABORT](reason: unknown): void {
-    this.#controller?.abort(reason);
+    if (this.#controller !== undefined) this.#controller.abort(reason);
+    else this.#pendingAbort ??= { reason };
   }
   get body(): ReadableStream<Uint8Array> | null {
     return this.#materialize().body;
@@ -838,8 +889,54 @@ Object.setPrototypeOf(LightRequest.prototype, Request.prototype);
 // prototype: zero per-request cost.
 (LightRequest.prototype as unknown as Record<symbol, unknown>)[DALOY_LIGHT_RESPONSE_OK] = true;
 
+/**
+ * Real undici `Request` for streamed bodies (chunked, or a `Content-Length`
+ * above the pre-buffer cap), with the same lazily-created, adapter-owned
+ * `signal` as {@link LightRequest}: aborted by the `requestTimeoutMs` hook
+ * ({@link DALOY_REQUEST_ABORT}) and by a client disconnect.
+ *
+ * Why a subclass rather than `new Request(url, { signal })`: passing a signal
+ * makes undici follow it, which roughly doubles construction cost on this
+ * path even when no handler ever reads `signal`. The prototype getter keeps
+ * construction at parity and attaches the disconnect listener only on first
+ * read. Body, `clone()`, and `instanceof Request` are undici's own.
+ */
+class StreamedRequest extends Request {
+  #res: ServerResponse;
+  #controller: AbortController | undefined;
+  /** Reason recorded by an abort that arrived before `signal` was ever read. */
+  #pendingAbort: { reason: unknown } | undefined;
+
+  constructor(url: string, init: RequestInit, res: ServerResponse) {
+    super(url, init);
+    this.#res = res;
+  }
+
+  override get signal(): AbortSignal {
+    let controller = this.#controller;
+    if (controller === undefined) {
+      controller = this.#controller = new AbortController();
+      if (this.#pendingAbort !== undefined) controller.abort(this.#pendingAbort.reason);
+      else watchClientDisconnect(this.#res, controller);
+    }
+    return controller.signal;
+  }
+
+  /**
+   * Framework abort hook ({@link DALOY_REQUEST_ABORT}); see
+   * {@link LightRequest}'s hook for the semantics.
+   *
+   * @param reason - Abort reason surfaced on `signal.reason` (a `TimeoutError`).
+   */
+  [DALOY_REQUEST_ABORT](reason: unknown): void {
+    if (this.#controller !== undefined) this.#controller.abort(reason);
+    else this.#pendingAbort ??= { reason };
+  }
+}
+
 function toWebRequest(
   req: IncomingMessage,
+  res: ServerResponse,
   trustProxy: boolean,
   bufferedBody?: Uint8Array,
   onBodyPull?: () => void
@@ -886,7 +983,7 @@ function toWebRequest(
     // LightRequest: skips the ~4µs undici Request constructor on the GET
     // hot path. Headers are still built eagerly above, so every header
     // guard sees the same view as before.
-    return new LightRequest(url, method, headers, undefined) as unknown as Request;
+    return new LightRequest(url, method, headers, undefined, res) as unknown as Request;
   }
   if (bufferedBody !== undefined) {
     // LightRequest with the pre-buffered bytes: skips the (much more
@@ -896,17 +993,21 @@ function toWebRequest(
     // The adapter has already enforced BUFFERED_BODY_MAX_BYTES +
     // Content-Length here; readBodyLimited re-checks against the caller's
     // limit.
-    const req2 = new LightRequest(url, method, headers, bufferedBody) as unknown as Request;
+    const req2 = new LightRequest(url, method, headers, bufferedBody, res) as unknown as Request;
     (req2 as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY] = bufferedBody;
     return req2;
   }
   const source = Readable.toWeb(req) as ReadableStream<Uint8Array>;
-  const streamed = new Request(url, {
-    method,
-    headers,
-    body: onBodyPull === undefined ? source : soliciting(source, onBodyPull),
-    duplex: "half",
-  } as RequestInit);
+  const streamed = new StreamedRequest(
+    url,
+    {
+      method,
+      headers,
+      body: onBodyPull === undefined ? source : soliciting(source, onBodyPull),
+      duplex: "half",
+    } as RequestInit,
+    res
+  );
   if (onBodyPull !== undefined) {
     (streamed as unknown as { [DALOY_REQUEST_BODY_SOLICIT]?: () => void })[
       DALOY_REQUEST_BODY_SOLICIT

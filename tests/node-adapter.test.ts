@@ -1636,3 +1636,246 @@ test("node adapter: a streamed SSE body that completes normally still ends clean
     await handle.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Client disconnect must abort ctx.request.signal so handlers stop paying for
+// downstream work (LLM calls, fetches, DB queries) nobody will receive. Covered
+// on all three request shapes: GET and pre-buffered POST (LightRequest) and a
+// chunked POST (streamed undici Request).
+// ---------------------------------------------------------------------------
+
+type SignalProbe = { started: Promise<void>; aborted: Promise<string> };
+
+/** Route whose handler parks until its request signal aborts, reporting the reason name. */
+function addParkedRoute(app: App, method: "GET" | "POST", path: string): SignalProbe {
+  let markStarted!: () => void;
+  let markAborted!: (name: string) => void;
+  const started = new Promise<void>((r) => (markStarted = r));
+  const aborted = new Promise<string>((r) => (markAborted = r));
+  app.route({
+    method,
+    path,
+    operationId: `parked${method}`,
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" }, 408: { description: "timeout" } },
+    handler: async ({ request }: { request: Request }) => {
+      const signal = request.signal;
+      signal.addEventListener("abort", () =>
+        markAborted((signal.reason as { name?: string } | undefined)?.name ?? "unknown")
+      );
+      markStarted();
+      await new Promise((r) => setTimeout(r, 1_000));
+      return { status: 200 as const, body: { ok: true } };
+    },
+  } as any);
+  return { started, aborted };
+}
+
+/** Send a raw request, wait until the handler is running, then hang up. */
+async function sendThenDrop(port: number, payload: string, started: Promise<void>): Promise<void> {
+  const sock = connect(port, "127.0.0.1");
+  sock.on("error", () => undefined);
+  await once(sock, "connect");
+  sock.write(payload);
+  await started;
+  sock.destroy();
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timed out waiting for ${what}`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+const DISCONNECT_CASES: Array<{ name: string; method: "GET" | "POST"; payload: string }> = [
+  {
+    name: "GET (LightRequest)",
+    method: "GET",
+    payload: "GET /parked HTTP/1.1\r\nHost: t\r\n\r\n",
+  },
+  {
+    name: "pre-buffered POST (LightRequest with body)",
+    method: "POST",
+    payload: "POST /parked HTTP/1.1\r\nHost: t\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nhi",
+  },
+  {
+    name: "chunked POST (streamed Request)",
+    method: "POST",
+    payload:
+      "POST /parked HTTP/1.1\r\nHost: t\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\n\r\n",
+  },
+];
+
+for (const c of DISCONNECT_CASES) {
+  test(`[unhappy] node adapter: client disconnect aborts ctx.request.signal with an AbortError — ${c.name}`, async () => {
+    const app = new App({ logger: false, requestTimeoutMs: 5_000 });
+    const probe = addParkedRoute(app, c.method, "/parked");
+    const { handle, port } = await startServer(app);
+    try {
+      await sendThenDrop(port, c.payload, probe.started);
+      assert.equal(await withTimeout(probe.aborted, 2_000, "signal abort"), "AbortError");
+    } finally {
+      await handle.close();
+    }
+  });
+}
+
+test("[unhappy] node adapter: work cancelled by a disconnect is classified as 499, not a 5xx", async () => {
+  const infos: unknown[] = [];
+  const errors: unknown[] = [];
+  const logger: any = {
+    info: (fields: unknown) => infos.push(fields),
+    warn: () => {},
+    error: (fields: unknown) => errors.push(fields),
+    debug: () => {},
+    child: () => logger,
+  };
+  const app = new App({ logger, requestTimeoutMs: 5_000 });
+  let markStarted!: () => void;
+  const started = new Promise<void>((r) => (markStarted = r));
+  let settled = false;
+  app.route({
+    method: "GET",
+    path: "/cancelled",
+    operationId: "cancelled",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }: { request: Request }) => {
+      markStarted();
+      try {
+        // Stand-in for a downstream call that honors the forwarded signal.
+        await new Promise((_, reject) =>
+          request.signal.addEventListener("abort", () => reject(request.signal.reason), { once: true })
+        );
+        return { status: 200 as const, body: { ok: true } };
+      } finally {
+        settled = true;
+      }
+    },
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    await sendThenDrop(port, "GET /cancelled HTTP/1.1\r\nHost: t\r\n\r\n", started);
+    assert.ok(await waitFor(() => settled), "downstream work must be cancelled");
+    const isDisconnect = (f: unknown) =>
+      typeof f === "object" && f !== null && (f as { event?: unknown }).event === "request.disconnected";
+    assert.ok(await waitFor(() => infos.some(isDisconnect)), "expected a request.disconnected log line");
+    assert.equal((infos.find(isDisconnect) as { status: number }).status, 499);
+    assert.equal(errors.length, 0, "a client disconnect must not be logged as a server error");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a completed response never aborts the signal afterwards (happy path)", async () => {
+  const app = new App({ logger: false });
+  let seen: AbortSignal | undefined;
+  app.route({
+    method: "GET",
+    path: "/done",
+    operationId: "done",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }: { request: Request }) => {
+      seen = request.signal;
+      return { status: 200 as const, body: { ok: true } };
+    },
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    // `Connection: close` tears the socket down right after the response, so
+    // the response's `close` event fires with writableFinished === true.
+    const statuses = await collectStatusLines(port, "GET /done HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n");
+    assert.deepEqual(statuses, [200]);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(seen, "handler must have read the signal");
+    assert.equal(seen.aborted, false, "a delivered response is not a disconnect");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: a signal first read after the client left is already aborted", async () => {
+  const app = new App({ logger: false, requestTimeoutMs: 5_000 });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let markStarted!: () => void;
+  const started = new Promise<void>((r) => (markStarted = r));
+  let result: { aborted: boolean; name?: string } | undefined;
+  app.route({
+    method: "GET",
+    path: "/late-read",
+    operationId: "lateRead",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }: { request: Request }) => {
+      markStarted();
+      await gate;
+      const signal = request.signal; // first read happens after the hang-up
+      result = { aborted: signal.aborted, name: (signal.reason as { name?: string } | undefined)?.name };
+      return { status: 200 as const, body: { ok: true } };
+    },
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    await sendThenDrop(port, "GET /late-read HTTP/1.1\r\nHost: t\r\n\r\n", started);
+    // Let Node observe the socket teardown before the handler reads the signal.
+    await new Promise((r) => setTimeout(r, 100));
+    release();
+    assert.ok(await waitFor(() => result !== undefined), "handler must finish");
+    assert.deepEqual(result, { aborted: true, name: "AbortError" });
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: requestTimeoutMs aborts the signal of a streamed (chunked) request", async () => {
+  // Regression: streamed bodies used a plain undici Request with no abort hook,
+  // so requestTimeoutMs never reached their signal.
+  const app = new App({ logger: false, requestTimeoutMs: 30 });
+  const probe = addParkedRoute(app, "POST", "/parked-stream");
+  const { handle, port } = await startServer(app);
+  try {
+    const statuses = await collectStatusLines(
+      port,
+      "POST /parked-stream HTTP/1.1\r\nHost: t\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n2\r\nhi\r\n0\r\n\r\n"
+    );
+    assert.deepEqual(statuses, [408]);
+    assert.equal(await withTimeout(probe.aborted, 2_000, "signal abort"), "TimeoutError");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: a timeout before the signal is read still surfaces as aborted", async () => {
+  const app = new App({ logger: false, requestTimeoutMs: 30 });
+  let result: { aborted: boolean; name?: string } | undefined;
+  app.route({
+    method: "GET",
+    path: "/late-timeout",
+    operationId: "lateTimeout",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" }, 408: { description: "timeout" } },
+    handler: async ({ request }: { request: Request }) => {
+      await new Promise((r) => setTimeout(r, 120));
+      const signal = request.signal; // first read happens after the 408
+      result = { aborted: signal.aborted, name: (signal.reason as { name?: string } | undefined)?.name };
+      return { status: 200 as const, body: { ok: true } };
+    },
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/late-timeout`);
+    assert.equal(res.status, 408);
+    await res.text();
+    assert.ok(await waitFor(() => result !== undefined), "handler must finish");
+    assert.equal(result!.aborted, true);
+    assert.equal(result!.name, "TimeoutError");
+  } finally {
+    await handle.close();
+  }
+});
