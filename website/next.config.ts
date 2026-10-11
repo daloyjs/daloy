@@ -43,6 +43,17 @@ const serviceWorkerHeaders = [
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // Partial Prefetching: prefetch one reusable App Shell per route (cached per
+  // session, since the root layout reads headers() for the CSP nonce) instead
+  // of one prefetch per visible <Link>. The docs sidebar renders ~150 links,
+  // and every route is request-time because of the nonce, so per-link
+  // prefetching cost a server render each while caching nothing reusable.
+  // Page content keyed on params streams after the click, as it did before.
+  // Becomes the default in Next.js 17.
+  partialPrefetching: true,
+  // `ensureStatic` is deliberately not used: the nonce read in app/layout.tsx
+  // is request-time data, which every static level rejects, and the nonce CSP
+  // stays (see the next-cache-components-adoption skill).
   typedRoutes: true,
   // The docs are MDX files under `content/`, read from disk at runtime by the
   // /mcp endpoint, the markdown route (/docs/*.md), and the MDX page routes
