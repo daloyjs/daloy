@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-11
+
 ### Added
 
 - `rateLimit({ standardHeaders: "draft-8" })` also emits the IETF
