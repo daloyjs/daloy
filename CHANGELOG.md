@@ -17,6 +17,30 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-11
+
+### Added
+
+- `mcpRoutes(path, handler, { methodAuth: { discovery, call } })` gives MCP
+  discovery its own credential. `server/discover`, `tools/list`,
+  `resources/list`, `resources/templates/list`, and `prompts/list` use
+  `discovery` (an auth hook, or `"public"`); everything else, including any
+  request without an `Mcp-Method` header, uses `call`. This lets a backend
+  that calls tools with delegated user tokens list them at startup with a
+  service token. The method is read from the `Mcp-Method` header, which is safe
+  because `createMcpHandler()` already rejects a header/body mismatch with
+  `-32020`; `methodAuth` therefore only accepts handlers built by
+  `createMcpHandler()`. Bundles may compose auth hooks with `some()`,
+  `every()`, and `requireScopes()` (scopes apply per selected bundle, and
+  `responseCache()` / `idempotency()` replays respect them); any other
+  middleware, `public: true`, and non-discovery
+  entries in `discoveryMethods` are refused at construction. The combined
+  hook satisfies the production MCP boot guard. It composes with the 1.7.0
+  `hooks` option: non-auth hooks such as `rateLimit()` run first, and an auth
+  hook there is refused because it would also gate discovery. Opt-in; existing endpoints are
+  unchanged. New exports: `MCP_DISCOVERY_METHODS`, `McpDiscoveryMethod`,
+  `McpMethodAuthOptions`.
+
 ## [1.7.0] - 2026-10-10
 
 ### Added
