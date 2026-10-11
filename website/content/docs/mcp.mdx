@@ -423,6 +423,88 @@ The agreement check also runs on **legacy** requests, which is stricter than the
 
 Values that cannot be represented as plain ASCII arrive in the Base64 sentinel form `=?base64?<payload>?=`. DaloyJS decodes them before comparing, and treats an undecodable payload as a mismatch. `Mcp-Session-Id` and `Last-Event-ID` from older clients are ignored. No session is ever minted or echoed, and streams are not resumable.
 
+## A separate credential for discovery [#method-auth]
+
+By default one auth middleware covers the whole `POST /mcp` route, so `tools/list` needs the same credential as `tools/call`. That is the safe default, but it hurts when the caller is a backend acting for users with delegated (on-behalf-of) tokens: there is no user at startup, so the backend cannot list the tools to log or register them, and ends up running discovery on every query.
+
+`mcpRoutes()` takes a `methodAuth` option (since 1.8.0) that gives discovery its own credential. The discovery methods (`server/discover`, `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list`, exported as `MCP_DISCOVERY_METHODS`) use `discovery`. Everything else uses `call`.
+
+```ts title="src/mcp-server.ts"
+import { App, bearerAuth, timingSafeEqual } from "@daloyjs/core";
+import { createMcpHandler, mcpRoutes } from "@daloyjs/core/mcp";
+
+const mcp = createMcpHandler({ serverInfo, tools });
+const app = new App();
+
+for (const route of mcpRoutes("/mcp", mcp, {
+  methodAuth: {
+    // A service token, so the backend can list tools at startup.
+    discovery: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.MCP_DISCOVERY_TOKEN!),
+    }),
+    // The user's delegated token for tools/call, resources/read, prompts/get.
+    call: bearerAuth({ validate: verifyDelegatedUserToken }),
+  },
+})) {
+  app.route(route);
+}
+```
+
+<FlowDiagram title="methodAuth picks one credential per request" steps={[
+          {
+            label: "Mcp-Method header",
+            detail: "read before the body",
+            tone: "accent",
+          },
+          {
+            label: "Discovery method?",
+            detail: "exact match, else call",
+            tone: "default",
+          },
+          {
+            label: "discovery or call auth",
+            detail: "only that gate runs",
+            tone: "default",
+          },
+          {
+            label: "Header must match body",
+            detail: "else 400, -32020",
+            tone: "muted",
+          },
+        ]} caption="The method comes from the Mcp-Method header so auth runs before the body is read. createMcpHandler() then rejects a request whose header disagrees with its body, so a discovery credential cannot send Mcp-Method: tools/list with a tools/call body." />
+
+How it stays fail-closed:
+
+- **Header and body must agree.** Routing auth on a header is only safe because the handler rejects a mismatch with `400` and `-32020` (see [required request headers](#request-headers)), in both protocol eras. For the same reason `methodAuth` only accepts a handler built by `createMcpHandler()` and throws at construction otherwise.
+- **No header means `call`.** Legacy clients that send no `Mcp-Method` header, and any value that is not an exact discovery method name (`Tools/List`, `tools/list, tools/call`), get the `call` credential.
+- **Only auth gates are accepted.** `discovery` and `call` must be authentication hooks (`bearerAuth()`, `jwk()`, `basicAuth()`, `clientCertAuth()`, `httpSignatureAuth()`, or a bundle wrapped with `markAuthHook()`), optionally combined with `some()`, `every()`, and `requireScopes()`. A bundle that also carries other middleware, such as `every(rateLimit(...), bearerAuth(...))`, throws: that middleware would only run for one credential class. Put it in the `hooks` option instead (see below), or in `app.use()`.
+- **Scopes follow the selected bundle.** A request is checked only against the `requireScopes()` of the bundle it selects, so discovery never needs the call scopes. Those scopes are recorded before any replay middleware runs, so `responseCache()` and `idempotency()` never replay a `tools/call` result to a caller without them.
+- **The boot guard still applies.** The combined hook counts as auth for the production [boot guard](/docs/security/boot-guards#6-unauthenticated-mcp-endpoint) and for `app({ requireAuth: true })`. `methodAuth` together with `public: true` throws.
+- **Works with `hooks`.** Non-auth middleware in the `hooks` option, such as `rateLimit()`, runs first and applies to every MCP request, so it also counts the ones auth rejects. An auth hook in `hooks` throws, because it would apply to discovery too. Move it into `methodAuth.call`.
+- **Opt-in only.** Without `methodAuth`, nothing changes.
+
+Some useful variations:
+
+```ts
+// Either the service token or a user token may list; only a user token may call.
+methodAuth: { discovery: some(serviceAuth, userAuth), call: userAuth }
+
+// The user token must also carry a scope to call tools.
+methodAuth: { discovery: serviceAuth, call: every(jwk({ /* ... */ }), requireScopes(["mcp:call"])) }
+
+// Discovery needs no credential at all (tool names and schemas become public;
+// keep a rate limit in front, since anyone can now hit it).
+hooks: rateLimit({ windowMs: 60_000, max: 120 }),
+methodAuth: { discovery: "public", call: userAuth }
+
+// Only tools/list is relaxed; resources/list still needs the user token.
+methodAuth: { discovery: serviceAuth, call: userAuth, discoveryMethods: ["tools/list"] }
+```
+
+<Callout type="warning">
+Only relax discovery when the lists are the same for every caller. If your tools, resources, or prompts are filtered by the user's scopes, a discovery credential has no user to filter for. In that case keep the default, and have the client cache the list per user using the [caching hints](#caching-hints). Also note that an `app.use()` auth middleware runs before route hooks, so if the call credential is registered globally, discovery still needs it. Use `methodAuth` instead of a global auth middleware or an auth hook in `hooks`, or put the MCP server on its own App.
+</Callout>
+
 ## Mirrored tool parameters (`x-mcp-header`) [#mirrored-parameters]
 
 A tool may ask clients to mirror a primitive parameter into an `Mcp-Param-{Name}` header so infrastructure can route on it. Annotate the property in `inputSchema`:
@@ -837,6 +919,7 @@ app.post(
 - Tool `annotations` (`readOnlyHint`, `destructiveHint`, and so on) are hints for the client's UI. The server enforces none of them.
 - Treat everything a tool or resource returns as untrusted text for the model. Database rows, web pages, emails, and tickets can carry instructions (indirect prompt injection). Return only the fields the task needs, and never put secrets in results.
 - Fail at startup when a token or key environment variable is missing, instead of discovering it on the first request.
+- If discovery needs a lighter credential than `tools/call`, use [`methodAuth`](#method-auth) rather than an `except()` on the MCP path or a header check of your own. It relies on the handler's header/body agreement check and falls back to the `call` credential when in doubt.
 - Leave the built-in `Origin` validation alone and prefer adding trusted web apps to `allowedOrigins` over any wildcard CORS layer in front of the endpoint.
 - The advertised `inputSchema` is now [enforced server-side](#input-schema-enforcement) for its supported subset, but it is still not a substitute for full validation: check anything expressed only through `pattern`, `format`, or `anyOf`/`oneOf`/`allOf` inside the handler.
 - Sign and bind `requestState` before it can influence anything. It passes through the client, so an unsigned blob is a request-forgery primitive. Include the authenticated principal from `ctx.state`, an identifier for the originating request, and a short expiry, and reject state that fails verification. `inputResponses` are client assertions, not proof that a person approved anything. See [multi round-trip requests](#multi-round-trip-requests).

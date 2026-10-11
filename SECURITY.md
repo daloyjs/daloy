@@ -501,6 +501,17 @@ DaloyJS ships first-party middleware for the surface the "API security tools" ma
 - **API9 Improper Inventory** — OpenAPI 3.1 from the same route contract (`app.get()`/`app.route()`); `pnpm gen` emits Hey API; `app.introspect()` is public.
 - **API10 Unsafe API Consumption** — outbound calls through `fetchGuard()`; JWT verifier applies the prototype-pollution reviver to attacker-controlled claims.
 
+#### MCP per-method authorization
+
+`mcpRoutes(path, handler, { methodAuth: { discovery, call } })` lets discovery methods (`server/discover`, `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list`) use a different credential than everything else. It authorizes on the `Mcp-Method` header before the body is read, so its safety rests on these properties, each covered by tests in `tests/mcp-method-auth.test.ts`:
+
+- **Header/body confusion**: `createMcpHandler()` rejects a request whose `Mcp-Method` disagrees with the JSON-RPC body (`400`, `-32020`) in both protocol eras, so a discovery credential cannot send `Mcp-Method: tools/list` with a `tools/call` body. `methodAuth` refuses, at construction, any handler not built by `createMcpHandler()`; membership is tracked in a module-private `WeakSet`, so a custom handler cannot claim it.
+- **Fail closed**: a missing header, or any value that is not an exact discovery method name, gets the `call` credential. `discoveryMethods` cannot include `tools/call`, `resources/read`, or `prompts/get`.
+- **No silent scoping of other middleware**: both bundles must be authentication hooks, optionally composed with `some()` / `every()` / `requireScopes()`; a bundle carrying `rateLimit()` or any non-gate phase (own or inherited) throws (such middleware belongs in the `mcpRoutes()` `hooks` option, which runs first). An auth hook in `hooks` alongside `methodAuth` also throws, since it would gate discovery too. Production-only refusals of either bundle (for example `jwk()` without an audience) still run at registration.
+- **Replays respect the selected scopes**: the combined `preBody` records the selected bundle's `requireScopes()` scopes on `ctx.state` before any `beforeHandle` runs, so `responseCache()` / `idempotency()` never replay a `tools/call` result to a caller lacking the call scopes, even under a coarse shared idempotency namespace. It deliberately does not advertise a route-wide scope marker, which would make discovery require the call scopes too. Both properties have regression tests, and the replay test was mutation-checked (it fails when the seeding is removed).
+- **Notifications**: a JSON-RPC notification (no `id`) is acknowledged with `202` and never dispatched or header-checked, so a discovery credential reaching that path can trigger nothing. A comment at that branch records the invariant; dispatching notifications later must add the header check first.
+- **Opt-in**: the default stays one credential for every method, because a tool list may be filtered per user. `discovery: "public"` publishes tool names and schemas and is documented as such.
+
 #### Agent-to-agent (A2A) endpoints
 
 `@daloyjs/core/a2a` exposes a service to peer agents, so its Agent Card is a capability grant and its JSON-RPC route is a remote-control surface. Defenses:

@@ -1,5 +1,7 @@
 import { readNodeEnv } from "./internal-env.js";
 import type { Hooks, PathString, RouteDefinition } from "./types.js";
+import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
+import { every } from "./combine.js";
 import type { StandardSchemaV1 } from "./schema.js";
 import { mediaTypeEssence, safeJsonParse, safeJsonParseLimited } from "./security.js";
 import { compileOriginAllowlist, isAllowedAgentOrigin } from "./origin-allowlist.js";
@@ -1324,6 +1326,14 @@ const DEFAULT_MAX_RESOURCE_URI_LENGTH = 8192;
  */
 const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
 
+/**
+ * Handlers built by {@link createMcpHandler}, which reject a request whose
+ * `Mcp-Method` header disagrees with its body. `mcpRoutes({ methodAuth })`
+ * authorizes on that header, so it accepts only these handlers. A WeakSet
+ * rather than a symbol property, so a custom handler cannot claim it.
+ */
+const HEADER_ENFORCING_HANDLERS = new WeakSet<McpHandler>();
+
 const HEADER_BASE64_PREFIX = "=?base64?";
 const HEADER_BASE64_SUFFIX = "?=";
 
@@ -2387,6 +2397,10 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         headers
       );
     }
+    // Notifications are acknowledged without dispatch or header validation.
+    // mcpRoutes({ methodAuth }) relies on that: a discovery credential may
+    // reach this point with any Mcp-Method header. If notifications are ever
+    // dispatched, validate the standard headers here first.
     if (message.id === undefined) {
       return new Response(null, { status: 202, headers });
     }
@@ -2410,6 +2424,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       if (production && !explicitExpose) exposeInternalErrors = false;
     },
   });
+  HEADER_ENFORCING_HANDLERS.add(handleMcpRequest);
   return handleMcpRequest;
 }
 
@@ -2437,9 +2452,256 @@ export interface McpRoutesOptions {
    * hand-rolled route and the `GET` hint and `OPTIONS` preflight stay
    * credential-free. An auth hook here satisfies the production boot guard.
    *
+   * With {@link McpRoutesOptions.methodAuth}, these hooks run first (so a
+   * `rateLimit()` here counts requests that auth then rejects) and must not
+   * contain an auth hook: it would apply to discovery too.
+   *
    * @since 1.7.0
    */
   hooks?: Hooks;
+  /**
+   * Authorize discovery methods with a different credential than everything
+   * else, e.g. let a backend list tools at startup with a service token while
+   * `tools/call` still requires the user's delegated token. See
+   * {@link McpMethodAuthOptions}.
+   *
+   * The resulting auth hook is applied to the `POST` route only, after any
+   * {@link McpRoutesOptions.hooks}, and satisfies the production boot guard.
+   * Requires a handler from {@link createMcpHandler}, and cannot be combined
+   * with `public: true` or with an auth hook in `hooks`.
+   *
+   * @since 1.8.0
+   */
+  methodAuth?: McpMethodAuthOptions;
+}
+
+/**
+ * MCP methods that only describe a server: they never run a tool, read a
+ * resource, or render a prompt. These are the only methods
+ * {@link McpMethodAuthOptions.discovery} can authorize.
+ *
+ * @since 1.8.0
+ */
+export const MCP_DISCOVERY_METHODS: readonly [
+  "server/discover",
+  "tools/list",
+  "resources/list",
+  "resources/templates/list",
+  "prompts/list",
+] = Object.freeze([
+  "server/discover",
+  "tools/list",
+  "resources/list",
+  "resources/templates/list",
+  "prompts/list",
+] as const);
+
+/**
+ * One of {@link MCP_DISCOVERY_METHODS}.
+ *
+ * @since 1.8.0
+ */
+export type McpDiscoveryMethod = (typeof MCP_DISCOVERY_METHODS)[number];
+
+/**
+ * Per-method authentication for {@link mcpRoutes}: one credential for
+ * discovery, another for everything else.
+ *
+ * The method is read from the `Mcp-Method` header, before the body is parsed.
+ * That is safe only because {@link createMcpHandler} rejects (`400`, `-32020`)
+ * a request whose header disagrees with its body, so a discovery credential
+ * cannot be used to send `Mcp-Method: tools/list` with a `tools/call` body.
+ * A request without the header (legacy clients) or with any other value
+ * always gets {@link McpMethodAuthOptions.call}.
+ *
+ * Only relax discovery when the lists are the same for every caller. If the
+ * tool list depends on the user's scopes, a discovery credential sees a list
+ * that was never filtered for a user.
+ *
+ * @since 1.8.0
+ */
+export interface McpMethodAuthOptions {
+  /**
+   * Authentication for every request that is not a discovery request,
+   * including `tools/call`, `resources/read`, `prompts/get`, notifications,
+   * and requests without an `Mcp-Method` header. Must be an authentication
+   * hook: a built-in (`bearerAuth()`, `jwk()`, `basicAuth()`,
+   * `clientCertAuth()`, `httpSignatureAuth()`) or a bundle wrapped with
+   * `markAuthHook()`, optionally composed with `some()` / `every()` and
+   * `requireScopes()`, e.g. `every(jwk({ ... }), requireScopes(["mcp:call"]))`.
+   * Any other middleware in the bundle (`rateLimit()`, `cors()`, an `onSend`
+   * hook) is refused at construction, because it would run for only one
+   * credential class; register it with `app.use()`.
+   */
+  call: Hooks;
+  /**
+   * Authentication for the {@link McpMethodAuthOptions.discoveryMethods}: an
+   * authentication hook (same rules as `call`), or `"public"` to serve them
+   * without credentials. `"public"` exposes your tool names, descriptions,
+   * and input schemas to anyone who can reach the endpoint.
+   */
+  discovery: Hooks | "public";
+  /**
+   * Which methods count as discovery. Defaults to all of
+   * {@link MCP_DISCOVERY_METHODS}; pass a subset to keep, say,
+   * `resources/list` behind the `call` credential.
+   *
+   * @defaultValue MCP_DISCOVERY_METHODS
+   */
+  discoveryMethods?: readonly McpDiscoveryMethod[];
+}
+
+const AUTH_HOOK_KEY = Symbol.for("daloyjs.auth.hook");
+const AUTH_WRAPPED_KEY = Symbol.for("daloyjs.auth.wrapped");
+/** Registration-time production hook key (see app.ts APP_PRODUCTION_HOOK). */
+const HOOKS_APP_PRODUCTION_KEY = Symbol.for("daloyjs.hooks.appProduction");
+/** Same string as middleware.ts REQUIRE_SCOPES_HOOK_MARKER (the scopes a bundle requires). */
+const REQUIRE_SCOPES_KEY = Symbol.for("daloyjs.middleware.requireScopes");
+const METHOD_AUTH_SYMBOLS: ReadonlySet<symbol> = new Set([
+  AUTH_HOOK_KEY,
+  AUTH_WRAPPED_KEY,
+  HOOKS_APP_PRODUCTION_KEY,
+  REQUIRE_SCOPES_KEY,
+]);
+/** Same string as middleware.ts REQUIRE_SCOPES_AGGREGATE_KEY (per-request scope list on ctx.state). */
+const REQUIRE_SCOPES_AGGREGATE_KEY = "__daloyRequiredScopes";
+
+/** Scopes a bundle's `requireScopes()` hooks require, from their route marker. */
+function requiredScopesOf(bundle: Hooks): readonly string[] {
+  const required = (bundle as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_KEY];
+  return Array.isArray(required)
+    ? required.filter((scope): scope is string => typeof scope === "string")
+    : [];
+}
+
+/** Phases the App reads off a bundle that a methodAuth gate must not carry. */
+const NON_GATE_PHASES = ["onRequest", "afterHandle", "onError", "onSend", "onResponse"] as const;
+
+/**
+ * Check that `value` is an authentication gate and nothing more. Other
+ * phases and markers (a `rateLimit()` budget, `cors()`) would only run for
+ * one credential class, or be dropped, so they are refused instead.
+ */
+function assertMethodAuthGate(value: unknown, label: string): Hooks {
+  const where = `mcpRoutes(): methodAuth.${label}`;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${where} must be a Hooks bundle such as bearerAuth({ ... }).`);
+  }
+  const record = value as Record<PropertyKey, unknown>;
+  if (record[AUTH_HOOK_KEY] !== true) {
+    throw new TypeError(
+      `${where} must be an authentication hook: bearerAuth(), jwk(), basicAuth(), ` +
+        `clientCertAuth(), httpSignatureAuth(), or a custom bundle wrapped with markAuthHook().`
+    );
+  }
+  // Property reads (not just own keys) so a phase inherited from a prototype
+  // is refused too: the App would read it, and it would silently not run here.
+  const extraPhases = [...NON_GATE_PHASES, ...Object.keys(record)].filter(
+    (key) => key !== "preBody" && key !== "beforeHandle" && record[key] !== undefined
+  );
+  if (extraPhases.length > 0) {
+    throw new TypeError(
+      `${where} has a "${extraPhases[0]}" hook. methodAuth accepts authentication gates only ` +
+        `(preBody / beforeHandle); put other middleware in the mcpRoutes() hooks option or app.use().`
+    );
+  }
+  for (const phase of ["preBody", "beforeHandle"] as const) {
+    if (record[phase] !== undefined && typeof record[phase] !== "function") {
+      throw new TypeError(`${where}.${phase} must be a function.`);
+    }
+  }
+  for (const key of Object.getOwnPropertySymbols(record)) {
+    if (!METHOD_AUTH_SYMBOLS.has(key)) {
+      throw new TypeError(
+        `${where} carries middleware other than authentication (${String(key)}). ` +
+          `Put it in the mcpRoutes() hooks option or app.use() instead.`
+      );
+    }
+  }
+  if (typeof record.preBody !== "function" && typeof record.beforeHandle !== "function") {
+    throw new TypeError(`${where} has no preBody or beforeHandle gate.`);
+  }
+  return value as Hooks;
+}
+
+/**
+ * Build the single auth hook bundle for {@link McpRoutesOptions.methodAuth}.
+ * It picks `discovery` or `call` from the `Mcp-Method` header and runs only
+ * that bundle's gate. Anything that is not an exact discovery method name
+ * falls through to `call`.
+ */
+function methodAuthHooks(options: McpMethodAuthOptions): Hooks {
+  if (options === null || typeof options !== "object") {
+    throw new TypeError("mcpRoutes(): methodAuth must be an object with call and discovery.");
+  }
+  const call = assertMethodAuthGate(options.call, "call");
+  const discovery: Hooks | "public" =
+    options.discovery === "public"
+      ? "public"
+      : assertMethodAuthGate(options.discovery, "discovery");
+  const methods = options.discoveryMethods ?? MCP_DISCOVERY_METHODS;
+  if (!Array.isArray(methods) || methods.length === 0) {
+    throw new TypeError("mcpRoutes(): methodAuth.discoveryMethods must be a non-empty array.");
+  }
+  const allowed: readonly string[] = MCP_DISCOVERY_METHODS;
+  for (const method of methods) {
+    if (!allowed.includes(method)) {
+      throw new TypeError(
+        `mcpRoutes(): methodAuth.discoveryMethods contains "${String(method)}", which is not a ` +
+          `discovery method. Allowed: ${allowed.join(", ")}.`
+      );
+    }
+  }
+  const discoverySet = new Set<string>(methods);
+  const select = (request: Request): Hooks | "public" => {
+    const method = request.headers.get("mcp-method");
+    return method !== null && discoverySet.has(method) ? discovery : call;
+  };
+  const callScopes = requiredScopesOf(call);
+  const discoveryScopes = discovery === "public" ? [] : requiredScopesOf(discovery);
+
+  const hooks: Hooks = {
+    preBody(ctx) {
+      const chosen = select(ctx.request);
+      if (chosen === "public") {
+        markAuthPassed(ctx);
+        return undefined;
+      }
+      // The route does not advertise either bundle's requireScopes() marker:
+      // the App would load it into every request, so discovery would also
+      // need the call scopes. Instead record the selected bundle's scopes
+      // here. preBody runs before every beforeHandle, so the replay checks in
+      // responseCache() / idempotency() and requireScopes() all see them.
+      const scopes = chosen === call ? callScopes : discoveryScopes;
+      if (scopes.length > 0) {
+        const state = ctx.state as Record<string, unknown>;
+        const prior = state[REQUIRE_SCOPES_AGGREGATE_KEY];
+        const aggregate = Array.isArray(prior) ? [...(prior as string[])] : [];
+        for (const scope of scopes) if (!aggregate.includes(scope)) aggregate.push(scope);
+        state[REQUIRE_SCOPES_AGGREGATE_KEY] = aggregate;
+      }
+      return chosen.preBody?.(ctx);
+    },
+  };
+  if (call.beforeHandle !== undefined || (discovery !== "public" && discovery.beforeHandle !== undefined)) {
+    hooks.beforeHandle = (ctx) => {
+      const chosen = select(ctx.request);
+      return chosen === "public" ? undefined : chosen.beforeHandle?.(ctx);
+    };
+  }
+  // Keep production-only refusals (jwk() without an audience) of both bundles.
+  const productionChecks = [call, discovery]
+    .map((bundle) =>
+      bundle === "public" ? undefined : (bundle as Record<PropertyKey, unknown>)[HOOKS_APP_PRODUCTION_KEY]
+    )
+    .filter((fn): fn is (production: boolean) => void => typeof fn === "function");
+  if (productionChecks.length > 0) {
+    (hooks as Record<PropertyKey, unknown>)[HOOKS_APP_PRODUCTION_KEY] = (production: boolean) => {
+      for (const check of productionChecks) check(production);
+    };
+  }
+  // Self-recording: the selected bundle (or the "public" branch) records the pass.
+  return stampAuthHook(hooks, true);
 }
 
 /**
@@ -2454,7 +2716,9 @@ export interface McpRoutesOptions {
  * `secureDefaults` App **refuses to boot** unless an authentication hook covers
  * it — MCP tools are model-controlled and side-effecting. Cover the route with
  * an auth middleware (e.g. `app.use(bearerAuth({ ... }))`), or pass
- * `{ public: true }` to intentionally expose a public MCP server.
+ * `{ public: true }` to intentionally expose a public MCP server. To let
+ * discovery (`tools/list`, ...) use a lighter credential than `tools/call`,
+ * pass `{ methodAuth: { discovery, call } }` (see {@link McpMethodAuthOptions}).
  *
  * The `POST` route also carries a hidden `Symbol.for("daloyjs.mcp.appProduction")`
  * callback so the host App can report its resolved production environment;
@@ -2473,6 +2737,10 @@ export interface McpRoutesOptions {
  *   path. `POST` is the actual MCP transport; `GET` gives a human-readable
  *   405 hint because this helper does not open server-initiated SSE streams;
  *   `OPTIONS` supports preflight when CORS middleware is installed.
+ * @throws {TypeError} when `methodAuth` is combined with `public: true` or
+ *   with an auth hook in `hooks`, is given a handler not built by
+ *   {@link createMcpHandler}, or holds a bundle that is not a pure
+ *   authentication hook.
  *
  * @example
  * ```ts
@@ -2494,6 +2762,16 @@ export interface McpRoutesOptions {
  * for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
  *   app.route(route);
  * }
+ *
+ * // ...or a service token for discovery, the user's token for everything else:
+ * for (const route of mcpRoutes("/mcp", mcp, {
+ *   methodAuth: {
+ *     discovery: bearerAuth({ validate: isServiceToken }),
+ *     call: bearerAuth({ validate: isDelegatedUserToken }),
+ *   },
+ * })) {
+ *   app.route(route);
+ * }
  * ```
  *
  * @since 1.0.0
@@ -2503,6 +2781,37 @@ export function mcpRoutes(
   handler: McpHandler,
   options: McpRoutesOptions = {}
 ): RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[] {
+  let postHooks: Hooks | undefined = options.hooks;
+  if (options.methodAuth !== undefined) {
+    if (options.public === true) {
+      throw new TypeError(
+        "mcpRoutes(): methodAuth and public: true cannot be combined. Use " +
+          'methodAuth: { discovery: "public", call } to make only discovery public.'
+      );
+    }
+    if (!HEADER_ENFORCING_HANDLERS.has(handler)) {
+      throw new TypeError(
+        "mcpRoutes(): methodAuth requires a handler from createMcpHandler(), which rejects " +
+          "requests whose Mcp-Method header disagrees with the body. Without that check a " +
+          "discovery credential could call tools."
+      );
+    }
+    const methodHooks = methodAuthHooks(options.methodAuth);
+    if (options.hooks === undefined) {
+      postHooks = methodHooks;
+    } else {
+      // An auth hook in `hooks` would run for discovery too and quietly cancel
+      // the lighter discovery credential; make that a configuration error.
+      if ((options.hooks as Record<PropertyKey, unknown>)[AUTH_HOOK_KEY] === true) {
+        throw new TypeError(
+          "mcpRoutes(): hooks contains an authentication hook, which would also apply to " +
+            "discovery requests. Move it into methodAuth.call (or methodAuth.discovery)."
+        );
+      }
+      // `hooks` first, so a rateLimit() there also counts requests auth rejects.
+      postHooks = every(options.hooks, methodHooks);
+    }
+  }
   const responses = {
     200: { description: "MCP JSON-RPC response", body: MCP_JSON_RESPONSE_SCHEMA },
     202: { description: "MCP notification accepted", body: MCP_JSON_RESPONSE_SCHEMA },
@@ -2524,7 +2833,7 @@ export function mcpRoutes(
       // intentionally opaque to Daloy's response serializer.
       acknowledgeNoResponseBodySchema: true,
       responses,
-      ...(options.hooks ? { hooks: options.hooks } : {}),
+      ...(postHooks !== undefined ? { hooks: postHooks } : {}),
       handler: ({ request, state }) =>
         handler(request, { state: (state ?? {}) as Record<string, unknown> }),
     },

@@ -157,6 +157,20 @@ type McpProtocolEra = "modern" | "legacy";
 
 interface McpRoutesOptions {
   public?: boolean;  // default false; opt out of the production auth boot guard
+  hooks?: Hooks;  // since 1.7.0; applied to the POST transport only
+  methodAuth?: McpMethodAuthOptions;  // since 1.8.0; not with public, or with auth in hooks
+}
+
+const MCP_DISCOVERY_METHODS: readonly [
+  "server/discover", "tools/list", "resources/list",
+  "resources/templates/list", "prompts/list",
+];
+type McpDiscoveryMethod = (typeof MCP_DISCOVERY_METHODS)[number];
+
+interface McpMethodAuthOptions {
+  call: Hooks;                       // auth hook for everything else (incl. no Mcp-Method header)
+  discovery: Hooks | "public";       // auth hook for discovery methods, or no credential
+  discoveryMethods?: readonly McpDiscoveryMethod[];  // default: all of MCP_DISCOVERY_METHODS
 }
 
 interface McpCacheHints {

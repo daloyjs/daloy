@@ -95,6 +95,7 @@ export { diffOpenAPI, hasBreakingChanges } from "./openapi-diff.js";
 export type { ChangeSeverity, OpenAPIChange, OpenAPIDiffResult } from "./openapi-diff.js";
 export {
   MCP_DEFAULT_MAX_BODY_BYTES,
+  MCP_DISCOVERY_METHODS,
   MCP_ERROR_CODES,
   MCP_MAX_REQUEST_STATE_LENGTH,
   MCP_META_KEYS,
@@ -110,6 +111,7 @@ export {
 export type {
   McpCacheHints,
   McpContent,
+  McpDiscoveryMethod,
   McpEmbeddedResourceContent,
   McpHandleOptions,
   McpHandler,
@@ -125,6 +127,7 @@ export type {
   McpJsonRpcId,
   McpJsonSchema,
   McpJsonValue,
+  McpMethodAuthOptions,
   McpPrompt,
   McpPromptArgument,
   McpPromptDefinition,

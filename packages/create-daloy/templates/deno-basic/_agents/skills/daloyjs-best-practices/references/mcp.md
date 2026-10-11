@@ -23,3 +23,10 @@ validated against the body — never relax that check. Treat an incoming
 `requestState` as attacker-controlled: sign it, bind it to the principal and
 the originating request, and give it a short expiry before it influences
 anything.
+
+If discovery (`tools/list` and the other list methods) needs a different
+credential than `tools/call`, for example a service token at startup and the
+user's delegated token per call, use
+`mcpRoutes("/mcp", handler, { methodAuth: { discovery, call } })` (core
+`>= 1.8.0`). Do not hand-roll it with `except()` or your own `Mcp-Method`
+check. Only relax discovery when every caller sees the same tool list.

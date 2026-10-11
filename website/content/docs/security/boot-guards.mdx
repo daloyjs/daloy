@@ -225,6 +225,8 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
 }
 ```
 
+A third option, `mcpRoutes(path, handler, { methodAuth: { discovery, call } })`, gives discovery methods such as `tools/list` their own credential. Its combined hook counts as auth for this guard, and it cannot be combined with `public: true`. See [a separate credential for discovery](/docs/mcp#method-auth).
+
 Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `OPTIONS` (CORS preflight) are left unmarked so preflight stays credential-free. Like guard 5, the boot check sees that an auth hook is present; from 1.5.4 the request-time check also refuses the call in production when that hook did not run. See the [MCP docs](/docs/mcp#security-checklist) for the full server setup.
 
 ## 7. `responseCache()` mounted ahead of `tenancy()`
