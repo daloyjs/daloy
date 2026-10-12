@@ -17,6 +17,69 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-12
+
+### Added
+
+- `requireScopes(scopes, { phase: "preBody" })` authorizes before the request
+  body is read, right after `preBody` authentication such as `jwk()`. A valid
+  token with too few scopes now gets `403` whatever the body contains, instead
+  of `400` for a malformed body, and the server no longer parses a body from a
+  caller it is about to refuse. The default phase stays `beforeHandle`, so apps
+  that authenticate in `beforeHandle` are unaffected.
+- `requireScopes(scopes, { phase: "preBody", match: "any" })` accepts a caller
+  that owns any one of the listed scopes. `match: "any"` must be paired with
+  `phase: "preBody"` and throws at construction otherwise: stored-response
+  replays (`idempotency()`, `responseCache()`) run in `beforeHandle` and only
+  understand all-of requirements, so an any-of check must reject before them.
+  New exported type: `RequireScopesOptions`.
+- `new App({ requestTimeoutStatus: 504 })` (or `503`) changes the status the
+  `requestTimeoutMs` deadline answers with. `408` stays the default. Per RFC
+  9110, `408` says the client was too slow; a deadline that trips on slow
+  upstream work (an LLM, another API) is a `504`, which monitoring counts as a
+  server failure and clients do not treat as their own fault. The problem
+  `type` stays `request-timeout`; the `title` follows the status. Any other
+  value throws at construction. The Node adapter's slow-client `408` is
+  unchanged. `RequestTimeoutError` takes the status as an optional second
+  argument. New exported type: `RequestTimeoutStatus`.
+
+### Fixed
+
+- `jwk()` now reads a string-valued `scp` claim. Microsoft Entra ID issues
+  delegated scopes as a space-delimited string (`"scp": "access_as_user"`), and
+  only the array form was accepted, so every Entra user got an empty scope list
+  and `requireScopes()` answered `403`. Non-string `scp` values still grant
+  nothing, and a `scope` claim still takes precedence.
+- An automatic `OPTIONS` preflight answered by `cors()` now carries
+  `X-Request-Id`, like the `204` fallback and the other unmatched-route
+  responses already did.
+
+### Security
+
+- `every(requireScopes(a), requireScopes(b))` kept only the first bundle's
+  scope marker, so the replay checks in `idempotency()` and `responseCache()`
+  required only `a`. In a shared replay namespace (a custom tenant `scope`, or
+  `allowUnscopedCallers: true`), a caller owning `a` but not `b` was served the
+  stored response before the route's `requireScopes(b)` ran. `every()` now
+  unions the markers of every bundle. The default per-`Authorization`
+  idempotency namespace was not affected, because one token always carries the
+  same scopes.
+
+### Documentation
+
+- Node adapter: the `bufferedBodyMaxBytes` tradeoff. With the default
+  pre-buffering, an unauthenticated small-body request sending
+  `Expect: 100-continue` is told `100 Continue` before `preBody` auth answers
+  `401`; `bufferedBodyMaxBytes: 0` keeps auth ahead of the body solicitation.
+- App reference: which requests constructor hooks (`new App({ hooks })`) see
+  versus route-composed `app.use()` hooks. Unmatched `404` / `405` responses
+  only reach constructor `onResponse` / `onError` / `onSend`, so request logs,
+  counters and tracing that must see every response belong there.
+- Microsoft Entra ID guide: a `jwk()` + `requireScopes({ phase: "preBody" })`
+  setup with required `exp` (`maxLifetimeSeconds`) and `requestTimeoutStatus`.
+- Middleware reference: corrected the `requireScopes()` signature, which
+  listed string and `{ all, any }` forms the function never accepted.
+
 ## [1.9.0] - 2026-10-11
 
 ### Added
