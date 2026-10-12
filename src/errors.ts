@@ -637,8 +637,29 @@ export class TooManyRequestsError extends HttpError {
 }
 
 /**
- * `408 Request Timeout` — thrown when a handler exceeds
- * {@link AppOptions.requestTimeoutMs}.
+ * Status codes a request deadline may answer with; see
+ * `AppOptions.requestTimeoutStatus`. `408` (the default) says the client was
+ * too slow, `504` that the server timed out waiting on upstream work, `503`
+ * that it is temporarily unable to finish.
+ *
+ * @since 1.10.0
+ */
+export type RequestTimeoutStatus = 408 | 503 | 504;
+
+const REQUEST_TIMEOUT_TITLES: Record<RequestTimeoutStatus, string> = {
+  408: "Request Timeout",
+  503: "Service Unavailable",
+  504: "Gateway Timeout",
+};
+
+/** An unsupported status falls back to `408` rather than emitting a non-error code. */
+function timeoutStatus(status: unknown): RequestTimeoutStatus {
+  return status === 503 || status === 504 ? status : 408;
+}
+
+/**
+ * `408 Request Timeout` (or the configured `requestTimeoutStatus`) — thrown
+ * when a request exceeds {@link AppOptions.requestTimeoutMs}.
  *
  * When the timeout fires the framework aborts `ctx.request.signal` (with a
  * `TimeoutError` reason) so a handler that forwarded that signal to downstream
@@ -652,13 +673,16 @@ export class TooManyRequestsError extends HttpError {
  * the `408` but no signal abort.)
  *
  * @param ms - The configured timeout that was exceeded.
+ * @param status - Response status: `408` (default), `503`, or `504`; any
+ *   other value falls back to `408`. The problem `type` stays
+ *   `request-timeout`; the `title` follows the status.
  * @since 0.1.0
  */
 export class RequestTimeoutError extends HttpError {
-  constructor(ms: number) {
-    super(408, {
+  constructor(ms: number, status: RequestTimeoutStatus = 408) {
+    super(timeoutStatus(status), {
       type: "https://daloyjs.dev/errors/request-timeout",
-      title: "Request Timeout",
+      title: REQUEST_TIMEOUT_TITLES[timeoutStatus(status)],
       detail: `Request exceeded ${ms}ms`,
     });
     this.name = "RequestTimeoutError";

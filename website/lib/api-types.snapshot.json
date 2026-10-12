@@ -101,7 +101,7 @@
       "name": "standardHeaders",
       "type": "\"draft-8\"",
       "required": false,
-      "description": "Also emit the IETF `RateLimit` / `RateLimit-Policy` headers (draft-ietf-httpapi-ratelimit-headers-08), e.g. `RateLimit-Policy: \"100-in-60sec\"; q=100; w=60` and `RateLimit: \"100-in-60sec\"; r=42; t=17`, where `t` is seconds until the window resets. The policy name matches express-rate-limit's, so clients written against it keep working. Off by default. No partition key (`pk`) is sent, so the bucket key never leaves the server.\n\n@throws Error at construction for any value other than `\"draft-8\"`.",
+      "description": "Also emit the IETF `RateLimit` / `RateLimit-Policy` headers (draft-ietf-httpapi-ratelimit-headers-08), e.g. `RateLimit-Policy: \"100-in-60sec\"; q=100; w=60` and `RateLimit: \"100-in-60sec\"; r=42; t=17`, where `t` is seconds until the window resets. The policy name matches express-rate-limit's, so clients written against it keep working. Off by default. No partition key (`pk`) is sent, so the bucket key never leaves the server.",
       "since": "1.9.0"
     },
     {
@@ -117,6 +117,22 @@
       "required": false,
       "description": "Share a single bucket across every `rateLimit()` call that declares the same `groupId`. Use this to enforce one combined limit across related routes (e.g. `/login`, `/login/otp`, and `/password-reset` all spend from the same per-IP \"auth\" bucket). Without `groupId`, each `rateLimit()` call gets its own independent in-memory store.\n\nCooperation is only meaningful for the default in-memory store; when an explicit `store` is supplied the developer is responsible for keying it. The framework prepends the `groupId` to the derived key so two groups never collide in a shared store either.",
       "since": "0.19.0"
+    }
+  ],
+  "src/middleware.ts#RequireScopesOptions": [
+    {
+      "name": "phase",
+      "type": "\"beforeHandle\" | \"preBody\"",
+      "required": false,
+      "description": "Lifecycle phase the scope check runs in. `\"beforeHandle\"` runs after the request body is read and validated, so a caller with too few scopes and a malformed body gets `400`. `\"preBody\"` runs before any body I/O, right after `preBody` authentication such as `jwk()` / `bearerAuth()`, so an under-scoped caller always gets `403` and its body is never parsed. The authentication hook must run first (registered earlier, or earlier inside `every()`); otherwise every request is a `401`.",
+      "default": "\"beforeHandle\""
+    },
+    {
+      "name": "match",
+      "type": "\"all\" | \"any\"",
+      "required": false,
+      "description": "How the listed scopes combine. `\"all\"` requires every listed scope; `\"any\"` accepts a caller that owns at least one. `\"any\"` requires `phase: \"preBody\"`: stored-response replays (`idempotency()`, `responseCache()`) only understand all-of requirements, so an any-of check must reject before any `beforeHandle` replay can run. Any-of guards are not added to the replay scope requirements.",
+      "default": "\"all\""
     }
   ]
 }

@@ -54,8 +54,8 @@ markAuthHook(hooks: Hooks): Hooks
 const AUTH_HOOK_MARKER: unique symbol  // stamped by built-ins and markAuthHook()
 csrf(opts?: CsrfOptions): Hooks
 fetchMetadata(opts?: FetchMetadataOptions): Hooks   // Sec-Fetch-Site/Mode/Dest enforcement
-requireScopes(scopes: string | string[]
-            | { all?: string[]; any?: string[] }): Hooks
+requireScopes(scopes: string[], opts?: RequireScopesOptions): Hooks
+                                                      // { phase?: "beforeHandle" | "preBody"; match?: "all" | "any" }
 ipRestriction(opts: IpRestrictionOptions): Hooks    // CIDR allow/deny
 loadShedding(opts?: LoadSheddingOptions): Hooks
 etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache-Control skip
@@ -81,6 +81,28 @@ app.use(rateLimit({ windowMs: 60_000, max: 120, standardHeaders: "draft-8", lega
 ### `ETagOptions` [#etag-options]
 
 <AutoTypeTable path="src/etag.ts" name="ETagOptions" />
+
+### `requireScopes()` options [#require-scopes-options]
+
+`requireScopes()` reads `ctx.state.user.scopes`, which `jwk()`, `bearerAuth()` and other auth helpers fill in. `jwk()` builds that list from the token's `scope` claim (space-delimited string), or, when `scope` is absent, from `scp` (a space-delimited string as Microsoft Entra ID issues it since 1.10.0, or an array) or `scopes` (array). A caller without credentials gets `401` with a `WWW-Authenticate: Bearer scope="..."` challenge; a caller with too few scopes gets `403`.
+
+By default the check runs in `beforeHandle`, after the request body is read and validated. That means a valid token with too few scopes and a malformed body gets `400`, and the server parses a body from a caller it is about to refuse. Since 1.10.0 you can authorize in `preBody` instead, right after header-only authentication:
+
+```ts
+import { App, every, jwk, requireScopes } from "@daloyjs/core";
+
+app.use(every(
+  jwk({ jwks, algorithms: ["RS256"], issuer, audience, maxLifetimeSeconds: 86_400 }),
+  // 403 before any body I/O; owning either scope is enough.
+  requireScopes(["agent.chat", "agent.admin"], { phase: "preBody", match: "any" }),
+));
+```
+
+- `phase: "preBody"` runs the same check before the body is read: missing credentials are `401`, insufficient scope is `403`, whatever the body contains. The authentication hook must run first (earlier in `every()`, or registered earlier with `app.use()`), or every request is a `401`.
+- `match: "any"` accepts a caller that owns at least one listed scope. It **requires** `phase: "preBody"`, and construction throws otherwise. Stored-response replays (`idempotency()`, `responseCache()`) run in `beforeHandle` and only understand all-of requirements, so an any-of check must reject before they can serve a stored response. All-of guards keep feeding those replay checks; any-of guards do not.
+- The default (`phase: "beforeHandle"`, `match: "all"`) is unchanged, so existing apps that authenticate in `beforeHandle` keep working.
+
+<AutoTypeTable path="src/middleware.ts" name="RequireScopesOptions" />
 
 ### `BearerAuthOptions` [#bearer-auth-options]
 

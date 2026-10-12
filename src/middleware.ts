@@ -2242,6 +2242,37 @@ function validateScopeList(scopes: unknown): readonly string[] {
   return out;
 }
 
+/**
+ * Options for {@link requireScopes}.
+ *
+ * @since 1.10.0
+ */
+export interface RequireScopesOptions {
+  /**
+   * Lifecycle phase the scope check runs in. `"beforeHandle"` runs after the
+   * request body is read and validated, so a caller with too few scopes and a
+   * malformed body gets `400`. `"preBody"` runs before any body I/O, right
+   * after `preBody` authentication such as `jwk()` / `bearerAuth()`, so an
+   * under-scoped caller always gets `403` and its body is never parsed. The
+   * authentication hook must run first (registered earlier, or earlier inside
+   * `every()`); otherwise every request is a `401`.
+   *
+   * @defaultValue "beforeHandle"
+   */
+  phase?: "beforeHandle" | "preBody";
+  /**
+   * How the listed scopes combine. `"all"` requires every listed scope;
+   * `"any"` accepts a caller that owns at least one. `"any"` requires
+   * `phase: "preBody"`: stored-response replays (`idempotency()`,
+   * `responseCache()`) only understand all-of requirements, so an any-of
+   * check must reject before any `beforeHandle` replay can run. Any-of guards
+   * are not added to the replay scope requirements.
+   *
+   * @defaultValue "all"
+   */
+  match?: "all" | "any";
+}
+
 function readUserScopes(user: unknown): ReadonlySet<string> | null {
   if (!user || typeof user !== "object") return null;
   const raw = (user as { scopes?: unknown }).scopes;
@@ -2261,6 +2292,11 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  * scopes into one combined `WWW-Authenticate: Bearer scope="a b c"` challenge
  * via {@link REQUIRE_SCOPES_AGGREGATE_KEY} on `ctx.state`.
  *
+ * By default the check runs in `beforeHandle`, after the body is parsed. Pass
+ * `{ phase: "preBody" }` to authorize before any body I/O, and
+ * `{ phase: "preBody", match: "any" }` to accept any one of several scopes;
+ * see {@link RequireScopesOptions}.
+ *
  * @example
  * ```ts
  * app.route({
@@ -2270,54 +2306,98 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  *   responses: { 200: { description: "ok" } },
  *   handler: () => ({ status: 200 as const, body: { ok: true } }),
  * });
+ *
+ * // Authorize before the body is read; any one listed scope is enough.
+ * app.use(every(
+ *   jwk({ jwks, algorithms: ["RS256"], issuer, audience }),
+ *   requireScopes(["agent.chat", "agent.admin"], { phase: "preBody", match: "any" }),
+ * ));
  * ```
  *
  * @param scopes - Required scope strings; must be non-empty and free of RFC 6749 illegal characters.
- * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`,
- * stamped with {@link REQUIRE_SCOPES_HOOK_MARKER}.
- * @throws {Error} When `scopes` is empty or contains a non-string, empty, or illegal-character scope.
+ * @param options - Phase and match mode; see {@link RequireScopesOptions}.
+ * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`.
+ * All-of guards are stamped with {@link REQUIRE_SCOPES_HOOK_MARKER} so
+ * stored-response replays require the same scopes; any-of guards are not.
+ * @throws {Error} When `scopes` is empty or contains a non-string, empty, or
+ * illegal-character scope, when `options` has an unknown `phase` / `match`,
+ * or when `match: "any"` is not paired with `phase: "preBody"`.
  * @since 0.21.0
  */
-export function requireScopes(scopes: readonly string[]): Hooks {
+export function requireScopes(
+  scopes: readonly string[],
+  options: RequireScopesOptions = {}
+): Hooks {
   const required = validateScopeList(scopes);
-  const hooks: Hooks = {
-    beforeHandle(ctx) {
-      const state = ctx.state as Record<string, unknown>;
-      const prior = state[REQUIRE_SCOPES_AGGREGATE_KEY];
-      const aggregate: string[] = Array.isArray(prior) ? [...(prior as string[])] : [];
-      for (const s of required) if (!aggregate.includes(s)) aggregate.push(s);
-      state[REQUIRE_SCOPES_AGGREGATE_KEY] = aggregate;
+  if (options === null || typeof options !== "object") {
+    throw new Error("requireScopes(): options must be an object.");
+  }
+  const phase = options.phase ?? "beforeHandle";
+  if (phase !== "beforeHandle" && phase !== "preBody") {
+    throw new Error('requireScopes(): phase must be "beforeHandle" or "preBody".');
+  }
+  const match = options.match ?? "all";
+  if (match !== "all" && match !== "any") {
+    throw new Error('requireScopes(): match must be "all" or "any".');
+  }
+  // An any-of guard cannot be expressed in the all-of replay requirements, so
+  // in beforeHandle a global idempotency() / responseCache() could replay a
+  // stored response to a caller that owns none of the scopes before this
+  // guard runs. In preBody it rejects before every beforeHandle replay.
+  if (match === "any" && phase !== "preBody") {
+    throw new Error(
+      'requireScopes(): match "any" requires phase "preBody", so the check runs before ' +
+        "stored-response replays (idempotency(), responseCache())."
+    );
+  }
+  const anyOf = match === "any";
 
-      const user = state.user;
-      if (user === undefined || user === null) {
-        const challenge = `Bearer scope="${aggregate.join(" ")}", error="insufficient_scope"`;
-        return new Response(
-          JSON.stringify({
-            type: "https://daloyjs.dev/errors/unauthorized",
-            title: "Unauthorized",
-            status: 401,
-            detail: `Missing credentials. Required scopes: ${aggregate.join(", ")}.`,
-          }),
-          {
-            status: 401,
-            headers: {
-              "content-type": "application/problem+json",
-              "www-authenticate": challenge,
-              "cache-control": "no-store",
-            },
-          }
-        );
-      }
+  const check = (ctx: PreBodyContext<any>): Response | undefined => {
+    const state = ctx.state as Record<string, unknown>;
+    const prior = state[REQUIRE_SCOPES_AGGREGATE_KEY];
+    const aggregate: string[] = Array.isArray(prior) ? [...(prior as string[])] : [];
+    // Any-of scopes stay out of the per-request aggregate: replay middleware
+    // reads it as an all-of requirement and would refuse every replay.
+    const challengeScopes = anyOf ? aggregate.slice() : aggregate;
+    for (const s of required) if (!challengeScopes.includes(s)) challengeScopes.push(s);
+    if (!anyOf) state[REQUIRE_SCOPES_AGGREGATE_KEY] = aggregate;
 
-      const owned = readUserScopes(user);
-      const missing = owned === null ? aggregate.slice() : aggregate.filter((s) => !owned.has(s));
-      if (missing.length > 0) {
-        throw new ForbiddenError(`Missing required scope(s): ${missing.join(", ")}.`);
+    const user = state.user;
+    if (user === undefined || user === null) {
+      const challenge = `Bearer scope="${challengeScopes.join(" ")}", error="insufficient_scope"`;
+      return new Response(
+        JSON.stringify({
+          type: "https://daloyjs.dev/errors/unauthorized",
+          title: "Unauthorized",
+          status: 401,
+          detail: `Missing credentials. Required scopes: ${challengeScopes.join(", ")}.`,
+        }),
+        {
+          status: 401,
+          headers: {
+            "content-type": "application/problem+json",
+            "www-authenticate": challenge,
+            "cache-control": "no-store",
+          },
+        }
+      );
+    }
+
+    const owned = readUserScopes(user);
+    if (anyOf) {
+      if (owned === null || !required.some((s) => owned.has(s))) {
+        throw new ForbiddenError(`Missing an accepted scope (any of): ${required.join(", ")}.`);
       }
       return undefined;
-    },
+    }
+    const missing = owned === null ? aggregate.slice() : aggregate.filter((s) => !owned.has(s));
+    if (missing.length > 0) {
+      throw new ForbiddenError(`Missing required scope(s): ${missing.join(", ")}.`);
+    }
+    return undefined;
   };
-  (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = required;
+  const hooks: Hooks = phase === "preBody" ? { preBody: check } : { beforeHandle: check };
+  if (!anyOf) (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = required;
   return hooks;
 }
 

@@ -52,6 +52,7 @@ interface AppOptions {
   bodyLimitBytes?: number;             // default: 1 MiB; every route, raw ctx.request reads included (1.5.4)
   allowedContentTypes?: string[];      // default: ["application/json", "application/x-www-form-urlencoded", "multipart/form-data"]
   requestTimeoutMs?: number;           // default: 30_000; 0 disables; covers hooks + body read + handler (1.5.4)
+  requestTimeoutStatus?: 408 | 503 | 504; // default: 408; status the requestTimeoutMs deadline answers with (1.10.0)
   maxHeaderCount?: number;             // default: 100; 0 disables. Node also 431s at the parser cap (HTTP + WS upgrade); usable budget is 99 at default
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
 
@@ -76,7 +77,7 @@ interface AppOptions {
   // Validation, hooks, mock mode
   validateResponses?: boolean;         // default: true
   mockMode?: boolean;
-  hooks?: Hooks;
+  hooks?: Hooks;                       // all-request hooks, unmatched 404/405 included (see below)
 
   // OpenAPI / docs auto-mount
   openapi?: AppOpenAPIOptions;
@@ -236,6 +237,48 @@ Header-only authentication runs in `preBody`, where route params, query values, 
 The body is then read and validated before `beforeHandle`. Body-aware guards still need the parsed `ctx.body`; `waf()` inspects it for NoSQL-operator injection and other inbound attack signatures, and `idempotency()` derives its dedup key from it. Deferring the read would silently turn those into no-ops.
 
 Custom cheap guards can use `preBody`. Keep rate limits that depend on validated identity, WAF, idempotency, dependencies, and other parsed-input logic in `beforeHandle`.
+
+Authorization can run in `preBody` too: `requireScopes(scopes, { phase: "preBody" })` answers `403` before the body is read, so a caller with too few scopes and a malformed body gets `403`, not `400`. See [`requireScopes()` options](/docs/api-reference/middleware#require-scopes-options).
+
+## All-request hooks vs route-composed hooks [#all-request-vs-route-composed-hooks]
+
+Where you register a hook decides which requests it sees:
+
+| Registered with | Matched routes | Unmatched `404` / wrong-method `405` | Use it for |
+| --- | --- | --- | --- |
+| `new App({ hooks })` | Every phase | `onRequest`, `onError`, `onSend`, `onResponse` | Request logging, metrics, tracing, error shaping that must see **every** response |
+| `app.use(hooks)` | Every phase | Perimeter guards only (`preBody` / `beforeHandle`: rate limits, IP rules, CORS preflight). `onSend` / `onResponse` run only when one of those guards answers; a plain `404` / `405` skips them | Route-level middleware: auth, scopes, CORS, idempotency, metrics that should only count real routes |
+| Route or group `hooks` | That route / group only | Never | Per-route policy |
+
+So an observer registered with `app.use({ onResponse })` runs for matched routes but **not** for a plain unmatched `404`. That is deliberate: unmatched paths are attacker-controlled, and route-composed metrics such as `httpMetrics()` must not mint a series per random path. When a hook must see every request (access logs, request counters, tracing), pass it to the constructor:
+
+```ts
+const app = new App({
+  hooks: {
+    // Runs exactly once per request, including unmatched 404s and 405s.
+    onResponse(res, ctx) {
+      log.info({ requestId: ctx?.state.requestId, status: res.status }, "HTTP request");
+    },
+  },
+});
+
+app.use(cors({ origin: "https://app.example.com" })); // route-composed
+```
+
+`ctx` is optional in constructor `onResponse` / `onError` hooks because the cold `404` path may not build a full context. Keep high-cardinality labels (the raw path) out of metrics recorded there.
+
+## Request timeout status [#request-timeout-status]
+
+`requestTimeoutMs` bounds the hooks, the body read and the handler. When it trips, the request's `signal` is aborted and the client gets a problem response with `type: "https://daloyjs.dev/errors/request-timeout"`. The status defaults to `408 Request Timeout`, which per RFC 9110 means the *client* was too slow. When the deadline mostly trips on slow upstream work (an LLM call, another API), answer `504 Gateway Timeout` instead, so monitoring counts it as a server-side failure and clients and proxies do not treat it as their fault:
+
+```ts
+const app = new App({
+  requestTimeoutMs: 150_000,
+  requestTimeoutStatus: 504, // or 503; anything other than 408 | 503 | 504 throws
+});
+```
+
+Only the handler deadline changes. The Node adapter still answers `408` when a client is too slow to send its headers or body, because that one really is the client's fault.
 
 ## Errors
 

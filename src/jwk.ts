@@ -460,11 +460,15 @@ export function jwk(opts: JwkOptions): Hooks {
 
 function extractScopes(payload: Record<string, unknown>): readonly string[] {
   // RFC 8693 / OAuth2: `scope` is a space-delimited string; some IdPs emit
-  // `scp` (Azure AD) or `scopes` (custom). Accept all three for ergonomics
-  // while staying strict on shape.
-  const scp = Array.isArray(payload.scp)
-    ? payload.scp.filter((scope): scope is string => typeof scope === "string").join(" ")
-    : "";
+  // `scp` (Microsoft Entra ID / Azure AD) or `scopes` (custom). Accept all
+  // three for ergonomics while staying strict on shape. Entra issues `scp` as
+  // a space-delimited string, other IdPs as an array: accept both.
+  const scp =
+    typeof payload.scp === "string"
+      ? payload.scp
+      : Array.isArray(payload.scp)
+        ? payload.scp.filter((scope): scope is string => typeof scope === "string").join(" ")
+        : "";
   const scopes = Array.isArray(payload.scopes)
     ? payload.scopes.filter((scope): scope is string => typeof scope === "string").join(" ")
     : "";

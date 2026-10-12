@@ -87,7 +87,12 @@ export {
   SAFE_CUSTOM_ERROR_RESPONSE_HEADERS,
   checkCustomErrorResponseHeaders,
 } from "./errors.js";
-export type { ProblemDetails, ProblemRenderOptions, HttpErrorOptions } from "./errors.js";
+export type {
+  ProblemDetails,
+  ProblemRenderOptions,
+  HttpErrorOptions,
+  RequestTimeoutStatus,
+} from "./errors.js";
 
 export type { StandardSchemaV1 } from "./schema.js";
 export { validate, isStandardSchema } from "./schema.js";
@@ -474,6 +479,7 @@ export type {
   CsrfCookieOptions,
   FetchMetadataOptions,
   BasicAuthOptions,
+  RequireScopesOptions,
 } from "./middleware.js";
 export type { BearerAuthOptions, BearerAuthVerifyHook } from "./middleware.js";
 

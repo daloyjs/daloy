@@ -10,6 +10,7 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import {
   _mergePreBodyWithEarlyRejections,
   EARLY_REJECTION_HOOK_MARKER,
+  REQUIRE_SCOPES_HOOK_MARKER,
 } from "./middleware.js";
 
 /**
@@ -370,6 +371,21 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
           ...(Array.isArray(existing) ? existing : []),
           ...(Array.isArray(incoming) ? incoming : []),
         ];
+        continue;
+      }
+      if (key === REQUIRE_SCOPES_HOOK_MARKER) {
+        // Union every bundle's all-of scopes: replay middleware reads this
+        // marker, and keeping only the first bundle's list would let a
+        // stored response replay to a caller missing a later bundle's scope.
+        const existing = (merged as Record<PropertyKey, unknown>)[key];
+        const incoming = record[key];
+        const union = Array.isArray(existing) ? [...(existing as string[])] : [];
+        if (Array.isArray(incoming)) {
+          for (const scope of incoming) {
+            if (typeof scope === "string" && !union.includes(scope)) union.push(scope);
+          }
+        }
+        (merged as Record<PropertyKey, unknown>)[key] = union;
         continue;
       }
       if (key === APP_PRODUCTION_HOOK) {

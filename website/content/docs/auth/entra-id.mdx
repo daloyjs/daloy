@@ -162,6 +162,40 @@ app.get(
 
 **App roles vs delegated scopes:** app-only tokens (client-credentials flow) put granted roles in `roles` with no `scp` claim, while user-delegated tokens put granted scopes in `scp`. Inspect both in `requireAuth` if you support both shapes.
 
+## Without jose: the built-in `jwk()` verifier [#built-in-jwk]
+
+If you would rather not add `jose`, `jwk()` verifies Entra ID v2.0 tokens on its own: it fetches the tenant JWKS over HTTPS with caching, requires a `kid`, pins the algorithm allowlist, and checks `iss`, `aud`, `exp` and `nbf`. Since 1.10.0 it reads Entra's `scp` claim, which is a **space-delimited string** (`"scp": "access_as_user User.Read"`), into `ctx.state.user.scopes`. Earlier versions only accepted an array there, so every Entra user failed `requireScopes()` with `403`.
+
+```ts
+import { App, every, jwk, requireScopes } from "@daloyjs/core";
+
+const tenantId = process.env.ENTRA_TENANT_ID!;
+
+const app = new App({
+  requestTimeoutMs: 150_000,
+  // Slow upstream work (an LLM, Graph) is a server-side timeout, not the client's fault.
+  requestTimeoutStatus: 504,
+});
+
+app.use(every(
+  jwk({
+    jwks: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
+    algorithms: ["RS256"],
+    issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    audience: process.env.ENTRA_API_AUDIENCE!,
+    // Also makes `exp` mandatory: without a lifetime cap, jwk() checks exp
+    // only when the token carries one.
+    maxLifetimeSeconds: 86_400,
+  }),
+  // Authorize before the body is read; any one accepted scope is enough.
+  requireScopes(["access_as_user", "admin"], { phase: "preBody", match: "any" }),
+));
+```
+
+With both hooks in `preBody`, the status codes do not depend on the request body: missing, expired or wrongly signed tokens are `401`, a valid token without an accepted scope is `403`, and only an authorized caller can get a `400` for a malformed body. On Node, add `serve(app, { bufferedBodyMaxBytes: 0 })` if unauthenticated clients sending `Expect: 100-continue` must never be invited to upload; see [request-body buffering](/docs/adapters/node#body-buffering-and-expect-100-continue).
+
+App-only tokens (client-credentials flow) carry `roles` instead of `scp`. `jwk()` does not map `roles` to scopes, so check `ctx.state.user.claims.roles` in your own `preBody` hook if you accept both shapes. Multi-tenant apps should validate `tid` the same way, or in `jwk({ verify })`.
+
 ## Acquiring downstream tokens with MSAL Node
 
 If your API needs to call Microsoft Graph or another protected service *on behalf of* the user, use MSAL Node's `ConfidentialClientApplication`:

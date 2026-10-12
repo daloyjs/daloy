@@ -100,6 +100,30 @@ curl --path-as-is http://localhost:3000/admin/%2e%2e/health
 curl -H 'Host: h\health?' http://localhost:3000/admin
 ```
 
+## Request-body buffering and `Expect: 100-continue` [#body-buffering-and-expect-100-continue]
+
+By default the adapter pre-buffers any request body whose declared `Content-Length` is at most `bufferedBodyMaxBytes` (256 KiB, and never more than the app's `bodyLimitBytes`) **before** dispatching to your hooks. That is the fast path for small JSON bodies, and it has one side effect worth knowing about: a client that sends `Expect: 100-continue` with a small body is told `100 Continue` before any `preBody` authentication runs. An unauthenticated client is invited to upload, and only then gets its `401`. The body is still capped and never reaches a handler, but the bytes cross the wire.
+
+Bodies above the threshold, or with no `Content-Length`, take the streaming path, where the adapter answers `100 Continue` only when the framework actually reads the body. There, an auth failure in `preBody` answers `401` without inviting the body at all.
+
+If you want authentication and authorization to always run before the client is asked for a body, turn buffering off:
+
+```ts
+serve(app, {
+  port: 3000,
+  // Every body takes the streaming path: `100 Continue` is sent only after
+  // preBody auth passes and the framework reaches for the body.
+  bufferedBodyMaxBytes: 0,
+});
+```
+
+| `bufferedBodyMaxBytes` | Small body + `Expect: 100-continue`, unauthenticated | Cost |
+| --- | --- | --- |
+| default (256 KiB) | `100 Continue`, then `401` | Fastest path for small bodies |
+| `0` | `401` only, body never solicited | Small bodies stream instead of being pre-read |
+
+Request deadlines (`requestTimeoutMs`) and client disconnects abort `ctx.request.signal` on both paths, so turning buffering off does not cost you cancellation. Pair it with header-only auth in `preBody` (`jwk()`, `bearerAuth()`) and `requireScopes(scopes, { phase: "preBody" })` so authorization also happens before the body is read.
+
 ## Behind a load balancer
 
 Two rules to avoid the classic 502/504 race:

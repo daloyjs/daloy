@@ -651,6 +651,13 @@ because the table is meant to be audited against your own stack:
   a `principal` names the caller — and then it partitions the key by that
   principal. Opting into caching credentialed responses without a `principal` (or
   a `Vary` that distinguishes callers) removes that protection.
+  Replay middleware also checks the scopes every all-of `requireScopes()` on the
+  route requires before serving a stored response (since 1.10.0 that includes
+  every bundle inside `every()`, not only the first). Since 1.10.0
+  `requireScopes(scopes, { phase: "preBody" })` moves the check into `preBody`,
+  which makes it order-independent like the gates above. Its any-of form
+  (`match: "any"`) cannot be expressed in the replay checks, so it is only
+  accepted with `phase: "preBody"` and refuses to construct otherwise.
 - **`fetchMetadata`** and **`csrf`** guard unsafe methods, which are not in
   `responseCache()`'s cacheable set (`GET`/`HEAD`), so a hit cannot arrive on a
   request they would have rejected.

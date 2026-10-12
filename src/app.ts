@@ -20,6 +20,7 @@ import {
   UnauthorizedError,
   UnsupportedMediaTypeError,
   ValidationError,
+  type RequestTimeoutStatus,
 } from "./errors.js";
 import { validate, type StandardSchemaV1 } from "./schema.js";
 import {
@@ -352,13 +353,31 @@ export interface AppOptions {
    * `afterHandle` hooks, the request-body read and the handler, measured from
    * the first asynchronous step. Default: 30000. Set 0 to disable. On timeout
    * the framework aborts `ctx.request.signal` (cooperative cancellation of
-   * downstream I/O) and responds `408`; see {@link RequestTimeoutError}. It does
+   * downstream I/O) and responds `408` (see {@link AppOptions.requestTimeoutStatus}
+   * and {@link RequestTimeoutError}). It does
    * not forcibly stop CPU-bound work, and `onSend` / `onResponse` and response
    * streaming are not bounded by it.
    *
    * @throws Error at construction when not a finite non-negative integer.
    */
   requestTimeoutMs?: number;
+
+  /**
+   * Status the {@link AppOptions.requestTimeoutMs} deadline answers with.
+   * Default `408`. `408 Request Timeout` (RFC 9110 section 15.5.9) tells the
+   * client *it* was too slow; set `504` when the deadline mostly trips on slow
+   * upstream work (an LLM, another API) so monitoring counts it as a server
+   * error and clients do not treat it as their fault, or `503` for a
+   * temporarily overloaded service. The problem `type` stays
+   * `https://daloyjs.dev/errors/request-timeout` either way. Only the handler
+   * deadline is affected: the Node adapter still answers `408` when a client
+   * is too slow to send its headers or body.
+   *
+   * @defaultValue 408
+   * @throws Error at construction for any value other than `408`, `503`, or `504`.
+   * @since 1.10.0
+   */
+  requestTimeoutStatus?: RequestTimeoutStatus;
 
   /**
    * Maximum number of distinct request header fields accepted before the
@@ -1412,6 +1431,17 @@ function numericOption(name: string, value: unknown, fallback: number): number {
 }
 
 /**
+ * Validate {@link AppOptions.requestTimeoutStatus}: `undefined` takes `408`.
+ * @throws Error for any value other than `408`, `503`, or `504`.
+ */
+function timeoutStatusOption(value: unknown): RequestTimeoutStatus {
+  if (value === undefined) return 408;
+  if (value === 408 || value === 503 || value === 504) return value;
+  const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
+  throw new Error(`app({ requestTimeoutStatus }) must be 408, 503, or 504; got ${shown}.`);
+}
+
+/**
  * Internal Symbol used to stash the raw Uint8Array (or null) body on a
  * `Response` produced by {@link serializeResult}. Adapters that want to
  * avoid the cost of `await response.arrayBuffer()` for buffer-backed
@@ -1946,6 +1976,7 @@ export class App<
         resolved.validateResponses ?? DEFAULTS.validateResponses,
       bodyLimitBytes: numericOption("bodyLimitBytes", resolved.bodyLimitBytes, DEFAULTS.bodyLimitBytes),
       requestTimeoutMs: numericOption("requestTimeoutMs", resolved.requestTimeoutMs, DEFAULTS.requestTimeoutMs),
+      requestTimeoutStatus: timeoutStatusOption(resolved.requestTimeoutStatus),
       maxHeaderCount: numericOption("maxHeaderCount", resolved.maxHeaderCount, DEFAULTS.maxHeaderCount),
       jsonMaxKeys: numericOption("jsonMaxKeys", resolved.jsonMaxKeys, DEFAULTS.jsonMaxKeys),
       jsonMaxDepth: numericOption("jsonMaxDepth", resolved.jsonMaxDepth, DEFAULTS.jsonMaxDepth),
@@ -5364,6 +5395,10 @@ export class App<
               : interceptedResult;
             if (intercepted instanceof Response) {
               copyContextHeaders(synthCtx, intercepted);
+              // Same correlation id as the 204 fallback and the cold guard paths.
+              if (!intercepted.headers.has("x-request-id")) {
+                intercepted.headers.set("x-request-id", requestId);
+              }
               const fin = finalizeResponse(
                 intercepted,
                 synthCtx,
@@ -5445,7 +5480,7 @@ export class App<
         const preBody = isPromiseLike(preBodyResult)
           ? await (timeoutMs === 0
               ? preBodyResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(preBodyResult))
+              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(preBodyResult))
           : preBodyResult;
         const overriddenId = state.requestId;
         if (
@@ -5497,7 +5532,7 @@ export class App<
       ctx = isPromiseLike(validatedCtx)
         ? await (timeoutMs === 0
             ? validatedCtx
-            : (deadline ??= new RequestDeadline(timeoutMs, request)).race(validatedCtx))
+            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(validatedCtx))
         : validatedCtx;
 
       if (allHooks.beforeHandle !== undefined) {
@@ -5505,7 +5540,7 @@ export class App<
         const before = isPromiseLike(beforeResult)
           ? await (timeoutMs === 0
               ? beforeResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(beforeResult))
+              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(beforeResult))
           : beforeResult;
         // Honor any request id override applied by middleware (e.g. the
         // `requestId()` Hooks bundle replaces the framework-generated value
@@ -5564,7 +5599,7 @@ export class App<
       let result: any = isPromiseLike(runResult)
         ? await (timeoutMs === 0
             ? runResult
-            : (deadline ??= new RequestDeadline(timeoutMs, request)).race(runResult))
+            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(runResult))
         : runResult;
 
       if (allHooks.afterHandle !== undefined) {
@@ -5572,7 +5607,7 @@ export class App<
         const afterReturn = isPromiseLike(afterResult)
           ? await (timeoutMs === 0
               ? afterResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request)).race(afterResult))
+              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(afterResult))
           : afterResult;
         if (afterReturn !== undefined) result = afterReturn;
       }
@@ -7495,7 +7530,8 @@ function byteCappedStream(
  * aborting `request.signal` with a `TimeoutError` `DOMException` (the same
  * reason shape as `AbortSignal.timeout()`) so cooperative downstream I/O
  * unwinds, and every step raced against the deadline rejects with a
- * {@link RequestTimeoutError}, so the client receives a `408`. A handler
+ * {@link RequestTimeoutError}, so the client receives a `408` (or the
+ * configured {@link AppOptions.requestTimeoutStatus}). A handler
  * stays attached to every raced step, so a late settle (including the
  * `AbortError` from the work it just cancelled) is never an unhandled
  * rejection. Steps are awaited one at a time, so a single pending slot is
@@ -7504,13 +7540,15 @@ function byteCappedStream(
 class RequestDeadline {
   private readonly timer: ReturnType<typeof setTimeout>;
   private readonly ms: number;
+  private readonly status: RequestTimeoutStatus;
   /** Set once the deadline has passed. */
   private expired = false;
   /** Rejects the step currently being awaited (steps run one at a time). */
   private rejectStep: ((reason: unknown) => void) | undefined;
 
-  constructor(ms: number, request: Request) {
+  constructor(ms: number, request: Request, status: RequestTimeoutStatus) {
     this.ms = ms;
+    this.status = status;
     this.timer = setTimeout(() => {
       this.expired = true;
       abortRequest(
@@ -7519,17 +7557,17 @@ class RequestDeadline {
       );
       const reject = this.rejectStep;
       this.rejectStep = undefined;
-      reject?.(new RequestTimeoutError(ms));
+      reject?.(new RequestTimeoutError(ms, status));
     }, ms);
   }
 
-  /** Settle with `step`, or reject with a 408 if the deadline passes first. */
+  /** Settle with `step`, or reject with the timeout error if the deadline passes first. */
   race<T>(step: PromiseLike<T>): Promise<T> {
     if (this.expired) {
       // Keep a handler on the abandoned step so its late settle is never an
       // unhandled rejection.
       step.then(undefined, () => {});
-      return Promise.reject(new RequestTimeoutError(this.ms));
+      return Promise.reject(new RequestTimeoutError(this.ms, this.status));
     }
     return new Promise<T>((resolve, reject) => {
       this.rejectStep = reject;
