@@ -148,53 +148,150 @@ for (const route of mcpRoutes("/mcp", mcp)) {
   app.route(route); // your API is now an MCP server too
 }`;
 
-const FEATURES = [
+interface Feature {
+  icon: typeof ShieldCheckIcon;
+  title: string;
+  body: string;
+  span?: string;
+  badges?: readonly string[];
+  stat?: { value: string; label: string };
+}
+
+const FEATURES: readonly Feature[] = [
   {
     icon: ShieldCheckIcon,
     title: "Secure runtime defaults",
     body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: body limits, request timeouts, prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, and 5xx detail redaction in production. In production it refuses to boot on the misconfigurations it knows about, such as weak session secrets or session cookies without CSRF.",
+    span: "lg:col-span-2",
+    badges: [
+      "Body limits (1MB default)",
+      "Request timeouts",
+      "Prototype pollution defense",
+      "RFC 9457 problem+json",
+      "Strict schema validation",
+      "Boot misconfiguration guards",
+    ],
   },
   {
     icon: PackageIcon,
     title: "Zero runtime dependencies",
     body: "Installing @daloyjs/core adds exactly zero transitive packages. No postinstall scripts to audit and no surprise CVEs from dependencies you never chose. The framework adds no dependency tree of its own; your app's other dependencies are still yours to vet.",
-  },
-  {
-    icon: LockIcon,
-    title: "Supply-chain-hardened scaffolds",
-    body: "Pick pnpm in create-daloy and pnpm-workspace.yaml is already hardened: ignoreScripts blocks install-script payloads (not code that runs on import), a 24-hour minimumReleaseAge waits out freshly published bad versions that get caught in time, and verifyStoreIntegrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
-  },
-  {
-    icon: SparkleIcon,
-    title: "AI-native scaffolding",
-    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Coding agents that read AGENTS.md pick up your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
+    span: "lg:col-span-1",
+    stat: {
+      value: "0",
+      label: "transitive packages in @daloyjs/core",
+    },
   },
   {
     icon: FileCodeIcon,
     title: "Contract-first by design",
     body: "One route definition is the source of truth for validation, types, OpenAPI 3.1, the typed client, and built-in contract tests, so drift has fewer places to hide.",
+    span: "lg:col-span-1",
+    badges: [
+      "Runtime validation",
+      "OpenAPI 3.1 spec",
+      "Hey API typed client",
+      "Built-in contract tests",
+    ],
+  },
+  {
+    icon: LockIcon,
+    title: "Supply-chain-hardened scaffolds",
+    body: "Pick pnpm in create-daloy and pnpm-workspace.yaml is already hardened: ignoreScripts blocks install-script payloads (not code that runs on import), a 24-hour minimumReleaseAge waits out freshly published bad versions that get caught in time, and verifyStoreIntegrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
+    span: "lg:col-span-2",
+    badges: [
+      "ignoreScripts",
+      "24h minimumReleaseAge",
+      "verifyStoreIntegrity",
+      "Pinned SHA Actions",
+      "daloy doctor audit",
+    ],
+  },
+  {
+    icon: SparkleIcon,
+    title: "AI-native scaffolding",
+    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Coding agents that read AGENTS.md pick up your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
+    span: "lg:col-span-1",
+    badges: ["AGENTS.md included", "Context skills", "Readable over MCP"],
   },
   {
     icon: GlobeIcon,
     title: "Runtime-portable",
-    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda - same app, same tests.",
+    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda: same app, same tests.",
+    span: "lg:col-span-1",
+    badges: [
+      "Node 24+",
+      "Bun",
+      "Deno",
+      "Cloudflare Workers",
+      "Vercel",
+      "AWS Lambda",
+    ],
   },
   {
     icon: RocketLaunchIcon,
     title: "Hey API typed clients",
     body: "Run pnpm gen and get a fully typed fetch SDK, for any consumer, in any TS project, generated from your real spec. Or skip codegen with the in-process typed client.",
+    span: "lg:col-span-1",
+    badges: ["pnpm gen", "Zero config", "End-to-end typed fetch SDK"],
   },
   {
     icon: BroadcastIcon,
     title: "Streaming & observability",
     body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
+    span: "lg:col-span-1",
+    badges: [
+      "Backpressure-safe SSE",
+      "NDJSON streaming",
+      "OTel HTTP server spans",
+    ],
   },
   {
     icon: CubeIcon,
     title: "Batteries included",
     body: "Edge-friendly sessions, WebSockets that spend from the same rate-limit buckets as HTTP, structured logs, and graceful shutdown: the production plumbing you usually assemble from plugins, still with zero runtime dependencies.",
+    span: "lg:col-span-2",
+    badges: [
+      "Edge sessions",
+      "WebSocket rate limits",
+      "Structured logs",
+      "Graceful shutdown",
+    ],
   },
 ];
+
+const COMPARISON_ROWS = [
+  {
+    want: "Best OpenAPI ergonomics",
+    best: "FastAPI",
+    give: "Built-in OpenAPI 3.1 from one route definition",
+  },
+  {
+    want: "Serverless / edge fit",
+    best: "Hono",
+    give: "Web-standard core, multi-runtime adapters",
+  },
+  {
+    want: "Mature Node ops & docs",
+    best: "Fastify",
+    give: "Encapsulated plugins, structured logs, graceful shutdown",
+  },
+  {
+    want: "Modern TS-first DX, Bun OK",
+    best: "Elysia",
+    give: "End-to-end typed handlers, typed context, typed client",
+  },
+  {
+    want: "Best typed client codegen",
+    best: "Hey API",
+    give: "pnpm gen → fully typed fetch SDK",
+  },
+  {
+    want: "Portable supply-chain hardening for the apps you build",
+    best: "pnpm defaults + zero-runtime-dep core",
+    give: "Hardened pnpm install settings, source-verified lockfiles, SBOM + npm provenance",
+  },
+] as const;
 
 const FEATURE_ACCENTS = [
   {
@@ -251,12 +348,11 @@ export default function HomePage() {
               className="float-up max-w-3xl text-base font-medium text-foreground/80 text-pretty sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              DaloyJS ships secure defaults and refuses to start in production
-              on the misconfigurations it knows about. It has zero runtime
-              dependencies and a hardened, provenance-signed publish pipeline.
-              No framework makes an app fully secure or stops every
-              supply-chain attack, so the docs say what is on by default, what
-              you turn on, and the risks that remain.
+              AI agents write backend code faster than humans can audit it.
+              DaloyJS provides the runtime defense and performance floor:
+              secure defaults that refuse to start on misconfigurations, zero
+              runtime dependencies against supply-chain attacks, and
+              high-throughput execution under agent-scale load.
             </h2>
             <div
               className="float-up mt-2 flex flex-col gap-3 sm:flex-row"
@@ -300,88 +396,70 @@ export default function HomePage() {
               ))}
             </ul>
             <ContractFlowVisual />
-            <p
-              className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
+            <div
+              className="float-up mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground"
               style={{ animationDelay: "320ms" }}
             >
-              Any framework can route a request. DaloyJS is built for
-              what happens next: one route definition drives validation, types,
-              OpenAPI 3.1, and a Hey API typed client, and the guardrails
-              AI-assisted code forgets (body limits, timeouts,
-              prototype-pollution-safe parsing, 5xx redaction) ship already
-              switched on. Rate limits, CORS allowlists, and CSRF are one{" "}
-              <code>app.use()</code> line, because those are policy. Set{" "}
-              <code>docs: true</code> on the <code>App</code> constructor
-              and DaloyJS auto-mounts a Scalar API reference at{" "}
-              <code>/docs</code> and the live OpenAPI 3.1 spec at{" "}
-              <code>/openapi.json</code>
-              {", "}the same DX as FastAPI.
-            </p>
-            <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-              <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy
-              means <span className="text-foreground">flow</span> in Tagalog,
-              pronounced{" "}
-              <span className="whitespace-nowrap text-foreground">da-loy</span>
-              {". "}
+              <span>
+                <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy
+                means <span className="text-foreground">flow</span> in Tagalog
+                (pronounced{" "}
+                <span className="whitespace-nowrap text-foreground">da-loy</span>
+                ).
+              </span>
+              <span className="hidden sm:inline text-border">•</span>
               <Link
                 href={"/about" as Route}
-                className="underline underline-offset-4"
+                className="underline underline-offset-4 hover:text-foreground"
               >
                 About
               </Link>
-              {", "}
+              <span className="hidden sm:inline text-border">•</span>
               <Link
                 href="/about-the-name"
-                className="underline underline-offset-4"
+                className="underline underline-offset-4 hover:text-foreground"
               >
-                the name
+                The name
               </Link>
-            </p>
-            <p
-              className="float-up max-w-2xl text-sm leading-7 text-muted-foreground"
-              style={{ animationDelay: "360ms" }}
-            >
-              New to backend TypeScript? Start with the{" "}
+              <span className="hidden sm:inline text-border">•</span>
               <Link
                 href="/docs/tutorials/bookstore"
-                className="underline underline-offset-4"
+                className="underline underline-offset-4 hover:text-foreground"
               >
-                bookstore tutorial
+                Bookstore tutorial
               </Link>
-              {". "}Evaluating options for a team? Everything below answers one
-              question: what does DaloyJS have that the others don&apos;t?
-            </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Features */}
+      {/* Security & Architecture - Bento Grid */}
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-balance">Why DaloyJS</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-balance">
+              Security defaults: the defense layer for AI-generated code
+            </h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
-              There are plenty of good ways to route an HTTP request in
-              JavaScript. This is what the others don&apos;t give you:{" "}
-              <strong>secure defaults</strong> at the runtime layer, pnpm
-              install-time hardening shipped with <code>create-daloy</code>,
-              and an optional hardened GitHub Actions bundle, so the app-safe
-              pieces of an LLM-era supply-chain defense are on the happy path
-              without giving up OpenAPI ergonomics, runtime portability, typed
-              clients, or Node ops.
+              When AI models generate code, developer typing speed is not the
+              bottleneck: runtime safety and supply-chain integrity are. DaloyJS
+              enforces guardrails at the runtime layer: request body limits,
+              timeouts, prototype-pollution protection, 5xx detail redactions,
+              and boot-time misconfiguration refusals, with zero transitive
+              dependencies to exploit.
             </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) =>
-              (() => {
-                const accent = FEATURE_ACCENTS[i % FEATURE_ACCENTS.length];
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map((f, i) => {
+              const accent = FEATURE_ACCENTS[i % FEATURE_ACCENTS.length];
 
-                return (
-                  <Card
-                    key={f.title}
-                    className={`${accent.card} group float-up transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
-                    style={{ animationDelay: `${i * 60}ms` }}
-                  >
+              return (
+                <Card
+                  key={f.title}
+                  className={`${accent.card} ${f.span ?? "lg:col-span-1"} group float-up flex flex-col justify-between transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
+                  style={{ animationDelay: `${i * 60}ms` }}
+                >
+                  <div>
                     <CardHeader>
                       <span
                         className={`${accent.icon} mb-2 inline-flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110`}
@@ -395,236 +473,65 @@ export default function HomePage() {
                         {f.body}
                       </CardDescription>
                     </CardContent>
-                  </Card>
-                );
-              })()
-            )}
+                  </div>
+                  {f.badges && f.badges.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 px-6 pb-6 pt-1">
+                      {f.badges.map((badge) => (
+                        <span
+                          key={badge}
+                          className="rounded-md border border-border/70 bg-background/70 px-2 py-0.5 text-xs font-medium text-foreground/80 dark:bg-background/50"
+                        >
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {f.stat && (
+                    <div className="px-6 pb-6 pt-1">
+                      <div className="flex items-baseline gap-2.5 rounded-lg border border-border/60 bg-background/60 px-3 py-2 dark:bg-background/40">
+                        <span className="font-mono text-3xl font-extrabold tracking-tight text-foreground">
+                          {f.stat.value}
+                        </span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {f.stat.label}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Hello world */}
-      <section className="border-b">
-        <div className="mx-auto max-w-5xl px-6 py-16">
-          <div
-            className="float-up mb-8 text-center"
-            style={{ animationDelay: "80ms" }}
-          >
-            <h2 className="text-3xl font-bold tracking-tight text-balance">
-              Hello, contract
-            </h2>
-            <p className="mt-3 leading-8 text-muted-foreground">
-              One route, types, validation, OpenAPI, and the typed client all
-              generated from it.
-            </p>
-          </div>
-          <div className="float-up" style={{ animationDelay: "120ms" }}>
-            <CodeBlock
-              code={HELLO_WORLD}
-              language="ts"
-              showCopyButton={false}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Scalar docs */}
-      <section className="border-b">
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="mb-10 flex flex-col items-center gap-3 text-center">
-            <span className="inline-flex size-11 items-center justify-center rounded-xl bg-mist-100 text-mist-700 ring-1 ring-mist-200/80 dark:bg-mist-950/40 dark:text-mist-200 dark:ring-mist-800/70 dim:bg-mist-950/35 dim:text-mist-100">
-              <BookOpenTextIcon className="size-6" />
-            </span>
-            <h2 className="text-3xl font-bold tracking-tight text-balance">
-              Scalar API reference, one line
-            </h2>
-            <p className="max-w-3xl leading-8 text-muted-foreground">
-              Scalar is the modern successor to Swagger UI: fast, clean,
-              dark-mode-native, with built-in try-it requests. In DaloyJS it is
-              the <em>default</em> docs UI, not a plugin:{" "}
-              <code>docs: true</code> on the <code>App</code> constructor
-              auto-mounts this page at <code>/docs</code> and the live OpenAPI
-              3.1 spec at <code>/openapi.json</code>.
-            </p>
-          </div>
-          <ScalarPreview />
-          <p className="mt-4 text-center text-sm leading-6 text-muted-foreground">
-            Generated from your route contracts, zero extra code. Prefer Swagger
-            UI or Redoc? Both are one config field away.{" "}
-            <Link
-              href="/docs/openapi"
-              className="font-medium text-foreground underline underline-offset-4"
-            >
-              OpenAPI &amp; docs UI guide →
-            </Link>
-          </p>
-        </div>
-      </section>
-
-      {/* Comparison */}
-      <section className="border-b">
-        <div className="mx-auto max-w-5xl px-6 py-16">
-          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-balance">
-            Competitor strengths, fewer tradeoffs
-          </h2>
-          <p className="mb-10 text-center leading-8 text-muted-foreground">
-            DaloyJS is not trying to win one checkbox. It is trying to remove
-            the glue work between the best ideas developers already like.
-          </p>
-          <div className="scrollbar-thin scrollbar-thumb-mist-300 scrollbar-track-transparent overflow-x-auto rounded-lg border dark:scrollbar-thumb-mist-700 dim:scrollbar-thumb-mist-800">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="p-3 text-left">You want</th>
-                  <th className="p-3 text-left">Today&apos;s best-of</th>
-                  <th className="p-3 text-left">What DaloyJS gives you</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  [
-                    "Best OpenAPI ergonomics",
-                    "FastAPI",
-                    "Built-in OpenAPI 3.1 from one route definition",
-                  ],
-                  [
-                    "Serverless / edge fit",
-                    "Hono",
-                    "Web-standard core, multi-runtime adapters",
-                  ],
-                  [
-                    "Mature Node ops & docs",
-                    "Fastify",
-                    "Encapsulated plugins, structured logs, graceful shutdown",
-                  ],
-                  [
-                    "Modern TS-first DX, Bun OK",
-                    "Elysia",
-                    "End-to-end typed handlers, typed context, typed client",
-                  ],
-                  [
-                    "Best typed client codegen",
-                    "Hey API",
-                    "pnpm gen → fully typed fetch SDK",
-                  ],
-                  [
-                    "Portable supply-chain hardening for the apps you build",
-                    "pnpm defaults + zero-runtime-dep core",
-                    "Hardened pnpm install settings, source-verified lockfiles, SBOM + npm provenance",
-                  ],
-                ].map(([want, best, give]) => (
-                  <tr key={want} className="border-t">
-                    <td className="p-3 font-medium">{want}</td>
-                    <td className="p-3 text-muted-foreground">{best}</td>
-                    <td className="p-3">{give}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* Benchmarks */}
+      {/* Benchmarks & Performance */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="mb-10 text-center">
             <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-              Benchmarks
+              Benchmarks &amp; Performance
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               The numbers, with the asterisks attached
             </h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
-              DaloyJS ships security checks on by default, so a fair comparison has to
-              say so out loud. These charts come straight from the repo&apos;s
-              own benchmark suite, and the caveats are part of the chart.
+              When AI agents loop tools and stream high-concurrency requests,
+              throughput and cold-start latency become critical. DaloyJS ships
+              security checks on by default, and these benchmarks measure
+              performance with every guard active.
             </p>
           </div>
           <BenchmarkCharts />
         </div>
       </section>
 
-      {/* Support */}
-      <section className="border-b bg-mauve-50/35 dark:bg-mauve-950/10 dim:bg-mauve-950/10">
-        <div className="mx-auto max-w-4xl px-6 py-14">
-          <div className="rounded-3xl border border-mauve-200/70 bg-background/90 p-8 text-center shadow-sm dark:border-mauve-900/70 dark:bg-background/80">
-            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-              Support the project
-            </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
-              If DaloyJS saves you time, you can buy me a coffee
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
-              DaloyJS is free and MIT-licensed. If the docs, posts, or the
-              framework itself helped you ship something with a little less
-              drama, coffee is a perfectly reasonable way to keep the work
-              going.
-            </p>
-            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-              <a
-                href="https://buymeacoffee.com/daloyjs"
-                target="_blank"
-                rel="noreferrer"
-                className={buttonVariants({ size: "lg" })}
-              >
-                Buy me a coffee
-              </a>
-              <Link
-                href="/blog"
-                className={buttonVariants({ size: "lg", variant: "outline" })}
-              >
-                Read the blog
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="border-b">
-        <div className="mx-auto max-w-3xl px-6 py-20 text-center">
-          <h2 className="mb-4 text-3xl font-bold tracking-tight text-balance">
-            Ready to ship with secure defaults?
-          </h2>
-          <p className="mb-8 leading-8 text-muted-foreground">
-            Scaffold a project in seconds with install hardening for your
-            package manager, generated CI that blocks install scripts, pinned GitHub
-            Actions, Dependabot, CODEOWNERS, and lockfile source verification.
-            Then keep the contract as the app grows, the same app runs on Node,
-            Bun, Deno, and Cloudflare Workers.
-          </p>
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <Link
-              href="/docs/installation"
-              className={buttonVariants({ size: "lg" })}
-            >
-              Install DaloyJS
-            </Link>
-            <Link
-              href="/docs/tutorials/bookstore"
-              className={buttonVariants({ size: "lg", variant: "outline" })}
-            >
-              Build a bookstore API
-            </Link>
-            <a
-              href="https://github.com/daloyjs/daloy"
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ size: "lg", variant: "outline" })}
-            >
-              View source
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* MCP */}
-      <section id="mcp" className="scroll-mt-20">
+      {/* MCP - AI Agent Integration */}
+      <section id="mcp" className="border-b scroll-mt-20">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="mb-10 text-center">
             <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-              For developers and AI agents
+              Machine-Native: For AI Agents and Tools
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               DaloyJS is MCP-ready
@@ -647,7 +554,7 @@ export default function HomePage() {
           </div>
 
           <Card className="mb-10 border-olive-200/70 bg-olive-50/55 dark:border-olive-900/70 dark:bg-olive-950/18 dim:border-olive-900/60 dim:bg-olive-950/15">
-            <CardContent className="grid gap-8 pt-2 lg:grid-cols-2 lg:items-center">
+            <CardContent className="grid gap-8 pt-6 lg:grid-cols-2 lg:items-center">
               <div className="flex flex-col gap-4">
                 <span className="inline-flex size-11 items-center justify-center rounded-xl bg-olive-100 text-olive-700 ring-1 ring-olive-200/80 dark:bg-olive-950/40 dark:text-olive-200 dark:ring-olive-800/70 dim:bg-olive-950/35 dim:text-olive-100">
                   <PlugsConnectedIcon className="size-6" />
@@ -726,6 +633,209 @@ export default function HomePage() {
                 Using a stdio-only client? Bridge it with{" "}
                 <code>npx -y mcp-remote {MCP_ENDPOINT_URL}</code>.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contracts as Blast-Radius Safety Boundaries */}
+      <section className="border-b">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div
+            className="float-up mb-8 text-center"
+            style={{ animationDelay: "80ms" }}
+          >
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              Blast-Radius Boundaries
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
+              Contracts as safety enclosures, not vanity syntax
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
+              In an AI-first workflow, contracts are not an aesthetic luxury for
+              humans: they are the machine-enforced boundary that prevents
+              hallucinated data structures from leaking between components. One
+              route contract strictly validates requests, bounds response
+              payloads, and emits the live OpenAPI 3.1 spec and typed client.
+            </p>
+          </div>
+          <div className="float-up" style={{ animationDelay: "120ms" }}>
+            <CodeBlock
+              code={HELLO_WORLD}
+              language="ts"
+              showCopyButton={false}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Scalar docs */}
+      <section className="border-b">
+        <div className="mx-auto max-w-7xl px-6 py-16">
+          <div className="mb-10 flex flex-col items-center gap-3 text-center">
+            <span className="inline-flex size-11 items-center justify-center rounded-xl bg-mist-100 text-mist-700 ring-1 ring-mist-200/80 dark:bg-mist-950/40 dark:text-mist-200 dark:ring-mist-800/70 dim:bg-mist-950/35 dim:text-mist-100">
+              <BookOpenTextIcon className="size-6" />
+            </span>
+            <h2 className="text-3xl font-bold tracking-tight text-balance">
+              Scalar API reference, one line
+            </h2>
+            <p className="max-w-3xl leading-8 text-muted-foreground">
+              Scalar is the modern successor to Swagger UI: fast, clean,
+              dark-mode-native, with built-in try-it requests. In DaloyJS it is
+              the <em>default</em> docs UI, not a plugin:{" "}
+              <code>docs: true</code> on the <code>App</code> constructor
+              auto-mounts this page at <code>/docs</code> and the live OpenAPI
+              3.1 spec at <code>/openapi.json</code>.
+            </p>
+          </div>
+          <ScalarPreview />
+          <p className="mt-4 text-center text-sm leading-6 text-muted-foreground">
+            Generated from your route contracts, zero extra code. Prefer Swagger
+            UI or Redoc? Both are one config field away.{" "}
+            <Link
+              href="/docs/openapi"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              OpenAPI &amp; docs UI guide →
+            </Link>
+          </p>
+        </div>
+      </section>
+
+      {/* Comparison */}
+      <section className="border-b">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-balance">
+            Competitor strengths, fewer tradeoffs
+          </h2>
+          <p className="mb-10 text-center leading-8 text-muted-foreground">
+            DaloyJS is not trying to win one checkbox. It is trying to remove
+            the glue work between the best ideas developers already like.
+          </p>
+
+          {/* Mobile view: Stacked card format */}
+          <div className="space-y-4 md:hidden">
+            {COMPARISON_ROWS.map((row) => (
+              <div
+                key={row.want}
+                className="rounded-xl border border-border/80 bg-card p-4 shadow-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    You want
+                  </span>
+                  <span className="rounded-md border border-border/70 bg-muted/50 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    Today: {row.best}
+                  </span>
+                </div>
+                <p className="mt-1.5 font-semibold text-foreground">
+                  {row.want}
+                </p>
+                <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <span className="mb-1 block text-[11px] font-semibold tracking-wider text-foreground/70 uppercase">
+                    What DaloyJS gives you
+                  </span>
+                  <p className="text-sm leading-relaxed text-foreground/90">
+                    {row.give}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop view: Structured table */}
+          <div className="hidden scrollbar-thin scrollbar-thumb-mist-300 scrollbar-track-transparent overflow-x-auto rounded-lg border md:block dark:scrollbar-thumb-mist-700 dim:scrollbar-thumb-mist-800">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="p-3 text-left">You want</th>
+                  <th className="p-3 text-left">Today&apos;s best-of</th>
+                  <th className="p-3 text-left">What DaloyJS gives you</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.want} className="border-t">
+                    <td className="p-3 font-medium">{row.want}</td>
+                    <td className="p-3 text-muted-foreground">{row.best}</td>
+                    <td className="p-3">{row.give}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="border-b">
+        <div className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <h2 className="mb-4 text-3xl font-bold tracking-tight text-balance">
+            Ready to ship with secure defaults?
+          </h2>
+          <p className="mb-8 leading-8 text-muted-foreground">
+            Scaffold a project in seconds with install hardening for your
+            package manager, generated CI that blocks install scripts, pinned GitHub
+            Actions, Dependabot, CODEOWNERS, and lockfile source verification.
+            Then keep the contract as the app grows, the same app runs on Node,
+            Bun, Deno, and Cloudflare Workers.
+          </p>
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <Link
+              href="/docs/installation"
+              className={buttonVariants({ size: "lg" })}
+            >
+              Install DaloyJS
+            </Link>
+            <Link
+              href="/docs/tutorials/bookstore"
+              className={buttonVariants({ size: "lg", variant: "outline" })}
+            >
+              Build a bookstore API
+            </Link>
+            <a
+              href="https://github.com/daloyjs/daloy"
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ size: "lg", variant: "outline" })}
+            >
+              View source
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Support */}
+      <section className="border-b bg-mauve-50/35 dark:bg-mauve-950/10 dim:bg-mauve-950/10">
+        <div className="mx-auto max-w-4xl px-6 py-14">
+          <div className="rounded-3xl border border-mauve-200/70 bg-background/90 p-8 text-center shadow-sm dark:border-mauve-900/70 dark:bg-background/80">
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              Support the project
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
+              If DaloyJS saves you time, you can buy me a coffee
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
+              DaloyJS is free and MIT-licensed. If the docs, posts, or the
+              framework itself helped you ship something with a little less
+              drama, coffee is a perfectly reasonable way to keep the work
+              going.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <a
+                href="https://buymeacoffee.com/daloyjs"
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ size: "lg" })}
+              >
+                Buy me a coffee
+              </a>
+              <Link
+                href="/blog"
+                className={buttonVariants({ size: "lg", variant: "outline" })}
+              >
+                Read the blog
+              </Link>
             </div>
           </div>
         </div>

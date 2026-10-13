@@ -101,7 +101,7 @@
       "name": "standardHeaders",
       "type": "\"draft-8\"",
       "required": false,
-      "description": "Also emit the IETF `RateLimit` / `RateLimit-Policy` headers (draft-ietf-httpapi-ratelimit-headers-08), e.g. `RateLimit-Policy: \"100-in-60sec\"; q=100; w=60` and `RateLimit: \"100-in-60sec\"; r=42; t=17`, where `t` is seconds until the window resets. The policy name matches express-rate-limit's, so clients written against it keep working. Off by default. No partition key (`pk`) is sent, so the bucket key never leaves the server.",
+      "description": "Also emit the IETF `RateLimit` / `RateLimit-Policy` headers (draft-ietf-httpapi-ratelimit-headers-08), e.g. `RateLimit-Policy: \"100-in-60sec\"; q=100; w=60` and `RateLimit: \"100-in-60sec\"; r=42; t=17`, where `t` is seconds until the window resets. The policy name matches express-rate-limit's, so clients written against it keep working. Off by default. No partition key (`pk`) is sent, so the bucket key never leaves the server.\n\n@throws Error at construction for any value other than `\"draft-8\"`.",
       "since": "1.9.0"
     },
     {

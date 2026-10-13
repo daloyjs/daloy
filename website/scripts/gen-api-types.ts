@@ -14,6 +14,7 @@
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import type { ApiProperty } from "../lib/api-types";
 import { readApiProperties } from "../lib/api-types-extract";
@@ -68,7 +69,7 @@ export function serializeSnapshot(snapshot: Record<string, ApiProperty[]>): stri
   return `${JSON.stringify(snapshot, null, 2)}\n`;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const snapshot = await buildApiTypesSnapshot();
   await writeFile(SNAPSHOT_FILE, serializeSnapshot(snapshot));
   console.log(`wrote ${SNAPSHOT_FILE} (${Object.keys(snapshot).length} declarations)`);
