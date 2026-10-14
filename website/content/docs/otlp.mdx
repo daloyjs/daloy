@@ -1,12 +1,13 @@
 ---
 title: OTLP export (OpenTelemetry push)
-description: Push logs and OTel semantic-convention HTTP metrics to an OpenTelemetry collector with zero dependencies. One App option reads the standard OTEL_EXPORTER_OTLP_* variables. Standalone exporters cover custom signals.
+description: Push logs, traces, and semconv HTTP metrics to an OpenTelemetry collector with zero dependencies. One App option reads the standard OTEL_* variables.
 keywords:
   - OTLP
   - OpenTelemetry
   - collector
   - OTEL_EXPORTER_OTLP_ENDPOINT
   - http.server.request.duration
+  - traces
   - semantic conventions
   - DaloyJS observability
 sitemap:
@@ -21,13 +22,13 @@ Many container platforms run an in-cluster OpenTelemetry collector and expect wo
 import { App } from "@daloyjs/core";
 
 const app = new App({
-  telemetry: true,
+  telemetry: { traces: true },
 });
 ```
 
-That flag tees the app logger's output to the collector as OTLP logs and records [`http.server.request.duration`](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) per the OTel HTTP semantic conventions. With no endpoint configured it is a silent no-op, so it is safe to keep enabled in development. There is no OTel SDK, loader hook, or runtime dependency.
+That tees the app logger's output to the collector as OTLP logs, records [`http.server.request.duration`](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) per the OTel HTTP semantic conventions, and (because of `traces: true`) traces every matched route. `telemetry: true` gives you logs and metrics; traces are opt-in. With no endpoint configured it is a silent no-op, so it is safe to keep enabled in development. There is no OTel SDK, loader hook, or runtime dependency.
 
-<FlowDiagram title="Push pipeline" numbered caption="The logger write sink and the semconv HTTP hook feed two batched exporters. Both post OTLP/HTTP JSON to the collector named by the platform-injected environment variables. The collector fans out to Loki-style log stores and Mimir/Prometheus-style metric stores." steps={[
+<FlowDiagram title="Push pipeline" numbered caption="The logger write sink, the semconv HTTP hook, and the request tracer feed three batched exporters. Each posts OTLP/HTTP JSON to the collector named by the platform-injected environment variables. The collector fans out to log, metric, and trace stores." steps={[
           {
             label: "OTEL_* env vars",
             eyebrow: "platform-injected",
@@ -35,12 +36,12 @@ That flag tees the app logger's output to the collector as OTLP logs and records
           },
           {
             label: "logger + hooks",
-            detail: "log lines tee, http.server.request.duration per request",
+            detail: "log lines, request duration, one span per request",
             tone: "accent",
           },
           {
             label: "batched exporters",
-            detail: "OTLP/HTTP JSON: /v1/logs and /v1/metrics",
+            detail: "OTLP/HTTP JSON: /v1/logs, /v1/metrics, /v1/traces",
           },
           {
             label: "collector",
@@ -49,15 +50,16 @@ That flag tees the app logger's output to the collector as OTLP logs and records
           {
             label: "Grafana",
             eyebrow: "standard dashboards",
-            detail: "semconv names and buckets work unchanged",
+            detail: "semconv names; logs link to traces",
             tone: "success",
           },
         ]} />
 
 ## What gets exported
 
-- **Logs**: every line the app logger writes. JSON lines are decomposed into an OTLP record: `msg` / `message` / `event` becomes the body, `level` maps to the OTLP severity, and remaining fields ship as attributes (structured metadata in Loki-style backends). Non-JSON lines ship verbatim.
-- **`http.server.request.duration`**: a histogram with the spec bucket boundaries and attributes `http.request.method` (normalized to the well-known set, else `_OTHER`), `http.route` (the matched route *template*, e.g. `/books/:id`, from `ctx.routePath`), `http.response.status_code`, `url.scheme`, and `error.type` on `5xx`. Unmatched 404s record nothing (the 404 fast path builds no request context), so raw paths can never mint metric series.
+- **Logs**: every line the app logger writes. JSON lines are decomposed into an OTLP record: `msg` / `message` / `event` becomes the body, `level` maps to the OTLP severity, well-formed `trace_id` / `span_id` / `trace_flags` fields become the record's trace context, and remaining fields ship as attributes (structured metadata in Loki-style backends). Non-JSON lines ship verbatim.
+- **`http.server.request.duration`**: a histogram with the spec bucket boundaries and attributes `http.request.method` (normalized to the well-known set, else `_OTHER`), `http.route` (the matched route *template*, e.g. `/books/:id`, from `ctx.routePath`), `http.response.status_code`, `url.scheme`, and `error.type` on `5xx`. Only requests that matched a route are recorded. Unmatched 404 / 405 responses and synthetic OPTIONS preflights record nothing, so raw paths can never mint metric series.
+- **Traces** (`traces: true`): one SERVER span per matched route from [`otelTracing()`](/docs/tracing), named after the route template (`GET /books/:id`), with the HTTP semantic-convention attributes. See [Traces](#traces).
 
 ## Configuration
 
@@ -68,6 +70,7 @@ const app = new App({
   telemetry: {
     logs: true, // tee the app logger to OTLP (default true)
     metrics: true, // semconv HTTP metrics (default true)
+    traces: { sampleRatio: 0.2 }, // OTLP traces (default false)
     exporter: {
       // all optional; defaults from OTEL_EXPORTER_OTLP_* env vars
       endpoint: "http://collector.internal:4318",
@@ -82,14 +85,62 @@ const app = new App({
 await app.telemetry?.flush();
 ```
 
-The conventional injected endpoint is the gRPC form (`http://host:4317`). A trailing `:4317` is rewritten to `:4318`, the collector's OTLP/HTTP port. Header values often carry multi-tenant routing credentials. DaloyJS never logs them. Spec values are percent-encoded (`tenant_id=a%2Cb` arrives as `a,b`).
+The conventional injected endpoint is the gRPC form (`http://host:4317`). A trailing `:4317` is rewritten to `:4318`, the collector's OTLP/HTTP port. Header values often carry multi-tenant routing credentials. DaloyJS never logs them, and the endpoint in the `telemetry.otlp` boot log line has any userinfo and query string stripped. Spec values are percent-encoded (`tenant_id=a%2Cb` arrives as `a,b`).
+
+### Environment variables [#environment]
+
+| Variable | Effect |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Base URL for every signal; `/v1/logs`, `/v1/metrics`, `/v1/traces` are appended. |
+| `OTEL_EXPORTER_OTLP_{LOGS,METRICS,TRACES}_ENDPOINT` | Full URL for one signal, used as-is. Wins over the base URL. |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_{SIGNAL}_HEADERS` | `key=value,...` request headers; the per-signal list overlays the generic one. |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_{SIGNAL}_TIMEOUT` | Export POST timeout in ms (default `5000`). |
+| `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME` | Resource attributes on every export. |
+| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`. Default `parentbased_always_on`. |
+| `OTEL_SDK_DISABLED=true` | Kill switch: disables every exporter, even with an explicit `endpoint`. |
+| `OTEL_{LOGS,METRICS,TRACES}_EXPORTER=none` | Disables one signal. |
+
+Explicit options in code win over the environment, except the two kill switches, which belong to the operator. DaloyJS speaks OTLP/HTTP with JSON bodies only, whatever `OTEL_EXPORTER_OTLP_PROTOCOL` says. Every collector accepts that on port 4318.
+
+## Traces [#traces]
+
+`traces: true` installs [`otelTracing()`](/docs/tracing) on every route backed by `createOtlpTracer()`, a dependency-free tracer that batches ended spans and pushes them to `/v1/traces`. Like the HTTP metrics it covers matched routes only, so a flood of unmatched paths produces no spans.
+
+```ts
+const app = new App({
+  telemetry: {
+    traces: {
+      propagate: true, // continue an inbound W3C traceparent (default true)
+      sampleRatio: 0.1, // keep 10% of new traces (default: OTEL_TRACES_SAMPLER, else 1)
+      correlateLogs: true, // bind trace_id / span_id onto ctx.state.log (default true)
+    },
+  },
+});
+```
+
+- **Sampling** is parent-based: a span with a parent follows the parent's sampled flag, so a trace is kept or dropped as a whole. New root traces are kept with probability `sampleRatio`, decided from the trace id. Sampled-out spans are cheap no-ops that still carry a valid identity, so `traceparent` keeps flowing downstream.
+- **Propagation** continues an inbound `traceparent` through the strict [`parseTraceparent()`](/docs/tracing#propagating-upstream-context). On an internet-facing edge the client controls that header, so set `propagate: false` there (or strip the header at the load balancer). Otherwise a client can pick your trace ids and opt its own requests out of sampling.
+- **Logs link to traces.** Handler lines written through `ctx.state.log` carry the span's ids and reach the collector as the log record's trace context.
+- **Child spans** take the request span as an explicit parent, because hooks cannot activate an OTel context:
+
+```ts
+app.get("/books/:id", contract, async ({ state, params }) => {
+  const span = app.telemetry?.traces?.startSpan("load book", {}, state.otelSpan);
+  try {
+    return { status: 200 as const, body: await books.find(params.id) };
+  } finally {
+    span?.end();
+  }
+});
+```
 
 ## Fail-safe by contract [#fail-safety]
 
-- A dead or misconfigured collector never affects request serving: export errors are swallowed and counted in `droppedBatches`. That counter mixes overflowed log lines, failed POSTs, and series refused at the cardinality cap, so do not treat it as "POSTs that failed" alone.
-- Every export POST is aborted after 5 seconds (override with `exporter.flushTimeoutMs`) so a blackholed collector cannot latch the flusher forever. Redirects are refused, so tenant headers cannot follow a 302 off-box.
-- The log queue is bounded (drop-oldest). Metric series are capped and attribute values length-truncated, so hostile cardinality cannot grow memory.
+- A dead or misconfigured collector never affects request serving: export errors are swallowed and counted in `droppedBatches`. That counter mixes overflowed log lines or spans, failed POSTs, and series refused at the cardinality cap, so do not treat it as "POSTs that failed" alone.
+- Every export POST is aborted after 5 seconds (override with `exporter.flushTimeoutMs` or `OTEL_EXPORTER_OTLP_TIMEOUT`) so a blackholed collector cannot stall flushing forever. Redirects are refused, so tenant headers cannot follow a 302 off-box.
+- The log queue (1,000 lines) and span queue (2,048 spans) are bounded, drop-oldest. Metric series are capped and attribute values length-truncated. Each span is capped at 128 attributes and 128 events, with long values truncated, so hostile input cannot grow memory.
 - Metrics use *cumulative* temporality: totals survive a failed push and the next successful push carries them.
+- `flush()` never rejects. Called while an export is already in flight, it waits for that export and then sends what was queued meanwhile, so the shutdown flush and the serverless adapters' `waitUntil` never finish early.
 
 ## Standalone exporters [#standalone]
 
@@ -98,6 +149,7 @@ The pieces compose individually from `@daloyjs/core/otlp` for custom signals, fo
 ```ts
 import {
   createOtlpMetricsExporter,
+  createOtlpTracer,
   semconvHttpMetrics,
 } from "@daloyjs/core/otlp";
 
@@ -112,6 +164,12 @@ metrics?.record("checkout_amount", { currency: "USD" }, 129.99, {
 
 // or install just the semconv HTTP hook on an existing app
 const app = new App({ hooks: metrics ? semconvHttpMetrics(metrics) : {} });
+
+// a tracer for otelTracing(), or for spans outside HTTP (jobs, queues)
+const tracer = createOtlpTracer({ sampleRatio: 0.5 });
+const job = tracer?.startSpan("nightly-report");
+job?.end();
+await tracer?.flush();
 ```
 
 ## Serverless and isolate runtimes [#serverless]
@@ -128,13 +186,14 @@ Workers without `nodejs_compat` cannot read `process.env`. Pass `telemetry: { ex
 
 - A caller-supplied `Logger` instance (pino, winston, a custom sink) is not intercepted. Tee it yourself with `createOtlpLogExporter` and your logger's write hook. The built-in logger, or `{ level }`, is teed automatically.
 - Export uses raw `fetch`. It does not go through `fetchGuard`. The collector URL is operator config (the same trust class as a database URL), and in-cluster collectors are typically private IPs that SSRF defaults would refuse.
-- There is no OTLP trace export yet. Keep using [`otelTracing()`](/docs/tracing) with a bring-your-own tracer.
+- No gRPC and no protobuf: OTLP/HTTP with JSON bodies only.
+- No automatic context propagation. Outbound `fetch` calls are not instrumented, and there is no context manager. Use `formatTraceparent(span.spanContext())` to propagate, and pass parents explicitly for child spans.
 - Calling `app.fetch` directly on an isolate, skipping the adapter, will queue telemetry and mostly never send it. Use `toFetchHandler` / `toLambdaHandler`, or call `await app.telemetry.flush()` yourself.
 
 ## Pull vs push, and tracing [#relationship]
 
-- [`app.metrics()` (Prometheus)](/docs/metrics) is the *pull* pillar: a scrape endpoint with Prometheus naming. Use it when something scrapes you. Use `telemetry` when a collector expects pushes. They coexist. The `httpMetrics()` route label also benefits from `ctx.routePath` now.
-- [`otelTracing()`](/docs/tracing) remains the tracing pillar (bring your own tracer). OTLP trace export is a planned follow-up.
+- [`app.metrics()` (Prometheus)](/docs/metrics) is the *pull* pillar: a scrape endpoint with Prometheus naming. Use it when something scrapes you. Use `telemetry` when a collector expects pushes. They coexist. The `httpMetrics()` route label also benefits from `ctx.routePath`.
+- [`otelTracing()`](/docs/tracing) is the tracing hook either way. `telemetry: { traces: true }` pairs it with the built-in OTLP tracer. If you already run the OTel SDK, pass its tracer to `otelTracing()` yourself and leave `traces` off.
 
 ## Querying in Grafana [#grafana]
 
@@ -151,3 +210,5 @@ sum by (http_response_status_code) (
   rate(http_server_request_duration_seconds_count[5m])
 )
 ```
+
+Spans land in Tempo (or Jaeger) under the `service.name` resource attribute. With log correlation on, Loki log lines carry the trace id, so a Grafana "derived field" or the Tempo data source's "logs for this span" link jumps between the two.

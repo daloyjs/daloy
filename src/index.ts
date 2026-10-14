@@ -627,6 +627,7 @@ export type { MetricLabels, MetricsRegistryOptions, HttpMetricsOptions } from ".
 export {
   createOtlpLogExporter,
   createOtlpMetricsExporter,
+  createOtlpTracer,
   createAppTelemetry,
   semconvHttpMetrics,
   HTTP_SERVER_REQUEST_DURATION_BUCKETS,
@@ -636,8 +637,12 @@ export type {
   OtlpLogExporter,
   OtlpMetricsExporter,
   OtlpHistogramOptions,
+  OtlpTracer,
+  OtlpTracerOptions,
+  OtlpSpan,
   SemconvHttpMetricsOptions,
   TelemetryOptions,
+  TelemetryTraceOptions,
   AppTelemetry,
 } from "./otlp.js";
 
@@ -659,7 +664,12 @@ export type {
 
 export {
   otelTracing,
+  parseTraceparent,
+  formatTraceparent,
+  isValidSpanContext,
+  TRACING_SPAN_KIND_INTERNAL,
   TRACING_SPAN_KIND_SERVER,
+  TRACING_SPAN_KIND_CLIENT,
   TRACING_SPAN_STATUS_UNSET,
   TRACING_SPAN_STATUS_OK,
   TRACING_SPAN_STATUS_ERROR,
@@ -669,6 +679,7 @@ export type {
   TracingAttributes,
   TracingAttributeValue,
   TracingSpan,
+  TracingSpanContext,
   TracingStartSpanOptions,
   TracingTracer,
 } from "./tracing.js";

@@ -1,11 +1,12 @@
 ---
 title: Tracing with OpenTelemetry
-description: Instrument DaloyJS apps with OpenTelemetry-compatible spans. The otelTracing helper produces a Hooks object that starts a SERVER span per request, attaches HTTP semantic-convention attributes, exposes the span on ctx.state, and ends it when the response is sent.
+description: Instrument apps with OpenTelemetry spans. otelTracing starts a SERVER span per request with HTTP semantic-convention attributes and works with any tracer.
 keywords:
   - OpenTelemetry
   - tracing
   - spans
   - otelTracing
+  - traceparent
   - DaloyJS observability
   - OTel
 ---
@@ -14,9 +15,9 @@ keywords:
 
 DaloyJS ships `otelTracing(opts)`, a hook factory that produces a `Hooks` object compatible with [`@opentelemetry/api`](https://www.npmjs.com/package/@opentelemetry/api). It starts a **SERVER-kind span** per HTTP request, attaches the standard [HTTP semantic-convention attributes](https://opentelemetry.io/docs/specs/semconv/http/http-spans/), exposes the span on `ctx.state` for handlers, and ends the span exactly once when the response is sent.
 
-The framework **does not depend on** `@opentelemetry/api`. You pass any tracer that implements the minimal `TracingTracer` interface, so the same hook works on Node with the OTel SDK, on Workers with a custom exporter, or in tests with an in-memory fake.
+The framework **does not depend on** `@opentelemetry/api`. You pass any tracer that implements the minimal `TracingTracer` interface, so the same hook works on Node with the OTel SDK, on Workers with the built-in [`createOtlpTracer()`](#built-in-otlp-tracer), or in tests with an in-memory fake.
 
-<FlowDiagram title="One span per request" numbered caption="The hook starts a SERVER span and attaches request attributes on onRequest, exposes the span on ctx.state during beforeHandle, then records the status code (and any exception) on onSend before ending the span exactly once." steps={[
+<FlowDiagram title="One span per request" numbered caption="The hook starts a SERVER span and attaches request attributes on onRequest, exposes the span on ctx.state during beforeHandle, then records the status code, http.route, and (for 5xx only) the error on onSend before ending the span exactly once." steps={[
           {
             label: "Extract context",
             eyebrow: "optional",
@@ -33,12 +34,12 @@ The framework **does not depend on** `@opentelemetry/api`. You pass any tracer t
           },
           {
             label: "onSend",
-            detail: "http.response.status_code, recordException on errors",
+            detail: "status code, http.route, rename to GET /users/:id",
           },
           {
             label: "span.end()",
             eyebrow: "exactly once",
-            detail: "5xx escalates to setStatus(ERROR)",
+            detail: "only 5xx sets ERROR + error.type",
             tone: "success",
           },
         ]} />
@@ -56,12 +57,34 @@ const app = new App({
 });
 ```
 
+No OTel SDK and just want spans in a collector? Use `new App({ telemetry: { traces: true } })` instead, see [OTLP export](/docs/otlp#traces).
+
 That single hook gives every request:
 
 - `http.request.method`, `url.path`, `url.scheme`, `server.address` (host without port), `server.port` (when present), `url.query` (redacted, see below), `user_agent.original` set on `onRequest`.
-- `http.response.status_code` set on `onSend`.
-- `recordException` + `setStatus(ERROR)` on thrown errors, and `ERROR` escalation for any `5xx` response.
-- A guaranteed single `span.end()` per request, even if both `onError` and `onSend` fire.
+- `http.response.status_code`, and `http.route` (the matched route template, e.g. `/users/:id`) set on `onSend`.
+- For `5xx` responses: `setStatus(ERROR)`, `error.type` (the exception name when one was thrown, otherwise the status code), and `recordException` with the thrown error.
+- A guaranteed single `span.end()` per request, including requests rejected before routing (for example by the cross-origin guard).
+
+### Status follows the HTTP semantic conventions [#status]
+
+Per the [OTel HTTP span status rules](https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status), a `4xx` is the client's problem, so it leaves a SERVER span's status **unset**. Only `5xx` responses mark the span `ERROR`. A thrown `NotFoundError`, a failed validation (`400` / `422`), or a rejected token (`401`) therefore no longer shows up as a failed span in Jaeger, Tempo, or your error-rate panel.
+
+| Outcome | Span status | `error.type` | Exception event |
+| --- | --- | --- | --- |
+| `2xx` / `3xx` | unset | - | - |
+| `4xx` (returned or thrown) | unset | - | - |
+| `5xx` from a thrown error | `ERROR` with the message | the error name, e.g. `TypeError` | yes |
+| `5xx` returned by the handler | `ERROR` | the status code, e.g. `503` | - |
+
+### Span names stay low-cardinality [#span-names]
+
+A span starts as `"<METHOD> <pathname>"`, because routing has not run yet. When the tracer's spans implement `updateName` (the `@opentelemetry/api` SDK and `createOtlpTracer()` both do), the span is renamed on send:
+
+- matched route: `GET /users/:id`, the route template from your route table;
+- unmatched request: just `GET`.
+
+Raw paths carry ids, emails, and anything an attacker types, and they explode the "operations" list of every trace UI. The route template is bounded by your route table. A custom `spanName` is never renamed.
 
 ### `url.query` is redacted by default [#url-query-redaction]
 
@@ -114,6 +137,43 @@ app.post(
 );
 ```
 
+## Child spans [#child-spans]
+
+`otelTracing()` runs as hooks, not as a wrapper around your handler, so it **cannot make the request span the active OTel context**. Hooks have no "around" phase to call `context.with()` in. Auto-instrumented libraries (an OTel `pg` or `undici` instrumentation) therefore start their spans as new roots unless you activate the span yourself.
+
+With the OTel SDK, wrap the work in `context.with`:
+
+```ts
+import { context, trace, type Span } from "@opentelemetry/api";
+
+app.get("/orders/:id", contract, async ({ state, params }) => {
+  const span = state.otelSpan as Span;
+  // Everything inside runs with the request span active: auto-instrumented
+  // clients and tracer.startActiveSpan() calls become its children.
+  return context.with(trace.setSpan(context.active(), span), async () => {
+    const order = await db.orders.find(params.id);
+    return { status: 200 as const, body: order };
+  });
+});
+```
+
+With [`createOtlpTracer()`](#built-in-otlp-tracer), pass the parent explicitly as the third `startSpan` argument:
+
+```ts
+import { TRACING_SPAN_KIND_CLIENT } from "@daloyjs/core";
+
+const child = tracer.startSpan(
+  "SELECT orders",
+  { kind: TRACING_SPAN_KIND_CLIENT, attributes: { "db.system.name": "postgresql" } },
+  state.otelSpan, // the request span
+);
+try {
+  return await db.orders.find(params.id);
+} finally {
+  child.end();
+}
+```
+
 ## Customizing span name and attributes
 
 All extractors are optional. They are merged on top of the defaults so you only need to override what you care about.
@@ -133,7 +193,7 @@ otelTracing({
 
 ## Propagating upstream context
 
-DaloyJS does not bundle a propagator. If you want parent-span continuation from `traceparent` / B3 headers, use `contextFromRequest` to wire your propagator's `extract` in:
+DaloyJS does not install a propagator. To continue a trace started by an upstream service, return its context from `contextFromRequest`. With the OTel SDK, use its propagator:
 
 ```ts
 import { context, propagation, trace } from "@opentelemetry/api";
@@ -151,9 +211,71 @@ otelTracing({
 });
 ```
 
+Without an SDK, the built-in W3C helpers do the same job. `parseTraceparent()` is strict, because the header is attacker-controlled on a public edge: uppercase hex, all-zero ids, version `ff`, a malformed version-`00` value, and anything over 512 characters are ignored.
+
+```ts
+import { otelTracing, parseTraceparent, formatTraceparent } from "@daloyjs/core";
+import { createOtlpTracer } from "@daloyjs/core/otlp";
+
+const tracer = createOtlpTracer()!;
+
+otelTracing({
+  tracer,
+  contextFromRequest: (req) => parseTraceparent(req.headers.get("traceparent")),
+});
+
+// Pass the trace on to a downstream service:
+await fetch("https://inventory.internal/stock", {
+  headers: { traceparent: formatTraceparent(span.spanContext()) },
+});
+```
+
+<Callout type="security" title="Who controls traceparent?">
+<p>Between your own services, continuing <code>traceparent</code> is the point of distributed tracing. On an internet-facing edge the client controls the header: it can choose your trace id and, with parent-based sampling, set the sampled flag to <code>00</code> to keep its own requests out of your traces. Do not continue inbound context at the edge. Strip the header at your load balancer, leave <code>contextFromRequest</code> unset, or use <code>telemetry: {"{"} traces: {"{"} propagate: false {"}"} {"}"}</code>.</p>
+</Callout>
+
+## Correlating logs with traces [#log-correlation]
+
+`correlateLogs: true` rebinds `ctx.state.log` to a child logger that adds `trace_id`, `span_id`, and `trace_flags` to every line the handler writes. The span must implement `spanContext()` (the OTel SDK and `createOtlpTracer()` both do). Invalid or all-zero ids are ignored.
+
+```ts
+const app = new App({ hooks: otelTracing({ tracer, correlateLogs: true }) });
+
+app.get("/books/:id", contract, ({ state }) => {
+  state.log.info({ event: "book.read" }, "reading");
+  // {"level":"info","trace_id":"0af7...","span_id":"b7ad...","trace_flags":"01",...}
+  return { status: 200 as const, body: book };
+});
+```
+
+The [OTLP log exporter](/docs/otlp) promotes those fields to the log record's trace context, so Grafana, Datadog, and similar backends can jump from a log line straight to its trace. `telemetry: { traces: true }` turns this on for you.
+
+## Built-in OTLP tracer [#built-in-otlp-tracer]
+
+`createOtlpTracer()` from `@daloyjs/core/otlp` is a dependency-free `TracingTracer` that batches spans and pushes them to an OpenTelemetry collector as OTLP/HTTP JSON (`/v1/traces`). It reads the same `OTEL_EXPORTER_OTLP_*` variables as the log and metric exporters, returns `null` when no endpoint is configured, and runs on Node, Bun, Deno, Cloudflare Workers, and Vercel.
+
+```ts
+import { App, otelTracing, parseTraceparent } from "@daloyjs/core";
+import { createOtlpTracer } from "@daloyjs/core/otlp";
+
+const tracer = createOtlpTracer({ sampleRatio: 0.1 }); // keep 10% of new traces
+
+const app = new App({
+  hooks: tracer
+    ? otelTracing({
+        tracer,
+        correlateLogs: true,
+        contextFromRequest: (req) => parseTraceparent(req.headers.get("traceparent")),
+      })
+    : {},
+});
+```
+
+Most apps do not need to write this: `new App({ telemetry: { traces: true } })` wires exactly that. See [OTLP export](/docs/otlp#traces) for sampling, the environment variables, and the fail-safe limits.
+
 ## End-to-end with Jaeger (OTLP)
 
-The repository ships a runnable example plus a Jaeger service in the `examples/observability/` Docker stack, so you can watch real spans land in a trace UI without writing any exporter code. Because `otelTracing()` only needs a tracer that matches the small `TracingTracer` interface, the example wires in a **dependency-free OTLP/HTTP exporter** (about 120 lines of web-standard `fetch` + `crypto`) that ships spans straight to Jaeger's OTLP receiver, no `@opentelemetry/*` SDK required.
+The repository ships a runnable example plus a Jaeger service in the `examples/observability/` Docker stack, so you can watch real spans land in a trace UI. The example uses `createOtlpTracer()`, so there is no `@opentelemetry/*` SDK and no exporter code to write.
 
 ### 1. Start Jaeger
 
@@ -168,7 +290,7 @@ docker compose -f examples/observability/docker-compose.yml up jaeger
 ```sh
 node --import tsx examples/otel-tracing-demo.ts
 # DaloyJS OTel tracing demo running at http://localhost:3002
-# Exporting OTLP spans to: http://localhost:4318/v1/traces
+# Exporting OTLP spans to: http://localhost:4318
 ```
 
 ### 3. Generate traffic and open Jaeger
@@ -176,7 +298,7 @@ node --import tsx examples/otel-tracing-demo.ts
 ```sh
 curl localhost:3002/orders
 curl -X POST localhost:3002/orders -d '{"item":"book","total":42}' -H 'content-type: application/json'
-curl localhost:3002/slow    # a span with visible duration
+curl localhost:3002/slow    # a span with visible duration and a child span
 curl localhost:3002/boom    # an ERROR span with an exception event
 
 # Continue a trace started by an upstream service (W3C traceparent):
@@ -184,23 +306,23 @@ curl localhost:3002/orders \
   -H 'traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'
 ```
 
-Open `http://localhost:16686`, pick the `daloy-otel-demo` service, and you will see one SERVER span per request: the `/boom` span flagged as an error with an `exception` event, the `/slow` span showing its real duration, and the `traceparent` request stitched into the upstream trace as a child span.
+Open `http://localhost:16686`, pick the `daloy-otel-demo` service, and you will see one SERVER span per request named after its route template: the `/boom` span flagged as an error with an `exception` event, the `/slow` span showing its real duration and a nested child span, and the `traceparent` request stitched into the upstream trace as a child span.
 
-In production you usually swap the demo exporter for the real SDK, `trace.getTracer("svc")` from `@opentelemetry/api` backed by `@opentelemetry/sdk-node` and an OTLP exporter. The `otelTracing()` call does not change. Only the tracer you pass in does.
+If you already run the OTel SDK, pass `trace.getTracer("svc")` from `@opentelemetry/api` instead. The `otelTracing()` call does not change. Only the tracer you pass in does.
 
 ## Lifecycle and limitations
 
-- Request outcomes. Matched routes, unmatched requests (`404` / `405`), and OPTIONS preflight responses all end with `http.response.status_code` on the same span.
-- The hook has no global side effects. It never touches `globalThis`, never installs a propagator, and never imports an OTel SDK. It stays adapter-portable.
-- Single end. If a handler throws, the same span is marked errored and ended once during `onSend`. Later `onError` / repeat `onSend` invocations are no-ops.
+- Request outcomes. Matched routes, unmatched requests (`404` / `405`), OPTIONS preflight responses, and requests rejected before routing (cross-origin guard) all end with `http.response.status_code` on the same span when the hook is installed with `new App({ hooks })`. Installed with `app.use(...)`, it covers matched routes registered after the call.
+- No active context. The hook never touches `globalThis`, never installs a propagator or context manager, and never imports an OTel SDK, so it stays adapter-portable. See [Child spans](#child-spans) for parenting work under the request span.
+- Single end. If a handler throws, the error is remembered and the span is ended once during `onSend`, with the final status deciding whether it is an error. Later `onError` / repeat `onSend` invocations are no-ops.
 - Composes with other hooks. Combine `otelTracing(...)` with `requestId(...)`, `secureHeaders(...)`, etc., DaloyJS merges global, group, and per-route hooks pipeline-style.
 
 ## Tree-shake-friendly subpath
 
 ```ts
 // Main barrel:
-import { otelTracing } from "@daloyjs/core";
+import { otelTracing, parseTraceparent } from "@daloyjs/core";
 
 // Or, to keep your bundle minimal:
-import { otelTracing } from "@daloyjs/core/tracing";
+import { otelTracing, parseTraceparent } from "@daloyjs/core/tracing";
 ```

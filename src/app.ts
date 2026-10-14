@@ -319,7 +319,8 @@ export interface AppOptions {
    * OpenTelemetry OTLP push export. `true` (or an options object) exports the
    * app logger's output as OTLP logs and records `http.server.request.duration`
    * per the OTel HTTP semantic conventions, pushed to the collector named by
-   * the standard `OTEL_EXPORTER_OTLP_*` environment variables. A silent no-op
+   * the standard `OTEL_EXPORTER_OTLP_*` environment variables. Add
+   * `traces: true` to also trace every matched route and push the spans. A silent no-op
    * when no endpoint is configured, so it is safe to keep enabled in
    * development. Export failures never affect request serving. Isolate
    * runtimes must go through `toFetchHandler` / `toLambdaHandler` so a
@@ -2018,6 +2019,8 @@ export class App<
     this.maybeMountDocs();
     this.maybeMountAsyncAPI();
     if (this.telemetry !== undefined) {
+      // Tracing first so the span is open before the metrics timer starts.
+      if (this.telemetry.traceHooks !== undefined) this.use(this.telemetry.traceHooks);
       if (this.telemetry.hooks !== undefined) this.use(this.telemetry.hooks);
       const telemetry = this.telemetry;
       this.onClose(() => telemetry.flush());
@@ -2025,8 +2028,10 @@ export class App<
         {
           event: "telemetry.otlp",
           active: telemetry.endpoint !== null,
-          // Endpoint only — OTLP headers may carry tenant credentials.
+          // Endpoint only (userinfo and query already stripped) — OTLP
+          // headers may carry tenant credentials.
           endpoint: telemetry.endpoint ?? undefined,
+          traces: telemetry.traces !== null,
         },
         telemetry.endpoint !== null
           ? "OTLP telemetry export active"
@@ -5203,6 +5208,14 @@ export class App<
     // Synthetic OPTIONS-preflight context, tracked only so the `finally` block
     // can run request finalizers registered on it (it is never `ctx`).
     let preflightCtx: BaseContext<any, any> | undefined;
+    // Set once a global `onRequest` hook has seen this request. Such a hook
+    // may correlate per-request state (span, timer, in-flight gauge) that
+    // only `onSend` / `onResponse` release, so the error path must hand
+    // those finalizers a context even when routing never built one.
+    let onRequestRan = false;
+    // Context handed to `onError` / `onSend` / `onResponse` on the error
+    // path: `ctx`, or a bootstrap context when only `onRequest` ran.
+    let hookCtx: BaseContext<any, any> | undefined;
     const globalHooks = this.globalHooks;
     let activeErrorHook = globalHooks.onError;
     let activeResponseHook = globalHooks.onResponse;
@@ -5222,6 +5235,7 @@ export class App<
       this.assertTrustProxyConfigured(request);
       this.assertBootGuards();
       if (globalHooks.onRequest !== undefined) {
+        onRequestRan = true;
         const onRequestResult = globalHooks.onRequest(request);
         if (isPromiseLike(onRequestResult)) await onRequestResult;
       }
@@ -5293,46 +5307,14 @@ export class App<
               coldPreBody !== undefined ||
               coldGuards !== undefined;
         if (needsCtx) {
-          // `query` and `headers` are materialized lazily — the common
-          // `onError` hook reads `requestId` / path and never touches them,
-          // so we skip `new URL(...)` + `Object.fromEntries` + the
-          // `Headers.forEach` on 404 GETs entirely. Setters preserve write
-          // semantics for hooks that reassign these fields.
-          let _query: Record<string, unknown> | undefined;
-          let _headers: Record<string, unknown> | undefined;
-          const reqRef = request;
-          const reqUrl = requestUrl;
-          ctx = {
+          ctx = coldPathContext(
             request,
-            params: {},
-            get query() {
-              if (_query !== undefined) return _query as any;
-              const qi = reqUrl.indexOf("?");
-              if (qi === -1) return (_query = {}) as any;
-              const hi = reqUrl.indexOf("#", qi + 1);
-              const qs =
-                hi === -1 ? reqUrl.slice(qi + 1) : reqUrl.slice(qi + 1, hi);
-              return (_query = Object.fromEntries(
-                new URLSearchParams(qs),
-              )) as any;
-            },
-            set query(v: any) {
-              _query = v;
-            },
-            get headers() {
-              return (_headers ??= headersToObject(reqRef.headers)) as any;
-            },
-            set headers(v: any) {
-              _headers = v;
-            },
-            body: undefined,
-            state: { ...this.decorations, requestId, log },
-            set: new LazyResponseSet(),
-            // Cast through `unknown`: this is a deliberately minimal bootstrap
-            // context for the cold 404 path (no user state populated yet), so
-            // it must compile even when a consumer augments `AppState`.
-          } as unknown as BaseContext<any, any>;
-          ctx.set.headers.set("x-request-id", requestId);
+            requestUrl,
+            this.decorations,
+            requestId,
+            log,
+            true,
+          );
         }
         if (coldPreBody !== undefined) {
           const guardResult = coldPreBody(ctx!);
@@ -5682,13 +5664,32 @@ export class App<
       }
       return finalized;
     } catch (err) {
+      // A request rejected before routing built a context (cross-origin
+      // guard, a 404/405 without an `onError` hook) still went through a
+      // global `onRequest`. Give the error and finalizer hooks a bootstrap
+      // context so they can correlate and release per-request state;
+      // without one an `otelTracing()` span is never ended and an
+      // `httpMetrics()` in-flight gauge never comes back down. `ctx` itself
+      // stays undefined so the CORS/header decision below is unchanged.
+      if (ctx === undefined && onRequestRan) {
+        hookCtx = coldPathContext(
+          request,
+          request.url,
+          this.decorations,
+          requestId,
+          log,
+          false,
+        );
+      } else {
+        hookCtx = ctx;
+      }
       // Skip the unconditional `await activeErrorHook?.(...)`: when no
       // error hook is registered (the common case), `await undefined`
       // still schedules a microtask. Branching first lets the hot error
       // path stay synchronous.
       let handled: unknown;
       if (activeErrorHook !== undefined) {
-        const r = activeErrorHook(err, ctx);
+        const r = activeErrorHook(err, hookCtx);
         handled = isPromiseLike(r) ? await r : r;
       }
       if (handled instanceof Response) {
@@ -5698,7 +5699,7 @@ export class App<
           handled.headers.set("x-request-id", requestId);
         return finalizeResponse(
           handled,
-          ctx,
+          hookCtx,
           {
             onSend: activeSendHook,
             onResponse: activeResponseHook,
@@ -5748,7 +5749,7 @@ export class App<
         else this.applyAppCorsPolicy(request, res);
         return finalizeResponse(
           res,
-          ctx,
+          hookCtx,
           {
             onSend: activeSendHook,
             onResponse: activeResponseHook,
@@ -5775,7 +5776,7 @@ export class App<
         res.headers.set("x-request-id", requestId);
       return finalizeResponse(
         res,
-        ctx,
+        hookCtx,
         {
           onSend: activeSendHook,
           onResponse: activeResponseHook,
@@ -5791,6 +5792,7 @@ export class App<
       if (requestFinalizersEnabled) {
         runRequestFinalizers(ctx);
         runRequestFinalizers(preflightCtx);
+        if (hookCtx !== ctx) runRequestFinalizers(hookCtx);
       }
     }
   };
@@ -6799,6 +6801,58 @@ class RequestContext {
     this._h = v;
     this._hSet = true;
   }
+}
+
+/**
+ * Minimal bootstrap context for the cold dispatch path (404 / 405 and errors
+ * thrown before a route context exists). `query` and `headers` are
+ * materialized lazily: the common `onError` / `onSend` hook reads
+ * `requestId` / the request and never touches them, so a 404 GET skips
+ * `new URL(...)`, `Object.fromEntries`, and the `Headers.forEach` walk.
+ * Setters preserve write semantics for hooks that reassign these fields.
+ */
+function coldPathContext(
+  request: Request,
+  requestUrl: string,
+  decorations: Record<string, unknown>,
+  requestId: string,
+  log: Logger,
+  stampRequestId: boolean,
+): BaseContext<any, any> {
+  let _query: Record<string, unknown> | undefined;
+  let _headers: Record<string, unknown> | undefined;
+  const ctx = {
+    request,
+    params: {},
+    get query() {
+      if (_query !== undefined) return _query as any;
+      const qi = requestUrl.indexOf("?");
+      if (qi === -1) return (_query = {}) as any;
+      const hi = requestUrl.indexOf("#", qi + 1);
+      const qs =
+        hi === -1 ? requestUrl.slice(qi + 1) : requestUrl.slice(qi + 1, hi);
+      return (_query = Object.fromEntries(new URLSearchParams(qs))) as any;
+    },
+    set query(v: any) {
+      _query = v;
+    },
+    get headers() {
+      return (_headers ??= headersToObject(request.headers)) as any;
+    },
+    set headers(v: any) {
+      _headers = v;
+    },
+    body: undefined,
+    state: { ...decorations, requestId, log },
+    set: new LazyResponseSet(),
+    // Cast through `unknown`: this is a deliberately minimal bootstrap
+    // context (no user state populated yet), so it must compile even when a
+    // consumer augments `AppState`.
+  } as unknown as BaseContext<any, any>;
+  // The error-path caller stamps `x-request-id` on the response itself, so
+  // it skips this and never materializes the lazy `Headers`.
+  if (stampRequestId) ctx.set.headers.set("x-request-id", requestId);
+  return ctx;
 }
 
 function createPreBodyContext(

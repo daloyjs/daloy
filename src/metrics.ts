@@ -150,9 +150,11 @@ export class Counter extends Metric {
    *
    * @param labels - Label bag (validated + sorted). Omit for an unlabelled series.
    * @param value - Positive increment. Default `1`.
-   * @throws {Error} If `value` is negative (counters never decrease).
+   * @throws {Error} If `value` is negative (counters never decrease) or not
+   *   finite (`NaN` / `Infinity` would poison the series for good).
    */
   inc(labels?: MetricLabels, value = 1): void {
+    if (!Number.isFinite(value)) throw new Error("Counter increment must be a finite number.");
     if (value < 0) throw new Error("Counter increment must be non-negative.");
     const entries = normalizeLabels(labels);
     const key = seriesKey(entries);
@@ -273,8 +275,12 @@ export class Histogram extends Metric {
    * Record an observation (e.g. a request duration in seconds) for the given
    * label set. The value lands in every bucket whose upper bound is `>=`
    * the value (cumulative), plus the `_sum` and `_count` series.
+   *
+   * @throws {Error} If `value` is not finite: a single `NaN` would turn
+   *   `_sum` into `NaN` for the life of the process.
    */
   observe(labels: MetricLabels | undefined, value: number): void {
+    if (!Number.isFinite(value)) throw new Error("Histogram observation must be a finite number.");
     const entries = normalizeLabels(labels);
     const key = seriesKey(entries);
     let s = this.series.get(key);
@@ -605,13 +611,6 @@ export function httpMetrics(opts: HttpMetricsOptions): Hooks {
     },
     onSend(res, ctx) {
       if (!ctx) return;
-      const path = (() => {
-        try {
-          return new URL(ctx.request.url).pathname;
-        } catch {
-          return "/";
-        }
-      })();
       const started = START_TIMES.get(ctx.request);
       START_TIMES.delete(ctx.request);
       // Only balance in-flight and record metrics when onRequest was actually
@@ -621,7 +620,16 @@ export function httpMetrics(opts: HttpMetricsOptions): Hooks {
       // decrementing the gauge would drive it negative.
       if (started === undefined) return;
       inFlight.dec();
-      if (opts.exclude && opts.exclude(path)) return;
+      // Parse the URL only when an exclude predicate needs the pathname.
+      if (opts.exclude !== undefined) {
+        let path = "/";
+        try {
+          path = new URL(ctx.request.url).pathname;
+        } catch {
+          /* malformed URL — keep the fallback */
+        }
+        if (opts.exclude(path)) return;
+      }
       const method = ctx.request.method.toUpperCase();
       const route = routeLabel(ctx);
       requests.inc({ method, route, status: res.status });

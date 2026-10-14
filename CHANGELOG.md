@@ -17,6 +17,77 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- OTLP trace export. `new App({ telemetry: { traces: true } })` traces every
+  matched route with `otelTracing()` and pushes the spans to the collector as
+  OTLP/HTTP JSON, next to the existing logs and metrics, with no
+  dependencies. Traces are opt-in so existing `telemetry: true` apps do not
+  start sending a new signal on upgrade. Options: `propagate` (continue an
+  inbound W3C `traceparent`; default `true`, set `false` on an
+  internet-facing edge where the client controls that header),
+  `sampleRatio`, and `correlateLogs`. New exports: `createOtlpTracer()`
+  (a `TracingTracer` that works standalone too), `OtlpTracer`, `OtlpSpan`,
+  `OtlpTracerOptions`, `TelemetryTraceOptions`, and the
+  `AppTelemetry.traces` / `.traceHooks` fields.
+- Log and trace correlation. `otelTracing({ correlateLogs: true })` (on by
+  default under `telemetry.traces`) rebinds `ctx.state.log` to a child
+  logger carrying `trace_id` / `span_id` / `trace_flags`, and the OTLP log
+  exporter promotes well-formed ids to the log record's trace context, so
+  Grafana and similar backends can jump from a log line to its trace.
+- W3C Trace Context helpers in `@daloyjs/core/tracing`: `parseTraceparent()`
+  (strict, because the header is attacker-controlled: rejects uppercase hex,
+  all-zero ids, version `ff`, malformed version `00`, and values over 512
+  characters), `formatTraceparent()`, and `isValidSpanContext()`. Also the
+  `TracingSpanContext` type, the optional `TracingSpan.updateName()` /
+  `.spanContext()` members, and the `TRACING_SPAN_KIND_INTERNAL` /
+  `TRACING_SPAN_KIND_CLIENT` constants.
+- The OTLP exporters honor more of the standard environment: the per-signal
+  `OTEL_EXPORTER_OTLP_{LOGS,METRICS,TRACES}_ENDPOINT` (used as-is),
+  `_HEADERS`, and `_TIMEOUT`, the generic `OTEL_EXPORTER_OTLP_TIMEOUT`,
+  `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG`, and the operator kill
+  switches `OTEL_SDK_DISABLED=true` and `OTEL_<SIGNAL>_EXPORTER=none`.
+
+### Changed
+
+- `otelTracing()` follows the OTel HTTP semantic conventions more closely. A
+  `4xx` response no longer marks the SERVER span `ERROR` (before this, every
+  404, 401 and validation failure showed up as a failed span). A `5xx` sets
+  `error.type` (the exception name when one was thrown, else the status
+  code) and records the exception. Matched routes get `http.route`. When the
+  tracer's spans implement `updateName` (the OTel SDK does), the span is
+  renamed to `"<METHOD> <route template>"`, or `"<METHOD>"` for unmatched
+  requests, so raw path segments (ids, emails) no longer end up in span
+  names. A custom `spanName` is never renamed.
+- `semconvHttpMetrics()` records only requests that matched a route, whatever
+  other hooks are installed. Unmatched 404 / 405 responses and synthetic
+  OPTIONS preflights record nothing.
+- `AppTelemetry.endpoint` (also logged in the `telemetry.otlp` boot line) is
+  now origin + path only. Userinfo, query and fragment are stripped because
+  they can carry credentials, and it is `null` when no exporter is active.
+
+### Fixed
+
+- A request rejected before routing built a context (a cross-origin guard
+  `403`, or a 404 / 405 on an app with no `onError` hook) still ran global
+  `onRequest` hooks, but `onError` / `onSend` / `onResponse` then got no
+  context to correlate with. With `new App({ hooks: otelTracing(...) })`
+  the span of a cross-origin-rejected request was never ended (so never
+  exported). With `new App({ hooks: httpMetrics(...) })` every such request
+  left `http_requests_in_flight` permanently one higher and was not counted.
+  When a global `onRequest` hook ran, the dispatcher now hands those hooks
+  a bootstrap context. CORS and header handling of these responses is
+  unchanged.
+- OTLP `flush()` called while an export was already in flight returned
+  immediately, so the shutdown flush and the serverless adapters'
+  `waitUntil(app.telemetry.flush())` could finish before newer logs or
+  metrics were sent. It now waits for the in-flight export and then exports
+  the rest.
+- `Counter.inc()` and `Histogram.observe()` now throw on `NaN` / `Infinity`
+  instead of corrupting the series (and `_sum`) for the life of the process.
+- `httpMetrics()` no longer parses the request URL on every response; it
+  does so only when an `exclude` predicate needs the pathname.
+
 ## [1.10.0] - 2026-10-12
 
 ### Added

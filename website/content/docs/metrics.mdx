@@ -92,7 +92,7 @@ Because the instrumentation is installed as a group hook, it only wraps matched 
 
 Out of the box, the scrape route exposes:
 
-- `http_requests_total{method,route,status}`: a request counter (rate). The error rate is the subset with a `4xx`/`5xx` status).
+- `http_requests_total{method,route,status}`: a request counter (rate). The error rate is the subset with a `4xx`/`5xx` status.
 - `http_request_duration_seconds{method,route}`: a latency histogram with conventional Prometheus buckets.
 - `http_requests_in_flight`: a gauge of concurrently-handled requests.
 - process gauges (`process_resident_memory_bytes`, `process_heap_used_bytes`, `process_uptime_seconds`) collected at scrape time on Node-like runtimes. These use the unprefixed names stock Grafana memory panels already query.
@@ -127,7 +127,7 @@ All fields are optional. The table below covers the full `MetricsRouteOptions` s
 </tr>
 <tr>
 <td><code>rateLimit</code></td>
-<td><code>{`{ limit?, windowMs? }`} | false\`</code></td>
+<td><code>{`{ limit?, windowMs? } | false`}</code></td>
 <td><code>{`{ limit: 60, windowMs: 60_000 }`}</code></td>
 <td>Per-IP fixed-window rate limit. Pass <code>false</code> to disable entirely (useful inside private VPC networks).</td>
 </tr>
@@ -215,9 +215,13 @@ renderTime.observe({ template: "invoice" }, 0.042);
 
 Use `registry.collect(fn)` to refresh point-in-time gauges (queue depth, connection-pool size) only when the endpoint is actually scraped, instead of on a timer.
 
+`Counter.inc()` throws on a negative, `NaN`, or `Infinity` increment, and `Histogram.observe()` throws on `NaN` / `Infinity`. One bad value would otherwise poison the series (or its `_sum`) for the life of the process, so the bug surfaces where it happens instead of as a flat-lined dashboard.
+
 ## Manual instrumentation
 
 Prefer to wire the pieces yourself? `httpMetrics()` returns a `Hooks` bundle you can `app.use(...)` without the built-in scrape route, then render the registry from your own handler.
+
+`app.use(httpMetrics(...))` instruments routes registered after the call. `new App({ hooks: httpMetrics(...) })` also sees unmatched `404` / `405` responses and requests the cross-origin guard rejects (`403`). Their `route` label falls back to the pathname, capped by `maxRouteCardinality`, and `http_requests_in_flight` stays balanced for them.
 
 ```ts
 import {
