@@ -260,6 +260,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Turso (libSQL)", href: "/docs/databases/turso" as Route },
       { title: "DuckDB", href: "/docs/databases/duckdb" as Route },
       { title: "Cloudflare D1", href: "/docs/databases/cloudflare-d1" as Route },
+      { title: "Cloudflare Hyperdrive", href: "/docs/databases/hyperdrive" as Route, badge: "new" },
       { title: "AWS Aurora DSQL", href: "/docs/databases/aurora-dsql" as Route },
     ],
   },

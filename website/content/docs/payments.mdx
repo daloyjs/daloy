@@ -1,12 +1,13 @@
 ---
 title: Payment & commerce integrations for DaloyJS
-description: Accept payments and integrate commerce platforms from a DaloyJS API. Provider guides cover SDK choice, webhook verification, idempotency, and runtime support.
+description: Accept payments from a DaloyJS API. Covers server-side pricing, webhook verification, dedupe and jobs, refunds, PCI scope, testing, and per-SDK runtime support.
 keywords:
   - DaloyJS payments
   - Node.js payment integration
   - Shopify DaloyJS
   - ecommerce API Node
   - payment webhooks
+  - webhook signature verification
 sitemap:
   priority: 0.8
 ---
@@ -33,26 +34,392 @@ DaloyJS treats payment providers the same way it treats [email senders](/docs/em
           { label: "Square", detail: "square" },
         ]} caption="Each provider SDK lives behind a small plugin function that decorates the root app, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes." />
 
-- [Stripe](/docs/payments/stripe): create hosted Checkout Sessions, redirect with `@stripe/stripe-js`, verify `Stripe-Signature` webhooks over the raw body, and use idempotency keys with the official `stripe` Node SDK.
-- [Shopify](/docs/payments/shopify): read products, create orders, and handle Shopify webhooks via the community `shopify-api-node` SDK with the GraphQL Admin API.
-- [Braintree (PayPal)](/docs/payments/braintree): accept PayPal, cards, Venmo, Apple Pay, and Google Pay through one gateway using the official `braintree` Node SDK with signed webhooks.
-- [Authorize.Net](/docs/payments/authorize-net): charge cards, Apple Pay, and Google Pay via the official `authorizenet` SDK, plus HMAC-SHA512 webhook verification through the JSON Webhooks REST API.
-- [Adyen](/docs/payments/adyen): cards, wallets, and local payment methods via `@adyen/api-library` using the Sessions flow for Drop-in / Components and `hmacValidator` for Standard webhook notifications.
-- [Mollie](/docs/payments/mollie): European cards, iDEAL, Bancontact, SEPA, and Klarna via the new `mollie-api-typescript` SDK, with `SignatureValidator` for signed webhooks and async-iterable pagination.
-- [Tap Payments](/docs/payments/tap): GCC and MENA acquiring (KNET, Mada, Benefit, STC Pay, BenefitPay) via the REST Charges API with Bearer auth, hosted redirect flow, and `hashstring` HMAC webhook verification.
-- [PayTabs](/docs/payments/paytabs): MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet, cards, Apple Pay) via the official `paytabs_pt2` npm package, wrapped as a Promise-friendly plugin with HMAC-SHA256 IPN signature verification.
-- [Razorpay](/docs/payments/razorpay): UPI, cards, netbanking, and wallets for India via the official `razorpay` Node SDK using the Orders flow, `validatePaymentVerification` for the client callback, and `validateWebhookSignature` for IPN.
-- [Square](/docs/payments/square): unified online + in-person payments via the v40+ `square` TypeScript SDK, with BigInt money amounts, the Web Payments SDK token handoff, and `WebhooksHelper.verifySignature` over the raw body. Runs on Node, Vercel, Cloudflare Workers, Deno, and Bun.
+- [Stripe](/docs/payments/stripe): hosted Checkout Sessions built from server-side Price IDs, a plain redirect to `session.url`, and `constructEventAsync` webhook verification that also runs on Workers.
+- [Shopify](/docs/payments/shopify): the GraphQL Admin API through the community `shopify-api-node` SDK, Dev Dashboard app credentials, and `X-Shopify-Hmac-SHA256` webhooks keyed with the app client secret.
+- [Braintree (PayPal)](/docs/payments/braintree): PayPal, cards, Venmo, Apple Pay, and Google Pay through the official `braintree` SDK, with session-scoped client tokens and SDK-verified webhooks.
+- [Authorize.Net](/docs/payments/authorize-net): Accept.js nonces charged through the official `authorizenet` SDK, `duplicateWindow` protection, and HMAC-SHA512 webhook verification.
+- [Adyen](/docs/payments/adyen): the Sessions flow for Drop-in / Components via `@adyen/api-library`, `hmacValidator` for Standard webhooks, and core `basicAuth()` on the webhook route.
+- [Mollie](/docs/payments/mollie): `mollie-api-typescript` with both classic per-payment webhooks (unsigned, refetch) and next-gen signed webhooks (`X-Mollie-Signature`).
+- [Tap Payments](/docs/payments/tap): GCC and MENA acquiring over the REST Charges API with `resilientFetch`, `reference.idempotent`, and `hashstring` verification.
+- [PayTabs](/docs/payments/paytabs): MENA acquiring via the official `paytabs_pt2` package, wrapped as a Promise-friendly plugin with HMAC-SHA256 IPN verification.
+- [Razorpay](/docs/payments/razorpay): UPI, cards, netbanking, and wallets via the Orders flow, with both the checkout callback signature and `X-Razorpay-Signature` webhooks verified by core helpers.
+- [Square](/docs/payments/square): the `square` TypeScript SDK, `bigint` money amounts, Web Payments SDK tokens, and the async `WebhooksHelper.verifySignature`.
 
-A direct PayPal Checkout guide will land here later. Each provider follows the same plugin shape so you can drop a new one into an existing application without rewriting routes.
+There is no dedicated PayPal Checkout (Orders v2) guide yet. Braintree covers PayPal wallets through the Braintree gateway. Each provider follows the same plugin shape so you can drop a new one into an existing application without rewriting routes.
 
 ## What every payment integration needs
 
 - Server-side secrets only. Secret keys, webhook signing secrets, and OAuth access tokens belong in environment variables, never in the browser bundle or in a Next.js client component.
-- Webhook signature verification. Every provider signs its webhooks. Verify the signature on the raw request body *before* doing anything with the payload, DaloyJS exposes the unparsed body so HMAC checks work correctly.
-- Idempotency. Networks retry. Store the provider's event ID (or send an idempotency key on outbound requests) so duplicate deliveries don't double-charge or double-fulfill.
-- Rate limits. Most commerce APIs throttle aggressively. Wrap the provider client so retries and back-off live in one place, and lean on the built-in [rateLimit middleware](/docs/security) for your own endpoints.
-- Error mapping. Surface provider failures through [problem+json](/docs/errors) so clients (and [typed clients](/docs/typed-client)) see a consistent error shape.
+- Server-side amounts. The browser sends an order id (or SKUs and quantities). The server loads the price and currency from its own records. See [never trust client amounts](#never-trust-client-amounts).
+- Webhook verification. Most providers sign their webhooks; Mollie's classic payment webhooks are unsigned and only carry an id you must refetch. Verify the signature on the raw request body *before* parsing it. A route without a `request.body` schema leaves the raw body readable (capped by `bodyLimitBytes`), so `readBodyLimited()` sees the exact bytes the provider signed.
+- Dedupe and fast acknowledgement. Providers retry, and deliveries arrive out of order. Dedupe atomically on the provider's event id, enqueue the work, and return 2xx quickly. See the [webhook pattern](#webhook-pattern).
+- Idempotency on outbound calls. Derive provider idempotency keys from your own order id (plus a cart version), never from a fresh random UUID per call. Use [`idempotency()`](/docs/idempotency) for retries of your own `POST /checkout`.
+- Scoped rate limits and CSRF. Limit and CSRF-protect the browser-facing checkout and refund routes, and exempt the webhook routes. Providers call webhooks from their own infrastructure, without your cookies or CSRF token.
+- Error mapping. Surface provider failures through [problem+json](/docs/errors) so clients (and [typed clients](/docs/typed-client)) see a consistent error shape. Log the provider's detail; do not forward it to the client.
+
+## Never trust client amounts [#never-trust-client-amounts]
+
+<Callout type="danger" title="Never charge the amount the browser sends">
+<p>Anything in a request body is attacker-controlled. A checkout route that accepts <code>amount</code>, <code>unitAmount</code>, <code>currency</code>, or a payment-method source from the client lets a shopper pay 1 cent for a 500 EUR order. Accept only an order or cart id (or SKUs and quantities), compute the total from your own catalogue on the server, and check again in the webhook worker that the amount and currency the provider reports match the stored order before you fulfil.</p>
+</Callout>
+
+Every provider guide uses the same small, illustrative order module. Back it with your own database; the important parts are the ownership check, the server-side total, and the conditional `pending -> paid` transition:
+
+```ts title="src/orders.ts"
+import { ConflictError, JobFatalError, NotFoundError, UnauthorizedError } from "@daloyjs/core";
+import { db } from "./db.ts"; // your persistence layer
+
+export interface Order {
+  id: string;
+  userId: string;
+  status: "pending" | "paid" | "refunded" | "partially_refunded";
+  currency: string;    // ISO 4217, uppercase
+  amountMinor: number; // computed on the server from your catalogue
+  version: number;     // bumped on every cart change
+  lines: Array<{ sku: string; name: string; quantity: number; unitMinor: number; stripePriceId?: string }>;
+  providerRef?: string; // PaymentIntent id, pspReference, tran_ref, ...
+  capturedMinor: number;
+  refundedMinor: number;
+}
+
+export const orders = {
+  /** Load an order the signed-in user owns and that still awaits payment. */
+  async forCheckout(orderId: string, userId: string | undefined): Promise<Order> {
+    if (!userId) throw new UnauthorizedError("Sign in to check out.");
+    const order = await db.orders.get(orderId);
+    // Same 404 for "missing" and "not yours", so ids cannot be probed.
+    if (!order || order.userId !== userId) throw new NotFoundError("Order not found.");
+    if (order.status !== "pending") throw new ConflictError("Order is not awaiting payment.");
+    return order;
+  },
+
+  /** Called from the webhook worker after refetching the payment from the provider. */
+  async markPaid(orderId: string, paid: { amountMinor: number; currency: string; providerRef: string }) {
+    const order = await db.orders.get(orderId);
+    if (!order) throw new JobFatalError(`unknown order ${orderId}`);
+    if (order.amountMinor !== paid.amountMinor || order.currency !== paid.currency.toUpperCase()) {
+      await db.orders.flagForReview(orderId, "paid amount or currency does not match");
+      throw new JobFatalError(`amount mismatch on ${orderId}`);
+    }
+    // UPDATE ... SET status = 'paid' WHERE id = ? AND status = 'pending'
+    await db.orders.transitionToPaid(orderId, paid.providerRef);
+  },
+};
+```
+
+Providers disagree on money formats (integer minor units, decimal strings, decimal numbers, `bigint`), so convert at the plugin edge with one helper:
+
+```ts title="src/money.ts"
+// ISO 4217 minor-unit exponents. Extend for the currencies you sell in.
+const ZERO_DECIMALS = new Set(["JPY", "KRW", "VND", "CLP", "ISK", "XAF", "XOF"]);
+const THREE_DECIMALS = new Set(["KWD", "BHD", "OMR", "JOD", "TND", "IQD", "LYD"]);
+
+export function currencyDecimals(currency: string): number {
+  const c = currency.toUpperCase();
+  if (ZERO_DECIMALS.has(c)) return 0;
+  if (THREE_DECIMALS.has(c)) return 3;
+  return 2;
+}
+
+/** 1050 + "EUR" -> "10.50"; 1050 + "KWD" -> "1.050". String math, no floats. */
+export function formatMinor(minor: number, currency: string): string {
+  const d = currencyDecimals(currency);
+  const digits = String(Math.abs(minor)).padStart(d + 1, "0");
+  const sign = minor < 0 ? "-" : "";
+  return d === 0 ? sign + digits : `${sign}${digits.slice(0, -d)}.${digits.slice(-d)}`;
+}
+
+/** "10.50" or 10.5 + "EUR" -> 1050. Rejects more decimals than the currency has. */
+export function toMinor(value: string | number, currency: string): number {
+  const d = currencyDecimals(currency);
+  const text = typeof value === "number" ? value.toFixed(d) : value;
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!m || (m[2]?.length ?? 0) > d) throw new Error(`invalid ${currency} amount: ${text}`);
+  return Number(m[1] + (m[2] ?? "").padEnd(d, "0"));
+}
+```
+
+| Currency examples | Decimals | 10 units in minor units |
+| --- | --- | --- |
+| JPY, KRW | 0 | `10` |
+| USD, EUR, GBP, SAR, AED, QAR, EGP, INR | 2 | `1000` |
+| KWD, BHD, OMR, JOD | 3 | `10000` |
+
+Some providers deviate from ISO 4217 for specific currencies, so check each provider's currency table before you add a new market.
+
+## The webhook pattern [#webhook-pattern]
+
+<FlowDiagram title="Verify, dedupe, enqueue, acknowledge" numbered steps={[
+          {
+            label: "Verify",
+            detail: "signature over the raw bytes",
+            eyebrow: "route",
+          },
+          {
+            label: "Dedupe",
+            detail: "atomic on provider event id",
+            eyebrow: "jobIdempotencyKey",
+          },
+          {
+            label: "Enqueue",
+            detail: "app.jobs.enqueue({ ... })",
+            eyebrow: "route",
+            tone: "accent",
+          },
+          {
+            label: "Ack 2xx fast",
+            detail: "refetch + fulfil in the worker",
+            eyebrow: "worker",
+            tone: "success",
+          },
+        ]} caption="The route only proves authenticity and records the event. The job store's atomic idempotency key collapses provider retries into one job, and the worker refetches the payment and fulfils idempotently." />
+
+A check-then-act dedupe (`if (await seen(id)) return; ... markSeen(id)`) races: two concurrent retries both pass the check. Instead, let the [job queue](/docs/jobs) do the dedupe. `JobStore.put` is atomic on the idempotency key, so a second enqueue with the same `jobIdempotencyKey()` returns the existing job with `duplicate: true` instead of creating another one.
+
+```ts title="src/webhooks/razorpay.ts"
+import { readBodyLimited, safeJsonParse, verifyWebhookSignature, jobIdempotencyKey } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/razorpay",
+  {
+    operationId: "razorpayWebhook",
+    // No request.body schema: the raw bytes stay readable for the HMAC check.
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      400: { description: "malformed delivery", body: z.object({ error: z.string() }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request }) => {
+    // 1. Verify over the exact bytes the provider signed.
+    const raw = await readBodyLimited(request, 1_048_576);
+    const ok = await verifyWebhookSignature({
+      payload: raw,
+      signature: request.headers.get("x-razorpay-signature") ?? "",
+      secret: process.env.RAZORPAY_WEBHOOK_SECRET!,
+      algorithm: "sha256",
+    });
+    if (!ok) return { status: 401, body: { error: "invalid signature" } };
+
+    const eventId = request.headers.get("x-razorpay-event-id");
+    if (!eventId) return { status: 400, body: { error: "missing event id" } };
+    const event = safeJsonParse(new TextDecoder().decode(raw)) as { event: string };
+
+    // 2 + 3. Atomic dedupe and enqueue in one call. Keep the payload small and
+    // deterministic: the same event id must always produce the same payload.
+    await app.jobs!.enqueue({
+      name: "razorpay.event",
+      payload: { eventId, type: event.event },
+      idempotencyKey: jobIdempotencyKey({ name: "razorpay.event", key: eventId }),
+    });
+
+    // 4. Ack fast. The worker refetches the payment and calls orders.markPaid().
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+Register the worker once per app with `app.useJobs()`. If you integrate several providers, put all their handlers in the same map:
+
+```ts title="src/app.ts"
+import { App, MemoryJobStore } from "@daloyjs/core";
+
+app.useJobs({
+  store: new MemoryJobStore(), // dev only: use a durable JobStore adapter in production
+  startWorker: true,           // long-lived processes only, never on Workers / Lambda
+  handlers: {
+    "razorpay.event": handleRazorpayEvent,
+    "stripe.event": handleStripeEvent,
+  },
+});
+```
+
+Delivery is at-least-once, so the worker must be idempotent too: refetch the authoritative state from the provider, compare amount and currency with the stored order, and use the conditional `pending -> paid` update. See [delivery semantics](/docs/jobs#delivery-semantics) and the [webhook recipe](/docs/jobs#recipe-webhook-202).
+
+## Shared app wiring [#app-wiring]
+
+Every provider guide assumes this wiring. CSRF protection and the rate limit apply to the browser-facing checkout and refund routes; webhook routes are exempt because the provider calls them server to server, authenticated by the signature instead:
+
+```ts title="src/app.ts"
+import { App, csrf, except, rateLimit, secureHeaders, session } from "@daloyjs/core";
+
+// Declare your real proxy topology so rate limits and client IPs are correct.
+const app = new App({ behindProxy: { hops: 1 } });
+
+app.use(secureHeaders());
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(except(["/webhooks/**"], csrf()));
+app.use(except(["/webhooks/**"], rateLimit({ windowMs: 60_000, max: 30 })));
+```
+
+See [CSRF protection](/docs/security/csrf), [sessions](/docs/security/session), and [trusted proxies](/docs/security#trusted-proxies-and-rate-limiting). If your checkout API is called with bearer tokens instead of cookies, swap `session()` for [`jwk()`](/docs/auth) and drop `csrf()`.
+
+To make your own `POST /checkout` safe to retry, mount [`idempotency()`](/docs/idempotency) on it. With cookie sessions, scope keys by the session user so one shopper can never replay another's response:
+
+```ts
+import { idempotency } from "@daloyjs/core";
+
+// Assumes the AppState augmentation from the sessions guide (session: SessionContext).
+const checkoutIdempotency = idempotency({
+  scope: (ctx) => ctx.state.session.get<string>("userId"),
+});
+// app.post("/checkout/...", { hooks: checkoutIdempotency, ... }, handler)
+```
+
+## Protected refunds [#protected-refunds]
+
+Refunds move money out of your account, so treat them as an admin operation: authenticate, require a role, check ownership (tenant or merchant), cap the amount at what was captured minus what was already refunded, and write an audit record. Every provider guide links here from its refund section.
+
+```ts title="src/routes/refunds.ts"
+import { z } from "zod";
+import { ConflictError, NotFoundError, every, jwk, requireRoles } from "@daloyjs/core";
+import { db } from "../db.ts";
+
+const staffOnly = every(
+  jwk({ jwks, algorithms: ["RS256"], issuer, audience }), // stamps ctx.state.user
+  requireRoles(["Payments.Refund"]),
+);
+
+app.post(
+  "/admin/orders/:orderId/refunds",
+  {
+    operationId: "refundOrder",
+    hooks: staffOnly,
+    request: {
+      params: z.object({ orderId: z.string().min(1).max(80) }),
+      body: z.object({
+        amountMinor: z.number().int().positive(),
+        reason: z.enum(["requested_by_customer", "duplicate", "fraudulent"]),
+      }).strict(),
+    },
+    responses: {
+      201: { description: "refund created", body: z.object({ refundId: z.string() }) },
+    },
+  },
+  async ({ params, body, state }) => {
+    const staff = state.user as { sub: string; claims: { merchant_id?: string } };
+    const order = await db.orders.get(params.orderId);
+    // Ownership: staff of merchant A must not refund merchant B's orders.
+    if (!order || order.merchantId !== staff.claims.merchant_id) throw new NotFoundError("Order not found.");
+
+    const refundable = order.capturedMinor - order.refundedMinor;
+    if (body.amountMinor > refundable) throw new ConflictError("Refund exceeds the captured amount.");
+
+    const refund = await state.stripe.refund({
+      paymentIntent: order.providerRef!,
+      amount: body.amountMinor,
+      // Stable per logical refund: a retry of the same request cannot refund twice.
+      idempotencyKey: `refund:${order.id}:${order.refundedMinor}:${body.amountMinor}`,
+    });
+
+    await db.orders.addRefund(order.id, body.amountMinor, refund.id);
+    await db.audit.write({
+      action: "payment.refund",
+      actor: staff.sub,
+      orderId: order.id,
+      amountMinor: body.amountMinor,
+      reason: body.reason,
+      providerRefundId: refund.id,
+    });
+    return { status: 201, body: { refundId: refund.id } };
+  },
+);
+```
+
+Combine the amount check with a row lock or a conditional update in your database so two concurrent refunds cannot both pass it. See [resource authorization](/docs/security/resource-authorization) and [administrator access](/docs/security/resource-authorization#administrator-access).
+
+## Webhook verification matrix [#webhook-verification-matrix]
+
+Built from each provider's documentation as of October 2026. Confirm against the provider docs before relying on a cell; providers change these details.
+
+| Provider | Header / field | Algorithm, encoding | Key | Signed input | Timestamp / replay | Dedupe id |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stripe | `Stripe-Signature` (`t=`, `v1=`) | HMAC-SHA256, hex | endpoint `whsec_` secret | `t`, a dot, then the raw body | `t`, SDK tolerance 300 s | `event.id` |
+| Shopify | `X-Shopify-Hmac-SHA256` | HMAC-SHA256, base64 | app client secret | raw body | none signed | `X-Shopify-Webhook-Id` |
+| Braintree | `bt_signature` form field | verified by `webhookNotification.parse()` | API key pair | `bt_payload` | none documented | none: `kind` + subject id + `timestamp` |
+| Authorize.Net | `X-ANET-Signature` | HMAC-SHA512, hex (often `sha512=` prefixed) | Signature Key | raw body | none signed | `notificationId` |
+| Adyen (Standard) | `additionalData.hmacSignature` per item | HMAC-SHA256, base64 | HMAC key (hex-decoded) | colon-joined fields | none signed; check `live` | `pspReference` + `eventCode` |
+| Mollie classic | none (unsigned `id=tr_...`) | none | none | none | refetch the payment | none: idempotent worker |
+| Mollie next-gen | `X-Mollie-Signature` (`sha256=`) | HMAC-SHA256, hex | signing secret | raw body | none signed | event `id` (`event_...`) |
+| Tap | `hashstring` | HMAC-SHA256, hex | secret API key | `x_id...x_created` string | none signed | charge id + status |
+| PayTabs | `Signature` | HMAC-SHA256, hex | profile Server Key | raw body | none signed | `tran_ref` + status |
+| Razorpay | `X-Razorpay-Signature` | HMAC-SHA256, hex | webhook secret | raw body | none signed | `x-razorpay-event-id` |
+| Square | `x-square-hmacsha256-signature` | HMAC-SHA256, base64 | subscription signature key | notification URL + raw body | none signed | `event_id` |
+
+Where nothing signs a timestamp, a captured delivery can be replayed. The atomic dedupe on the event id, plus refetching state from the provider in the worker, is what makes a replay harmless.
+
+## Secure checkout checklist [#secure-checkout-checklist]
+
+- PCI DSS scope. Your SAQ depends on who serves the payment fields. A full redirect to a hosted payment page usually lands in SAQ A. When your own page loads the provider's script or fields (Stripe Elements, Accept.js, Hosted Fields), your page can affect the payment page, which is typically SAQ A-EP; confirm with your acquirer, because providers classify their iframe products differently. Receiving raw card numbers on your server means SAQ D. See the [PCI DSS controls mapping](/docs/security/compliance#pci-dss-v4-0-software-side-controls).
+- Hosted fields only. Collect cards with the provider's hosted page, iframe fields, or wallet SDK. A raw PAN must never reach your DaloyJS routes or logs.
+- SCA and 3-D Secure. European cards require strong customer authentication. Hosted Checkout, Adyen Drop-in, and similar flows run 3DS for you; a custom server-to-server flow must handle the challenge and redirect states.
+- Server-side amounts. Compute totals from your catalogue and verify the paid amount and currency in the webhook worker. See [above](#never-trust-client-amounts).
+- Minor units and decimals. Convert at the plugin edge with one helper (`src/money.ts` above); 0, 2, and 3 decimal currencies all exist.
+- Webhooks are the source of truth. The browser redirect back to your site is a UX hint; mark orders paid only from a verified webhook plus a refetch.
+- Log redaction. Do not log request bodies on payment routes. Keep provider request ids, error codes, and your order id; drop names, emails, addresses, and anything card-shaped. See [redaction](/docs/logging#redaction-secure-by-default).
+- Secrets. Separate test and live keys, rotate webhook secrets, and support two secrets during a rotation window where the provider signs with both.
+
+## Testing [#testing]
+
+- Use each provider's sandbox: Stripe test mode and sandboxes, Braintree sandbox, Authorize.Net `apitest`, Adyen test accounts, Mollie `test_` keys, Square sandbox, Razorpay test keys, and the Tap and PayTabs test profiles.
+- Stripe CLI: `stripe listen --forward-to localhost:3000/webhooks/stripe` forwards events with a local `whsec_` secret, and `stripe trigger checkout.session.completed` fires a real test event.
+- Contract tests: sign fake webhooks with the core `signWebhookPayload()` and drive them through [`app.request()`](/docs/testing). Always include the unhappy paths: a wrong secret, a tampered body, and a duplicate delivery.
+
+```ts title="tests/webhooks.test.ts"
+import test from "node:test";
+import assert from "node:assert/strict";
+import { signWebhookPayload } from "@daloyjs/core";
+import { app } from "../src/app.ts";
+
+const body = JSON.stringify({ event: "payment.captured", payload: {} });
+
+test("accepts a correctly signed Razorpay webhook", async () => {
+  const signature = await signWebhookPayload({ payload: body, secret: process.env.RAZORPAY_WEBHOOK_SECRET! });
+  const res = await app.request("/webhooks/razorpay", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-razorpay-signature": signature, "x-razorpay-event-id": "evt_test_1" },
+    body,
+  });
+  assert.equal(res.status, 200);
+});
+
+test("rejects a tampered body", async () => {
+  const signature = await signWebhookPayload({ payload: body, secret: process.env.RAZORPAY_WEBHOOK_SECRET! });
+  const res = await app.request("/webhooks/razorpay", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-razorpay-signature": signature, "x-razorpay-event-id": "evt_test_2" },
+    body: body.replace("captured", "failed"),
+  });
+  assert.equal(res.status, 401);
+});
+```
+
+`signWebhookPayload()` returns hex. For base64 providers (Shopify, Square, Adyen), convert the hex digest to base64 in the test, or sign with WebCrypto directly. Pass `timestamp` to reproduce Stripe-style `t=` signatures.
+
+## Runtime compatibility [#runtime-compatibility]
+
+"Node hosts" means long-lived Node, Vercel Node.js functions, AWS Lambda, and Azure Functions. Cells say "Not verified" where neither the SDK's docs nor its package metadata state support; test before you ship there. The core helpers used for verification (`verifyWebhookSignature`, `readBodyLimited`, `safeJsonParse`, `resilientFetch`) use only web-standard APIs and run on every [DaloyJS adapter](/docs/adapters).
+
+| SDK | Node hosts | Deno | Cloudflare Workers | Vercel Edge |
+| --- | --- | --- | --- | --- |
+| `stripe` 23.x | Yes (Node 20+) | Yes (`npm:stripe`) | Yes, with `createFetchHttpClient()` + `createSubtleCryptoProvider()` | Not verified |
+| `square` 46.x | Yes (Node 18+) | Yes (README: Deno 1.25+) | Yes (README) | Not verified |
+| `mollie-api-typescript` 1.12.x | Yes | Yes (RUNTIMES.md: Deno 1.39) | Not verified (Fetch-based) | Not verified |
+| `@adyen/api-library` 32.x | Yes (Node 18+) | Not verified | Not verified: call the REST API with `fetch` | Not verified |
+| `braintree` 3.x | Yes | Not verified | No (Node `http`, `Buffer`): use the GraphQL API | No |
+| `authorizenet` 1.x | Yes | Not verified | No (Node-only dependencies): POST the JSON API with `fetch` | No |
+| `razorpay` 2.x | Yes | Not verified | Not verified: call the REST API with `fetch` | Not verified |
+| `paytabs_pt2` 2.x | Yes | Not verified | Not verified: call the PT2 REST API with `fetch` | Not verified |
+| `shopify-api-node` 3.x | Yes | Not verified | No (`got`, Node HTTP): call GraphQL with `fetch` | No |
+| Tap (no SDK, `fetch`) | Yes | Yes | Yes | Yes |
+
+DaloyJS itself requires Node `^24 || >=26`, so the SDKs' own Node floors are already met on Node hosts.
+
+## Beyond one-off payments [#beyond-one-off-payments]
+
+- Subscriptions and dunning. Let the provider own the billing schedule and retry logic ([Stripe Billing](https://docs.stripe.com/billing), [Braintree Recurring Billing](https://developer.paypal.com/braintree/docs/guides/recurring-billing/overview), [Mollie subscriptions](https://docs.mollie.com/reference/subscriptions-api), [Adyen tokenization](https://docs.adyen.com/online-payments/tokenization/)). Drive entitlements from webhooks and handle the failed-payment events, not from your own cron.
+- Reconciliation and disputes. Run a nightly job (see [`cronEnqueue`](/docs/jobs#cron-vs-jobs)) that compares provider settlement reports with your ledger, and subscribe to dispute or chargeback events so evidence deadlines are not missed.
+- Tax and merchant of record. Sales tax, VAT, and GST depend on where the buyer is. Use a tax engine ([Stripe Tax](https://docs.stripe.com/tax) and similar), or a merchant-of-record service that takes on the tax liability for you, rather than hard-coding rates.
 
 ## Common plugin shape
 
@@ -83,15 +450,12 @@ A direct PayPal Checkout guide will land here later. Each provider follows the s
 
 Each provider guide implements roughly the same interface on `ctx.state`:
 
-```ts
-// src/plugins/commerce.ts
-import type { App } from "@daloyjs/core";
-
+```ts title="src/plugins/commerce.ts"
 export interface CommerceClient {
   // Read a product / order / customer.
   read(kind: string, id: string): Promise<unknown>;
-  // Verify and parse a webhook from the provider.
-  verifyWebhook(headers: Headers, rawBody: Buffer): Promise<{ topic: string; payload: unknown }>;
+  // Verify a webhook over the raw bytes and return the parsed event.
+  verifyWebhook(headers: Headers, rawBody: Uint8Array): Promise<{ topic: string; payload: unknown }>;
 }
 
 declare module "@daloyjs/core" {

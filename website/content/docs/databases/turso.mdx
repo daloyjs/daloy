@@ -1,6 +1,6 @@
 ---
 title: Use Turso (libSQL) with DaloyJS
-description: Connect a DaloyJS API to Turso, a distributed SQLite-compatible database, using @libsql/client. Works on Node.js, Bun, Deno, and Cloudflare Workers over HTTP.
+description: Connect a DaloyJS API to Turso, a SQLite-compatible database, using @libsql/client. Works on Node.js, Bun, Deno, and Cloudflare Workers over HTTP or WebSockets
 keywords:
   - Turso DaloyJS
   - libSQL
@@ -12,7 +12,9 @@ keywords:
 
 # Use Turso (libSQL) with DaloyJS
 
-[Turso](https://turso.tech) is a distributed database built on [libSQL](https://github.com/tursodatabase/libsql) (a fork of SQLite). The `@libsql/client` driver speaks HTTP and WebSocket, so the same DaloyJS app works on Node, Bun, Deno, and Cloudflare Workers.
+[Turso](https://turso.tech) is a hosted database built on [libSQL](https://github.com/tursodatabase/libsql) (a fork of SQLite). The `@libsql/client` driver speaks HTTP and WebSocket, so the same DaloyJS app works on Node, Bun, Deno, and Cloudflare Workers.
+
+<Callout type="note" title="Which Turso package?">Turso now publishes newer packages next to `@libsql/client`: `@tursodatabase/serverless` (a fetch-only driver for remote databases on edge runtimes) and `@tursodatabase/database` (the new Turso Database engine for local and embedded use, still pre-1.0 on npm). Turso's docs point to `@libsql/client` for ORM integration (Drizzle, Prisma), and it is the client this guide uses. Check [Turso's TypeScript docs](https://docs.turso.tech/sdk/ts/quickstart) before you pick one of the newer packages.</Callout>
 
 <BranchDiagram title="One client, two connection modes" source={{
           eyebrow: "@libsql/client",
@@ -20,33 +22,32 @@ keywords:
           detail: "HTTP and WebSocket",
         }} branches={[
           {
-            eyebrow: "node / bun",
+            eyebrow: "node / bun on durable disk",
             label: "Embedded replica",
             detail:
               "url: file:local.db + syncUrl · local reads, writes to primary",
             tone: "success",
           },
           {
-            eyebrow: "workers / edge",
+            eyebrow: "workers / serverless",
             label: "Remote HTTP client",
             detail: "url + authToken · no embedded replicas",
           },
-        ]} caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers." />
+        ]} caption="The same createClient() driver serves both modes. Use an embedded replica on a long-lived server with a durable disk, and the remote HTTP client on Workers and serverless functions." />
 
 ## 1. Provision
 
-Create a database via the Turso CLI or dashboard, then grab the URL and auth token. Set them as `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+Create a database via the Turso CLI or dashboard, then grab the URL and auth token. Set them as `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`. Prefer a database-scoped token over a group or organization token.
 
 ## 2. Install
 
-```ts
-pnpm add @libsql/client
+```package-install
+@libsql/client
 ```
 
 ## 3. Create a Turso plugin
 
-```ts
-// src/db/turso.ts
+```ts title="src/db/turso.ts"
 import { createClient, type Client } from "@libsql/client";
 import type { App } from "@daloyjs/core";
 
@@ -57,9 +58,10 @@ export const db: Client = createClient({
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
-export async function tursoPlugin(app: App) {
+export function tursoPlugin(app: App) {
   app.decorate("db", db);
-  app.onClose(async () => {
+  // Runs on the Node, Bun, and Deno adapters after in-flight requests drain.
+  app.onClose(() => {
     db.close();
   });
 }
@@ -80,14 +82,14 @@ declare module "@daloyjs/core" {
 
 ## 5. Use it in a route
 
-```ts
+```ts title="src/server.ts"
 import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
 import { tursoPlugin } from "./db/turso.ts";
 
 const app = new App();
 app.use(secureHeaders());
-await tursoPlugin(app);
+tursoPlugin(app);
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
@@ -109,30 +111,73 @@ app.get(
 );
 ```
 
+Pass request values as arguments, never by string concatenation: `state.db.execute({ sql: "select * from todos where id = ?", args: [id] })`.
+
 ## Embedded replicas (Node, Bun)
 
-For ultra-low-latency reads, use an embedded replica that syncs with the primary in the background. Writes still go to the primary. Reads are local.
+For very low-latency reads, use an embedded replica: a local SQLite file that syncs with the primary in the background. Writes still go to the primary. Reads are local.
 
-```ts
+```ts title="src/db/turso-replica.ts"
 import { createClient } from "@libsql/client";
 
 export const db = createClient({
-  url: "file:local.db",
+  url: "file:/var/lib/my-api/replica.db",
   syncUrl: process.env.TURSO_DATABASE_URL!,
   authToken: process.env.TURSO_AUTH_TOKEN,
   syncInterval: 60,
 });
 ```
 
-## Cloudflare Workers [#cloudflare-workers-vercel]
+An embedded replica needs a **durable, writable filesystem** that the process keeps between requests: a VM, a container with a persistent volume, or a long-lived Node/Bun server. Do not use it on Lambda, Vercel, Netlify, or other serverless functions (read-only or throwaway `/tmp` storage, a fresh copy per instance), or on Workers (no filesystem). Use the remote client there.
 
-Use the standard HTTP client (no embedded replicas in Workers). Pass `env.TURSO_DATABASE_URL` instead of `process.env`.
+## Cloudflare Workers
+
+Use the remote HTTP client from `@libsql/client/web` (no embedded replicas in Workers). Store the URL and token as Worker secrets, run `pnpm wrangler types`, import `env` from `cloudflare:workers`, and decorate the app once before registering routes. Do not decorate inside the Worker `fetch` handler: `decorate()` throws on the second request.
+
+```ts title="src/index.ts"
+import { env } from "cloudflare:workers";
+import { createClient, type Client } from "@libsql/client/web";
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Client;
+  }
+}
+
+const app = new App({ production: true, behindProxy: { hops: 1 } });
+app.use(secureHeaders());
+// Decorate before the routes. The client opens no connection until a query
+// runs inside a request.
+app.decorate(
+  "db",
+  createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN }),
+);
+
+app.get(
+  "/todos/count",
+  {
+    operationId: "countTodos",
+    responses: { 200: { description: "ok", body: z.object({ count: z.number() }) } },
+  },
+  async ({ state }) => {
+    const result = await state.db.execute("select count(*) as count from todos");
+    return { status: 200, body: { count: Number(result.rows[0]?.count ?? 0) } };
+  },
+);
+
+export default toFetchHandler(app);
+```
 
 ## With Drizzle ORM
 
-```ts
-pnpm add drizzle-orm
-// src/db/drizzle.ts
+```package-install
+drizzle-orm
+```
+
+```ts title="src/db/drizzle.ts"
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
 
@@ -145,6 +190,38 @@ export const db = drizzle({ client });
 
 ## With Prisma
 
-Prisma supports Turso through the [libSQL Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/turso) in preview. Use Drizzle if you want a stable, production-ready setup today.
+Prisma 7 connects through a driver adapter, which is mandatory, and generates the client into your source tree. Use the [libSQL adapter](https://www.prisma.io/docs/orm/overview/databases/turso) (current release: Prisma 7.10):
 
-See also [Cloudflare D1](/docs/databases/cloudflare-d1) for a SQLite-style option that's bundled into Workers, or the [database hosting overview](/docs/databases).
+```package-install
+@prisma/client @prisma/adapter-libsql
+```
+
+```package-install dev
+prisma
+```
+
+```prisma title="prisma/schema.prisma"
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+```
+
+```ts title="src/db/prisma.ts"
+import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaClient } from "../generated/prisma/client.ts";
+
+const adapter = new PrismaLibSql({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+export const prisma = new PrismaClient({ adapter });
+```
+
+`prisma migrate dev` does not run against Turso directly. Prisma's Turso guide generates SQL with `prisma migrate diff` against a local SQLite file and applies it with the Turso CLI. See [Prisma](/docs/orm/prisma) for the plugin and shutdown setup.
+
+See also [Cloudflare D1](/docs/databases/cloudflare-d1) for a SQLite-style option that's built into Workers, or the [database hosting overview](/docs/databases).

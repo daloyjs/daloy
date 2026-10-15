@@ -1,6 +1,6 @@
 ---
 title: Use Supabase with DaloyJS
-description: "Build a DaloyJS API on top of Supabase: hosted Postgres, row-level security, and auth via @supabase/supabase-js, works on Node.js and every edge runtime DaloyJS supports."
+description: "Build a DaloyJS API on Supabase: hosted Postgres, row-level security, and locally verified auth tokens via supabase-js, on Node.js and every edge runtime."
 keywords:
   - Supabase DaloyJS
   - supabase-js
@@ -11,26 +11,30 @@ keywords:
 
 # Use Supabase with DaloyJS
 
-[Supabase](https://supabase.com) is a hosted Postgres + auth + storage platform. The official [`@supabase/supabase-js`](https://supabase.com/docs/reference/javascript) client is fetch-based, so it runs on every runtime DaloyJS supports, Node.js, Bun, Deno, and Cloudflare Workers.
+<AuthRole role="resource-server">
+<p>Supabase Auth owns the accounts, the login flows, and token issuance. Your DaloyJS API only verifies the Supabase access token on each request and forwards it so row-level security applies. Do not build login or token issuance into the API; see{" "}<a href="/docs/auth">Authentication</a>{" "}for the split.</p>
+</AuthRole>
+
+[Supabase](https://supabase.com) is a hosted Postgres + auth + storage platform. The official [`@supabase/supabase-js`](https://supabase.com/docs/reference/javascript) client is fetch-based, so it runs on every runtime DaloyJS supports: Node.js, Bun, Deno, and Cloudflare Workers.
 
 Treat Supabase as a platform client, not a traditional ORM: you are composing PostgREST, auth, storage, and realtime APIs rather than mapping tables through model classes.
 
-<FlowDiagram numbered title="One request through Supabase" caption="Zod validates the request, the handler calls the fetch-based PostgREST client off state.supabase, the destructured error is mapped to problem+json, then the response schema checks the body. The same client runs on Node.js and every edge runtime." steps={[
+<FlowDiagram numbered title="One request through Supabase" caption="jwk() verifies the Supabase access token before any body I/O, a per-request client carries that token so Postgres row-level security applies, the destructured error is mapped to problem+json, then the response schema checks the body." steps={[
           {
             eyebrow: "client",
             label: "HTTP request",
-            detail: "GET /users/:id",
+            detail: "GET /users/:id + Bearer token",
           },
           {
-            eyebrow: "zod",
-            label: "Validated input",
-            detail: "params.id is a uuid",
+            eyebrow: "preBody",
+            label: "Verified token",
+            detail: "jwk() against the project JWKS",
             tone: "accent",
           },
           {
             eyebrow: "supabase",
-            label: "PostgREST query",
-            detail: 'from("users").select(...).eq(...)',
+            label: "RLS-scoped query",
+            detail: 'state.supabase.from("users")...',
           },
           {
             eyebrow: "response",
@@ -42,7 +46,7 @@ Treat Supabase as a platform client, not a traditional ORM: you are composing Po
 
 ## 1. Install
 
-```ts
+```bash
 pnpm add @supabase/supabase-js
 ```
 
@@ -50,61 +54,122 @@ pnpm add @supabase/supabase-js
 
 Use the Supabase CLI to generate a fully typed schema:
 
-```ts
+```bash
 pnpm dlx supabase login
 pnpm dlx supabase gen types typescript --project-id <your-ref> --schema public > src/db/supabase.types.ts
 ```
 
-## 3. Create a Supabase plugin
+## 3. API keys and the admin client
 
-Create a long-lived service-role client for server-to-server calls. For per-request, user-scoped clients (RLS), instantiate inside the handler with the caller's JWT.
+Use the new API keys from **Settings, API Keys** in the dashboard:
 
-```ts
-// src/db/supabase.ts
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+```bash title=".env"
+SUPABASE_URL=https://<your-ref>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
+```
+
+<Callout type="note">Supabase is deprecating the legacy JWT-based `anon` and `service_role` keys by the end of 2026 ([API keys](https://supabase.com/docs/guides/api/api-keys)). The publishable key replaces `anon` and the secret key replaces `service_role`. Creating the new keys does not disable the legacy ones; turn those off in the dashboard once nothing uses them.</Callout>
+
+```ts title="src/db/supabase.ts"
+import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { App } from "@daloyjs/core";
 import type { Database } from "./supabase.types.ts";
 
 export type Db = SupabaseClient<Database>;
 
-export const serviceClient: Db = createClient<Database>(
+// Server-only. The secret key maps to the service_role Postgres role, which
+// BYPASSES EVERY ROW-LEVEL SECURITY POLICY. Use it for trusted
+// server-to-server work (jobs, webhooks), never for user-facing reads.
+export const supabaseAdmin: Db = createClient<Database>(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  process.env.SUPABASE_SECRET_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
 export function supabasePlugin(app: App) {
-  app.decorate("supabase", serviceClient);
+  app.decorate("supabaseAdmin", supabaseAdmin);
 }
 ```
+
+<Callout type="danger">Never send the secret key to a browser or mobile app, and never use `supabaseAdmin` to answer a request on behalf of a user: it ignores RLS, so every row in every table is readable and writable through it. User-facing handlers use the per-request client below.</Callout>
 
 ## 4. Augment app state types
 
 Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.supabase` degrades to `any`.
 
-```ts
-// src/db/supabase.ts (same module as the plugin above)
+```ts title="src/db/supabase.ts"
+// same module as the plugin above
 declare module "@daloyjs/core" {
   interface AppState {
+    supabaseAdmin: Db;
+    /** Per-request client carrying the caller's token, so RLS applies. */
     supabase: Db;
   }
 }
 ```
 
-## 5. Use it in routes
+## 5. Verify the token and build an RLS-aware client
 
-```ts
-// src/server.ts
+Verify the Supabase access token locally with the built-in [`jwk()`](/docs/auth#pattern-jwk) against your project's JWKS, instead of calling `auth.getUser()` over the network on every request. Then build a per-request client that forwards the token, so Postgres evaluates RLS policies as that user.
+
+Register both hooks **before** the routes they protect (`app.use()` only applies to routes added after it), and keep them in `preBody` so a request without a valid token is rejected before any body I/O.
+
+```ts title="src/auth.ts"
+import { createClient } from "@supabase/supabase-js";
+import { UnauthorizedError, jwk } from "@daloyjs/core";
+import type { App } from "@daloyjs/core";
+import type { Database } from "./db/supabase.types.ts";
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const BEARER = /^Bearer\s+(\S+)$/i;
+
+export function supabaseAuth(app: App) {
+  // 1. 401 on a missing, expired, or forged token. Puts { sub, scopes, claims }
+  //    on state.user.
+  app.use(
+    jwk({
+      jwks: `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
+      algorithms: ["ES256", "RS256"], // match the signing key type you enabled
+      issuer: `${SUPABASE_URL}/auth/v1`,
+      audience: "authenticated",
+    }),
+  );
+
+  // 2. A user-scoped client per request. Never reuse it across requests.
+  app.use({
+    preBody({ headers, state }) {
+      const match = BEARER.exec(headers["authorization"] ?? "");
+      if (!match) throw new UnauthorizedError("Missing bearer token");
+      state.supabase = createClient<Database>(SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+        global: { headers: { Authorization: `Bearer ${match[1]}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+    },
+  });
+}
+```
+
+The JWKS endpoint only serves keys once your project uses asymmetric JWT signing keys ([JWTs](https://supabase.com/docs/guides/auth/jwts)). A project still on the legacy shared HS256 secret has nothing to verify against, and `jwk()` refuses symmetric algorithms by design: migrate the project to asymmetric signing keys. Supabase's own SDK route to the same check is `supabase.auth.getClaims()`. Anonymous sign-ins carry `aud: "anon"`; add it to `audience` only if you accept them. For roles and scopes on top, see [`requireRoles()`](/docs/auth).
+
+## 6. Use it in routes
+
+```ts title="src/server.ts"
 import { z } from "zod";
-import { App, secureHeaders } from "@daloyjs/core";
+import { App, NotFoundError, secureHeaders } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { supabasePlugin } from "./db/supabase.ts";
+import { throwPostgrestError } from "./db/supabase-errors.ts";
+import { supabaseAuth } from "./auth.ts";
 
 const app = new App();
 app.use(secureHeaders());
 supabasePlugin(app);
+// Public routes go here, before supabaseAuth(). Everything after it needs a token.
+supabaseAuth(app);
 
 const UserSchema = z.object({
   id: z.uuid(),
@@ -119,6 +184,7 @@ app.get(
     request: { params: z.object({ id: z.uuid() }) },
     responses: {
       200: { description: "Found", body: UserSchema },
+      401: { description: "Missing or invalid token" },
       404: { description: "Not found" },
     },
   },
@@ -129,10 +195,9 @@ app.get(
       .eq("id", params.id)
       .maybeSingle();
 
-    if (error) throw error;
-    return data
-      ? { status: 200, body: data }
-      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+    if (error) throwPostgrestError(error);
+    if (!data) throw new NotFoundError("User not found");
+    return { status: 200, body: data };
   },
 );
 
@@ -141,15 +206,21 @@ app.post(
   {
     operationId: "createUser",
     request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
-    responses: { 201: { description: "Created", body: UserSchema } },
+    responses: {
+      201: { description: "Created", body: UserSchema },
+      401: { description: "Missing or invalid token" },
+      403: { description: "Blocked by row-level security" },
+      409: { description: "Already exists" },
+    },
   },
   async ({ body, state }) => {
+    // Safe only because z.object() strips unknown keys (no mass assignment).
     const { data, error } = await state.supabase
       .from("users")
       .insert(body)
       .select("id,email,name")
       .single();
-    if (error) throw error;
+    if (error) throwPostgrestError(error);
     return { status: 201, body: data };
   },
 );
@@ -158,59 +229,43 @@ await app.ready();
 serve(app, { port: 3000 });
 ```
 
-## Per-request, RLS-aware clients
+## Mapping Supabase errors
 
-For row-level security, derive a client from the caller's bearer token in a hook so each handler gets a Supabase client scoped to that user.
+Translate `PostgrestError` codes into typed framework errors so they serialize as [problem+json](/docs/errors). Never put `error.message` in the `title`: the title is always sent to the client, and PostgREST messages name your tables, columns, and constraints. Log the details server-side and return a generic title.
 
-```ts
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "./db/supabase.types.ts";
+```ts title="src/db/supabase-errors.ts"
+import type { PostgrestError } from "@supabase/supabase-js";
+import { ConflictError, ForbiddenError, HttpError, NotFoundError } from "@daloyjs/core";
 
-app.use({
-  beforeHandle({ headers, state }) {
-    const auth = headers["authorization"];
-    state.supabaseUser = createClient<Database>(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: auth ?? "" } } },
-    );
-  },
-});
+export function throwPostgrestError(error: PostgrestError): never {
+  switch (error.code) {
+    case "23505": // unique_violation
+      throw new ConflictError("Resource already exists");
+    case "PGRST116": // .single() matched zero (or several) rows
+      throw new NotFoundError();
+    case "42501": // insufficient_privilege, including RLS rejections
+      throw new ForbiddenError();
+  }
+  console.error("supabase query failed", {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  });
+  throw new HttpError(500, { title: "Internal Server Error" });
+}
 ```
 
-## Auth: validating Supabase JWTs
-
-```ts
-import { HttpError } from "@daloyjs/core";
-
-app.use({
-  async beforeHandle({ headers, state }) {
-    const token = headers["authorization"]?.replace(/^Bearer\s+/i, "");
-    if (!token) throw new HttpError(401, { title: "Missing token" });
-    const { data, error } = await state.supabase.auth.getUser(token);
-    if (error || !data.user) throw new HttpError(401, { title: "Invalid token" });
-    state.user = data.user;
-  },
-});
-```
+Declare every mapped status in the route's `responses`, as the routes above do.
 
 ## Realtime, storage, and edge functions
 
-The same `supabase` client exposes `storage`, `functions`, and `realtime`. Use them inside handlers exactly the same way, DaloyJS doesn't care.
+The same client exposes `storage`, `functions`, and `realtime`. Use them inside handlers the same way; prefer the per-request `state.supabase` so storage policies apply to the caller too.
 
-## Mapping Supabase errors
+## Serverless and edge
 
-Translate `PostgrestError` codes into typed framework errors so they serialize as [problem+json](/docs/errors):
+The client is fetch-based and holds no connection pool, so there is nothing to close on Lambda, Vercel, Azure Functions, or Workers. If you also connect to the Supabase Postgres directly (Drizzle, Prisma), read [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) and use Supabase's pooler.
 
-```ts
-import { HttpError } from "@daloyjs/core";
-
-if (error?.code === "23505") {
-  throw new HttpError(409, { title: "Resource already exists" });
-}
-if (error) throw new HttpError(500, { title: error.message });
-```
-
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) if you are on a document database.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) for document databases.
 
 For other managed Postgres / MySQL hosts, [Neon](/docs/databases/neon), [PlanetScale](/docs/databases/planetscale), [Turso](/docs/databases/turso), [Cloudflare D1](/docs/databases/cloudflare-d1), and [Aurora DSQL](/docs/databases/aurora-dsql): see the [database hosting overview](/docs/databases).

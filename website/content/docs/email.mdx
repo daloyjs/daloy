@@ -1,6 +1,6 @@
 ---
 title: Email integrations for DaloyJS
-description: Send transactional and marketing email from a DaloyJS API using AWS SES, SendGrid, Resend, Postmark, Mailgun, or Mailtrap. Compares runtime support, SDK style, and best-fit use cases.
+description: Send email from DaloyJS with SES, SendGrid, Resend, Postmark, Mailgun, or Mailtrap. Shared sender, open-relay rules, queueing, webhooks, and deliverability.
 keywords:
   - DaloyJS email
   - transactional email Node.js
@@ -10,13 +10,15 @@ keywords:
   - Postmark DaloyJS
   - Mailgun DaloyJS
   - Mailtrap DaloyJS
+  - email webhooks bounces
+  - email deliverability DMARC
 sitemap:
   priority: 0.8
 ---
 
 # Email integrations
 
-DaloyJS doesn't ship its own email transport. Send mail with a small [plugin](/docs/plugins) function that decorates the root app with a provider client (handlers read it as `ctx.state.email`), then call it from your route handlers. The pages in this section show how to wire up the six most common transactional email providers using their official Node SDKs.
+DaloyJS doesn't ship its own email transport. You write one small `EmailSender` per provider, decorate the root app with it (handlers read it as `ctx.state.email`), and call it from route handlers or, better, from a background job. This page holds everything the six provider guides share: the sender contract, the rules that stop your send route from becoming an open relay, HTML escaping, queueing, webhooks for bounces and complaints, deliverability, and testing. The provider pages only cover what is different.
 
 <BranchDiagram title="One EmailSender, six providers" source={{
           eyebrow: "your app",
@@ -33,33 +35,35 @@ DaloyJS doesn't ship its own email transport. Send mail with a small [plugin](/d
           { eyebrow: "inbox-first", label: "Postmark", detail: "postmark" },
           { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
           { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
-        ]} caption="A plugin function decorates the root app with a provider client behind a shared EmailSender contract. Route handlers call state.email.send() without depending on which provider is wired in." />
+        ]} caption="A plugin function decorates the root app with a provider sender behind a shared EmailSender contract. Route handlers and job handlers call it without depending on which provider is wired in." />
 
 ## Supported providers
 
-- [AWS SES (SESv2)](/docs/email/aws-ses): pay-as-you-go SMTP/HTTP at AWS scale via `@aws-sdk/client-sesv2`. Best fit when you already run on AWS or need the cheapest per-message price.
-- [SendGrid](/docs/email/sendgrid): Twilio's established sender via `@sendgrid/mail`. Good for high-volume marketing plus transactional.
-- [Resend](/docs/email/resend): email API via the `resend` SDK. React Email templates and edge-runtime support.
-- [Postmark](/docs/email/postmark): transactional-first delivery via the `postmark` SDK. Known for high inbox placement.
-- [Mailgun](/docs/email/mailgun): Sinch-backed sender via `mailgun.js`. Strong validation, routing, and EU/US regions.
-- [Mailtrap](/docs/email/mailtrap): sandbox + production sending via the `mailtrap` SDK. Switch between a test inbox and live sending with a single flag.
+- [AWS SES (SESv2)](/docs/email/aws-ses): pay-as-you-go sending at AWS scale via `@aws-sdk/client-sesv2`. Best fit when you already run on AWS or need the cheapest per-message price.
+- [SendGrid](/docs/email/sendgrid): Twilio's established sender via `@sendgrid/mail`. Transactional plus marketing in one account.
+- [Resend](/docs/email/resend): email API via the `resend` SDK. Fetch-based, React Email templates, native idempotency keys.
+- [Postmark](/docs/email/postmark): transactional-first delivery via the `postmark` SDK, with separate message streams for transactional and broadcast mail.
+- [Mailgun](/docs/email/mailgun): Sinch-backed sender via `mailgun.js`. Validation, routing, and US/EU regions.
+- [Mailtrap](/docs/email/mailtrap): sandbox plus production sending via the `mailtrap` SDK. Captures mail in a test inbox until you explicitly switch to production.
 
-## Runtime compatibility at a glance
+## Runtime and feature matrix [#runtime-compatibility-at-a-glance]
 
-Most provider SDKs are HTTPS-based and work on every runtime DaloyJS targets, but a few depend on Node-only APIs (filesystem, TCP, AWS Signature V4 with NodeHttpHandler) and won't run on Cloudflare Workers without adjustments.
+Every provider here speaks HTTPS+JSON. Some SDKs depend on Node-only pieces (axios with Node `http`/`https` agents, the AWS default credential chain), so on Cloudflare Workers you either use a fetch-based SDK or call the REST API through [`resilientFetch`](#calling-a-rest-api-with-fetch).
 
-| Provider | Node / Bun / Deno | Cloudflare Workers | AWS Lambda |
-| --- | --- | --- | --- |
-| AWS SES (SESv2) | Yes | With `fetch` handler & static creds | Yes (IAM role) |
-| SendGrid | Yes | Use Web API via fetch (SDK is Node-oriented) | Yes |
-| Resend | Yes | Yes | Yes |
-| Postmark | Yes | Call REST via fetch (SDK uses axios) | Yes |
-| Mailgun | Yes | Yes (enable `useFetch: true` in v12.1+) | Yes |
-| Mailtrap | Yes | Call REST via fetch (SDK uses Node features) | Yes |
+| Provider | Node / Bun / Deno | Cloudflare Workers | AWS Lambda | Webhook signing | Native idempotency key |
+| --- | --- | --- | --- | --- | --- |
+| AWS SES (SESv2) | Yes | Sign the SESv2 REST API with `aws4fetch` | Yes (IAM role) | SNS message signature (RSA, `SignatureVersion` 2 is SHA256), or EventBridge to SQS with no public endpoint | Not documented |
+| SendGrid | Yes | REST via `resilientFetch` (SDK is built on axios) | Yes | ECDSA Signed Event Webhook over timestamp + raw body | Not documented |
+| Resend | Yes | Yes (SDK uses `fetch`) | Yes | Svix-style HMAC-SHA256 (`resend.webhooks.verify`) | Yes (`idempotencyKey`) |
+| Postmark | Yes | SDK v5 is fetch-based and takes a custom `fetch`; REST via `resilientFetch` is the conservative path | Yes | None: Basic Auth in the webhook URL, optional IP allowlist | Not documented |
+| Mailgun | Yes | Yes with `useFetch: true` (v12.1+) | Yes | HMAC-SHA256 of `timestamp + token` | Not documented |
+| Mailtrap | Yes | REST via `resilientFetch` (SDK uses axios with Node agents) | Yes | HMAC-SHA256 of the raw body (`Mailtrap-Signature`) | Not documented |
+
+"Not documented" means the provider's public send API has no idempotency key we could find. Rely on the [job queue's idempotency key](#send-off-the-request-path) instead and never blindly retry a send that may have reached the provider.
 
 ## Common pattern
 
-Every guide in this section follows the same three steps: install the SDK, call a small plugin function on the root app that decorates it with the client, then call it inside a validated route handler. The plugin shape is intentionally tiny so you can swap providers without touching business logic:
+Every guide follows the same steps: install the SDK, build a `sender: EmailSender`, call `emailPlugin(app, sender)` on the root app, then send from a validated route or a job handler. The plugin is tiny so you can swap providers without touching business logic:
 
 <FlowDiagram title="Wire it up once" numbered steps={[
           {
@@ -70,26 +74,34 @@ Every guide in this section follows the same three steps: install the SDK, call 
           {
             eyebrow: "step 2",
             label: "Decorate the root app",
-            detail: 'app.decorate("email", sender)',
+            detail: "emailPlugin(app, sender)",
             tone: "accent",
           },
           {
             eyebrow: "step 3",
-            label: "Call from a route",
+            label: "Send from a route or job",
             detail: "state.email.send(msg)",
             tone: "success",
           },
-        ]} caption="Every guide in this section follows the same three steps. The plugin function decorates the root app with the client, then validated route handlers send through it." />
+        ]} caption="Every guide in this section follows the same three steps. The plugin function decorates the root app with the sender, then validated route handlers and job handlers send through it." />
 
-```ts
-// src/plugins/email.ts
+```ts title="src/plugins/email.ts"
 import type { App } from "@daloyjs/core";
 
+/** One outgoing message. Every field that ends up in a header must be CR/LF free. */
 export interface EmailMessage {
   to: string;
   subject: string;
   text?: string;
   html?: string;
+  /** The person a reply should reach, for example a contact-form visitor. */
+  replyTo?: string;
+  /** Extra headers your code builds (List-Unsubscribe, tags). Never raw user input. */
+  headers?: Record<string, string>;
+  /** Forwarded to providers with a native idempotency key (Resend). */
+  idempotencyKey?: string;
+  /** Cancels the provider call when the request or job is aborted. */
+  signal?: AbortSignal;
 }
 
 export interface EmailSender {
@@ -102,42 +114,357 @@ export function emailPlugin(app: App, sender: EmailSender) {
   app.decorate("email", sender);
 }
 
+/** Escape a value before interpolating it into an HTML body. */
+export function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 declare module "@daloyjs/core" {
   interface AppState {
     email: EmailSender;
+    // What jwk() stamps on authenticated requests (see /docs/auth).
+    // Drop this line if your auth layer already declares `user`.
+    user?: { sub?: string; scopes: string[]; claims: Record<string, unknown> };
   }
 }
 ```
 
-Each provider page implements `EmailSender` with the official SDK so the rest of your app stays provider-agnostic.
+`app.decorate()` is not linked to `AppState`, so an inline object literal passed straight to it gets untyped method parameters under `strict`. That is why every provider page declares `const sender: EmailSender = { ... }` first and hands it to `emailPlugin()`.
+
+The shared input schema rejects CR, LF, and NUL in every header-bound field. Provider pages import `headerSafe` from here for subjects, names, and From display names:
+
+```ts title="src/schemas/email.ts"
+import { z } from "zod";
+
+// Reject CR, LF, NUL: the SMTP / email header injection trio.
+export const headerSafe = z
+  .string()
+  .min(1)
+  .max(998) // RFC 5322 line length
+  .regex(/^[^\r\n\u0000]+$/, "CR, LF, and NUL are not allowed in header fields");
+```
+
+Load the sender address and other settings once, at boot, with [`defineConfig()`](/docs/config) so a missing key fails the deploy instead of the first send:
+
+```ts title="src/config.ts"
+import { z } from "zod";
+import { defineConfig } from "@daloyjs/core";
+import { headerSafe } from "./schemas/email.ts";
+
+export const config = await defineConfig({
+  schema: z.object({
+    EMAIL_FROM: headerSafe, // "Acme <no-reply@mail.acme.example.com>"
+    CONTACT_INBOX: z.email(), // where contact-form mail lands
+    // ...plus the provider keys listed on each provider page
+  }),
+});
+```
+
+## Don't build an open relay [#open-relay]
+
+An endpoint that sends whatever the client asks, to whoever the client names, is an open relay. Spammers find it within days, your provider suspends the account, and your domain reputation takes the hit. Two rules cover almost every app:
+
+1. **Contact and feedback forms send to you, not to the visitor.** The recipient is a fixed internal address from config. The visitor's address goes only into `replyTo`, so hitting Reply in your inbox reaches them.
+2. **User-triggered mail (invites, receipts, password resets) comes from an authenticated user, and the server picks the recipient and the content.** The client sends an id (an order id, a team id plus an invitee address), the server checks the caller owns it, looks up the data, and builds the message from a template. The client never supplies `to`, `subject`, or body text that lands in someone else's inbox unescaped.
+
+```ts title="src/routes/contact.ts"
+import { z } from "zod";
+import { App, rateLimit } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { headerSafe } from "../schemas/email.ts";
+import { config } from "../config.ts";
+
+export function contactRoutes(app: App) {
+  app.post(
+    "/contact",
+    {
+      operationId: "submitContact",
+      // Per-route limit: 5 messages per 10 minutes per client IP.
+      hooks: rateLimit({ windowMs: 10 * 60_000, max: 5 }),
+      request: {
+        body: z
+          .object({
+            name: headerSafe.max(80),
+            email: z.email(),
+            message: z.string().min(1).max(5000),
+          })
+          .strict(),
+      },
+      responses: {
+        202: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async ({ body, state }) => {
+      await state.email.send({
+        to: config.CONTACT_INBOX, // fixed, never from the request
+        replyTo: body.email, // the visitor, only as Reply-To
+        subject: `Contact form: ${body.name}`, // headerSafe already rejected CR/LF
+        text: `From ${body.name} <${body.email}>\n\n${body.message}`,
+        html: `<p>From ${escapeHtml(body.name)} &lt;${escapeHtml(body.email)}&gt;</p><p>${escapeHtml(body.message)}</p>`,
+      });
+      return { status: 202, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+## Escape every interpolated value [#escape-html]
+
+Anything a user typed (a name, a message, a team name in an invite) becomes HTML the moment you put it in `html`. Without escaping, `<a href="https://evil.example">Reset your password</a>` in a display name turns your trusted domain into a phishing kit. Use the `escapeHtml()` helper above for every interpolation, or render with a template engine that escapes by default (React Email, Handlebars `{{ }}`, Postmark's Mustachio, Mailgun and SendGrid stored templates). Plain-text bodies need no escaping, but header-bound fields still go through `headerSafe`.
+
+## Rate limiting [#rate-limiting]
+
+Put `rateLimit()` on the routes that send mail, through the route's `hooks`, rather than one global `app.use(rateLimit(...))` that also throttles your health check. Stack a second limiter keyed by the authenticated user or by the recipient, so one account cannot mail-bomb an inbox from many IPs:
+
+```ts title="src/email/guards.ts"
+import { every, rateLimit } from "@daloyjs/core";
+import { authenticated } from "../auth.ts"; // your jwk() / bearerAuth() hooks, see /docs/auth
+
+// Use as `hooks: sendGuards` on every route that triggers mail.
+export const sendGuards = every(
+  authenticated,
+  rateLimit({ windowMs: 60_000, max: 10 }), // per client IP
+  rateLimit({
+    windowMs: 60 * 60_000,
+    max: 20,
+    keyGenerator: (ctx) => `email-user:${ctx.state.user?.sub ?? "anonymous"}`,
+  }),
+);
+```
+
+A per-recipient limiter works the same way. `rateLimit()` runs in `beforeHandle`, after body validation, so a `keyGenerator` can read the validated invitee address and key on `invite-to:` plus the lowercased address. Nobody can then flood one inbox through many accounts. The [Mailgun invite route](/docs/email/mailgun#use-it-in-a-route) shows it.
+
+For anything multi-instance, back the limiter with the [Redis store](/docs/security/rate-limit-redis). Public forms also deserve bot friction: [`botGuard()`](/docs/bot-guard) blocks empty and abusive User-Agents, and a CAPTCHA such as Cloudflare Turnstile (verify the token server-side with the provider's siteverify endpoint before you call `send`) stops scripted submissions that a rate limit alone lets through slowly.
+
+## Send off the request path [#send-off-the-request-path]
+
+A provider call takes tens to hundreds of milliseconds and sometimes times out. Hand it to the [background job queue](/docs/jobs) so the HTTP response does not wait, retries happen with backoff, and a duplicate request collapses into one job through its idempotency key:
+
+```ts title="src/email/jobs.ts"
+import { MemoryJobStore, type App } from "@daloyjs/core";
+import type { EmailMessage, EmailSender } from "../plugins/email.ts";
+
+type QueuedEmail = Omit<EmailMessage, "signal" | "idempotencyKey">;
+
+export function emailJobs(app: App, sender: EmailSender) {
+  app.useJobs({
+    store: new MemoryJobStore(), // production: your durable Redis/Postgres/SQS JobStore
+    handlers: {
+      "email.send": async ({ job, signal }) => {
+        const msg = job.payload as QueuedEmail;
+        if (await isUndeliverable(msg.to)) return; // see "Bounces, complaints, and suppression"
+        // job.id is stable across retries, so a provider with a native key dedupes too.
+        await sender.send({ ...msg, signal, idempotencyKey: job.id });
+      },
+      "email.suppress": async ({ job }) => {
+        const { email, reason } = job.payload as { email: string; reason: string };
+        await markUndeliverable(email.toLowerCase(), reason);
+      },
+    },
+    startWorker: true, // long-lived Node/Bun/Deno processes only
+  });
+}
+
+// Your data layer: a column on users or a small suppression table.
+declare function isUndeliverable(email: string): Promise<boolean>;
+declare function markUndeliverable(email: string, reason: string): Promise<void>;
+```
+
+Then enqueue from the route with a key that describes the business event, so a double-click or a client retry never sends twice:
+
+```ts
+import { jobIdempotencyKey } from "@daloyjs/core";
+
+await app.jobs!.enqueue({
+  name: "email.send",
+  payload: { to: user.email, subject: "Welcome to Acme", text, html },
+  idempotencyKey: jobIdempotencyKey({ name: "email.send", key: `welcome-${user.id}` }),
+});
+```
+
+- The worker loop belongs on a long-lived process. On AWS Lambda, enqueue into SQS and let a Lambda consumer send. On Cloudflare Workers, use Cloudflare Queues with a consumer Worker. See [where jobs run](/docs/jobs#topology-d).
+- Delivery is at least once. The job's idempotency key stops duplicate enqueues; the provider's own key (Resend) or your `isUndeliverable` / "already sent" check stops a duplicate run.
+- For client-facing retries on the HTTP route itself, add the [`idempotency()` middleware](/docs/idempotency).
+
+## Calling a REST API with fetch [#calling-a-rest-api-with-fetch]
+
+When an SDK does not run on your runtime, call the provider's REST endpoint with a guarded, time-bounded fetch:
+
+```ts title="src/email/fetch.ts"
+import { fetchGuard, resilientFetch } from "@daloyjs/core";
+
+export const providerFetch = resilientFetch({
+  // On Workers there may be no node:dns resolver; allowHosts skips DNS for the
+  // one fixed provider host while every other destination still fails closed.
+  fetch: fetchGuard({ allowHosts: ["api.sendgrid.com"] }),
+  timeoutMs: 10_000,
+});
+```
+
+[`resilientFetch()`](/docs/fetch-resilience) retries only `GET`, `HEAD`, `OPTIONS`, `PUT`, and `DELETE` by default. A send is a `POST`, so a timeout is **not** retried, which is what you want: the provider may already have accepted the message, and a blind retry sends it twice. Let the job queue retry the whole job instead, and only add `POST` to `retryableMethods` for a provider that honours an idempotency key you pass. [`fetchGuard()`](/docs/security/fetch-guard) keeps the SSRF floor underneath; on Node you can drop `allowHosts` and let it resolve DNS normally, and on Workers you can pass a `resolve` function instead.
+
+## Secrets on every runtime [#secrets]
+
+- Keep API keys in environment variables or the platform's secret store. Never commit them. On Lambda prefer the execution role over keys.
+- On Cloudflare Workers, `process.env` is populated only with the `nodejs_compat` flag, and the `nodejs_compat_populate_process_env` behaviour it relies on is on by default for compatibility dates on or after 2025-04-01. Otherwise read bindings with `import { env } from "cloudflare:workers"` and pass them to `defineConfig({ schema, source: { kind: "env", env } })`.
+- Use the narrowest key each provider offers (send-only, scoped to one domain), and a separate key per environment so a leaked staging key cannot send production mail.
+
+## Bounces, complaints, and suppression [#webhooks]
+
+Every provider reports delivery events (bounces, spam complaints, unsubscribes) to a webhook you host. Process them, or you keep mailing dead and hostile addresses until the provider throttles you. Each provider page has a "Webhooks: bounces and complaints" section with a real route; they all follow the same shape:
+
+<FlowDiagram title="Provider webhook, the safe way" numbered steps={[
+          {
+            eyebrow: "read",
+            label: "Bounded raw body",
+            detail: "no body schema; readBodyLimited(request, n)",
+          },
+          {
+            eyebrow: "verify",
+            label: "Signature or credentials",
+            detail: "on the exact bytes, before parsing",
+            tone: "accent",
+          },
+          {
+            eyebrow: "dedupe",
+            label: "Provider event id",
+            detail: "jobIdempotencyKey({ name, key: eventId })",
+          },
+          {
+            eyebrow: "ack",
+            label: "2xx fast",
+            detail: "enqueue, do not process inline",
+            tone: "success",
+          },
+          {
+            eyebrow: "worker",
+            label: "Mark undeliverable",
+            detail: "email.suppress job",
+          },
+        ]} caption="Verify on the raw bytes before parsing, dedupe on the provider's event id through the job queue, acknowledge quickly so the provider does not retry or disable the endpoint, and update your own suppression data in the worker." />
+
+1. Declare the route **without** a body schema and read the bytes with `readBodyLimited(request, 1_048_576)`. Signatures cover the exact bytes; parsing and re-serializing JSON breaks them.
+2. Verify before you trust anything. `verifyWebhookSignature()` from core covers the HMAC schemes (Mailgun, Mailtrap, and a manual Resend check). SendGrid signs with ECDSA and SES with RSA certificates, so those pages use `node:crypto`. Postmark has no signatures at all and relies on Basic Auth.
+3. Parse with `safeJsonParse()` (prototype-pollution safe) only after verification.
+4. Enqueue one `email.suppress` job per hard bounce or complaint, keyed by the provider's event id, and return 2xx. Duplicate deliveries of the same event collapse into the existing job.
+5. Keep your own "undeliverable" flag even though every provider also keeps a suppression list. Your flag lets you stop at enqueue time, show the user "we can't reach this address", and switch providers without losing history.
+
+For mail you send to webhooks of your own customers, see [webhook delivery](/docs/webhook-delivery) instead.
+
+## Deliverability [#deliverability]
+
+- **Authenticate and align.** Publish SPF and DKIM for the sending domain, then DMARC. DMARC passes only when the visible `From:` domain aligns with the SPF (Return-Path) or DKIM domain, so set up the provider's custom Return-Path / MAIL FROM domain (SES "custom MAIL FROM domain", Postmark Return-Path CNAME, SendGrid domain authentication, Mailgun's sending domain) instead of leaving it on the provider's shared domain.
+- **Move DMARC beyond `p=none`.** Start with `p=none` and a `rua=` report address, read the reports until only your senders pass, then step up to `p=quarantine` and finally `p=reject`. `p=none` only monitors; it does not stop anyone spoofing your domain.
+- **Bulk sender rules.** Since February 2024, Gmail requires senders of 5,000+ messages a day to Gmail accounts to have SPF, DKIM, and a DMARC policy (at least `p=none`) with alignment, one-click unsubscribe on marketing mail, and a spam rate below 0.3% in Postmaster Tools. Yahoo announced matching rules at the same time. Microsoft began enforcing similar SPF, DKIM, and DMARC requirements for domains sending over 5,000 messages a day to Outlook.com, Hotmail.com, and Live.com in May 2025. Check each mailbox provider's sender guidelines for the current thresholds.
+- **One-click unsubscribe (RFC 8058).** Marketing and other subscribed mail needs both headers. Build them in your code (never from request input) and pass them through `EmailMessage.headers`. The URL must accept an unauthenticated `POST` with the body `List-Unsubscribe=One-Click`, so put a signed, single-purpose token in it rather than relying on a session:
+
+```ts
+await state.email.send({
+  to: subscriber.email,
+  subject: "Acme product news",
+  html,
+  headers: {
+    "List-Unsubscribe": `<https://acme.example.com/unsubscribe/${token}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  },
+});
+```
+
+- **Separate transactional from marketing.** Send password resets and receipts from one subdomain and stream (`mail.acme.example.com`, Postmark's transactional stream, a dedicated SendGrid subuser or IP pool) and newsletters from another (`news.acme.example.com`, a broadcast stream). A bad campaign then cannot drag your login emails into spam. Some providers add unsubscribe headers automatically on their marketing products; check before you add a second pair.
+
+## Testing [#testing]
+
+Unit-test routes and jobs with a fake sender that records messages, and use the [in-process test client](/docs/testing) to drive the route:
+
+```ts title="tests/email.test.ts"
+import test from "node:test";
+import assert from "node:assert/strict";
+import { App } from "@daloyjs/core";
+import { emailPlugin, type EmailMessage, type EmailSender } from "../src/plugins/email.ts";
+import { contactRoutes } from "../src/routes/contact.ts";
+
+test("contact form mails the internal inbox, not the visitor", async () => {
+  const sent: EmailMessage[] = [];
+  const fake: EmailSender = {
+    async send(msg) {
+      sent.push(msg);
+      return { id: `fake-${sent.length}` };
+    },
+  };
+  const app = new App();
+  emailPlugin(app, fake);
+  contactRoutes(app);
+
+  const res = await app.request("/contact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "<b>Ada</b>", email: "ada@example.com", message: "Hi" }),
+  });
+
+  assert.equal(res.status, 202);
+  assert.equal(sent[0]?.replyTo, "ada@example.com");
+  assert.notEqual(sent[0]?.to, "ada@example.com");
+  assert.ok(sent[0]?.html?.includes("&lt;b&gt;Ada&lt;/b&gt;"));
+});
+```
+
+For end-to-end checks of real MIME output locally, run [Mailpit](https://mailpit.axllent.org) (`docker run -p 8025:8025 -p 1025:1025 axllent/mailpit`) and point a Nodemailer-based sender at its SMTP port. Open `http://localhost:8025` to see every captured message:
+
+```ts title="src/email/mailpit.ts"
+import nodemailer from "nodemailer";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
+
+const transport = nodemailer.createTransport({ host: "localhost", port: 1025, secure: false });
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const info = await transport.sendMail({
+      from: config.EMAIL_FROM,
+      to: msg.to,
+      replyTo: msg.replyTo,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+      headers: msg.headers,
+    });
+    return { id: info.messageId };
+  },
+};
+```
+
+Cloudflare Workers cannot open outbound TCP connections on port 25, so SMTP-based senders are for Node, Bun, and Deno; on Workers use an HTTPS provider API. [Mailtrap's sandbox](/docs/email/mailtrap) is a hosted alternative to Mailpit for staging.
+
+## Never leak provider errors [#errors]
+
+Provider error messages can contain your account details, the recipient list, or internal ids. Log them through the request logger (which [redacts tokens and credentials](/docs/logging)) and return a generic [problem+json](/docs/errors) error to the client:
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+try {
+  await state.email.send(msg);
+} catch (err) {
+  state.log.error({ err }, "email send failed");
+  throw new HttpError(502, { title: "Email could not be sent" });
+}
+```
+
+Inside a job handler, just rethrow: the worker logs it and retries with backoff. Throw `JobFatalError` for permanent failures such as an inactive recipient, so the job is not retried.
 
 ## Security checklist
 
-- Keep API keys in environment variables. Never commit them. Use AWS IAM roles on Lambda and platform-managed secrets on Vercel, Cloudflare, Fly, and Render.
-- Verify your sending domain. Add SPF, DKIM, and DMARC records before going live. Every provider here rejects unverified senders in production.
-- Validate inputs and reject CRLF in header fields. Treat `to`, `subject`, display names, `reply_to`, and any custom header value as untrusted. Use [DaloyJS validation](/docs/validation) with `z.email()` for addresses and reject `\r` / `\n` in every other header-bound string. This is the classic SMTP / email header injection vector (Snyk's 2022 write-up [Avoiding SMTP Injection](https://snyk.io/blog/avoiding-smtp-injection/) documents library-level CVEs that were fixed upstream, but the application-level rule still applies whenever you forward user input into mail headers). A reusable schema looks like:
-
-```ts
-// src/schemas/email.ts
-import { z } from "zod";
-
-// Reject CR, LF, NUL - the SMTP / email header injection trio.
-const headerSafe = z
-  .string()
-  .max(998) // RFC 5322 line length
-  .regex(/^[^\r\n\u0000]+$/, "CRLF / NUL not allowed in header fields");
-
-export const SendEmailBody = z
-  .object({
-    to: z.email(),
-    subject: headerSafe,
-    fromName: headerSafe.optional(),
-    replyTo: z.email().optional(),
-    text: z.string().max(50_000),
-  })
-  .strict();
-```
-
-- Prefer HTTPS provider SDKs over raw SMTP libraries. The six providers documented here all speak HTTPS+JSON, so the CRLF-in-SMTP-command class of bug (`smtp-client`, `smtp-channel`, `aiosmtplib` `source_address`) doesn't reach the wire. If you must use a raw SMTP client, validate every field, including hostname and source address, with the schema above.
-- Rate-limit the send route. Use the built-in [rateLimit middleware](/docs/security) (or the [Redis store](/docs/security/rate-limit-redis)) on any endpoint that triggers email so abuse can't drive your bill or reputation down.
-- Verify provider webhooks. If you process bounces, complaints, or opens, verify the signature on every incoming webhook before trusting its payload.
+- Keep API keys in environment variables or a secret store, validated at boot with `defineConfig()`. Use IAM roles on Lambda and platform-managed secrets on Vercel, Cloudflare, Fly, and Render.
+- Verify your sending domain with SPF, DKIM, and DMARC before going live, and plan the move past `p=none` ([deliverability](#deliverability)).
+- **Don't build an open relay.** Contact forms send to a fixed internal address with the visitor only in `replyTo`. User-triggered mail requires authentication, and the server looks up the recipient and content ([details](#open-relay)).
+- **Escape every interpolated value in HTML bodies** with `escapeHtml()` or an auto-escaping template engine ([details](#escape-html)).
+- Validate inputs and reject CRLF in header fields. Treat `to`, `subject`, display names, `replyTo`, and any custom header value as untrusted. Use [DaloyJS validation](/docs/validation) with `z.email()` for addresses and the `headerSafe` schema for every other header-bound string. This is the classic SMTP / email header injection vector (Snyk's write-up [Avoiding SMTP Injection](https://snyk.io/blog/avoiding-smtp-injection/) documents library-level CVEs that were fixed upstream, but the application-level rule still applies whenever you forward user input into mail headers).
+- Prefer HTTPS provider APIs over raw SMTP libraries. The six providers documented here all speak HTTPS+JSON, so the CRLF-in-SMTP-command class of bug (`smtp-client`, `smtp-channel`, `aiosmtplib` `source_address`) doesn't reach the wire. If you must use a raw SMTP client, validate every field, including hostname and source address.
+- Rate-limit each send route through its own `hooks`, add a per-user or per-recipient limiter, and put bot friction on public forms ([details](#rate-limiting)).
+- Verify every provider webhook on the raw body before trusting it, dedupe on the event id, and suppress hard bounces and complaints ([details](#webhooks)).
+- Never echo provider errors to clients ([details](#errors)).

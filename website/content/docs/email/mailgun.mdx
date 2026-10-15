@@ -1,17 +1,18 @@
 ---
 title: Send email from DaloyJS with Mailgun
-description: Send transactional email from a DaloyJS API using Sinch Mailgun's mailgun.js SDK. Includes API key setup, the mg.messages.create interface, EU region support, and edge-runtime configuration.
+description: Send email from DaloyJS with mailgun.js. EU region, global FormData, a server-checked invite route, HMAC webhook verification, suppressions, and useFetch.
 keywords:
   - DaloyJS Mailgun
   - mailgun.js
   - Mailgun Node SDK
   - Mailgun EU region
+  - Mailgun webhook signature
   - Mailgun Cloudflare Workers
 ---
 
 # Send email from DaloyJS with Mailgun
 
-[Mailgun](https://www.mailgun.com) (now Sinch Mailgun) offers high-volume transactional and bulk email, address validation, and routing. This guide uses the official [`mailgun.js`](https://github.com/mailgun/mailgun.js) SDK.
+[Mailgun](https://www.mailgun.com) (now Sinch Mailgun) offers high-volume transactional and bulk email, address validation, and routing. This guide uses the official [`mailgun.js`](https://github.com/mailgun/mailgun.js) SDK. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.send` / `email.suppress` jobs used below.
 
 <SequenceDiagram title="Send through the mailgun.js SDK" participants={["Route handler", "mg client", "Mailgun API", "Webhooks"]} steps={[
           {
@@ -39,145 +40,243 @@ keywords:
           {
             from: "Mailgun API",
             to: "Webhooks",
-            label: "delivery, bounce, complaint events",
+            label: "failed, complained, unsubscribed events",
             detail: "verify HMAC-SHA256(timestamp + token) before trusting",
             kind: "async",
           },
-        ]} caption="The region is fixed per domain (US or EU), set url accordingly. On edge runtimes pass useFetch: true so the SDK uses native fetch. Webhook payloads are HMAC-signed, verify them before acting." />
+        ]} caption="The region is fixed per domain (US or EU), so set url accordingly. On edge runtimes pass useFetch: true so the SDK uses native fetch. Webhook payloads are HMAC-signed; verify them and reject replayed tokens before acting." />
 
 ## 1. Provision
 
-1. Add and verify your sending domain under **Sending -\> Domains -\> Add new domain**. Add the SPF/DKIM TXT records and the MX records Mailgun lists.
+1. Add and verify your sending domain (a subdomain such as `mg.acme.example.com`) under **Sending -\> Domains -\> Add new domain**. Add the SPF and DKIM TXT records and the tracking CNAME Mailgun lists. The MX records are for **receiving** mail through Mailgun (routes, inbound parsing); you can skip them if the subdomain only sends, though some receiving servers run sender-domain checks that expect an MX to exist.
 2. Choose your **region**: `https://api.mailgun.net` (US, default) or `https://api.eu.mailgun.net` (EU). The region is fixed per domain.
-3. Create a **Sending API key** from **API Security** and store it as `MAILGUN_API_KEY`.
+3. Create a **Sending API key** from **API Security**, scoped to that domain, and store it as `MAILGUN_API_KEY`. Copy the separate **Webhook Signing Key** from the same page; it is not your API key.
 
 ## 2. Install
 
-```ts
-pnpm add mailgun.js form-data
+```package-install
+mailgun.js
 ```
 
-`form-data` is the multipart implementation Mailgun expects on Node.
+On Node 24 (and Bun, Deno, Workers) the global `FormData` is enough, so you do not need the `form-data` package.
 
 ## 3. Environment variables
 
-```ts
-# .env
-MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```dotenv title=".env"
+# Older accounts may still have keys starting with "key-"; current keys do not, so don't validate a prefix.
+MAILGUN_API_KEY=your-domain-sending-key
+MAILGUN_WEBHOOK_SIGNING_KEY=your-webhook-signing-key
 MAILGUN_DOMAIN=mg.acme.example.com
-MAILGUN_FROM="Acme <no-reply@mg.acme.example.com>"
-# Optional: use EU
+EMAIL_FROM="Acme <no-reply@mg.acme.example.com>"
+# Optional: EU region
 # MAILGUN_URL=https://api.eu.mailgun.net
 ```
 
-## 4. Plugin
+Add `MAILGUN_API_KEY`, `MAILGUN_WEBHOOK_SIGNING_KEY`, and `MAILGUN_DOMAIN` (each `z.string().min(1)`) plus `MAILGUN_URL: z.url().optional()` to the overview's [`defineConfig()` schema](/docs/email#common-pattern).
 
-```ts
-// src/plugins/mailgun.ts
+## 4. Sender
+
+```ts title="src/email/mailgun.ts"
 import Mailgun from "mailgun.js";
-import FormData from "form-data";
-import type { App } from "@daloyjs/core";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
 
-const mailgun = new Mailgun(FormData);
-const mg = mailgun.client({
+const mailgun = new Mailgun(FormData); // the global FormData
+export const mg = mailgun.client({
   username: "api",
-  key: process.env.MAILGUN_API_KEY!,
-  url: process.env.MAILGUN_URL, // omit for the default US endpoint
+  key: config.MAILGUN_API_KEY,
+  url: config.MAILGUN_URL, // omit for the default US endpoint
+  timeout: 10_000,
 });
 
-const DOMAIN = process.env.MAILGUN_DOMAIN!;
-
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function mailgunPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const res = await mg.messages.create(DOMAIN, {
-        from: process.env.MAILGUN_FROM!,
-        to: [to],
-        subject,
-        text,
-        html,
-      });
-      return { id: res.id ?? "" };
-    },
-  });
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
-    };
-  }
-}
+export const sender: EmailSender = {
+  async send(msg) {
+    const extraHeaders = Object.fromEntries(
+      Object.entries(msg.headers ?? {}).map(([name, value]) => [`h:${name}`, value]),
+    );
+    const res = await mg.messages.create(config.MAILGUN_DOMAIN, {
+      from: config.EMAIL_FROM,
+      to: [msg.to],
+      subject: msg.subject,
+      ...(msg.html !== undefined ? { html: msg.html, text: msg.text } : { text: msg.text ?? "" }),
+      ...(msg.replyTo ? { "h:Reply-To": msg.replyTo } : {}),
+      ...extraHeaders,
+    });
+    return { id: res.id ?? "" };
+  },
+};
 ```
 
-## 5. Use it in a route
+Mailgun's send API has no idempotency key, so queue sends through the overview's [`email.send` job](/docs/email#send-off-the-request-path) and do not auto-retry a timed-out send.
 
-```ts
+## 5. Use it in a route [#use-it-in-a-route]
+
+Invites legitimately go to an address the user types, which makes them a favourite spam vector. So the inviter must be signed in and allowed to invite into that team, the content is built server-side from stored names, and two limiters apply: one per inviting user and one per invitee address:
+
+```ts title="src/routes/invites.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { mailgunPlugin } from "./plugins/mailgun.ts";
+import { App, ForbiddenError, UnauthorizedError, every, jobIdempotencyKey, rateLimit } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { sendGuards } from "../email/guards.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-mailgunPlugin(app);
+export function inviteRoutes(app: App) {
+  app.post(
+    "/teams/:teamId/invites",
+    {
+      operationId: "inviteToTeam",
+      hooks: every(
+        sendGuards, // auth + per-IP + per-user limits, see the overview
+        rateLimit({
+          windowMs: 24 * 60 * 60_000,
+          max: 3, // per invitee address per day
+          keyGenerator: (ctx) =>
+            `invite-to:${String((ctx as { body?: { email?: string } }).body?.email ?? "").toLowerCase()}`,
+        }),
+      ),
+      request: {
+        params: z.object({ teamId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/) }),
+        body: z.object({ email: z.email() }).strict(),
+      },
+      responses: {
+        202: { description: "Queued", body: z.object({ jobId: z.string() }) },
+      },
+    },
+    async ({ params, body, state }) => {
+      const sub = state.user?.sub;
+      if (!sub) throw new UnauthorizedError();
+      const team = await findTeamWhereUserCanInvite(params.teamId, sub);
+      if (!team) throw new ForbiddenError();
+      const invite = await createInvite(team.id, body.email, sub); // stores a single-use token
+      const { job } = await app.jobs!.enqueue({
+        name: "email.send",
+        payload: {
+          to: body.email,
+          // Names were validated with headerSafe when they were stored.
+          subject: `${invite.inviterName} invited you to ${team.name} on Acme`,
+          text: `${invite.inviterName} invited you to ${team.name}. Join: ${invite.url}`,
+          html: `<p>${escapeHtml(invite.inviterName)} invited you to <strong>${escapeHtml(team.name)}</strong>.</p><p><a href="${escapeHtml(invite.url)}">Accept the invite</a></p>`,
+        },
+        idempotencyKey: jobIdempotencyKey({ name: "email.send", key: `invite-${invite.id}` }),
+      });
+      return { status: 202, body: { jobId: job.id } };
+    },
+  );
+}
 
-app.post(
-  "/invites",
-  {
-    operationId: "sendInvite",
-    request: {
-      body: z.object({
-        to: z.email(),
-        inviter: z.string().min(1).max(80),
-      }),
-    },
-    responses: {
-      202: { description: "Sent", body: z.object({ id: z.string() }) },
-    },
-  },
-  async ({ body, state }) => {
-    const { id } = await state.email.send({
-      to: body.to,
-      subject: `${body.inviter} invited you to Acme`,
-      text: `${body.inviter} invited you. Join: https://acme.example.com/join`,
-    });
-    return { status: 202, body: { id } };
-  },
-);
+declare function findTeamWhereUserCanInvite(teamId: string, userId: string): Promise<{ id: string; name: string } | null>;
+declare function createInvite(
+  teamId: string,
+  email: string,
+  inviterId: string,
+): Promise<{ id: string; url: string; inviterName: string }>;
 ```
 
 ## Templates
 
-Create a stored template in **Sending -\> Templates** with [Handlebars](https://handlebarsjs.com/) syntax, then reference it by name and pass variables as a JSON string:
+Create a stored template in **Sending -\> Templates** with [Handlebars](https://handlebarsjs.com/) syntax (double braces escape HTML), then reference it by name and pass variables as a JSON string:
 
 ```ts
-await mg.messages.create(DOMAIN, {
-  from: process.env.MAILGUN_FROM!,
-  to: [to],
+await mg.messages.create(config.MAILGUN_DOMAIN, {
+  from: config.EMAIL_FROM,
+  to: [user.email], // looked up server-side
   subject: "Welcome",
   template: "welcome",
-  "h:X-Mailgun-Variables": JSON.stringify({ name: "Devlin" }),
+  "h:X-Mailgun-Variables": JSON.stringify({ name: user.name }),
 });
 ```
 
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Mailgun signs every event webhook. The JSON body has a `signature` object (`timestamp`, `token`, `signature`) next to `event-data`. The signature is the hex HMAC-SHA256 of `timestamp` and `token` joined with no separator, keyed with your **Webhook Signing Key**. Core's `verifyWebhookSignature()` handles the constant-time compare. Pass the concatenated string as the payload; do not use its `timestamp` option, which signs `timestamp.payload` with a dot.
+
+The signature does **not** cover `event-data`, so a captured token could be replayed with a different body. Reject stale timestamps and never accept a token twice. Below the token is the job's idempotency key, so a replayed token with a different payload throws `JobIdempotencyConflictError` and is rejected:
+
+```ts title="src/routes/mailgun-webhook.ts"
+import { z } from "zod";
+import {
+  App,
+  JobIdempotencyConflictError,
+  UnauthorizedError,
+  jobIdempotencyKey,
+  readBodyLimited,
+  safeJsonParse,
+  verifyWebhookSignature,
+} from "@daloyjs/core";
+import { config } from "../config.ts";
+
+interface MailgunWebhook {
+  signature?: { timestamp?: string; token?: string; signature?: string };
+  "event-data"?: { event?: string; severity?: string; recipient?: string };
+}
+
+export function mailgunWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/mailgun",
+    {
+      operationId: "mailgunEvents",
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+        401: { description: "Rejected" },
+      },
+    },
+    async ({ request }) => {
+      const raw = new TextDecoder().decode(await readBodyLimited(request, 1_048_576));
+      const body = safeJsonParse(raw) as MailgunWebhook | undefined;
+      const sig = body?.signature;
+      const timestamp = sig?.timestamp ?? "";
+      const token = sig?.token ?? "";
+      // Mailgun advises a loose window because webhook delivery can lag.
+      const fresh = /^\d{1,12}$/.test(timestamp) && Math.abs(Date.now() / 1000 - Number(timestamp)) <= 15 * 60;
+      const valid =
+        fresh &&
+        /^[0-9a-f]{1,128}$/i.test(token) &&
+        (await verifyWebhookSignature({
+          payload: timestamp + token,
+          signature: sig?.signature ?? "",
+          secret: config.MAILGUN_WEBHOOK_SIGNING_KEY,
+        }));
+      if (!valid) throw new UnauthorizedError("invalid signature");
+
+      const event = body?.["event-data"];
+      const hard =
+        (event?.event === "failed" && event.severity === "permanent") || event?.event === "complained";
+      try {
+        await app.jobs!.enqueue({
+          name: hard ? "email.suppress" : "email.mailgun_event",
+          payload: { email: event?.recipient ?? "", reason: event?.event ?? "unknown" },
+          idempotencyKey: jobIdempotencyKey({ name: "email.mailgun_token", key: `mg-${token}` }),
+        });
+      } catch (err) {
+        if (err instanceof JobIdempotencyConflictError) throw new UnauthorizedError("replayed token");
+        throw err;
+      }
+      return { status: 200, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+Register a no-op (or audit) `email.mailgun_event` handler next to the overview's handlers, so every verified token lands in the job store and the replay check covers non-bounce events too. Job idempotency only lasts as long as your store keeps completed jobs, so keep their retention above the timestamp window.
+
+## Suppressions
+
+Mailgun keeps per-domain suppression lists for bounces, complaints, and unsubscribes and stops delivering to those addresses (later sends fail with a `failed` event). Read and manage them with the SDK, for example `mg.suppressions.list(domain, "bounces")`, `mg.suppressions.get(domain, "complaints", address)`, and `mg.suppressions.destroy(domain, "bounces", address)` once a user fixes their address. Mirror hard failures into your own undeliverable flag through the webhook above.
+
 ## Runtimes
 
-<ul>
-<li>Node / Bun / AWS Lambda{": "}works with the configuration above.</li>
-<li>Cloudflare Workers{": "}pass <code>useFetch: true</code> so the SDK uses the platform's native <code>fetch</code> instead of{" "}<code>request</code> (which depends on Node's HTTP module):<CodeBlock code={"const mg = mailgun.client({\n  username: \"api\",\n  key: process.env.MAILGUN_API_KEY!,\n  url: process.env.MAILGUN_URL,\n  useFetch: true,\n});"} />When <code>useFetch</code> is enabled, you can also drop the{" "}<code>form-data</code> dependency in favour of the global{" "}<code>FormData</code>.</li>
-</ul>
+- Node / Bun / AWS Lambda: works with the configuration above.
+- Cloudflare Workers: pass `useFetch: true` (mailgun.js 12.1 and later) so the SDK uses the platform `fetch` instead of axios's Node transport. Proxy settings and the `form-data` package are not supported in this mode, which is fine because the global `FormData` is what you pass anyway:
 
-## Webhooks
+```ts title="src/email/mailgun-workers.ts"
+import Mailgun from "mailgun.js";
+import { env } from "cloudflare:workers";
 
-Mailgun signs webhook payloads with HMAC-SHA256. When you accept delivery, bounce, or complaint events, verify `signature.signature` against `timestamp + token` using your webhook signing key before trusting the body.
+const mg = new Mailgun(FormData).client({
+  username: "api",
+  key: env.MAILGUN_API_KEY,
+  url: env.MAILGUN_URL,
+  useFetch: true,
+});
+```
 
 See also [AWS SES](/docs/email/aws-ses), [Resend](/docs/email/resend), and the [email integrations overview](/docs/email).

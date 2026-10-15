@@ -1,6 +1,6 @@
 ---
 title: Using ODMs with DaloyJS
-description: Connect DaloyJS to document databases with ODMs such as Mongoose for MongoDB or Ottoman for Couchbase. Learn the recommended pattern for injecting connections and models into your handlers.
+description: Connect DaloyJS to document databases with Mongoose for MongoDB or Ottoman for Couchbase. Inject connections and models, and handle serverless lifecycle.
 keywords:
   - DaloyJS ODM
   - Mongoose DaloyJS
@@ -52,22 +52,31 @@ Like SQL clients, ODM connections belong in a setup function you call once with 
           },
         ]} caption="Connections are opened once in a setup function that decorates the root app, and exposed on state. Handlers read models from state.db, so the connection lifecycle stays in one place and closes cleanly on shutdown." />
 
-```ts
-// src/db/plugin.ts
+```ts title="src/db/plugin.ts"
 import type { App } from "@daloyjs/core";
+import mongoose from "mongoose";
+import { db } from "./mongoose.ts"; // { connection, User, Order, Inventory }
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
-export function databasePlugin(app: App, db: Database) {
+export async function databasePlugin(app: App) {
+  await mongoose.connect(process.env.MONGODB_URI!);
   app.decorate("db", db);
   app.onClose(async () => {
-    await db.disconnect();
+    await mongoose.disconnect();
   });
 }
-
-// src/server.ts
-databasePlugin(app, db);
 ```
+
+```ts title="src/server.ts"
+import { App } from "@daloyjs/core";
+import { databasePlugin } from "./db/plugin.ts";
+
+const app = new App();
+await databasePlugin(app);
+```
+
+`onClose()` only runs on the Node.js, Bun, and Deno adapters. On Lambda, Vercel, and Azure Functions, connect at module scope and keep the pool small (Mongoose's `maxPoolSize`); see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) for the full picture.
 
 ## Pick your ODM
 
@@ -76,12 +85,12 @@ databasePlugin(app, db);
 
 ## Runtime compatibility cheat sheet
 
-| ODM | Node.js | Bun | Deno | Cloudflare Workers |
-| --- | --- | --- | --- | --- |
-| Mongoose | Yes | Partial | No | No |
-| Ottoman | Yes | Partial | No | No |
+| ODM | Node.js | Bun | Deno | Vercel (Node) | AWS Lambda | Azure Functions | Cloudflare Workers |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Mongoose 9 | Yes | Not verified | Alpha (per the Mongoose README) | Not verified | Not verified | Not verified | No |
+| Ottoman 2 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | No |
 
-Mongoose and Ottoman both depend on Node.js database drivers, so they are primarily Node.js choices. If you need a portable edge-friendly database layer, stay in the SQL-oriented [ORM section](/docs/orm) and choose a compatible client there.
+Vercel Functions (Node.js runtime), AWS Lambda, and Azure Functions run on Node.js, so both ODMs are expected to load there, but we have not verified them end to end and connection reuse is your job (see the [lifecycle notes](/docs/orm#serverless-lifecycle)). Mongoose and Ottoman both depend on Node.js database drivers that open long-lived TCP connections, so they are primarily Node.js choices. If you need a portable edge-friendly database layer, stay in the SQL-oriented [ORM section](/docs/orm) and choose a compatible client there.
 
 ## Typing the decorated client
 
@@ -98,28 +107,31 @@ declare module "@daloyjs/core" {
 
 ## Sessions and transactions
 
-MongoDB transactions require a replica set and a session. Start the session inside the handler that owns the unit of work, then pass it through each model operation.
+MongoDB transactions require a replica set and a session. Start the session inside the handler that owns the unit of work, then pass it through each model operation. This example assumes `Order` and `Inventory` models exported on `db` and a route that declares `201`.
 
 ```ts
 handler: async ({ body, state }) => {
   const session = await state.db.connection.startSession();
   try {
-    let createdOrder: unknown;
+    let orderId = "";
     await session.withTransaction(async () => {
-      createdOrder = await state.db.Order.create([{ ...body }], { session });
+      const [order] = await state.db.Order.create([{ sku: body.sku, qty: body.qty }], { session });
+      orderId = String(order._id);
       await state.db.Inventory.updateOne(
         { sku: body.sku },
         { $inc: { stock: -body.qty } },
-        { session }
+        { session },
       );
     });
 
-    return { status: 201, body: createdOrder };
+    return { status: 201, body: { id: orderId, sku: body.sku, qty: body.qty } };
   } finally {
     await session.endSession();
   }
 }
 ```
+
+Pick fields explicitly when you write. Spreading `{ ...body }` into `create()` is safe only because `z.object()` strips unknown keys before the handler runs; a `z.looseObject()` or `.passthrough()` write schema would let a client set any field on the document (mass assignment).
 
 ## Next steps
 

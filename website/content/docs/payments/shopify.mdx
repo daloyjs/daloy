@@ -1,114 +1,133 @@
 ---
 title: Integrate Shopify with DaloyJS
-description: Call the Shopify Admin GraphQL API and verify Shopify webhooks from a DaloyJS API using the community shopify-api-node SDK. Covers custom-app access tokens, API versioning, rate limits, pagination, and HMAC verification.
+description: "Call the Shopify Admin GraphQL API from DaloyJS with shopify-api-node: Dev Dashboard apps, tokens, API versions, and webhook HMAC with the client secret."
 keywords:
   - DaloyJS Shopify
   - shopify-api-node
   - Shopify Admin GraphQL DaloyJS
   - Shopify webhook verification Node
-  - Shopify custom app access token
+  - Shopify client credentials grant
 ---
 
 # Integrate Shopify with DaloyJS
 
-[Shopify](https://www.shopify.com/) is the commerce platform behind millions of stores. This guide uses the community [`shopify-api-node`](https://github.com/MONEI/Shopify-api-node) SDK (maintained by MONEI) to call the Shopify Admin API from a DaloyJS plugin, and shows how to verify Shopify webhooks against the raw request body.
+[Shopify](https://www.shopify.com/) is the commerce platform behind millions of stores. This guide uses the community [`shopify-api-node`](https://github.com/MONEI/Shopify-api-node) SDK (maintained by MONEI) to call the Shopify Admin API from a DaloyJS plugin, and verifies Shopify webhooks against the raw request body with the core `verifyWebhookSignature()`.
 
-## REST is deprecated: prefer GraphQL
+## REST is legacy: use GraphQL
 
-Shopify [froze the REST Admin API at version 2024-04](https://shopify.dev/docs/api/admin-rest) and requires new public apps to use the [GraphQL Admin API](https://shopify.dev/docs/api/admin-graphql). The REST resources on `shopify-api-node` (`shopify.product.list`, `shopify.order.create`, …) still work against older API versions, but you should write new code against the SDK's `shopify.graphql()` method. Every example below uses GraphQL.
+Shopify made the [REST Admin API](https://shopify.dev/docs/api/admin-rest) a legacy API as of October 1, 2024, and since April 1, 2025 new public apps must be built exclusively on the [GraphQL Admin API](https://shopify.dev/docs/api/admin-graphql). The REST resources on `shopify-api-node` (`shopify.product.list`, `shopify.order.create`, and so on) still exist, but write new code against the SDK's `shopify.graphql()` method. Every example below uses GraphQL.
 
-Pin your `apiVersion` to a current stable release (Shopify ships a new version every quarter, supports each for 12 months, and lists them on the [versioning page](https://shopify.dev/docs/api/usage/versioning)). The default in `shopify-api-node` is the *oldest* supported stable version, which is usually not what you want.
+Pin `apiVersion` to a current stable release. Shopify ships a new version every quarter and supports each for about a year; at the time of writing the latest stable version is `2026-10`. Check the [versioning page](https://shopify.dev/docs/api/usage/versioning) when you upgrade. Do not rely on the SDK's default version.
 
-## 1. Provision a custom app
+## 1. Create the app and get a token
 
-1. In the Shopify admin, open **Settings -\> Apps and sales channels -\> Develop apps**, then create a custom app. The legacy “private apps” flow (API key + password) was removed back in January 2022, don't use the `apiKey` / `password` options on the SDK.
-2. Pick the [Admin API access scopes](https://shopify.dev/docs/api/usage/access-scopes) your integration actually needs (for example `read_products`, `write_orders`). Stay minimal, you can always grant more later.
-3. Install the app on the store. Copy the **Admin API access token** (starts with `shpat_`). This is the only credential the SDK needs.
+Shopify changed how custom apps are created. Per the [Shopify changelog](https://changelog.shopify.com/posts/legacy-custom-apps-can-t-be-created-after-january-1-2026), since January 1, 2026 you can no longer create new custom apps in the Shopify admin. Create the app in the **Dev Dashboard** instead, then install it on your store.
+
+1. In Shopify's Dev Dashboard, create an app and choose the [Admin API access scopes](https://shopify.dev/docs/api/usage/access-scopes) it needs (for example `read_products`, `write_orders`). Stay minimal.
+2. Install the app on the store and note its **client ID** and **client secret**.
+3. For a server-side integration with stores in your own Shopify organization, exchange those credentials for an access token with the [client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant). These tokens expire after 24 hours, so the plugin below refreshes them. For stores outside your organization, use token exchange or the authorization code grant (the official `@shopify/shopify-api` library implements both).
+
+<Callout type="note" title="Existing legacy custom apps">
+<p>Custom apps created in the admin before January 1, 2026 keep working, and Shopify still lets you manage them there. If you already have one, you can keep passing its Admin API access token (the <code>shpat_</code> value) to <code>accessToken</code> and skip the refresh logic below. New integrations should start from the Dev Dashboard.</p>
+</Callout>
 
 ## 2. Install
 
-```ts
-pnpm add shopify-api-node
+```package-install
+shopify-api-node
 ```
 
-TypeScript users: the package ships its own typings (under `types/` in the repo). No `@types/shopify-api-node` install needed.
+The package ships its own typings (under `types/`), so no `@types/shopify-api-node` install is needed.
 
 ## 3. Environment variables
 
-```ts
-# .env
+```bash title=".env"
 SHOPIFY_SHOP=acme-test.myshopify.com
-SHOPIFY_ACCESS_TOKEN=shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-SHOPIFY_API_VERSION=2026-01
-SHOPIFY_WEBHOOK_SECRET=shpss_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SHOPIFY_CLIENT_ID=replace_me
+SHOPIFY_CLIENT_SECRET=replace_me      # also the webhook HMAC key
+SHOPIFY_API_VERSION=2026-10
 ```
 
-The webhook secret is shown when you create a webhook subscription (either in the admin or via GraphQL `webhookSubscriptionCreate`). Update `SHOPIFY_API_VERSION` to the latest stable on each Shopify release.
+Shopify signs webhooks with the app's **client secret**, so the same secret that obtains tokens also verifies deliveries. Treat it as a production credential.
 
 ## 4. Plugin
 
-```ts
-// src/plugins/shopify.ts
-import { createHmac, timingSafeEqual } from "node:crypto";
+```ts title="src/plugins/shopify.ts"
 import Shopify from "shopify-api-node";
+import { resilientFetch, verifyWebhookSignature } from "@daloyjs/core";
 import type { App } from "@daloyjs/core";
 
-const shopify = new Shopify({
-  shopName: process.env.SHOPIFY_SHOP!,
-  accessToken: process.env.SHOPIFY_ACCESS_TOKEN!,
-  apiVersion: process.env.SHOPIFY_API_VERSION ?? "2026-01",
-  // Retry 429s and respect Shopify's GraphQL throttled-cost data.
-  // Mutually exclusive with autoLimit - pick one.
-  maxRetries: 5,
-  timeout: 30_000,
-});
+const shop = process.env.SHOPIFY_SHOP!;
+const apiVersion = process.env.SHOPIFY_API_VERSION ?? "2026-10";
+const tokenFetch = resilientFetch({ timeoutMs: 10_000, retries: 0 });
 
-// Optional: surface throttle pressure to your metrics layer.
-shopify.on("callGraphqlLimits", (limits) => {
-  // { actualQueryCost, requestedQueryCost, throttleStatus: { ... } }
-  if (limits.throttleStatus.currentlyAvailable < 100) {
-    console.warn("[shopify] graphql credits low", limits.throttleStatus);
-  }
-});
+let cached: { client: Shopify; expiresAt: number } | null = null;
 
-function verifyShopifyHmac(rawBody: Buffer, headerHmac: string | null) {
-  if (!headerHmac) return false;
-  const digest = createHmac("sha256", process.env.SHOPIFY_WEBHOOK_SECRET!)
-    .update(rawBody)
-    .digest("base64");
-  const a = Buffer.from(digest, "utf8");
-  const b = Buffer.from(headerHmac, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+// Client credentials grant: tokens last 24 hours, so refresh a few minutes early.
+async function getShopify(): Promise<Shopify> {
+  if (cached && Date.now() < cached.expiresAt - 5 * 60_000) return cached.client;
+  const res = await tokenFetch(`https://${shop}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: process.env.SHOPIFY_CLIENT_ID!,
+      client_secret: process.env.SHOPIFY_CLIENT_SECRET!,
+    }),
+  });
+  if (!res.ok) throw new Error(`Shopify token request failed: ${res.status}`);
+  const { access_token, expires_in } = (await res.json()) as { access_token: string; expires_in: number };
+  const client = new Shopify({
+    shopName: shop,
+    accessToken: access_token,
+    apiVersion,
+    maxRetries: 5, // retry 429s using Shopify's throttle data; mutually exclusive with autoLimit
+    timeout: 30_000,
+  });
+  cached = { client, expiresAt: Date.now() + expires_in * 1000 };
+  return client;
 }
 
 export interface ShopifyClient {
-  graphql<TData = unknown, TVars extends Record<string, unknown> = Record<string, unknown>>(
-    query: string,
-    variables?: TVars,
-  ): Promise<TData>;
-  verifyWebhook(headers: Headers, rawBody: Buffer): {
+  graphql<TData = unknown>(query: string, variables?: Record<string, unknown>): Promise<TData>;
+  verifyWebhook(headers: Headers, rawBody: Uint8Array): Promise<{
     ok: boolean;
     topic: string | null;
     shop: string | null;
-    eventId: string | null;
-  };
+    webhookId: string | null;
+  }>;
 }
+
+// Exported so job handlers (which run outside a request) can use it too.
+export const shopifyClient: ShopifyClient = {
+  async graphql(query, variables) {
+    const shopify = await getShopify();
+    return shopify.graphql(query, variables) as Promise<never>;
+  },
+
+  async verifyWebhook(headers, rawBody) {
+    const hmac = headers.get("x-shopify-hmac-sha256");
+    const ok =
+      !!hmac &&
+      (await verifyWebhookSignature({
+        payload: rawBody,
+        signature: hmac, // base64 HMAC-SHA256 of the raw body
+        secret: process.env.SHOPIFY_CLIENT_SECRET!,
+        algorithm: "sha256",
+      }));
+    return {
+      ok,
+      topic: headers.get("x-shopify-topic"),
+      shop: headers.get("x-shopify-shop-domain"),
+      webhookId: headers.get("x-shopify-webhook-id"),
+    };
+  },
+};
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
 export function shopifyPlugin(app: App) {
-  const client: ShopifyClient = {
-    graphql: (query, variables) => shopify.graphql(query, variables) as Promise<never>,
-    verifyWebhook(headers, rawBody) {
-      return {
-        ok: verifyShopifyHmac(rawBody, headers.get("x-shopify-hmac-sha256")),
-        topic: headers.get("x-shopify-topic"),
-        shop: headers.get("x-shopify-shop-domain"),
-        eventId: headers.get("x-shopify-webhook-id"),
-      };
-    },
-  };
-  app.decorate("shopify", client);
+  app.decorate("shopify", shopifyClient);
 }
 
 declare module "@daloyjs/core" {
@@ -118,15 +137,14 @@ declare module "@daloyjs/core" {
 }
 ```
 
+With a legacy `shpat_` token, replace `getShopify()` with a single `new Shopify({ shopName, accessToken, apiVersion, maxRetries: 5 })`. To surface throttle pressure to your metrics, listen to the client's `callGraphqlLimits` event.
+
 ## 5. Query products with GraphQL
 
-```ts
+```ts title="src/routes/catalog.ts"
 import { z } from "zod";
-import { App, secureHeaders } from "@daloyjs/core";
-import { shopifyPlugin } from "./plugins/shopify.ts";
+import { shopifyPlugin } from "../plugins/shopify.ts";
 
-const app = new App();
-app.use(secureHeaders());
 shopifyPlugin(app);
 
 const ProductsQuery = /* GraphQL */ `
@@ -155,7 +173,7 @@ app.get(
     request: {
       query: z.object({
         first: z.coerce.number().int().min(1).max(50).default(20),
-        after: z.string().optional(),
+        after: z.string().max(512).optional(),
       }),
     },
     responses: {
@@ -205,23 +223,23 @@ app.get(
 );
 ```
 
-GraphQL pagination uses opaque cursors (`endCursor`) rather than the REST `nextPageParameters` helper. Forward the cursor as a query string to your client.
+GraphQL pagination uses opaque cursors (`endCursor`). Forward the cursor as a query string to your client.
 
 ## 6. Receive and verify webhooks
 
-<SequenceDiagram title="Webhook verification" participants={["Shopify", "DaloyJS route", "Your worker"]} steps={[
+<SequenceDiagram title="Webhook verification" participants={["Shopify", "DaloyJS route", "Job worker"]} steps={[
           {
             from: "Shopify",
             to: "DaloyJS route",
             label: "POST /webhooks/shopify",
-            detail: "X-Shopify-Hmac-Sha256 over raw body",
+            detail: "X-Shopify-Hmac-SHA256 over raw body",
             kind: "request",
           },
           {
             from: "DaloyJS route",
             to: "DaloyJS route",
-            label: "Compare HMAC-SHA256 with timingSafeEqual",
-            detail: "verifyWebhook(headers, rawBody)",
+            label: "verifyWebhookSignature with the client secret",
+            detail: "base64 HMAC-SHA256, constant-time compare",
             kind: "note",
           },
           {
@@ -233,87 +251,69 @@ GraphQL pagination uses opaque cursors (`endCursor`) rather than the REST `nextP
           },
           {
             from: "DaloyJS route",
-            to: "Your worker",
-            label: "Dedupe on X-Shopify-Webhook-Id, then enqueue",
-            detail: "ack 200 within ~5s",
+            to: "Job worker",
+            label: "enqueue keyed by X-Shopify-Webhook-Id, then 200",
+            detail: "ack well inside the 5 s budget",
             kind: "async",
           },
-        ]} caption="Hash the raw bytes before JSON.parse, reject bad signatures with 401, dedupe on the webhook id, then ack fast and do the heavy work in a background job." />
+        ]} caption="Hash the raw bytes before parsing, reject bad signatures with 401, dedupe atomically on X-Shopify-Webhook-Id through the job idempotency key, then ack fast and do the heavy work in the worker." />
 
-Shopify signs every webhook with `X-Shopify-Hmac-Sha256` over the *raw* body. Skip JSON parsing until the signature matches, and dedupe on `X-Shopify-Webhook-Id` so retries don't double-process. Use the [bounded raw-body helper](/docs/api-reference/security) to get the bytes:
+Shopify signs every HTTPS webhook with `X-Shopify-Hmac-SHA256`, a base64 HMAC-SHA256 of the raw body keyed with your app's client secret. Dedupe on `X-Shopify-Webhook-Id`, which identifies one delivery. Do not dedupe on `X-Shopify-Event-Id`: it is shared by every delivery that one merchant action produced (several subscriptions to the same topic each get their own webhook id but the same event id), so it is a correlation id, not a dedupe key. The route follows the [shared webhook pattern](/docs/payments#webhook-pattern):
 
-```ts
+```ts title="src/webhooks/shopify.ts"
 import { z } from "zod";
-import { readBodyLimited } from "@daloyjs/core";
+import { readBodyLimited, jobIdempotencyKey } from "@daloyjs/core";
 
 app.post(
   "/webhooks/shopify",
   {
     operationId: "shopifyWebhook",
-    // No body schema - we hash bytes before parsing.
+    // No body schema: we hash bytes before parsing.
     responses: {
       200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
       401: { description: "bad signature", body: z.object({ error: z.string() }) },
     },
   },
   async ({ request, state }) => {
-    // Keep webhook reads bounded and preserve the exact bytes Shopify signed.
-    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
-    const result = state.shopify.verifyWebhook(request.headers, raw);
-    if (!result.ok) {
-      return { status: 401, body: { error: "invalid signature" } };
-    }
-    // Dedupe before any side effect.
-    if (result.eventId && (await seen(result.eventId))) {
-      return { status: 200, body: { ok: true as const } };
-    }
+    const raw = await readBodyLimited(request, 1_048_576);
+    const result = await state.shopify.verifyWebhook(request.headers, raw);
+    if (!result.ok) return { status: 401, body: { error: "invalid signature" } };
+    if (!result.webhookId || !result.topic) return { status: 200, body: { ok: true as const } };
 
-    const payload = JSON.parse(raw.toString("utf8"));
-    switch (result.topic) {
-      case "orders/create":
-        await onOrderCreated(payload);
-        break;
-      case "orders/paid":
-        await onOrderPaid(payload);
-        break;
-      case "app/uninstalled":
-        await onAppUninstalled(result.shop, payload);
-        break;
-      // ...
-    }
-
+    await app.jobs!.enqueue({
+      name: "shopify.webhook",
+      // Keep the payload small; the worker re-reads current state over GraphQL.
+      payload: { webhookId: result.webhookId, topic: result.topic, shop: result.shop },
+      idempotencyKey: jobIdempotencyKey({ name: "shopify.webhook", key: result.webhookId }),
+    });
     return { status: 200, body: { ok: true as const } };
   },
 );
 ```
 
-Shopify expects a 2xx within \~5 seconds, retries with exponential back-off for up to 48 hours, and disables the subscription after 19 consecutive failures. Do the heavy work in a background job and ack fast.
+If the worker needs the payload itself (for example the order id on `orders/paid`), parse it with `safeJsonParse()` after verification and put only the ids into the job payload.
+
+Shopify uses a one-second connection timeout and a five-second timeout for the whole request, and treats any non-2xx (including redirects) as a failure. It retries a failed delivery 8 times over the next 4 hours, and a subscription created through the Admin API is deleted after 8 consecutive failures. Deliveries are not ordered; use `X-Shopify-Triggered-At` or the payload's `updated_at` when order matters. See Shopify's [webhook best practices](https://shopify.dev/docs/apps/build/webhooks/best-practices).
 
 ## Rate limits
 
-The GraphQL Admin API uses a [calculated cost & leaky-bucket model](https://shopify.dev/docs/api/usage/rate-limits). Use the `maxRetries` option (above) so the SDK respects the throttled-cost information that comes back on 429 responses. `autoLimit` only works for the REST API and only inside a single Node process, skip it for GraphQL or multi-instance deployments and rely on retries instead.
+The GraphQL Admin API uses a [calculated cost and leaky-bucket model](https://shopify.dev/docs/api/usage/rate-limits). Use the `maxRetries` option (above) so the SDK respects the throttle information that comes back on 429 responses. `autoLimit` only applies to the REST API and only inside a single process, so skip it for GraphQL or multi-instance deployments.
 
 ## Runtimes
 
-`shopify-api-node` is built on [got v11](https://github.com/sindresorhus/got), which depends on Node's HTTPS module. It runs fine on Node, Bun, AWS Lambda, and any long-running container, but it is **not** drop-in compatible with [Cloudflare Workers](/docs/adapters). On those runtimes, call the Admin GraphQL endpoint directly with `fetch`:
+`shopify-api-node` is built on [got](https://github.com/sindresorhus/got), which depends on Node's HTTP stack. It runs on Node hosts (long-lived Node, Vercel Node.js functions, AWS Lambda, Azure Functions), but not on [Cloudflare Workers](/docs/adapters/cloudflare-workers) or Vercel Edge. On those runtimes, call the Admin GraphQL endpoint directly with `fetch`; the webhook verification above already uses only core WebCrypto helpers:
 
 ```ts
 // edge-friendly fallback
-const res = await fetch(
-  `https://${shop}/admin/api/${apiVersion}/graphql.json`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": accessToken,
-    },
-    body: JSON.stringify({ query, variables }),
-  },
-);
+const res = await fetch(`https://${shop}/admin/api/${apiVersion}/graphql.json`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": accessToken },
+  body: JSON.stringify({ query, variables }),
+});
 ```
 
 ## Alternatives
 
-Shopify also publishes the official [`@shopify/shopify-api`](https://github.com/Shopify/shopify-api-js) library, which adds OAuth for public/embedded apps and a built-in webhook registry. Reach for it when you're building a Shopify App Store listing. Reach for `shopify-api-node` when you're building a server-side integration for a single store and want a smaller surface.
+Shopify also publishes the official [`@shopify/shopify-api`](https://github.com/Shopify/shopify-api-js) library (15.x, Node 22+), which implements OAuth, token exchange, session storage, and a webhook registry for public and embedded apps. Reach for it when you build an App Store app or need to act on stores outside your organization. Reach for `shopify-api-node` when you build a server-side integration for your own store and want a smaller surface.
 
 See also the [payments overview](/docs/payments), [problem+json errors](/docs/errors), and [distributed rate-limit store](/docs/security/rate-limit-redis).

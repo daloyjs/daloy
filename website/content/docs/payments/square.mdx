@@ -1,43 +1,43 @@
 ---
 title: Accept payments with Square in DaloyJS
-description: Integrate Square Payments from a DaloyJS API using the modern square TypeScript SDK (v40+). Covers SquareClient, BigInt money amounts, idempotency keys, the Web Payments SDK token handoff, WebhooksHelper.verifySignature with the raw body and exact notification URL, refunds, and edge-runtime compatibility.
+description: "Square payments in DaloyJS with the square SDK: server-side bigint amounts, order-derived idempotency keys, Web Payments tokens, and awaited webhook checks."
 keywords:
   - DaloyJS Square
   - square Node SDK
   - SquareClient
   - WebhooksHelper.verifySignature
-  - Square BigInt amount
+  - Square bigint amount
   - Square Web Payments SDK
 ---
 
 # Accept payments with Square in DaloyJS
 
-[Square](https://squareup.com/) gives you one API across in-person, online, and recurring payments, useful when the same merchant takes both Tap to Pay at the counter and Apple Pay through your web app. This guide uses the modern [`square`](https://github.com/square/square-nodejs-sdk) TypeScript SDK (v40+, currently v44.x, a full rewrite from the pre-v40 line), Square's Web Payments SDK on the client for tokenisation, and `WebhooksHelper.verifySignature` on the server for webhook auth.
+[Square](https://squareup.com/) gives you one API across in-person, online, and recurring payments, useful when the same merchant takes both Tap to Pay at the counter and Apple Pay through your web app. This guide uses the [`square`](https://github.com/square/square-nodejs-sdk) TypeScript SDK (the v40+ line, currently 46.x), Square's Web Payments SDK on the client for tokenisation, and webhook signature verification on the server.
 
 ## What you should know up front
 
-- v40+ is a full rewrite. If you see `squareConnect`, `new Client({ bearerAuthCredentials })`, or `paymentsApi.createPayment` in tutorials, you're looking at the legacy SDK. The new client is `SquareClient`, calls are `client.payments.create(...)`, and parameters are camelCase. The legacy surface is still shipped as `square/legacy` for migration only, don't start there in 2026.
-- Money is `BigInt`, in the smallest unit. `{ amount: BigInt("1000"), currency: "USD" }` means $10.00. Pass a plain `number` and TypeScript will (correctly) yell at you; `JSON.stringify`ing a BigInt without a replacer will throw at runtime. See the serialisation note below.
-- You don't charge a card, you charge a *source ID*. The Web Payments SDK on the client returns a single-use token (`cnon:...` for cards, `cash:`, Apple Pay nonces, etc.) that your server passes as `sourceId`. Raw PANs never touch your code.
-- Always send an `idempotencyKey`. Required on every mutating call (`payments.create`, `refunds.refundPayment`, orders, etc.). A UUID per logical attempt is the right shape, re-use it on retries.
-- Webhook verification needs three things, not two. `WebhooksHelper.verifySignature` wants the raw body, the signature header, the signature key, *and* the exact `notificationUrl` you registered in the dashboard. Get the URL even slightly wrong (trailing slash, http vs https, behind a proxy that strips the host) and every event will look invalid.
+- v40+ is a rewrite. If you see `new Client({ bearerAuthCredentials })` or `paymentsApi.createPayment` in tutorials, you are looking at the legacy SDK. The current client is `SquareClient`, calls are `client.payments.create(...)`, and parameters are camelCase. The legacy surface still ships as `square/legacy` for migration only.
+- Money is `bigint`, in the smallest unit. `{ amount: 1000n, currency: "USD" }` means 10.00 USD. `JSON.stringify` throws on a `bigint`, so convert to a string yourself before it reaches a response body. See the callout below.
+- You charge a *source ID*, not a card. The Web Payments SDK returns a single-use token that your server passes as `sourceId`. Raw PANs never touch your code.
+- The amount comes from your order, not the request. The browser sends the token and an order id; the server loads the total. See [never trust client amounts](/docs/payments#never-trust-client-amounts).
+- Derive the `idempotencyKey` from the order. Every mutating call needs one. A random UUID per call protects nothing when your own handler is retried; a key derived from the order id and version does.
+- `WebhooksHelper.verifySignature` is async. It returns `Promise<boolean>` and must be awaited. It also needs the exact `notificationUrl` you registered: a trailing slash or http vs https mismatch makes every event look invalid.
 
 ## 1. Provision
 
 1. Sign in at [developer.squareup.com](https://developer.squareup.com/apps) and create an application.
 2. Grab a **Sandbox access token** and your **Application ID** from *Credentials*. Also note a **Location ID** from *Locations*: every payment needs one.
-3. Under *Webhooks -\> Subscriptions*, add an endpoint pointing at your DaloyJS route, subscribe to at least `payment.updated`, `payment.created`, and `refund.updated`, and copy the **Signature Key**. Save the full URL exactly as Square shows it.
+3. Under *Webhooks -\> Subscriptions*, add an endpoint pointing at your DaloyJS route, subscribe to at least `payment.updated` and `refund.updated`, and copy the **Signature Key**. Save the full URL exactly as Square shows it.
 
 ## 2. Install
 
-```ts
-pnpm add square
+```package-install
+square
 ```
 
 ## 3. Environment variables
 
-```ts
-# .env
+```bash title=".env"
 SQUARE_ACCESS_TOKEN=EAAA_replace_me                  # sandbox or production access token
 SQUARE_APPLICATION_ID=sandbox-sq0idb-replace_me      # public; also used by Web Payments SDK
 SQUARE_LOCATION_ID=L_replace_me                      # default location for charges
@@ -48,9 +48,7 @@ SQUARE_ENV=sandbox                                   # "sandbox" | "production"
 
 ## 4. Plugin
 
-```ts
-// src/plugins/square.ts
-import { randomUUID } from "node:crypto";
+```ts title="src/plugins/square.ts"
 import { SquareClient, SquareEnvironment, SquareError, WebhooksHelper } from "square";
 import type { App } from "@daloyjs/core";
 
@@ -62,101 +60,102 @@ const square = new SquareClient({
       : SquareEnvironment.Sandbox,
 });
 
+/** Stable key per logical operation. 40 hex chars, under Square's 45-character limit. */
+export async function squareIdempotencyKey(...parts: Array<string | number>): Promise<string> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join(":"))),
+  );
+  return Array.from(digest.slice(0, 20), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export interface SquareClientWrapper {
   raw: SquareClient;
 
   createPayment(input: {
-    sourceId: string;                  // token from Web Payments SDK
-    amountMinor: bigint;               // smallest unit — cents for USD, etc.
-    currency: string;                  // ISO-4217, uppercase
-    idempotencyKey?: string;           // defaults to randomUUID()
-    locationId?: string;               // defaults to env LOCATION_ID
-    referenceId?: string;              // your internal id (≤ 40 chars)
-    note?: string;                     // ≤ 500 chars
-    autocomplete?: boolean;            // default true (capture on auth)
-  }): Promise<{ id: string; status: string; orderId?: string; receiptUrl?: string }>;
+    sourceId: string;          // token from Web Payments SDK
+    amountMinor: bigint;       // smallest unit, from your order
+    currency: string;          // ISO 4217, uppercase
+    idempotencyKey: string;    // derived from the order, never random per call
+    referenceId: string;       // your order id (max 40 chars)
+    verificationToken?: string; // from the Web Payments SDK buyer verification (SCA)
+  }): Promise<{ id: string; status: string; receiptUrl?: string }>;
 
-  verifyWebhookSignature(rawBody: string, signatureHeader: string | null): boolean;
+  verifyWebhookSignature(rawBody: string, signatureHeader: string | null): Promise<boolean>;
 
-  getPayment(paymentId: string): Promise<{ id: string; status: string; amountMinor: bigint; currency: string }>;
+  getPayment(paymentId: string): Promise<{
+    id: string;
+    status: string;
+    amountMinor: bigint;
+    currency: string;
+    referenceId?: string;
+  }>;
 
   refund(input: {
     paymentId: string;
     amountMinor: bigint;
     currency: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
     reason?: string;
   }): Promise<{ id: string; status: string }>;
 }
 
+// Exported so job handlers (which run outside a request) can use it too.
+export const squareClient: SquareClientWrapper = {
+  raw: square,
+
+  async createPayment({ sourceId, amountMinor, currency, idempotencyKey, referenceId, verificationToken }) {
+    const { payment } = await square.payments.create({
+      sourceId,
+      idempotencyKey,
+      amountMoney: { amount: amountMinor, currency },
+      locationId: process.env.SQUARE_LOCATION_ID!,
+      referenceId,
+      verificationToken,
+      autocomplete: true,
+    });
+    if (!payment) throw new Error("Square returned no payment");
+    return { id: payment.id!, status: payment.status!, receiptUrl: payment.receiptUrl };
+  },
+
+  async verifyWebhookSignature(rawBody, signatureHeader) {
+    if (!signatureHeader) return false;
+    // Async in the current SDK: always await the result.
+    return await WebhooksHelper.verifySignature({
+      requestBody: rawBody,
+      signatureHeader,
+      signatureKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
+      notificationUrl: process.env.SQUARE_WEBHOOK_URL!,
+    });
+  },
+
+  async getPayment(paymentId) {
+    const { payment } = await square.payments.get({ paymentId });
+    if (!payment) throw new Error(`Square payment ${paymentId} not found`);
+    return {
+      id: payment.id!,
+      status: payment.status!,
+      amountMinor: payment.amountMoney!.amount!,
+      currency: payment.amountMoney!.currency!,
+      referenceId: payment.referenceId,
+    };
+  },
+
+  async refund({ paymentId, amountMinor, currency, idempotencyKey, reason }) {
+    const { refund } = await square.refunds.refundPayment({
+      paymentId,
+      idempotencyKey,
+      amountMoney: { amount: amountMinor, currency },
+      reason,
+    });
+    if (!refund) throw new Error("Square returned no refund");
+    return { id: refund.id!, status: refund.status! };
+  },
+};
+
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
 export function squarePlugin(app: App) {
-  const client: SquareClientWrapper = {
-    raw: square,
-
-    async createPayment({
-      sourceId,
-      amountMinor,
-      currency,
-      idempotencyKey = randomUUID(),
-      locationId = process.env.SQUARE_LOCATION_ID!,
-      referenceId,
-      note,
-      autocomplete = true,
-    }) {
-      const { payment } = await square.payments.create({
-        sourceId,
-        idempotencyKey,
-        amountMoney: { amount: amountMinor, currency },
-        locationId,
-        referenceId,
-        note,
-        autocomplete,
-      });
-      if (!payment) throw new Error("Square returned no payment");
-      return {
-        id: payment.id!,
-        status: payment.status!,
-        orderId: payment.orderId,
-        receiptUrl: payment.receiptUrl,
-      };
-    },
-
-    verifyWebhookSignature(rawBody, signatureHeader) {
-      if (!signatureHeader) return false;
-      return WebhooksHelper.verifySignature({
-        requestBody: rawBody,
-        signatureHeader,
-        signatureKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
-        notificationUrl: process.env.SQUARE_WEBHOOK_URL!,
-      });
-    },
-
-    async getPayment(paymentId) {
-      const { payment } = await square.payments.get({ paymentId });
-      if (!payment) throw new Error(`Square payment ${paymentId} not found`);
-      return {
-        id: payment.id!,
-        status: payment.status!,
-        amountMinor: payment.amountMoney!.amount!,
-        currency: payment.amountMoney!.currency!,
-      };
-    },
-
-    async refund({ paymentId, amountMinor, currency, idempotencyKey = randomUUID(), reason }) {
-      const { refund } = await square.refunds.refundPayment({
-        paymentId,
-        idempotencyKey,
-        amountMoney: { amount: amountMinor, currency },
-        reason,
-      });
-      if (!refund) throw new Error("Square returned no refund");
-      return { id: refund.id!, status: refund.status! };
-    },
-  };
-
-  app.decorate("square", client);
+  app.decorate("square", squareClient);
 }
 
 export { SquareError };
@@ -168,6 +167,23 @@ declare module "@daloyjs/core" {
 }
 ```
 
+<Callout type="danger" title="Await verifySignature">
+<p>In the current SDK, <code>WebhooksHelper.verifySignature()</code> returns <code>Promise&lt;boolean&gt;</code>. Code written for an older synchronous version, such as <code>if (!WebhooksHelper.verifySignature(...))</code>, negates a Promise object, which is always truthy, so the check never fails and every forged webhook is accepted. Type the wrapper as <code>Promise&lt;boolean&gt;</code> and <code>await</code> it, as above.</p>
+</Callout>
+
+The SDK helper computes HMAC-SHA256 over the notification URL followed by the raw body and compares the base64 result with a plain string comparison. If you want a constant-time comparison, the core helper does the same check (it accepts base64 signatures):
+
+```ts
+import { verifyWebhookSignature } from "@daloyjs/core";
+
+const ok = await verifyWebhookSignature({
+  payload: process.env.SQUARE_WEBHOOK_URL! + rawBody,
+  signature: signatureHeader ?? "",
+  secret: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
+  algorithm: "sha256",
+});
+```
+
 ## 5. Create a payment
 
 <SequenceDiagram title="Token handoff and charge" participants={["Browser", "DaloyJS route", "Square"]} steps={[
@@ -175,42 +191,39 @@ declare module "@daloyjs/core" {
             from: "Browser",
             to: "Square",
             label: "Web Payments SDK tokenises the card",
-            detail: "returns a single-use sourceId (cnon:...)",
+            detail: "returns a single-use sourceId",
             kind: "async",
           },
           {
             from: "Browser",
             to: "DaloyJS route",
             label: "POST /checkout/square",
-            detail: "sourceId + amountMinor (BigInt) + currency",
+            detail: "{ orderId, sourceId } only",
             kind: "request",
           },
           {
             from: "DaloyJS route",
             to: "Square",
-            label: "payments.create with an idempotencyKey",
-            detail: "amountMoney { amount: bigint }, locationId",
+            label: "payments.create",
+            detail: "amount from the stored order, order-derived idempotencyKey",
             kind: "request",
           },
           {
             from: "DaloyJS route",
             to: "Browser",
-            label: "201 captured, or 402 on SquareError decline",
+            label: "201 captured, or 402 on a decline",
             detail: "{ paymentId, status, receiptUrl }",
             kind: "response",
           },
-        ]} caption="The browser tokenises the card into a single-use sourceId so raw PANs never reach your server. Send an idempotencyKey on payments.create and map a 402 SquareError to a card-declined response." />
+        ]} caption="The browser tokenises the card so raw PANs never reach your server, and names only the order. The server loads the amount, derives a stable idempotency key, and maps a 402 SquareError to a card-declined response." />
 
-The client uses Square's [Web Payments SDK](https://developer.squareup.com/docs/web-payments/overview) with your `SQUARE_APPLICATION_ID` + `SQUARE_LOCATION_ID`, tokenises the card, and posts the `sourceId` to this endpoint.
+The client uses Square's [Web Payments SDK](https://developer.squareup.com/docs/web-payments/overview) with your `SQUARE_APPLICATION_ID` and `SQUARE_LOCATION_ID`, tokenises the card, and posts the `sourceId` together with the order id. The route relies on the [shared app wiring](/docs/payments#app-wiring) (session, scoped `csrf()` and `rateLimit()`) and the overview's `orders` module.
 
-```ts
+```ts title="src/routes/checkout-square.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { squarePlugin, SquareError } from "./plugins/square.ts";
+import { squarePlugin, squareIdempotencyKey, SquareError } from "../plugins/square.ts";
+import { orders } from "../orders.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 squarePlugin(app);
 
 app.post(
@@ -219,33 +232,29 @@ app.post(
     operationId: "createSquarePayment",
     request: {
       body: z.object({
-        sourceId: z.string().min(1),                  // from Web Payments SDK
-        amountMinor: z.coerce.bigint().positive(),    // accepts string from JSON
-        currency: z.string().length(3),
-        orderId: z.string().min(1).max(40),           // your internal id
-        note: z.string().max(500).optional(),
-      }),
+        orderId: z.string().min(1).max(40),
+        sourceId: z.string().min(1).max(512),
+        verificationToken: z.string().max(512).optional(),
+      }).strict(),
     },
     responses: {
       201: {
         description: "captured",
-        body: z.object({
-          paymentId: z.string(),
-          status: z.string(),
-          receiptUrl: z.url().optional(),
-        }),
+        body: z.object({ paymentId: z.string(), status: z.string(), receiptUrl: z.url().optional() }),
       },
       402: { description: "card declined", body: z.object({ error: z.string() }) },
     },
   },
   async ({ body, state }) => {
+    const order = await orders.forCheckout(body.orderId, state.session.get<string>("userId"));
     try {
       const payment = await state.square.createPayment({
         sourceId: body.sourceId,
-        amountMinor: body.amountMinor,
-        currency: body.currency,
-        referenceId: body.orderId,
-        note: body.note,
+        verificationToken: body.verificationToken,
+        amountMinor: BigInt(order.amountMinor), // server-side total
+        currency: order.currency,
+        referenceId: order.id,
+        idempotencyKey: await squareIdempotencyKey("payment", order.id, order.version),
       });
       return {
         status: 201,
@@ -253,8 +262,8 @@ app.post(
       };
     } catch (err) {
       if (err instanceof SquareError && err.statusCode === 402) {
-        const detail = err.errors?.[0]?.detail ?? "card declined";
-        return { status: 402, body: { error: detail } };
+        // Log err.errors internally; return your own stable message.
+        return { status: 402, body: { error: "The card was declined." } };
       }
       throw err;
     }
@@ -262,24 +271,24 @@ app.post(
 );
 ```
 
-<Callout type="warning" title="BigInt + JSON gotcha">
-<p>JavaScript's default JSON serialiser throws on BigInt. Map money to strings at the response edge (<code>amountMinor.toString()</code>) or use a custom replacer. DaloyJS's Zod responses already coerce BigInt to string when you declare the response as <code>z.string()</code>. Declare a{" "}<code>z.bigint()</code> only when both ends agree on it.</p>
+<Callout type="warning" title="bigint and JSON">
+<p>DaloyJS does not convert <code>bigint</code> values for you, and <code>JSON.stringify</code> throws a <code>TypeError</code> on them. Convert money at the response edge yourself (<code>amountMinor.toString()</code>) and declare that field as <code>z.string()</code> in the response schema, or convert to <code>Number(...)</code> when the value is known to fit in a safe integer.</p>
 </Callout>
 
 ## 6. Webhook
 
-<SequenceDiagram title="Webhook verification" participants={["Square", "DaloyJS route"]} steps={[
+<SequenceDiagram title="Webhook verification" participants={["Square", "DaloyJS route", "Job worker"]} steps={[
           {
             from: "Square",
             to: "DaloyJS route",
             label: "POST /webhooks/square",
-            detail: "x-square-hmacsha256-signature over raw body",
+            detail: "x-square-hmacsha256-signature over URL + raw body",
             kind: "request",
           },
           {
             from: "DaloyJS route",
             to: "DaloyJS route",
-            label: "WebhooksHelper.verifySignature",
+            label: "await verifySignature",
             detail: "raw body + signatureKey + exact notificationUrl",
             kind: "note",
           },
@@ -292,96 +301,93 @@ app.post(
           },
           {
             from: "DaloyJS route",
-            to: "Square",
-            label: "getPayment(id) to confirm COMPLETED, then ack",
-            detail: "200, dedupe on event_id",
+            to: "Job worker",
+            label: "enqueue keyed by event_id, then 200",
+            detail: "worker refetches the payment",
             kind: "async",
           },
-        ]} caption="verifySignature needs the raw body, the signature key, and the exact registered notificationUrl. A wrong URL (trailing slash, http vs https) fails every event. Refetch the payment to confirm COMPLETED before fulfilling." />
+        ]} caption="Await the signature check, dedupe atomically on event_id through the job idempotency key, and let the worker refetch the payment and compare it with the stored order before fulfilling." />
 
-```ts
-import { readBodyLimited } from "@daloyjs/core";
+```ts title="src/webhooks/square.ts"
+import { z } from "zod";
+import { readBodyLimited, safeJsonParse, jobIdempotencyKey } from "@daloyjs/core";
 
 app.post(
   "/webhooks/square",
   {
     operationId: "squareWebhook",
+    // No request.body schema: the raw bytes stay readable for verification.
     responses: {
       200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
       401: { description: "bad signature", body: z.object({ error: z.string() }) },
     },
   },
   async ({ request, state }) => {
-    // Decode only after a bounded read. Keep this string unchanged for verification.
-    const rawBytes = await readBodyLimited(request, 1_048_576);
-    const raw = new TextDecoder().decode(rawBytes);
+    const raw = new TextDecoder().decode(await readBodyLimited(request, 1_048_576));
     const signature = request.headers.get("x-square-hmacsha256-signature");
 
-    if (!state.square.verifyWebhookSignature(raw, signature)) {
+    if (!(await state.square.verifyWebhookSignature(raw, signature))) {
       return { status: 401, body: { error: "bad signature" } };
     }
 
-    const event = JSON.parse(raw) as {
-      type: string;
-      event_id: string;
-      data: { type: string; id: string; object?: unknown };
-    };
-
-    // Idempotency: keep a 24h record of event.event_id; Square retries non-2xx.
-    switch (event.type) {
-      case "payment.updated":
-      case "payment.created": {
-        // Re-fetch with the SDK to get the authoritative status before fulfilling.
-        const fresh = await state.square.getPayment(event.data.id);
-        if (fresh.status === "COMPLETED") {
-          // Mark order paid — idempotent on (payment.id).
-        }
-        break;
-      }
-      case "refund.updated":
-        // Reconcile refund state.
-        break;
+    const event = safeJsonParse(raw) as { type: string; event_id: string; data: { type: string; id: string } };
+    if (event.type === "payment.updated") {
+      await app.jobs!.enqueue({
+        name: "square.payment",
+        payload: { eventId: event.event_id, paymentId: event.data.id },
+        idempotencyKey: jobIdempotencyKey({ name: "square.payment", key: event.event_id }),
+      });
     }
-
     return { status: 200, body: { ok: true as const } };
   },
 );
 ```
 
-Square retries non-2xx responses with backoff for up to 72 hours. Once the signature checks out, ack with 200 even for event types you don't handle, and do the slow work asynchronously.
+```ts title="src/jobs/square.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { squareClient } from "../plugins/square.ts";
+import { orders } from "../orders.ts";
+
+export const handleSquarePayment: JobHandler<{ eventId: string; paymentId: string }> = async ({ job }) => {
+  const payment = await squareClient.getPayment(job.payload.paymentId);
+  if (payment.status !== "COMPLETED" || !payment.referenceId) return;
+  await orders.markPaid(payment.referenceId, {
+    amountMinor: Number(payment.amountMinor),
+    currency: payment.currency,
+    providerRef: payment.id,
+  });
+};
+```
+
+Register the handler in your single `app.useJobs()` call (see the [webhook pattern](/docs/payments#webhook-pattern)). Square includes `event_id` in every notification for exactly this dedupe, retries deliveries that do not get a 2xx, and can disable a subscription that keeps failing, so ack fast and do the work in the worker.
 
 ## 7. Refunds
 
-```ts
-// Full refund — use the original payment's amount.
-await state.square.refund({
-  paymentId: "pay_xxx",
-  amountMinor: BigInt(1000),     // $10.00
-  currency: "USD",
-  reason: "Customer changed mind",
-});
+Expose refunds only through a [protected refund route](/docs/payments#protected-refunds). The plugin call:
 
-// Partial refund — amount strictly less than the captured amount.
+```ts
 await state.square.refund({
-  paymentId: "pay_xxx",
-  amountMinor: BigInt(250),      // $2.50 back
+  paymentId: order.providerRef!,
+  amountMinor: 250n, // 2.50 USD, never more than captured minus refunded
   currency: "USD",
+  idempotencyKey: await squareIdempotencyKey("refund", order.id, order.refundedMinor, 250),
+  reason: "requested_by_customer",
 });
 ```
 
 ## Runtimes
 
-The v40+ SDK is Fern-generated and uses the platform `fetch` when available, falling back to `node-fetch`. Square officially supports Node.js 18+, Cloudflare Workers, Deno 1.25+, Bun 1.0+, and React Native, so the same plugin runs on Edge runtimes unchanged. The portable `readBodyLimited()` helper reads the standard `Request` body while enforcing the explicit byte cap shown above.
+The SDK uses the platform `fetch` when present and lists Node.js 18+, Vercel, Cloudflare Workers, Deno 1.25+, and Bun 1.0+ as supported runtimes in its README. The plugin above only adds WebCrypto (`crypto.subtle`) and the portable `readBodyLimited()` helper. See the [runtime table](/docs/payments#runtime-compatibility).
 
 ## Errors
 
-Non-2xx responses throw `SquareError`. Inspect `err.statusCode`, `err.body`, and the structured `err.errors[]` array, each entry has `category` (e.g. `PAYMENT_METHOD_ERROR`), `code` (e.g. `CARD_DECLINED`, `CVV_FAILURE`), `detail`, and an optional `field`. Map them through [problem+json](/docs/errors) with `type: square:<category>:<code>` so reconciliation tools can join them later.
+Non-2xx responses throw `SquareError`. Inspect `err.statusCode`, `err.body`, and the structured `err.errors[]` array: each entry has `category` (for example `PAYMENT_METHOD_ERROR`), `code` (for example `CARD_DECLINED`, `CVV_FAILURE`), `detail`, and an optional `field`. Log them and map them to [problem+json](/docs/errors) with your own `type` and `title`; do not forward Square's `detail` to the client.
 
 ## Modernisation notes
 
-- Use the new SDK, not `square/legacy`. The legacy export exists so v39 codebases can migrate piecemeal, there's no reason to start a new integration on it in 2026. New features ship to the new client first (or only).
-- Pin a Square API version in production. The SDK is tied to a Square API version per release, and a new SDK major (v40 -\> v41 -\> ...) can be a breaking change. Pin `square` to a caret range you control and read the changelog before bumping.
-- Iterate paginated endpoints with `for await`. List responses are async-iterable: `for (const item of pageable)` (synchronously) only gives you the first page. Use `for await (const item of pageable)` to walk all pages without manual cursor juggling.
-- Verify webhooks. Do not trust the source IP. Square's IP ranges change. The HMAC + the registered notification URL together prove authenticity and that the request hit the right endpoint.
+- Use the current SDK, not `square/legacy`. The legacy export exists so older codebases can migrate piecemeal.
+- Pin the SDK major. Each SDK release targets a Square API version, and a new major can be breaking. Pin a caret range and read the changelog before bumping.
+- Iterate paginated endpoints with `for await`. List responses are async-iterable; a synchronous loop only gives you the first page.
+- Verify webhooks. Do not trust the source IP. The HMAC plus the registered notification URL prove authenticity and that the request hit the right endpoint.
 
 See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), [Authorize.Net guide](/docs/payments/authorize-net), and [problem+json errors](/docs/errors).

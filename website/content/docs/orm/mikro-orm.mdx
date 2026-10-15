@@ -1,6 +1,6 @@
 ---
 title: Use MikroORM with DaloyJS
-description: Integrate MikroORM v7 with DaloyJS using the modern defineEntity helper, defineConfig, request-scoped EntityManagers, the unit-of-work, and migrations wired into your contract-first routes.
+description: Integrate MikroORM v7 with DaloyJS using defineEntity, defineConfig, request-scoped EntityManagers, the unit of work, and migrations in contract-first routes.
 keywords:
   - MikroORM DaloyJS
   - MikroORM v7
@@ -20,7 +20,7 @@ keywords:
 
 Install `@mikro-orm/core` together with the driver package for your database. The version of every `@mikro-orm/*` package must match.
 
-```ts
+```bash
 # PostgreSQL (also CockroachDB)
 pnpm add @mikro-orm/core @mikro-orm/postgresql
 # or MySQL / MariaDB
@@ -68,7 +68,7 @@ Import `defineConfig` from your driver package, it infers the driver and gives y
 // src/mikro-orm.config.ts
 import { defineConfig } from "@mikro-orm/postgresql";
 import { Migrator } from "@mikro-orm/migrations";
-      import { User } from "./db/entities/User.ts";
+import { User } from "./db/entities/User.ts";
 
 export default defineConfig({
   entities: [User],
@@ -170,7 +170,7 @@ declare module "@daloyjs/core" {
 ```ts
 // src/server.ts
 import { z } from "zod";
-import { App } from "@daloyjs/core";
+import { App, NotFoundError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { mikroOrmPlugin } from "./db/plugin.ts";
 import { requestEntityManager } from "./db/middleware.ts";
@@ -178,13 +178,23 @@ import { User } from "./db/entities/User.ts";
 
 const app = new App();
 await mikroOrmPlugin(app);
+// Register before the routes: app.use() only applies to routes added after it.
 app.use(requestEntityManager());
 
+// Dates go over the wire as ISO strings: z.coerce.date() has no
+// representation in the generated OpenAPI document.
 const UserSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   name: z.string().nullable(),
-  createdAt: z.coerce.date(),
+  createdAt: z.iso.datetime(),
+});
+
+const toUser = (user: User) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name ?? null,
+  createdAt: user.createdAt.toISOString(),
 });
 
 app.get(
@@ -199,9 +209,8 @@ app.get(
   },
   async ({ params, state }) => {
     const user = await state.em.findOne(User, { id: params.id });
-    return user
-      ? { status: 200, body: user }
-      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: toUser(user) };
   },
 );
 
@@ -215,7 +224,7 @@ app.post(
   async ({ body, state }) => {
     const user = state.em.create(User, { email: body.email, name: body.name ?? null });
     await state.em.flush();
-    return { status: 201, body: user };
+    return { status: 201, body: toUser(user) };
   },
 );
 
@@ -227,17 +236,20 @@ MikroORM batches every change in the forked EM into a single `flush()`. You almo
 
 ## Transactions
 
-Use `em.transactional()` inside the handler that owns the unit of work. The callback receives a transactional EM that commits on success and rolls back if you throw.
+Use `em.transactional()` inside the handler that owns the unit of work. The callback receives a transactional EM that commits on success and rolls back if you throw. This example assumes `Order` and `Inventory` entities defined like `User` above and a route that declares `201`.
 
 ```ts
+import { Inventory } from "./db/entities/Inventory.ts";
+import { Order } from "./db/entities/Order.ts";
+
 handler: async ({ body, state }) => {
   const order = await state.em.transactional(async (em) => {
-    const created = em.create(Order, body);
+    const created = em.create(Order, { sku: body.sku, qty: body.qty });
     const inventory = await em.findOneOrFail(Inventory, { sku: body.sku });
     inventory.stock -= body.qty;
     return created;
   });
-  return { status: 201, body: order };
+  return { status: 201, body: { id: order.id, sku: order.sku, qty: order.qty } };
 }
 ```
 
@@ -245,7 +257,7 @@ handler: async ({ body, state }) => {
 
 The CLI is installed as a dev dependency and reads `src/mikro-orm.config.ts` by default. If you move the config under `src/db`, pass `--config` or configure `mikro-orm.configPaths` in `package.json`.
 
-```ts
+```bash
 # generate a migration from the current entity diff
 pnpm mikro-orm migration:create
 
@@ -261,25 +273,25 @@ pnpm mikro-orm debug
 
 ## Errors
 
-Translate MikroORM errors into framework errors so they serialize as [problem+json](/docs/errors):
+Translate MikroORM errors into framework errors so they serialize as [problem+json](/docs/errors). MikroORM also exports a class named `NotFoundError` (thrown by `findOneOrFail()`), so alias it on import to avoid shadowing the DaloyJS one. Declare `404` and `409` in the route's `responses`.
 
 ```ts
-import { HttpError } from "@daloyjs/core";
-import { UniqueConstraintViolationException, NotFoundError } from "@mikro-orm/core";
+import { ConflictError, NotFoundError } from "@daloyjs/core";
+import {
+  NotFoundError as MikroNotFoundError,
+  UniqueConstraintViolationException,
+} from "@mikro-orm/core";
 
 try {
   const user = state.em.create(User, { email: body.email, name: body.name ?? null });
   await state.em.flush();
-  return { status: 201, body: user };
+  return { status: 201, body: toUser(user) };
 } catch (err) {
   if (err instanceof UniqueConstraintViolationException) {
-    throw new HttpError(409, {
-      title: "User already exists",
-      type: "https://daloyjs.dev/errors/duplicate",
-    });
+    throw new ConflictError("User already exists");
   }
-  if (err instanceof NotFoundError) {
-    throw new HttpError(404, { title: "Not found" });
+  if (err instanceof MikroNotFoundError) {
+    throw new NotFoundError();
   }
   throw err;
 }
@@ -287,8 +299,10 @@ try {
 
 ## Runtime notes
 
-- MikroORM is a Node.js adapter default for Daloy apps. Edge runtimes require precompiled MikroORM functions plus a compatible driver, so most Cloudflare Workers apps should start with [Drizzle](/docs/orm/drizzle) or [Supabase](/docs/orm/supabase) instead.
+- This guide is tested against the Node.js adapter. MikroORM v7's JSR listings advertise Cloudflare Workers, Deno, and Bun support, but we have not verified any of them with DaloyJS, so most Workers apps should start with [Drizzle](/docs/orm/drizzle) or [Supabase](/docs/orm/supabase) instead.
+- `onClose()` runs on the Node.js, Bun, and Deno adapters only; see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle).
+- Run `migration:up` as a deploy step, never at app boot (see [migrations](/docs/orm#migrations)).
 - Always fork the EM per request. Sharing the root EM across requests will leak the identity map and corrupt unit-of-work state.
 - Keep `@mikro-orm/core`, your driver package, the CLI, and `@mikro-orm/migrations` on the same version.
 
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) if you need document models.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [Sequelize](/docs/orm/sequelize), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.

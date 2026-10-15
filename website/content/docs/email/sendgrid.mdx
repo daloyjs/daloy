@@ -1,17 +1,20 @@
 ---
 title: Send email from DaloyJS with SendGrid
-description: Send transactional email from a DaloyJS API using Twilio SendGrid's @sendgrid/mail SDK. Includes API key setup, the Mail Send v3 interface, sender verification, and DaloyJS plugin pattern.
+description: Send email from DaloyJS with Twilio SendGrid's @sendgrid/mail. Restricted keys, a safe contact route, Signed Event Webhook checks, suppressions, and Workers.
 keywords:
   - DaloyJS SendGrid
   - "@sendgrid/mail"
   - Twilio SendGrid Node.js
   - SendGrid Mail Send v3
+  - SendGrid Signed Event Webhook
   - transactional email DaloyJS
 ---
 
 # Send email from DaloyJS with SendGrid
 
-[Twilio SendGrid](https://sendgrid.com/) is a long-standing email delivery service that combines transactional and marketing sending. This guide uses the official [`@sendgrid/mail`](https://github.com/sendgrid/sendgrid-nodejs/tree/main/packages/mail) SDK, which wraps the v3 Mail Send REST API.
+[Twilio SendGrid](https://sendgrid.com/) is a long-standing email delivery service that combines transactional and marketing sending. This guide uses the official [`@sendgrid/mail`](https://github.com/sendgrid/sendgrid-nodejs/tree/main/packages/mail) SDK, which wraps the v3 Mail Send REST API. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.suppress` job used below.
+
+SendGrid retired its permanent free plans in 2025; new accounts start on a time-limited trial (see the [Twilio changelog](https://www.twilio.com/en-us/changelog/sendgrid-free-plan)). Budget for a paid plan before you build on it.
 
 <SequenceDiagram title="Send through @sendgrid/mail" participants={[
           "Route handler",
@@ -43,133 +46,215 @@ keywords:
           {
             from: "SendGrid v3 API",
             to: "Event Webhook",
-            label: "delivered, bounce, open events",
-            detail: "verify the signature before trusting payloads",
+            label: "delivered, bounce, spamreport events",
+            detail: "ECDSA-signed; verify before trusting payloads",
             kind: "async",
           },
-        ]} caption="The plugin sets the API key once, then sgMail.send() POSTs to the v3 Mail Send API. SendGrid replies 202 with an X-Message-Id, and later posts delivery events to your Event Webhook." />
+        ]} caption="The plugin sets the API key once, then sgMail.send() POSTs to the v3 Mail Send API. SendGrid replies 202 with an X-Message-Id, and later posts signed delivery events to your Event Webhook." />
 
 ## 1. Provision
 
 1. Create a SendGrid account, enable 2FA, then go to **Settings -\> API Keys** and generate a *Restricted Access* key with only **Mail Send -\> Full Access** enabled.
-2. Complete [Domain Authentication](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/how-to-set-up-domain-authentication) (SPF/DKIM CNAMEs) for your sending domain, or use Single Sender Verification for quick tests only.
+2. Complete [Domain Authentication](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/how-to-set-up-domain-authentication) for your sending domain. It publishes DKIM and a branded return path so SPF and DKIM align with your `From:` domain. Single Sender Verification is for quick tests only.
+3. Keep transactional and marketing mail apart (separate subusers or IP pools, separate subdomains). See [deliverability](/docs/email#deliverability).
 
 ## 2. Install
 
-```ts
-pnpm add @sendgrid/mail
+```package-install
+@sendgrid/mail
 ```
 
 ## 3. Environment variables
 
-```ts
-# .env
+```dotenv title=".env"
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxx
-SENDGRID_FROM="Acme <no-reply@acme.example.com>"
+SENDGRID_WEBHOOK_PUBLIC_KEY=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+EMAIL_FROM="Acme <no-reply@mail.acme.example.com>"
+CONTACT_INBOX=support@acme.example.com
 ```
 
-## 4. Plugin
+Add `SENDGRID_API_KEY: z.string().startsWith("SG.")` and `SENDGRID_WEBHOOK_PUBLIC_KEY: z.string().min(1)` to the overview's [`defineConfig()` schema](/docs/email#common-pattern) so a missing key fails at boot.
+
+## 4. Sender
+
+```ts title="src/email/sendgrid.ts"
+import sgMail from "@sendgrid/mail";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
+
+sgMail.setApiKey(config.SENDGRID_API_KEY);
+
+export const sender: EmailSender = {
+  async send(msg) {
+    // SendGrid needs at least one of text or html.
+    const body = msg.html !== undefined ? { html: msg.html, text: msg.text } : { text: msg.text ?? "" };
+    const [res] = await sgMail.send({
+      from: config.EMAIL_FROM,
+      to: msg.to,
+      replyTo: msg.replyTo,
+      subject: msg.subject,
+      headers: msg.headers,
+      ...body,
+    });
+    // SendGrid returns 202 with an X-Message-Id header on success.
+    return { id: String(res.headers["x-message-id"] ?? "") };
+  },
+};
+```
+
+```ts title="src/app.ts"
+import { App, secureHeaders } from "@daloyjs/core";
+import { emailPlugin } from "./plugins/email.ts";
+import { sender } from "./email/sendgrid.ts";
+import { contactRoutes } from "./routes/contact.ts";
+
+export const app = new App();
+app.use(secureHeaders());
+emailPlugin(app, sender);
+contactRoutes(app); // the overview's /contact route
+```
+
+SendGrid's API has no idempotency key, so queue sends through the overview's [`email.send` job](/docs/email#send-off-the-request-path) and never auto-retry a timed-out send.
+
+**EU data residency.** `@sendgrid/client` has `setDataResidency("eu")`, which routes calls to `https://api.eu.sendgrid.com`. It only works for accounts set up for EU residency (regional subusers), so confirm with SendGrid before relying on it:
 
 ```ts
-// src/plugins/sendgrid.ts
+import client from "@sendgrid/client";
 import sgMail from "@sendgrid/mail";
-import type { App } from "@daloyjs/core";
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
-
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function sendgridPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const [res] = await sgMail.send({
-        from: process.env.SENDGRID_FROM!,
-        to,
-        subject,
-        text,
-        html,
-      });
-      // SendGrid returns 202 with an X-Message-Id header on success
-      const id = res.headers["x-message-id"] ?? "";
-      return { id: String(id) };
-    },
-  });
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
-    };
-  }
-}
+client.setDataResidency("eu");
+sgMail.setClient(client);
 ```
 
 ## 5. Use it in a route
 
-```ts
-import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { sendgridPlugin } from "./plugins/sendgrid.ts";
-
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-sendgridPlugin(app);
-
-app.post(
-  "/contact",
-  {
-    operationId: "submitContact",
-    request: {
-      body: z.object({
-        to: z.email(),
-        subject: z.string().min(1).max(200),
-        message: z.string().min(1).max(5000),
-      }),
-    },
-    responses: {
-      202: { description: "Queued", body: z.object({ id: z.string() }) },
-    },
-  },
-  async ({ body, state }) => {
-    const { id } = await state.email.send({
-      to: body.to,
-      subject: body.subject,
-      text: body.message,
-    });
-    return { status: 202, body: { id } };
-  },
-);
-```
+The contact form is the classic SendGrid use case, and the classic open relay. Use the overview's [`/contact` route](/docs/email#open-relay) unchanged: it sends to the fixed `CONTACT_INBOX`, puts the visitor's address only in `replyTo`, validates the name with `headerSafe`, escapes every value in the HTML body, and carries its own per-route `rateLimit()` hook. Do not accept a `to` field from the form.
 
 ## Dynamic templates
 
-For server-side templating, create a [Dynamic Transactional Template](https://www.twilio.com/docs/sendgrid/ui/sending-email/how-to-send-an-email-with-dynamic-templates) in the SendGrid UI and pass its ID with substitution values:
+For server-side templating, create a [Dynamic Transactional Template](https://www.twilio.com/docs/sendgrid/ui/sending-email/how-to-send-an-email-with-dynamic-templates) in the SendGrid UI and pass its ID with substitution values. Handlebars double braces escape HTML, so prefer them over triple braces for anything a user typed:
 
 ```ts
 await sgMail.send({
-  from: process.env.SENDGRID_FROM!,
-  to,
+  from: config.EMAIL_FROM,
+  to: user.email, // looked up server-side
   templateId: "d-1234567890abcdef1234567890abcdef",
-  dynamicTemplateData: {
-    firstName: "Devlin",
-    cartUrl: "https://acme.example.com/cart/abc",
-  },
+  dynamicTemplateData: { firstName: user.firstName, cartUrl: `https://acme.example.com/cart/${cart.id}` },
 });
 ```
 
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Enable the **Event Webhook** for `bounce`, `dropped`, `spamreport`, and `unsubscribe`, then turn on **Signed Event Webhook Requests**. SendGrid signs `timestamp + raw body` with ECDSA (the public key it shows you is a base64 DER P-256 key) and sends the signature and timestamp in `X-Twilio-Email-Event-Webhook-Signature` and `X-Twilio-Email-Event-Webhook-Timestamp`. Core's `verifyWebhookSignature()` is HMAC-only, so verify with `node:crypto`:
+
+```ts title="src/routes/sendgrid-webhook.ts"
+import { createPublicKey, verify } from "node:crypto";
+import { z } from "zod";
+import { App, UnauthorizedError, jobIdempotencyKey, readBodyLimited, safeJsonParse } from "@daloyjs/core";
+import { config } from "../config.ts";
+
+const sendgridKey = createPublicKey({
+  key: Buffer.from(config.SENDGRID_WEBHOOK_PUBLIC_KEY, "base64"),
+  format: "der",
+  type: "spki",
+});
+
+interface SendGridEvent {
+  event: string;
+  email: string;
+  sg_event_id: string;
+  type?: string; // on bounces: "bounce" (hard) or "blocked"
+}
+
+function verifySendGrid(raw: Uint8Array, signature: string, timestamp: string): boolean {
+  if (!/^\d{1,12}$/.test(timestamp)) return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false; // replay window
+  try {
+    return verify(
+      "sha256",
+      Buffer.concat([Buffer.from(timestamp, "utf8"), raw]),
+      { key: sendgridKey, dsaEncoding: "der" },
+      Buffer.from(signature, "base64"),
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function sendgridWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/sendgrid",
+    {
+      operationId: "sendgridEvents",
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+        401: { description: "Rejected" },
+      },
+    },
+    async ({ request }) => {
+      const raw = await readBodyLimited(request, 1_048_576); // no body schema: keep exact bytes
+      const signature = request.headers.get("x-twilio-email-event-webhook-signature") ?? "";
+      const timestamp = request.headers.get("x-twilio-email-event-webhook-timestamp") ?? "";
+      if (!verifySendGrid(raw, signature, timestamp)) throw new UnauthorizedError("invalid signature");
+
+      const events = safeJsonParse(new TextDecoder().decode(raw)) as SendGridEvent[];
+      for (const e of Array.isArray(events) ? events : []) {
+        const hard = (e.event === "bounce" && e.type !== "blocked") || e.event === "spamreport";
+        if (!hard || !e.sg_event_id) continue;
+        await app.jobs!.enqueue({
+          name: "email.suppress",
+          payload: { email: e.email, reason: e.event },
+          idempotencyKey: jobIdempotencyKey({ name: "email.suppress", key: `sg-${e.sg_event_id}` }),
+        });
+      }
+      return { status: 200, body: { ok: true as const } }; // ack fast; the worker does the rest
+    },
+  );
+}
+```
+
+The five-minute window is our recommendation, not a SendGrid rule; widen it if you see legitimate late deliveries. On Workers or other Web Crypto runtimes you can verify with `crypto.subtle` (`ECDSA`, `P-256`, `SHA-256`), but WebCrypto expects a raw `r || s` signature, so convert the DER signature first, or use Twilio's `@sendgrid/eventwebhook` helper on Node.
+
+## Suppressions
+
+SendGrid keeps suppression lists for bounces, invalid emails, spam reports, and global and group unsubscribes, and drops later sends to those addresses (you see a `dropped` event, and the attempt still counts against your plan). Blocks are temporary and not kept. Manage them in **Suppressions** in the UI or through the Suppressions API (for example `GET /v3/suppression/bounces`), and mirror hard bounces and spam reports into your own undeliverable flag through the webhook above.
+
 ## Error handling
 
-On non-2xx responses the SDK throws an error with `response.body.errors` describing each failure. Surface those to your client through the standard [problem+json](/docs/errors) helper rather than echoing raw text.
+On non-2xx responses the SDK throws an error with `response.body.errors` describing each failure. Those messages can include account details, so log them with the request logger and return a generic error, as shown in [never leak provider errors](/docs/email#errors).
 
 ## Runtimes
 
-The `@sendgrid/mail` package is Node-oriented (it uses `@sendgrid/client` with Node's HTTPS module). For [Cloudflare Workers](/docs/adapters), call the v3 REST API directly with `fetch` against `https://api.sendgrid.com/v3/mail/send` using the same JSON body and a `Bearer` token.
+`@sendgrid/mail` is built on `@sendgrid/client`, which uses axios for HTTP. It is Node-oriented. For [Cloudflare Workers](/docs/adapters/cloudflare-workers), call the v3 REST API with the overview's [`resilientFetch` + `fetchGuard`](/docs/email#calling-a-rest-api-with-fetch) client. Its default retry policy leaves `POST` alone, so a timeout never turns into a duplicate email:
+
+```ts title="src/email/sendgrid-workers.ts"
+import { env } from "cloudflare:workers";
+import type { EmailSender } from "../plugins/email.ts";
+import { providerFetch } from "./fetch.ts"; // allowHosts: ["api.sendgrid.com"]
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const content = [
+      ...(msg.text ? [{ type: "text/plain", value: msg.text }] : []),
+      ...(msg.html ? [{ type: "text/html", value: msg.html }] : []),
+    ];
+    const res = await providerFetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.SENDGRID_API_KEY}`, "content-type": "application/json" },
+      signal: msg.signal,
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: msg.to }] }],
+        from: { email: env.EMAIL_FROM_ADDRESS, name: "Acme" },
+        ...(msg.replyTo ? { reply_to: { email: msg.replyTo } } : {}),
+        subject: msg.subject,
+        content,
+        ...(msg.headers ? { headers: msg.headers } : {}),
+      }),
+    });
+    if (res.status !== 202) throw new Error(`SendGrid send failed with status ${res.status}`);
+    return { id: res.headers.get("x-message-id") ?? "" };
+  },
+};
+```
 
 See also [Resend](/docs/email/resend), [Postmark](/docs/email/postmark), and the [email integrations overview](/docs/email).

@@ -1,17 +1,18 @@
 ---
 title: Send email from DaloyJS with AWS SES (SESv2)
-description: Send transactional email from a DaloyJS API using Amazon SES via the AWS SDK for JavaScript v3 (@aws-sdk/client-sesv2). Includes IAM setup, the SendEmailCommand interface, and runtime tips for Node and AWS Lambda.
+description: Send email from DaloyJS with Amazon SES via @aws-sdk/client-sesv2. Scoped IAM, attachments, SNS bounce webhooks, suppression, and aws4fetch on Workers.
 keywords:
   - DaloyJS AWS SES
   - "@aws-sdk/client-sesv2"
   - SendEmailCommand
   - AWS SES Node.js
   - SES Lambda DaloyJS
+  - SES SNS bounce webhook
 ---
 
 # Send email from DaloyJS with AWS SES
 
-[Amazon Simple Email Service](https://aws.amazon.com/ses/) (SES) is AWS's pay-as-you-go transactional and bulk email service. This guide uses **SESv2**: the current API, through the [AWS SDK for JavaScript v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/sesv2/). Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2) or need low per-message cost.
+[Amazon Simple Email Service](https://aws.amazon.com/ses/) (SES) is AWS's pay-as-you-go transactional and bulk email service. This guide uses **SESv2**, the current API, through the [AWS SDK for JavaScript v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/sesv2/). Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2) or need low per-message cost. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.send` / `email.suppress` jobs used below.
 
 <SequenceDiagram title="Send through SESv2, then track events" participants={[
           "Route handler",
@@ -51,137 +52,362 @@ keywords:
 
 ## 1. Provision
 
-1. In the AWS console, open **Amazon SES -\> Verified identities** and verify either an email address (for development) or your sending domain (for production). Add the SPF, DKIM, and DMARC records SES shows you.
+1. In the AWS console, open **Amazon SES -\> Verified identities** and verify your sending domain. Publish the DKIM records SES shows, and set up a **custom MAIL FROM domain** so SPF aligns with your `From:` domain for DMARC (see [deliverability](/docs/email#deliverability)).
 2. New accounts start in the SES **sandbox**: you can only send to verified addresses. Request production access from **Account dashboard** before launching.
-3. Create an IAM principal that can call `ses:SendEmail`. Prefer an **execution role** attached to your Lambda or container, avoid long-lived access keys.
+3. Create a **configuration set** (for example `transactional`) with an event destination for bounces and complaints. That is what feeds the [webhook below](#webhooks-bounces-and-complaints).
+4. Give the sending principal only `ses:SendEmail`, on the named identity and configuration set, and pin the From address with the `ses:FromAddress` condition key. Prefer an **execution role** on Lambda or ECS over long-lived access keys.
+
+```json title="ses-send-policy.json"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail"],
+      "Resource": [
+        "arn:aws:ses:eu-west-1:123456789012:identity/mail.acme.example.com",
+        "arn:aws:ses:eu-west-1:123456789012:configuration-set/transactional"
+      ],
+      "Condition": {
+        "StringEquals": { "ses:FromAddress": "no-reply@mail.acme.example.com" }
+      }
+    }
+  ]
+}
+```
+
+SES also offers `ses:Recipients` and `ses:FromDisplayName` condition keys; see [Identity and access management in Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/control-user-access.html).
 
 ## 2. Install
 
-```ts
-pnpm add @aws-sdk/client-sesv2
+```package-install
+@aws-sdk/client-sesv2
 ```
 
-The v3 SDK is modular, install only the SESv2 client. It works on Node 18+ and is compatible with the [Lambda adapter](/docs/adapters).
+The v3 SDK is modular; install only the SESv2 client. It works with the [Lambda adapter](/docs/adapters/aws-lambda).
 
 ## 3. Environment variables
 
-```ts
-# .env
-AWS_REGION=us-east-1
-SES_FROM_ADDRESS="Acme <no-reply@acme.example.com>"
+```dotenv title=".env"
+AWS_REGION=eu-west-1
+EMAIL_FROM="Acme <no-reply@mail.acme.example.com>"
+CONTACT_INBOX=support@acme.example.com
+SES_CONFIGURATION_SET=transactional
+SES_EVENTS_TOPIC_ARN=arn:aws:sns:eu-west-1:123456789012:ses-events
 
-# Local development only - in AWS, prefer the execution role
+# Local development only. In AWS, the execution role supplies credentials.
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
-## 4. Plugin
+Add the SES keys to the overview's [`defineConfig()` schema](/docs/email#common-pattern): `AWS_REGION: z.string().min(1)`, `SES_CONFIGURATION_SET: z.string().min(1)`, and `SES_EVENTS_TOPIC_ARN: z.string().startsWith("arn:aws:sns:")`.
+
+## 4. Sender
 
 The SDK reads credentials from the standard AWS provider chain (env vars, shared config file, IMDS, IRSA on EKS, Lambda role), so the client itself takes no secrets.
 
-```ts
-// src/plugins/ses.ts
-import {
-  SESv2Client,
-  SendEmailCommand,
-  type SendEmailCommandInput,
-} from "@aws-sdk/client-sesv2";
-import type { App } from "@daloyjs/core";
+```ts title="src/email/ses.ts"
+import { SESv2Client, SendEmailCommand, type SendEmailCommandInput } from "@aws-sdk/client-sesv2";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
 
-const client = new SESv2Client({ region: process.env.AWS_REGION });
+export const sesClient = new SESv2Client({ region: config.AWS_REGION });
 
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function sesPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const input: SendEmailCommandInput = {
-        FromEmailAddress: process.env.SES_FROM_ADDRESS!,
-        Destination: { ToAddresses: [to] },
-        Content: {
-          Simple: {
-            Subject: { Data: subject, Charset: "UTF-8" },
-            Body: {
-              ...(text ? { Text: { Data: text, Charset: "UTF-8" } } : {}),
-              ...(html ? { Html: { Data: html, Charset: "UTF-8" } } : {}),
-            },
+export const sender: EmailSender = {
+  async send(msg) {
+    const input: SendEmailCommandInput = {
+      FromEmailAddress: config.EMAIL_FROM,
+      Destination: { ToAddresses: [msg.to] },
+      ReplyToAddresses: msg.replyTo ? [msg.replyTo] : undefined,
+      ConfigurationSetName: config.SES_CONFIGURATION_SET,
+      Content: {
+        Simple: {
+          Subject: { Data: msg.subject, Charset: "UTF-8" },
+          Body: {
+            ...(msg.text ? { Text: { Data: msg.text, Charset: "UTF-8" } } : {}),
+            ...(msg.html ? { Html: { Data: msg.html, Charset: "UTF-8" } } : {}),
           },
+          Headers: msg.headers
+            ? Object.entries(msg.headers).map(([Name, Value]) => ({ Name, Value }))
+            : undefined,
         },
-      };
-      const out = await client.send(new SendEmailCommand(input));
-      return { id: out.MessageId ?? "" };
-    },
-  });
-  app.onClose(() => client.destroy());
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
+      },
     };
-  }
-}
+    // SES has no idempotency key: dedupe happens in the job queue.
+    const out = await sesClient.send(new SendEmailCommand(input), { abortSignal: msg.signal });
+    return { id: out.MessageId ?? "" };
+  },
+};
+```
+
+```ts title="src/app.ts"
+import { App, secureHeaders } from "@daloyjs/core";
+import { emailPlugin } from "./plugins/email.ts";
+import { emailJobs } from "./email/jobs.ts";
+import { sender, sesClient } from "./email/ses.ts";
+
+export const app = new App();
+app.use(secureHeaders());
+emailPlugin(app, sender);
+emailJobs(app, sender);
+app.onClose(() => sesClient.destroy());
 ```
 
 ## 5. Use it in a route
 
-```ts
+A signed-in user asks for their welcome email again. The recipient and content come from your database, not from the request, and the actual send runs in the `email.send` job:
+
+```ts title="src/routes/welcome.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { sesPlugin } from "./plugins/ses.ts";
+import { App, UnauthorizedError, jobIdempotencyKey } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { sendGuards } from "../email/guards.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-sesPlugin(app);
+export function welcomeRoutes(app: App) {
+  app.post(
+    "/me/welcome-email",
+    {
+      operationId: "resendWelcomeEmail",
+      hooks: sendGuards, // auth + per-IP + per-user limits, see the overview
+      responses: {
+        202: { description: "Queued", body: z.object({ jobId: z.string() }) },
+      },
+    },
+    async ({ state }) => {
+      const sub = state.user?.sub;
+      if (!sub) throw new UnauthorizedError();
+      const user = await loadUser(sub); // server-side lookup: the client never picks `to`
+      const day = new Date().toISOString().slice(0, 10);
+      const { job } = await app.jobs!.enqueue({
+        name: "email.send",
+        payload: {
+          to: user.email,
+          subject: "Welcome to Acme",
+          text: `Hi ${user.name}, thanks for signing up.`,
+          html: `<p>Hi ${escapeHtml(user.name)}, thanks for signing up.</p>`,
+        },
+        // At most one resend per user per day, however often the button is clicked.
+        idempotencyKey: jobIdempotencyKey({ name: "email.send", key: `welcome-${user.id}-${day}` }),
+      });
+      return { status: 202, body: { jobId: job.id } };
+    },
+  );
+}
 
-app.post(
-  "/notify",
-  {
-    operationId: "sendWelcome",
-    request: {
-      body: z.object({
-        to: z.email(),
-        name: z.string().min(1).max(80),
-      }),
-    },
-    responses: {
-      202: { description: "Queued", body: z.object({ id: z.string() }) },
-    },
-  },
-  async ({ body, state }) => {
-    const { id } = await state.email.send({
-      to: body.to,
-      subject: `Welcome, ${body.name}!`,
-      text: `Hi ${body.name}, thanks for signing up.`,
-      html: `<p>Hi ${body.name}, thanks for signing up.</p>`,
-    });
-    return { status: 202, body: { id } };
-  },
-);
+declare function loadUser(id: string): Promise<{ id: string; email: string; name: string }>;
 ```
 
-## Templates & attachments [#templates-and-attachments]
+## Templates and attachments [#templates-and-attachments]
 
 SESv2's `SendEmailCommand` accepts three content variants:
 
-- `Content.Simple`: subject + text/HTML body (used above). Also supports an `Attachments` array with base64 `RawContent`, `FileName`, and `ContentType`.
-- `Content.Raw.Data`: a fully MIME-encoded message (use [mailcomposer](https://nodemailer.com/extras/mailcomposer/) or `nodemailer`'s composer if you need rich attachments).
-- `Content.Template`: render an SES template by `TemplateName` with a JSON `TemplateData` payload. Create templates ahead of time with `CreateEmailTemplateCommand`.
+- `Content.Simple`: subject, text/HTML body, optional `Headers`, and (since April 2025) an `Attachments` array. Each attachment takes `FileName`, `ContentType`, `ContentDisposition` (`"ATTACHMENT"` or `"INLINE"`), and the file bytes as `RawContent` (a `Uint8Array`; the SDK encodes it). You no longer need to build MIME yourself for a PDF receipt:
+
+```ts
+Content: {
+  Simple: {
+    Subject: { Data: "Your invoice", Charset: "UTF-8" },
+    Body: { Text: { Data: "Invoice attached.", Charset: "UTF-8" } },
+    Attachments: [
+      {
+        FileName: "invoice-1024.pdf",
+        ContentType: "application/pdf",
+        ContentDisposition: "ATTACHMENT",
+        RawContent: pdfBytes, // Uint8Array
+      },
+    ],
+  },
+},
+```
+
+- `Content.Raw.Data`: a fully MIME-encoded message, for the rare case Simple cannot express. Build it with Nodemailer's [MailComposer](https://nodemailer.com/extras/mailcomposer) (`nodemailer/lib/mail-composer`) and keep Nodemailer current.
+- `Content.Template`: render an SES template by `TemplateName` with a JSON `TemplateData` payload. Create templates ahead of time with `CreateEmailTemplateCommand`. Check how your template syntax treats HTML in variables; if you are not sure it escapes, escape user values before they go into `TemplateData` (see [escaping](/docs/email#escape-html)).
+
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+SES publishes events from the configuration set to an event destination. You have two options:
+
+- **No public endpoint (preferred on AWS):** subscribe an SQS queue to the SNS topic (or route an EventBridge event destination to SQS) and consume it from a Lambda or a worker. IAM does the authentication, so there is no signature code to get wrong.
+- **An HTTPS endpoint on your API:** subscribe the route below to the SNS topic. You must verify the SNS message signature yourself, confirm the subscription, and pin the topic.
+
+Set the topic's `SignatureVersion` attribute to `2` so SNS signs with SHA256, then verify like this:
+
+```ts title="src/email/sns.ts"
+import { createVerify } from "node:crypto";
+import { fetchGuard } from "@daloyjs/core";
+
+export interface SnsEnvelope {
+  Type: "Notification" | "SubscriptionConfirmation" | "UnsubscribeConfirmation";
+  MessageId: string;
+  TopicArn: string;
+  Message: string;
+  Timestamp: string;
+  SignatureVersion: string;
+  Signature: string;
+  SigningCertURL: string;
+  Subject?: string;
+  Token?: string;
+  SubscribeURL?: string;
+}
+
+const AWS_SNS_HOST = /^sns\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/;
+export const snsFetch = fetchGuard(); // SSRF floor for every outbound call below
+const certs = new Map<string, string>(); // keyed by an AWS-only URL, so it stays small
+
+/** True only for an https URL on an SNS host, before anything is fetched. */
+export function isSnsUrl(raw: string | undefined): raw is string {
+  if (!raw) return false;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && AWS_SNS_HOST.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function stringToSign(m: SnsEnvelope): string {
+  const keys =
+    m.Type === "Notification"
+      ? (["Message", "MessageId", "Subject", "Timestamp", "TopicArn", "Type"] as const)
+      : (["Message", "MessageId", "SubscribeURL", "Timestamp", "Token", "TopicArn", "Type"] as const);
+  let out = "";
+  for (const key of keys) {
+    const value = m[key];
+    if (value !== undefined) out += `${key}\n${value}\n`;
+  }
+  return out;
+}
+
+export async function verifySnsMessage(m: SnsEnvelope): Promise<boolean> {
+  if (m.SignatureVersion !== "2") return false; // refuse SHA1 signatures
+  if (!isSnsUrl(m.SigningCertURL)) return false; // check the host BEFORE fetching
+  let pem = certs.get(m.SigningCertURL);
+  if (!pem) {
+    const res = await snsFetch(m.SigningCertURL);
+    if (!res.ok) return false;
+    pem = await res.text();
+    certs.set(m.SigningCertURL, pem);
+  }
+  return createVerify("RSA-SHA256").update(stringToSign(m), "utf8").verify(pem, m.Signature, "base64");
+}
+```
+
+```ts title="src/routes/ses-webhook.ts"
+import { z } from "zod";
+import { App, UnauthorizedError, jobIdempotencyKey, readBodyLimited, safeJsonParse } from "@daloyjs/core";
+import { isSnsUrl, snsFetch, verifySnsMessage, type SnsEnvelope } from "../email/sns.ts";
+import { config } from "../config.ts";
+
+interface SesEvent {
+  eventType: string;
+  bounce?: { bounceType: string; bouncedRecipients: { emailAddress: string }[] };
+  complaint?: { complainedRecipients: { emailAddress: string }[] };
+}
+
+export function sesWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/ses",
+    {
+      operationId: "sesEvents",
+      // No body schema: SNS posts text/plain and the signature covers exact fields.
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+        401: { description: "Rejected" },
+      },
+    },
+    async ({ request }) => {
+      const raw = new TextDecoder().decode(await readBodyLimited(request, 256 * 1024));
+      const msg = safeJsonParse(raw) as SnsEnvelope | undefined;
+      if (!msg || typeof msg !== "object" || !(await verifySnsMessage(msg))) {
+        throw new UnauthorizedError("invalid SNS signature");
+      }
+      if (msg.TopicArn !== config.SES_EVENTS_TOPIC_ARN) throw new UnauthorizedError("unexpected topic");
+
+      if (msg.Type === "SubscriptionConfirmation") {
+        if (!isSnsUrl(msg.SubscribeURL)) throw new UnauthorizedError("bad SubscribeURL");
+        await snsFetch(msg.SubscribeURL); // confirms the subscription
+        return { status: 200, body: { ok: true as const } };
+      }
+      if (msg.Type !== "Notification") return { status: 200, body: { ok: true as const } };
+
+      const event = safeJsonParse(msg.Message) as SesEvent;
+      const hard =
+        event.eventType === "Bounce" && event.bounce?.bounceType === "Permanent"
+          ? event.bounce.bouncedRecipients
+          : event.eventType === "Complaint"
+            ? (event.complaint?.complainedRecipients ?? [])
+            : [];
+      for (const [i, r] of hard.entries()) {
+        await app.jobs!.enqueue({
+          name: "email.suppress",
+          payload: { email: r.emailAddress, reason: event.eventType.toLowerCase() },
+          // SNS retries reuse MessageId, so redeliveries collapse into one job.
+          idempotencyKey: jobIdempotencyKey({ name: "email.suppress", key: `ses-${msg.MessageId}-${i}` }),
+        });
+      }
+      return { status: 200, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+## Suppression
+
+- Turn on the **account-level suppression list** for both `BOUNCE` and `COMPLAINT` reasons (SES console **Configuration -\> Suppression list**, or `PutAccountSuppressionAttributesCommand`). SES then drops sends to those addresses instead of hurting your reputation.
+- A configuration set can override the account setting, which is useful when marketing and transactional mail need different rules.
+- Add or remove addresses yourself with `PutSuppressedDestinationCommand` / `DeleteSuppressedDestinationCommand` (reason `"BOUNCE"` or `"COMPLAINT"`), for example when a user fixes a typo in their address.
+- Keep your own undeliverable flag too (the `email.suppress` job), so the app stops at enqueue time.
 
 ## Runtimes
 
 - Node / Bun / Deno / AWS Lambda: works without extra config. On Lambda, omit access keys and let the execution role supply credentials.
-- Cloudflare Workers: the SDK can run there but uses a Web Crypto signer. Pin `@aws-sdk/client-sesv2` ≥ 3.700 and pass `credentials` explicitly (the default provider chain expects Node APIs).
+- Cloudflare Workers: the default credential chain expects Node APIs, and we have not verified the full SDK on Workers. The small, documented path is [`aws4fetch`](https://github.com/mhart/aws4fetch), which signs requests with Web Crypto, against the SESv2 REST endpoint. Set `retries: 0`: aws4fetch retries by default, and a retried `POST` can send the email twice.
+
+```ts title="src/email/ses-workers.ts"
+import { AwsClient } from "aws4fetch";
+import { env } from "cloudflare:workers";
+import type { EmailSender } from "../plugins/email.ts";
+
+const aws = new AwsClient({
+  accessKeyId: env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+  service: "ses",
+  region: env.AWS_REGION,
+  retries: 0, // never auto-retry a send
+});
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await aws.fetch(`https://email.${env.AWS_REGION}.amazonaws.com/v2/email/outbound-emails`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: msg.signal,
+      body: JSON.stringify({
+        FromEmailAddress: env.EMAIL_FROM,
+        Destination: { ToAddresses: [msg.to] },
+        ReplyToAddresses: msg.replyTo ? [msg.replyTo] : undefined,
+        Content: {
+          Simple: {
+            Subject: { Data: msg.subject },
+            Body: {
+              ...(msg.text ? { Text: { Data: msg.text } } : {}),
+              ...(msg.html ? { Html: { Data: msg.html } } : {}),
+            },
+          },
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`SES send failed with status ${res.status}`);
+    const out = (await res.json()) as { MessageId?: string };
+    return { id: out.MessageId ?? "" };
+  },
+};
+```
+
+Give that Worker an IAM user whose only permission is the scoped `ses:SendEmail` policy above, and store its keys as Worker secrets.
 
 ## Observability
 
-SES publishes **delivery, bounce, and complaint** events to SNS, EventBridge, or Kinesis Firehose via a *configuration set*. Add `ConfigurationSetName` to `SendEmailCommandInput` to opt in.
+Configuration-set events cover sends, deliveries, bounces, complaints, rejects, and (if you enable tracking) opens and clicks. Publish them to SNS, EventBridge, CloudWatch, or Kinesis Data Firehose. Add `ConfigurationSetName` to every send so nothing goes untracked.
 
 See also [Resend](/docs/email/resend), [SendGrid](/docs/email/sendgrid), and the [email integrations overview](/docs/email).

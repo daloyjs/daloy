@@ -39,7 +39,7 @@ The Cloudflare adapter exports a Workers module entrypoint: the canonical `expor
 ## When to choose Workers
 
 - You want global, low-latency execution without managing regions yourself.
-- You can live without raw TCP sockets (Workers Hyperdrive solves Postgres).
+- Your database is reachable over HTTP, a binding, or Postgres/MySQL through [Hyperdrive](/docs/databases/hyperdrive). Workers can open outbound TCP, but not keep it open between requests.
 - You want bindings (KV, R2, D1, Durable Objects, Queues) instead of standalone services.
 
 ## Scaffold
@@ -203,7 +203,7 @@ app.get(
 
 ## Gotchas
 
-- Workers have no raw TCP. Use **Hyperdrive** for Postgres/MySQL, or HTTP drivers like Neon's serverless driver, PlanetScale's `@planetscale/database`, or Turso/libSQL. See [Database hosting](/docs/databases).
+- Workers can open outbound TCP (`connect()` from `cloudflare:sockets`), and `pg` and `mysql2` run with `nodejs_compat`, but a socket cannot outlive or be shared across requests. For Postgres/MySQL, use [Hyperdrive](/docs/databases/hyperdrive) (pooled, cached, one cheap client per request), or HTTP drivers like Neon's serverless driver, PlanetScale's `@planetscale/database`, or Turso/libSQL. See [Database hosting](/docs/databases).
 - Workers have no filesystem. Use [multipart uploads](/docs/multipart) with R2 rather than `node:fs`.
 - For background work, import `waitUntil` from `cloudflare:workers` and call it inside the handler: `toFetchHandler` does not forward the Worker `ExecutionContext` to your routes. (It does use `ctx.waitUntil` itself to flush telemetry.)
 
@@ -211,5 +211,5 @@ app.get(
 
 - [Adapters overview](/docs/adapters)
 - [Moving off Deno Deploy](/docs/adapters/deno#moving-off-deno-deploy): the Workers entry is the usual destination.
-- [Neon on Workers](/docs/databases/neon) · [PlanetScale](/docs/databases/planetscale) · [Turso](/docs/databases/turso) · [Cloudflare D1](/docs/databases/cloudflare-d1)
+- [Hyperdrive](/docs/databases/hyperdrive) · [Neon on Workers](/docs/databases/neon#cloudflare-workers) · [PlanetScale](/docs/databases/planetscale) · [Turso](/docs/databases/turso#cloudflare-workers) · [Cloudflare D1](/docs/databases/cloudflare-d1)
 - [Sessions](/docs/security/session) · [Distributed rate-limit store](/docs/security/rate-limit-redis)

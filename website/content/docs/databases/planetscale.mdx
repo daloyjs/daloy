@@ -1,9 +1,10 @@
 ---
 title: Use PlanetScale with DaloyJS
-description: Connect a DaloyJS API to PlanetScale MySQL using @planetscale/database, an HTTP driver that works on Cloudflare Workers, Node.js, Bun, and Deno.
+description: Connect a DaloyJS API to PlanetScale MySQL with the @planetscale/database HTTP driver, or PlanetScale Postgres with pg, on Node, Bun, Deno, Lambda, or Workers
 keywords:
   - PlanetScale DaloyJS
   - "@planetscale/database"
+  - PlanetScale Postgres
   - PlanetScale Cloudflare Workers
   - PlanetScale Vercel
   - PlanetScale Drizzle
@@ -12,7 +13,10 @@ keywords:
 
 # Use PlanetScale with DaloyJS
 
-[PlanetScale](https://planetscale.com) is a managed MySQL host built around Vitess, branching, deploy requests, and a fetch-based HTTP driver. Because `@planetscale/database` uses plain `fetch`, it runs on every runtime DaloyJS supports, including Cloudflare Workers and Vercel. If you are using PlanetScale Postgres, follow the [Neon](/docs/databases/neon) driver pattern instead.
+[PlanetScale](https://planetscale.com) offers two database engines:
+
+- **PlanetScale MySQL**, built on Vitess, with branching, deploy requests, and the fetch-based `@planetscale/database` HTTP driver. Because that driver uses plain `fetch`, it runs on Node, Bun, Deno, Lambda, and Cloudflare Workers. Most of this page covers it.
+- **PlanetScale Postgres**, which is Postgres: use a standard driver such as `pg`. `@planetscale/database` is the MySQL (Vitess) driver and is not used for Postgres. Jump to [PlanetScale Postgres](#planetscale-postgres).
 
 <LayerStack title="One HTTP driver, every runtime" caption="Because @planetscale/database speaks plain fetch instead of a raw TCP socket, the same data-access code runs on every runtime DaloyJS targets, including Cloudflare Workers." layers={[
           {
@@ -24,10 +28,10 @@ keywords:
           {
             title: "@planetscale/database",
             detail: "fetch-based HTTP driver",
-            items: ["Node", "Bun", "Deno", "Workers"],
+            items: ["Node", "Bun", "Deno", "Lambda", "Workers"],
           },
           {
-            title: "PlanetScale",
+            title: "PlanetScale MySQL",
             detail: "managed MySQL on Vitess",
             tone: "muted",
             items: ["branches", "deploy requests"],
@@ -36,27 +40,26 @@ keywords:
 
 ## 1. Provision and grab credentials
 
-Create a database at [app.planetscale.com](https://app.planetscale.com), generate a password, and copy the host plus credentials. Set them as `DATABASE_HOST`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`.
+Create a database at [app.planetscale.com](https://app.planetscale.com), generate a password, and copy the host plus credentials. Set them as `DATABASE_HOST`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`. Give the app a password with the read/write role, not admin.
 
 ## 2. Install
 
-```ts
-pnpm add @planetscale/database
+```package-install
+@planetscale/database
 ```
 
 ## 3. Create a PlanetScale plugin
 
-```ts
-// src/db/planetscale.ts
-    import { connect } from "@planetscale/database";
+```ts title="src/db/planetscale.ts"
+import { connect } from "@planetscale/database";
 import type { App } from "@daloyjs/core";
 
-    export const db = connect({
+export const db = connect({
   host: process.env.DATABASE_HOST!,
   username: process.env.DATABASE_USERNAME!,
   password: process.env.DATABASE_PASSWORD!,
 });
-    export type Db = typeof db;
+export type Db = typeof db;
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
@@ -80,7 +83,7 @@ declare module "@daloyjs/core" {
 
 ## 5. Use it in a route
 
-```ts
+```ts title="src/server.ts"
 import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
 import { planetscalePlugin } from "./db/planetscale.ts";
@@ -116,27 +119,21 @@ app.get(
 
 ## Cloudflare Workers
 
-Import `env` from `cloudflare:workers`, construct the connection from it, and decorate the app before registering routes. Do not decorate inside the Worker `fetch` handler: `decorate()` throws on the second request, and a decoration added after the routes were registered never reaches them.
+Store the credentials with `pnpm wrangler secret put`, run `pnpm wrangler types` so they are typed on `env`, construct the connection from `env` (imported from `cloudflare:workers`), and decorate the app before registering routes. Do not decorate inside the Worker `fetch` handler: `decorate()` throws on the second request, and a decoration added after the routes were registered never reaches them.
 
-```ts
+```ts title="src/index.ts"
 import { env } from "cloudflare:workers";
 import { connect } from "@planetscale/database";
 import { App } from "@daloyjs/core";
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-const bindings = env as {
-  DATABASE_HOST: string;
-  DATABASE_USERNAME: string;
-  DATABASE_PASSWORD: string;
-};
-
-const app = new App();
+const app = new App({ production: true, behindProxy: { hops: 1 } });
 app.decorate(
   "db",
   connect({
-    host: bindings.DATABASE_HOST,
-    username: bindings.DATABASE_USERNAME,
-    password: bindings.DATABASE_PASSWORD,
+    host: env.DATABASE_HOST,
+    username: env.DATABASE_USERNAME,
+    password: env.DATABASE_PASSWORD,
   }),
 );
 
@@ -145,11 +142,15 @@ app.decorate(
 export default toFetchHandler(app);
 ```
 
+If you would rather use `mysql2` with a regular MySQL connection string, put [Hyperdrive](/docs/databases/hyperdrive) in front of the database; Cloudflare lists PlanetScale among its Hyperdrive providers.
+
 ## With Drizzle ORM
 
-```ts
-pnpm add drizzle-orm
-// src/db/drizzle.ts
+```package-install
+drizzle-orm
+```
+
+```ts title="src/db/drizzle.ts"
 import { drizzle } from "drizzle-orm/planetscale-serverless";
 
 export const db = drizzle({
@@ -163,22 +164,90 @@ export const db = drizzle({
 
 ## With Prisma
 
-Use the [PlanetScale Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/planetscale) (GA since Prisma `6.16.0`). PlanetScale disables foreign-key constraints by default on MySQL unless you enable them in database settings, so set `relationMode = "prisma"` in your `schema.prisma` when you are using the default no-FK mode, and point `DATABASE_URL` at the serverless host (`aws.connect.psdb.cloud`).
+Prisma 7 connects through a driver adapter, which is mandatory, and generates the client into your source tree. Use the [PlanetScale adapter](https://www.prisma.io/docs/orm/overview/databases/planetscale) (current release: Prisma 7.10):
 
-```ts
-pnpm add @prisma/adapter-planetscale
-// src/db/prisma.ts
-import { PrismaClient } from "@prisma/client";
+```package-install
+@prisma/client @prisma/adapter-planetscale
+```
+
+```package-install dev
+prisma
+```
+
+PlanetScale MySQL disables foreign-key constraints by default unless you enable them in the database settings. In the default no-FK mode, set `relationMode = "prisma"` and add your own indexes on relation fields:
+
+```prisma title="prisma/schema.prisma"
+datasource db {
+  provider     = "mysql"
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+```
+
+```ts title="src/db/prisma.ts"
 import { PrismaPlanetScale } from "@prisma/adapter-planetscale";
+import { PrismaClient } from "../generated/prisma/client.ts";
 
 const adapter = new PrismaPlanetScale({ url: process.env.DATABASE_URL! });
 export const prisma = new PrismaClient({ adapter });
 ```
 
-On Node.js versions older than 18 (no global `fetch`), install `undici` and pass `{ fetch: undiciFetch }` as a second option.
+Prisma CLI commands read their connection URL from `prisma.config.ts`. See [Prisma](/docs/orm/prisma) for the config file, plugin, and shutdown setup.
+
+## PlanetScale Postgres
+
+PlanetScale Postgres is a Postgres database, so you use `pg` (or any Postgres driver or ORM) with the connection string from the dashboard. TLS is required. PlanetScale recommends port `6432` (PgBouncer, transaction pooling) for application traffic and port `5432` (direct) for migrations, long-running admin work, and session features.
+
+```package-install
+pg
+```
+
+```package-install dev
+@types/pg
+```
+
+### Node, Bun, Deno, and Lambda
+
+```ts title="src/db/pg.ts"
+import { Pool } from "pg";
+import type { App } from "@daloyjs/core";
+
+// Module scope: reused across requests and warm Lambda invocations.
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL!, // the :6432 PgBouncer string
+  max: 10,
+  idleTimeoutMillis: 30_000,
+});
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Pool;
+  }
+}
+
+// Call with the root app, not through app.register().
+export function pgPlugin(app: App) {
+  app.decorate("db", pool);
+  // Runs on the Node, Bun, and Deno adapters. Lambda has no shutdown hook,
+  // so keep max small there and rely on the idle timeout.
+  app.onClose(async () => {
+    await pool.end();
+  });
+}
+```
+
+Query with parameters: `await state.db.query("select id, email from users where id = $1", [params.id])`. PgBouncer in transaction mode does not keep session state, so avoid `SET`, advisory locks, and `LISTEN` on the `6432` string.
+
+### Cloudflare Workers
+
+Create a [Hyperdrive](/docs/databases/hyperdrive) config with the PlanetScale Postgres connection string and use `pg` with `env.HYPERDRIVE.connectionString`, one client per request. The Hyperdrive page has the full DaloyJS sample.
 
 ## Branching & deploy requests [#branching-and-deploy-requests]
 
-PlanetScale's schema workflow uses branches and deploy requests rather than ad-hoc `ALTER TABLE`. Pair this with your CI: run migrations against a development branch, open a deploy request, and merge to `main`. The same Daloy app code works against any branch. Swap the host.
+PlanetScale MySQL's schema workflow uses branches and deploy requests rather than ad-hoc `ALTER TABLE`. Pair this with your CI: run migrations against a development branch, open a deploy request, and merge to `main`. The same Daloy app code works against any branch. Swap the host.
 
-See also [Neon](/docs/databases/neon), [Supabase](/docs/orm/supabase), and the [database hosting overview](/docs/databases).
+See also [Cloudflare Hyperdrive](/docs/databases/hyperdrive), [Neon](/docs/databases/neon), [Supabase](/docs/orm/supabase), and the [database hosting overview](/docs/databases).

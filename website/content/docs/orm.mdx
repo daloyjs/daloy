@@ -1,6 +1,6 @@
 ---
 title: Using SQL ORMs with DaloyJS
-description: Connect DaloyJS to SQL databases with Prisma, Drizzle ORM, TypeORM, MikroORM, or Sequelize. Learn the recommended pattern for injecting clients, managing lifecycle, and keeping handlers type-safe.
+description: Connect DaloyJS to SQL with Prisma, Drizzle, TypeORM, MikroORM, or Sequelize, plus serverless pooling, migrations, tenancy, and error mapping.
 keywords:
   - DaloyJS ORM
   - DaloyJS SQL ORM
@@ -19,7 +19,7 @@ sitemap:
 DaloyJS is database-agnostic. Any SQL client that runs on your target runtime works, so pick the ORM or query layer that fits your team. Two primitives attach the client and tie cleanup to shutdown:
 
 - `app.decorate("db", client)` attaches a shared client to every handler's `state`.
-- `app.onClose(async () => client.disconnect())` ties cleanup to graceful shutdown.
+- `app.onClose(async () => client.disconnect())` ties cleanup to graceful shutdown on the Node.js, Bun, and Deno adapters. Serverless and edge adapters never call it; see [Serverless and edge lifecycle](#serverless-lifecycle).
 
 <BranchDiagram title="One app, your choice of data layer" source={{
           eyebrow: "your app",
@@ -29,7 +29,7 @@ DaloyJS is database-agnostic. Any SQL client that runs on your target runtime wo
           {
             eyebrow: "schema-first",
             label: "Prisma",
-            detail: "@prisma/client",
+            detail: "generated PrismaClient",
           },
           { eyebrow: "ts-first", label: "Drizzle ORM", detail: "drizzle-orm" },
           { eyebrow: "decorators", label: "TypeORM", detail: "DataSource" },
@@ -80,38 +80,75 @@ Wrap the database client in a setup function and call it once with the root app 
           },
         ]} />
 
-```ts
-// src/db/plugin.ts
+The sample uses Prisma ORM 7 with its generated client (see the [Prisma guide](/docs/orm/prisma) for the schema and generator setup). Every other ORM follows the same shape.
+
+```ts title="src/db/plugin.ts"
 import type { App } from "@daloyjs/core";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.ts";
+
+export function createDb() {
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  return new PrismaClient({ adapter });
+}
+
+export type Db = ReturnType<typeof createDb>;
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
-export function databasePlugin(app: App, client: DbClient) {
-  app.decorate("db", client);
+export function databasePlugin(app: App, db: Db) {
+  app.decorate("db", db);
   app.onClose(async () => {
-    await client.$disconnect?.();
+    await db.$disconnect();
   });
 }
 
-// src/server.ts
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Db;
+  }
+}
+```
+
+```ts title="src/server.ts"
+import { z } from "zod";
+import { App, NotFoundError } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { createDb, databasePlugin } from "./db/plugin.ts";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  name: z.string().nullable(),
+});
+
 const app = new App();
-databasePlugin(app, await createClient());
+databasePlugin(app, createDb());
 
 app.get(
   "/users/:id",
   {
     operationId: "getUser",
     request: { params: z.object({ id: z.uuid() }) },
-    responses: { 200: { description: "ok", body: UserSchema } },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
   async ({ params, state }) => {
     const user = await state.db.user.findUnique({ where: { id: params.id } });
-    return user
-      ? { status: 200, body: user }
-      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: user };
   },
 );
+
+await app.ready();
+serve(app, { port: 3000 });
 ```
+
+Throwing `NotFoundError` (or any `HttpError`) renders an RFC 9457 [problem+json](/docs/errors) body for you. Declare every status the route can produce in `responses` so it shows up in the OpenAPI contract and the typed client. A handler that *returns* a status missing from `responses` is turned into a `500` by the framework.
+
+<Callout type="warning">**Mass assignment.** Passing `body` straight to `create()` is safe only because `z.object()` strips unknown keys before the handler runs. Keep write schemas on `z.object()` or `z.strictObject()`, never `z.looseObject()` or `.passthrough()`, and never accept server-owned fields such as `role`, `tenantId`, or `ownerId` from the client.</Callout>
 
 ## Pick your ORM
 
@@ -133,24 +170,27 @@ This section is intentionally SQL-focused. If you are using MongoDB or Couchbase
 
 ## Runtime compatibility cheat sheet
 
-| Data layer | Node.js | Bun | Deno | Cloudflare Workers |
-| --- | --- | --- | --- | --- |
-| Prisma | Yes | Yes | Yes | Yes, with Driver Adapters |
-| Drizzle ORM | Yes | Yes | Yes | Yes |
-| TypeORM | Yes | Partial | Partial | No |
-| MikroORM | Yes | Yes | Partial | No |
-| Sequelize | Yes | Partial | No | No |
-| Supabase JS | Yes | Yes | Yes | Yes |
+Vercel Functions (Node.js runtime), AWS Lambda, and Azure Functions all run your code on Node.js, so a library that works on Node.js usually works there too. The serverless columns say "Not verified" where we have not confirmed it end to end; the real constraint there is connection pooling, covered [below](#serverless-lifecycle).
 
-For edge runtimes (Cloudflare Workers), prefer Drizzle or Supabase, or use Prisma with [Driver Adapters](https://www.prisma.io/docs/orm/overview/databases/database-drivers). TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime assumptions and are best on the Node.js adapter.
+| Data layer | Node.js | Bun | Deno | Vercel (Node) | AWS Lambda | Azure Functions | Cloudflare Workers |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Prisma ORM 7 | Yes | Yes | Yes | Yes | Yes | Not verified | Yes, with a driver adapter and `runtime = "workerd"` |
+| Drizzle ORM | Yes | Yes | Yes | Yes | Yes | Not verified | Yes (D1, Hyperdrive, HTTP drivers) |
+| TypeORM | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified |
+| MikroORM v7 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified |
+| Sequelize | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | No |
+| Supabase JS | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+
+For Cloudflare Workers, prefer Drizzle or Supabase, or use Prisma with a [driver adapter](https://www.prisma.io/docs/orm/overview/databases/database-drivers). MikroORM's JSR listings advertise Workers, Deno, and Bun support, but we have not tested it with DaloyJS. TypeORM and Sequelize are built around long-lived Node.js processes and are the safest bet on the Node.js adapter.
 
 ## Typing the decorated client
 
 Use the exported `AppState` augmentation point to make decorated clients available on `state` in every handler. Declare it in the module that creates the client (a regular `.ts` file the compiler always checks), not in a separate `.d.ts` file: declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
 
-```ts
-// src/db/prisma.ts (the module that creates the client)
-import type { PrismaClient } from "@prisma/client";
+```ts title="src/db/prisma.ts"
+// Prisma ORM 7 generates the client into your source tree; import it from
+// the generated path, not from "@prisma/client".
+import type { PrismaClient } from "../generated/prisma/client.ts";
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -161,40 +201,253 @@ declare module "@daloyjs/core" {
 
 ## Transactions
 
-Don't open transactions in middleware. Open them inside the handler that owns the unit of work, so your contract response (success or error) maps cleanly onto commit / rollback.
+Don't open transactions in middleware. Open them inside the handler that owns the unit of work, so your contract response (success or error) maps cleanly onto commit / rollback. This example assumes `Order` and `Inventory` models in your Prisma schema and a route that declares `201`.
 
 ```ts
 handler: async ({ body, state }) => {
-  return state.db.$transaction(async (tx) => {
-    const order = await tx.order.create({ data: body });
+  const order = await state.db.$transaction(async (tx) => {
+    const created = await tx.order.create({ data: { sku: body.sku, qty: body.qty } });
     await tx.inventory.update({
       where: { sku: body.sku },
       data: { stock: { decrement: body.qty } },
     });
-    return { status: 201, body: order };
+    return created;
   });
+  return { status: 201, body: order };
 }
 ```
 
 ## Errors
 
-Translate database errors into framework errors so they serialize as [problem+json](/docs/errors) automatically:
+Throw framework errors and they serialize as [problem+json](/docs/errors) automatically: `NotFoundError`, `ConflictError`, and `HttpError(status, { title, type?, detail? })` all render an RFC 9457 body with the right status. Keep the `title` generic. It is always sent to the client, while raw database messages can reveal table, column, and constraint names, so log those server-side instead.
 
 ```ts
-import { HttpError } from "@daloyjs/core";
+import { ConflictError } from "@daloyjs/core";
+import { Prisma } from "../generated/prisma/client.ts";
 
 try {
-  return await state.db.user.create({ data: body });
+  const user = await state.db.user.create({ data: body });
+  return { status: 201, body: user };
 } catch (err) {
-  if (isUniqueViolation(err)) {
-    throw new HttpError(409, {
-      title: "User already exists",
-      type: "https://daloyjs.dev/errors/duplicate",
-    });
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    throw new ConflictError("User already exists");
   }
   throw err;
 }
 ```
+
+See the [error mapping table](#error-mapping) below for the full set of constraint codes.
+
+## Serverless and edge lifecycle [#serverless-lifecycle]
+
+`app.onClose()` and `app.onShutdown()` only run when the [Node.js](/docs/adapters/node), [Bun](/docs/adapters/bun), or [Deno](/docs/adapters/deno) adapter drains the server. [AWS Lambda](/docs/adapters/aws-lambda), [Vercel](/docs/adapters/vercel), [Azure Functions](/docs/adapters/azure-functions), [Cloudflare Workers](/docs/adapters/cloudflare-workers), and [Fastly](/docs/adapters/fastly) never call them, so plan the connection lifecycle per platform:
+
+- **Lambda, Vercel Functions, Azure Functions.** Create the client at module scope so warm invocations reuse it, and keep the pool tiny (`max: 1` or close to it): every function instance holds its own pool, and a traffic spike multiplies instances. Put a pooler in front of the database, such as [RDS Proxy](https://aws.amazon.com/rds/proxy/) for RDS and Aurora, or your provider's pooler (Neon, Supabase, PgBouncer).
+- **Cloudflare Workers.** A database socket cannot be reused across requests, so build the client per request in a hook instead of `app.decorate()`. Route Postgres and MySQL through [Hyperdrive](/docs/databases/hyperdrive), which keeps the real pool warm for you, or use an HTTP or binding driver ([D1](/docs/databases/cloudflare-d1), Neon HTTP, PlanetScale).
+- **Long-running servers (Node.js, Bun, Deno, containers).** One pool per process, decorated once, closed in `onClose`. Size it so `pool max x instances` stays under the database's connection limit.
+
+```ts title="src/worker.ts"
+// Cloudflare Workers + Hyperdrive: one cheap client per request.
+import { env } from "cloudflare:workers";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { App } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+import * as schema from "./db/schema.ts";
+
+const app = new App();
+
+// Register before the routes: app.use() only applies to routes added after it.
+app.use({
+  preBody({ state }) {
+    const client = postgres(env.HYPERDRIVE.connectionString, { max: 5, fetch_types: false });
+    state.db = drizzle({ client, schema });
+  },
+});
+
+// ...register routes that read state.db
+
+export default toFetchHandler(app);
+```
+
+## Production checklist [#production]
+
+### Readiness that checks the database [#readiness]
+
+`app.readinesscheck()` reports plugin boot and drain state. It does **not** ping your database. When you want the orchestrator to pull an instance whose database is unreachable, add your own route with a short timeout, and keep it off the public internet (or behind a token) like the built-in probes.
+
+```ts
+import { z } from "zod";
+import { HttpError } from "@daloyjs/core";
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("database ping timed out")), ms),
+    ),
+  ]);
+}
+
+app.get(
+  "/readyz/db",
+  {
+    operationId: "readyDatabase",
+    responses: {
+      200: { description: "Database reachable", body: z.object({ status: z.literal("ready") }) },
+      503: { description: "Database unreachable" },
+    },
+  },
+  async ({ state }) => {
+    try {
+      await withTimeout(state.db.$queryRaw`SELECT 1`, 1_000);
+    } catch (err) {
+      console.error("readiness: database ping failed", err);
+      throw new HttpError(503, { title: "Service Unavailable" }, { "retry-after": "5" });
+    }
+    return { status: 200, body: { status: "ready" } };
+  },
+);
+```
+
+Point liveness at `app.healthcheck()` and never at the database probe: a database blip should drain traffic, not restart every container. See [lifecycle and health](/docs/security/lifecycle-health).
+
+### Connection pooling per adapter [#pooling]
+
+| Where it runs | Pool shape |
+| --- | --- |
+| Node.js, Bun, Deno, containers | One pool per process, decorated once, `max` sized against the database limit |
+| Lambda, Vercel Functions, Azure Functions | Module-scope client, `max: 1` to a few, a pooler (RDS Proxy, PgBouncer, Neon or Supabase pooler) in front |
+| Cloudflare Workers | Client per request through [Hyperdrive](/docs/databases/hyperdrive), or an HTTP / binding driver |
+
+Transaction-mode poolers (PgBouncer in transaction mode, Supabase's transaction pooler) may not support prepared statements, depending on version and configuration; behind one, turn them off in the driver (for example `prepare: false` in postgres.js). Leave them on everywhere else, including Hyperdrive.
+
+### Migrations are a deploy step [#migrations]
+
+- Run migrations from CI or a one-off release job (`prisma migrate deploy`, `drizzle-kit migrate`, `typeorm migration:run`, `mikro-orm migration:up`), never at app boot. Many instances booting at once race each other, and the runtime role should not need DDL privileges.
+- Use expand / contract for breaking changes: add the new column or table, deploy code that writes both, backfill, switch reads, then drop the old shape in a later release. Old and new instances run side by side during every deploy.
+
+### Multi-tenancy [#tenancy]
+
+Resolve the tenant once with [`tenancy()`](/docs/multitenancy) and scope every query by `state.tenant`. For defense in depth on Postgres, add row-level security and set the tenant inside the transaction so it cannot leak to the next request on a pooled connection:
+
+```ts
+handler: async ({ state }) => {
+  const invoices = await state.db.$transaction(async (tx) => {
+    // set_config(..., true) is the parameterizable form of SET LOCAL.
+    await tx.$queryRaw`SELECT set_config('app.tenant_id', ${String(state.tenant)}, true)`;
+    return tx.invoice.findMany();
+  });
+  return { status: 200, body: invoices };
+}
+```
+
+```sql
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON invoices
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
+```
+
+Connect as a role that does not own the tables and does not have `BYPASSRLS`. See [resource authorization](/docs/security/resource-authorization) for user-owned records.
+
+### Testing [#testing]
+
+Drive the real pipeline with `app.request()` against a dedicated test database (a container or a throwaway branch), never a shared dev database. Run migrations once before the suite, then either wrap each test in a transaction you roll back or truncate between tests. See [Testing](/docs/testing).
+
+### Pagination and cursor safety [#pagination]
+
+Use [`paginationQuery()`](/docs/pagination) with keyset cursors. `decodeCursor()` caps the length and parses safely, but the decoded value is still client input: validate it with a Zod object of primitives before it reaches a `where` clause, otherwise a crafted cursor can smuggle operator objects into the filter (see [SQL injection](/docs/security/sql-injection)).
+
+```ts
+import { z } from "zod";
+import { BadRequestError, decodeCursor, encodeCursor, paginationQuery } from "@daloyjs/core";
+
+const CursorSchema = z.strictObject({ createdAt: z.iso.datetime(), id: z.uuid() });
+
+function readCursor(cursor: string | undefined) {
+  if (!cursor) return undefined;
+  const parsed = CursorSchema.safeParse(decodeCursor(cursor));
+  if (!parsed.success) throw new BadRequestError("Invalid pagination cursor.");
+  return parsed.data;
+}
+
+// inside a route with request: { query: paginationQuery({ maxLimit: 100 }) }
+const after = readCursor(query.cursor);
+const rows = await state.db.user.findMany({
+  where: after
+    ? {
+        OR: [
+          { createdAt: { lt: new Date(after.createdAt) } },
+          { createdAt: new Date(after.createdAt), id: { lt: after.id } },
+        ],
+      }
+    : undefined,
+  orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  take: query.limit + 1,
+});
+const page = rows.slice(0, query.limit);
+const last = rows.length > query.limit ? page[page.length - 1] : undefined;
+const next = last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null;
+```
+
+### Idempotency and the outbox [#outbox]
+
+For retried writes (payments, orders), put [`idempotency()`](/docs/idempotency) on the route. When a write must also trigger a side effect (email, webhook, queue message), insert an outbox row in the same transaction as the business row and let a [background job](/docs/jobs) deliver it, so a crash between commit and send never loses or duplicates the effect.
+
+### Observability [#observability]
+
+Export traces and metrics with [OTLP](/docs/otlp), keep ORM query logging off (or errors only) in production, and log database errors server-side with the request id instead of returning them to clients.
+
+### Error mapping [#error-mapping]
+
+Map constraint violations to typed client errors and transient failures to `503`. Codes are Postgres SQLSTATEs; Prisma surfaces them as `P20xx` codes.
+
+| Failure | Postgres | Prisma | Status |
+| --- | --- | --- | --- |
+| Unique violation | `23505` | `P2002` | `409` Conflict |
+| Foreign key violation | `23503` | `P2003` | `409` (or `422` when the client sent the missing reference) |
+| Not-null violation | `23502` | `P2011` | `422` (usually a gap in the request schema) |
+| Record to update or delete not found | n/a | `P2025` | `404` |
+| Serialization failure, deadlock | `40001`, `40P01` | `P2034` | `503` with `Retry-After` (or retry the transaction) |
+
+```ts title="src/db/errors.ts"
+import { ConflictError, HttpError, NotFoundError } from "@daloyjs/core";
+
+function sqlState(err: unknown): string | undefined {
+  // Some ORMs wrap the driver error; check the error and its cause.
+  for (const e of [err, (err as { cause?: unknown } | null)?.cause]) {
+    if (typeof e === "object" && e !== null && "code" in e && typeof e.code === "string") {
+      return e.code;
+    }
+  }
+  return undefined;
+}
+
+export function mapDbError(err: unknown): never {
+  switch (sqlState(err)) {
+    case "23505":
+    case "P2002":
+      throw new ConflictError("Resource already exists");
+    case "23503":
+    case "P2003":
+      throw new ConflictError("Related resource conflict");
+    case "23502":
+    case "P2011":
+      throw new HttpError(422, { title: "Missing required field" });
+    case "P2025":
+      throw new NotFoundError();
+    case "40001":
+    case "40P01":
+    case "P2034":
+      throw new HttpError(503, { title: "Service Unavailable" }, { "retry-after": "1" });
+    default:
+      throw err;
+  }
+}
+```
+
+Use it as `catch (err) { mapDbError(err); }` and declare `409`, `422`, and `503` in the route's `responses`.
 
 ## Next steps
 

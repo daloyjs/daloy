@@ -1,6 +1,6 @@
 ---
 title: Use Neon serverless Postgres with DaloyJS
-description: Connect a DaloyJS API to Neon's serverless Postgres using the @neondatabase/serverless HTTP and WebSocket driver. Works on Node, Bun, Deno, Cloudflare Workers, and AWS Lambda.
+description: Connect a DaloyJS API to Neon serverless Postgres with the @neondatabase/serverless HTTP and WebSocket driver, on Node, Bun, Deno, Workers, and AWS Lambda.
 keywords:
   - Neon DaloyJS
   - "@neondatabase/serverless"
@@ -13,7 +13,7 @@ keywords:
 
 # Use Neon serverless Postgres with DaloyJS
 
-[Neon](https://neon.com) is a serverless Postgres host with database branching, scale-to-zero, and an HTTP/WebSocket driver that runs in *every* runtime DaloyJS targets, including Cloudflare Workers where raw TCP isn't available.
+[Neon](https://neon.com) is a serverless Postgres host with database branching, scale-to-zero, and the `@neondatabase/serverless` driver, which sends queries over HTTP or WebSockets. That driver runs on Node, Bun, Deno, Cloudflare Workers, and AWS Lambda. Neon is also standard Postgres, so plain `pg` over TCP works too, and on Workers you can reach it through [Hyperdrive](/docs/databases/hyperdrive).
 
 <BranchDiagram title="Two drivers, one connection string" source={{
           eyebrow: "@neondatabase/serverless",
@@ -23,36 +23,41 @@ keywords:
           {
             eyebrow: "edge-friendly",
             label: "HTTP neon() client",
-            detail: "One-shot queries · Workers",
+            detail: "One-shot queries · Workers · Lambda",
             tone: "success",
           },
           {
-            eyebrow: "node",
-            label: "Pooled Pool client",
-            detail: "WebSocket · reused connections · pool.end()",
+            eyebrow: "sessions & transactions",
+            label: "WebSocket Pool client",
+            detail: "module scope on Node · per request on Workers",
           },
-        ]} caption="Both clients ship in the same package. Use the lightweight HTTP neon() client on edge runtimes and the pooled WebSocket Pool for long-lived Node processes." />
+        ]} caption="Both clients ship in the same package. Use the HTTP neon() client for one-shot queries anywhere, and the WebSocket Pool when you need sessions or interactive transactions." />
 
 ## 1. Provision
 
-Create a project at [console.neon.tech](https://console.neon.tech) and copy the connection string. Set it as `DATABASE_URL` in your environment.
+Create a project at [console.neon.tech](https://console.neon.tech) and copy the connection string. Set it as `DATABASE_URL` in your environment. Neon offers a **pooled** string (host ends in `-pooler`) for application traffic and a direct one for migrations.
 
 ## 2. Install
 
-```ts
-pnpm add @neondatabase/serverless
+```package-install
+@neondatabase/serverless
 ```
 
-For a pooled connection on Node, use the `Pool` export. For one-shot queries on edge runtimes, use the lightweight HTTP `neon()` client. Neon's GA driver requires Node.js 19 or newer when you run it in Node.
+Use the HTTP `neon()` client for one-shot queries and non-interactive transactions (`sql.transaction([...])`). Use `Pool` or `Client` when you need a session, interactive transactions, or `node-postgres` compatibility.
 
-## 3. HTTP client (edge-friendly)
+## 3. HTTP client (any runtime)
 
-```ts
-// src/db/neon.ts
+```ts title="src/db/neon.ts"
 import { neon } from "@neondatabase/serverless";
 import type { App } from "@daloyjs/core";
 
 export const sql = neon(process.env.DATABASE_URL!);
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    sql: typeof sql;
+  }
+}
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
@@ -61,44 +66,54 @@ export function neonPlugin(app: App) {
 }
 ```
 
-## 4. Pooled WebSocket client (Node)
+Keep the `declare module` block in the module that creates the client, not in a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.sql` degrades to `any`.
+
+The tagged template turns every `${value}` into a bound parameter. When you build the SQL text yourself, use `sql.query(text, params)` with `$1` placeholders instead of string concatenation:
 
 ```ts
-// src/db/neon-pool.ts
+const rows = await sql.query("select id, email from users where id = $1", [id]);
+```
+
+## 4. Pooled WebSocket client
+
+Where the pool lives depends on the runtime:
+
+| Runtime | Pool guidance |
+| --- | --- |
+| Node, Bun, Deno (long-lived) | One module-scope `Pool`, closed with `app.onClose()` |
+| AWS Lambda and other serverless functions | Prefer the HTTP `neon()` client. If you need a `Pool`, keep `max` small, set `idleTimeoutMillis`, and use the `-pooler` host; there is no shutdown hook |
+| Cloudflare Workers | Create, use, and close the `Pool` or `Client` inside one request, or use [Hyperdrive](/docs/databases/hyperdrive) with `pg` |
+
+For a long-lived server:
+
+```ts title="src/db/neon-pool.ts"
 import { Pool } from "@neondatabase/serverless";
 import type { App } from "@daloyjs/core";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Pool;
+  }
+}
+
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
-export async function neonPoolPlugin(app: App) {
+export function neonPoolPlugin(app: App) {
   app.decorate("db", pool);
+  // Runs on the Node, Bun, and Deno adapters after in-flight requests drain.
   app.onClose(async () => {
     await pool.end();
   });
 }
 ```
 
-## 5. Augment app state
+Only the module that creates the pool declares `db`, so an app that imports just the HTTP client never sees a `state.db` that is not there.
 
-Add the `declare module` block to the same module that creates the clients, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.sql` / `state.db` degrade to `any`.
+## 5. Use it in a route
 
-```ts
-// src/db/neon.ts (same module as the HTTP plugin above)
-import type { Pool } from "@neondatabase/serverless";
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    sql: ReturnType<typeof neon>;
-    db: Pool;
-  }
-}
-```
-
-## 6. Use it in a route
-
-```ts
+```ts title="src/server.ts"
 import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
 import { neonPlugin } from "./db/neon.ts";
@@ -131,27 +146,31 @@ app.get(
 
 ## Cloudflare Workers
 
-Use the HTTP `neon()` client and read the connection string from the Worker environment instead of `process.env`. Import `env` from `cloudflare:workers` and decorate the app before registering routes (decorating inside the Worker `fetch` handler throws on the second request):
+Use the HTTP `neon()` client and read the connection string from the Worker environment instead of `process.env`. Store it with `pnpm wrangler secret put DATABASE_URL`, run `pnpm wrangler types` so `env.DATABASE_URL` is typed, then import `env` from `cloudflare:workers` and decorate the app before registering routes (decorating inside the Worker `fetch` handler throws on the second request):
 
-```ts
+```ts title="src/index.ts"
 import { env } from "cloudflare:workers";
 import { neon } from "@neondatabase/serverless";
 import { App } from "@daloyjs/core";
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
-const app = new App();
-app.decorate("sql", neon((env as { DATABASE_URL: string }).DATABASE_URL));
+const app = new App({ production: true, behindProxy: { hops: 1 } });
+app.decorate("sql", neon(env.DATABASE_URL));
 
 // ...register routes that read state.sql
 
 export default toFetchHandler(app);
 ```
 
+The HTTP client is safe to create at module scope because it opens no socket until a query runs inside a request. A WebSocket `Pool` is not: create it inside the request and close it before the request ends. For `pg` and ORMs that expect a TCP driver, Neon's driver docs suggest [Hyperdrive](/docs/databases/hyperdrive) instead.
+
 ## With Drizzle ORM
 
-```ts
-pnpm add drizzle-orm
-// src/db/drizzle.ts
+```package-install
+drizzle-orm
+```
+
+```ts title="src/db/drizzle.ts"
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 
@@ -161,22 +180,51 @@ export const db = drizzle({ client: sql });
 
 ## With Prisma
 
-Use the [Neon Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/neon) so Prisma can run on edge runtimes (GA since Prisma `6.16.0`):
+Prisma 7 connects through a driver adapter, which is mandatory, and generates the client into your source tree. Use the [Neon adapter](https://www.prisma.io/docs/orm/overview/databases/neon) (current release: Prisma 7.10):
 
-```ts
-pnpm add @prisma/adapter-neon
-// src/db/prisma.ts
-import { PrismaClient } from "@prisma/client";
+```package-install
+@prisma/client @prisma/adapter-neon
+```
+
+```package-install dev
+prisma
+```
+
+```prisma title="prisma/schema.prisma"
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+```
+
+```ts title="src/db/prisma.ts"
 import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaClient } from "../generated/prisma/client.ts";
 
 const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
 export const prisma = new PrismaClient({ adapter });
 ```
 
-Use Neon's **pooled** connection string (host ends in `-pooler`) for `DATABASE_URL`, and a separate `DIRECT_URL` for Prisma CLI commands like `prisma migrate` and `prisma db pull`.
+The app uses the **pooled** string in `DATABASE_URL`. Prisma CLI commands (`prisma migrate`, `prisma db pull`) read their URL from `prisma.config.ts`, so point that at Neon's **direct** connection string:
+
+```ts title="prisma.config.ts"
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  datasource: { url: env("DIRECT_URL") },
+});
+```
+
+See [Prisma](/docs/orm/prisma) for the full plugin, transactions, and shutdown setup.
 
 ## Branching for preview environments
 
-Pair Neon's branching with Vercel preview deployments or GitHub PR previews. Create a branch per PR and pass its connection string to the deployment's `DATABASE_URL`. This is a natural fit for the [Vercel adapter](/docs/adapters).
+Pair Neon's branching with Vercel preview deployments or GitHub PR previews. Create a branch per PR and pass its connection string to the deployment's `DATABASE_URL`. This is a natural fit for the [Vercel adapter](/docs/adapters/vercel).
 
-See also [PlanetScale](/docs/databases/planetscale), [Supabase](/docs/orm/supabase), and the [database hosting overview](/docs/databases).
+See also [Cloudflare Hyperdrive](/docs/databases/hyperdrive), [PlanetScale](/docs/databases/planetscale), [Supabase](/docs/orm/supabase), and the [database hosting overview](/docs/databases).

@@ -1,175 +1,246 @@
 ---
 title: Send email from DaloyJS with Mailtrap
-description: Send transactional email from a DaloyJS API using the official mailtrap Node SDK. Includes sandbox vs. production sending, MailtrapClient configuration, and switching with a single flag.
+description: Send email from DaloyJS with the mailtrap SDK. A sandbox toggle that fails closed, separate tokens, bulk stream, signed webhooks, and fetch on Workers.
 keywords:
   - DaloyJS Mailtrap
   - Mailtrap Node SDK
   - MailtrapClient
   - Mailtrap sandbox
+  - Mailtrap webhook signature
   - email testing DaloyJS
 ---
 
 # Send email from DaloyJS with Mailtrap
 
-[Mailtrap](https://mailtrap.io) bundles an **Email Sandbox** (safe test inbox) and an **Email API/SMTP** for production sending under one SDK. That makes it especially handy for staging environments: dev/staging captures messages, production actually delivers, with the same code path.
+[Mailtrap](https://mailtrap.io) bundles an **Email Sandbox** (a safe test inbox) and an **Email API/SMTP** for production sending under one SDK. That makes it handy for staging: dev and staging capture messages, production delivers, with the same code path. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.suppress` job used below.
 
 <BranchDiagram title="One client, two destinations" source={{
           eyebrow: "state.email.send(...)",
           label: "MailtrapClient",
-          detail: "MAILTRAP_SANDBOX flips the mode",
+          detail: "MAILTRAP_MODE picks the destination",
         }} branches={[
           {
-            eyebrow: "dev / staging",
+            eyebrow: "default",
             label: "Email Sandbox",
             detail: "sandbox: true + testInboxId · captured, never delivered",
           },
           {
-            eyebrow: "production",
+            eyebrow: "MAILTRAP_MODE=production",
             label: "Email Sending",
             detail: "verified domain · delivered to recipients",
             tone: "success",
           },
-        ]} caption="The same plugin code path serves every environment. Set MAILTRAP_SANDBOX=true in dev/staging to capture messages in a test inbox, and leave it off in production to deliver for real." />
+        ]} caption="The sender defaults to the sandbox. Only an explicit MAILTRAP_MODE=production, validated at boot together with a sending token, delivers real mail, so a missing variable can never email your customers from staging." />
 
 ## 1. Provision
 
-1. For testing, open **Email Sandbox -\> Inboxes** and copy the inbox **ID** plus an **API token** scoped to the sandbox.
-2. For production, open **Email Sending -\> Sending Domains**, verify a domain via SPF/DKIM/DMARC records, then create an API token with *Email Sending* permissions.
+1. For testing, open **Email Sandbox -\> Inboxes** and copy the inbox **ID**, then create an API token with access to that sandbox only.
+2. For production, open **Email Sending -\> Sending Domains**, verify a domain with the SPF, DKIM, and DMARC records shown, then create a **separate** API token with *Email Sending* permission for that domain.
+3. Store the two tokens under different names and give each environment only the token it needs. Staging never holds the sending token.
 
 ## 2. Install
 
-```ts
-pnpm add mailtrap
+```package-install
+mailtrap
 ```
 
 ## 3. Environment variables
 
-```ts
-# .env
-MAILTRAP_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-MAILTRAP_FROM_EMAIL=no-reply@acme.example.com
-MAILTRAP_FROM_NAME=Acme
-# Sandbox mode (testing) - set both to enable
-MAILTRAP_SANDBOX=true
+```dotenv title=".env.staging"
+MAILTRAP_MODE=sandbox
+MAILTRAP_SANDBOX_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 MAILTRAP_TEST_INBOX_ID=1234567
+EMAIL_FROM_ADDRESS=no-reply@mail.acme.example.com
+CONTACT_INBOX=feedback@acme.example.com
 ```
 
-## 4. Plugin
+```dotenv title=".env.production"
+MAILTRAP_MODE=production
+MAILTRAP_SENDING_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+MAILTRAP_WEBHOOK_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+EMAIL_FROM_ADDRESS=no-reply@mail.acme.example.com
+CONTACT_INBOX=feedback@acme.example.com
+```
 
-```ts
-// src/plugins/mailtrap.ts
+## 4. Sender
+
+The toggle **fails closed**: anything other than an explicit `MAILTRAP_MODE=production` means sandbox, and [`defineConfig()`](/docs/config) refuses to boot when the chosen mode is missing its token or inbox id:
+
+```ts title="src/email/mailtrap.ts"
+import { z } from "zod";
 import { MailtrapClient } from "mailtrap";
-import type { App } from "@daloyjs/core";
+import { defineConfig } from "@daloyjs/core";
+import type { EmailSender } from "../plugins/email.ts";
 
-const sandbox = process.env.MAILTRAP_SANDBOX === "true";
-const client = new MailtrapClient({
-  token: process.env.MAILTRAP_TOKEN!,
-  ...(sandbox
-    ? { sandbox: true, testInboxId: Number(process.env.MAILTRAP_TEST_INBOX_ID) }
-    : {}),
+const cfg = await defineConfig({
+  schema: z
+    .object({
+      MAILTRAP_MODE: z.enum(["sandbox", "production"]).default("sandbox"),
+      MAILTRAP_SANDBOX_TOKEN: z.string().min(1).optional(),
+      MAILTRAP_TEST_INBOX_ID: z.coerce.number().int().positive().optional(),
+      MAILTRAP_SENDING_TOKEN: z.string().min(1).optional(),
+      EMAIL_FROM_ADDRESS: z.email(),
+    })
+    .superRefine((c, ctx) => {
+      if (c.MAILTRAP_MODE === "production" && !c.MAILTRAP_SENDING_TOKEN) {
+        ctx.addIssue({ code: "custom", path: ["MAILTRAP_SENDING_TOKEN"], message: "required in production mode" });
+      }
+      if (c.MAILTRAP_MODE === "sandbox" && (!c.MAILTRAP_SANDBOX_TOKEN || !c.MAILTRAP_TEST_INBOX_ID)) {
+        ctx.addIssue({ code: "custom", path: ["MAILTRAP_TEST_INBOX_ID"], message: "sandbox mode needs a sandbox token and inbox id" });
+      }
+    }),
 });
 
-const FROM = {
-  email: process.env.MAILTRAP_FROM_EMAIL!,
-  name: process.env.MAILTRAP_FROM_NAME ?? "Acme",
-};
-
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function mailtrapPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const res = await client.send({
-        from: FROM,
-        to: [{ email: to }],
-        subject,
-        text,
-        html,
+const client =
+  cfg.MAILTRAP_MODE === "production"
+    ? new MailtrapClient({ token: cfg.MAILTRAP_SENDING_TOKEN! })
+    : new MailtrapClient({
+        token: cfg.MAILTRAP_SANDBOX_TOKEN!,
+        sandbox: true,
+        testInboxId: cfg.MAILTRAP_TEST_INBOX_ID!,
       });
-      return { id: res.message_ids?.[0] ?? "" };
-    },
-  });
-}
 
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
-    };
-  }
-}
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await client.send({
+      from: { email: cfg.EMAIL_FROM_ADDRESS, name: "Acme" },
+      to: [{ email: msg.to }],
+      ...(msg.replyTo ? { reply_to: { email: msg.replyTo } } : {}),
+      subject: msg.subject,
+      headers: msg.headers,
+      ...(msg.html !== undefined ? { html: msg.html, text: msg.text } : { text: msg.text ?? "" }),
+    });
+    return { id: res.message_ids?.[0] ?? "" };
+  },
+};
 ```
 
-The same plugin works for dev, staging, and prod, flip `MAILTRAP_SANDBOX` per environment.
+The same sender works in every environment; only the variables change. Mailtrap's send API has no documented idempotency key, so queue sends through the overview's [`email.send` job](/docs/email#send-off-the-request-path).
 
 ## 5. Use it in a route
 
-```ts
-import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { mailtrapPlugin } from "./plugins/mailtrap.ts";
-
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-mailtrapPlugin(app);
-
-app.post(
-  "/feedback",
-  {
-    operationId: "sendFeedback",
-    request: {
-      body: z.object({
-        to: z.email(),
-        message: z.string().min(1).max(2000),
-      }),
-    },
-    responses: {
-      202: { description: "Sent", body: z.object({ id: z.string() }) },
-    },
-  },
-  async ({ body, state }) => {
-    const { id } = await state.email.send({
-      to: body.to,
-      subject: "Thanks for your feedback",
-      text: body.message,
-    });
-    return { status: 202, body: { id } };
-  },
-);
-```
+A feedback form is a contact form, so it goes to your own inbox with the visitor only in `replyTo`. Mount the overview's [`/contact` route](/docs/email#open-relay) as-is, or copy it under `/feedback`. Do not send a "thanks for your feedback" auto-reply to the address the visitor typed: that turns the form back into a relay that mails strangers on demand.
 
 ## Bulk sending
 
-Mailtrap exposes a separate **Bulk Sending** stream optimised for marketing volume. Toggle it on the same client by setting `bulk: true` instead of `sandbox: true`:
+Mailtrap has a separate **Bulk Sending** stream (host `bulk.api.mailtrap.io`) for marketing volume. Use a separate client with `bulk: true` and keep it apart from transactional mail:
 
 ```ts
-const bulkClient = new MailtrapClient({
-  token: process.env.MAILTRAP_TOKEN!,
-  bulk: true,
-});
+const bulkClient = new MailtrapClient({ token: cfg.MAILTRAP_SENDING_TOKEN!, bulk: true });
 ```
+
+Bulk mail needs [one-click unsubscribe headers](/docs/email#deliverability) and should come from its own subdomain.
 
 ## Templates
 
-Create a template in **Email Sending -\> Email Templates**, then send it by UUID and provide variables instead of `subject`/`text`/`html`:
+Create a template in **Email Sending -\> Email Templates**, then send it by UUID with variables instead of `subject`/`text`/`html`:
 
 ```ts
 await client.send({
-  from: FROM,
-  to: [{ email: "user@example.com" }],
+  from: { email: cfg.EMAIL_FROM_ADDRESS, name: "Acme" },
+  to: [{ email: user.email }], // looked up server-side
   template_uuid: "11111111-2222-3333-4444-555555555555",
-  template_variables: { name: "Devlin", company: "Acme" },
+  template_variables: { name: user.name, company: "Acme" },
 });
 ```
 
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Create a webhook in Mailtrap's webhook settings for the `bounce`, `spam`, `unsubscribe`, and `reject` events in JSON format, and copy its signing secret. Mailtrap sends a lowercase hex HMAC-SHA256 of the **raw body** in the `Mailtrap-Signature` header, so core's `verifyWebhookSignature()` verifies it directly (the SDK also exports a Node-only `verifyWebhookSignature` helper). There is no signed timestamp, so dedupe on each event's `event_id`. Mailtrap retries anything other than a `200` response, so acknowledge with exactly `200`:
+
+```ts title="src/routes/mailtrap-webhook.ts"
+import { z } from "zod";
+import {
+  App,
+  UnauthorizedError,
+  jobIdempotencyKey,
+  readBodyLimited,
+  safeJsonParse,
+  verifyWebhookSignature,
+} from "@daloyjs/core";
+import { config } from "../config.ts";
+
+interface MailtrapEvent {
+  event: string; // "delivery", "bounce", "soft bounce", "spam", "unsubscribe", "reject", ...
+  email: string;
+  event_id: string;
+}
+
+export function mailtrapWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/mailtrap",
+    {
+      operationId: "mailtrapEvents",
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+        401: { description: "Rejected" },
+      },
+    },
+    async ({ request }) => {
+      const raw = await readBodyLimited(request, 2 * 1_048_576); // up to 500 events per request
+      const ok = await verifyWebhookSignature({
+        payload: raw,
+        signature: request.headers.get("mailtrap-signature") ?? "",
+        secret: config.MAILTRAP_WEBHOOK_SECRET,
+      });
+      if (!ok) throw new UnauthorizedError("invalid signature");
+
+      const body = safeJsonParse(new TextDecoder().decode(raw)) as { events?: MailtrapEvent[] } | undefined;
+      for (const e of body?.events ?? []) {
+        if (!["bounce", "spam", "unsubscribe"].includes(e.event) || !e.event_id) continue;
+        await app.jobs!.enqueue({
+          name: "email.suppress",
+          payload: { email: e.email, reason: e.event },
+          idempotencyKey: jobIdempotencyKey({ name: "email.suppress", key: `mt-${e.event_id}` }),
+        });
+      }
+      return { status: 200, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+Add `MAILTRAP_WEBHOOK_SECRET: z.string().min(1)` to the overview's config schema in production. The header name and scheme above match [Mailtrap's webhook docs](https://docs.mailtrap.io/email-api-smtp/advanced/webhooks#verifying-the-signature) and SDK v5 at the time of writing; recheck them if verification starts failing after a Mailtrap update.
+
+## Suppressions
+
+Mailtrap keeps a suppression list for production sending and exposes it through the SDK's suppressions API, which needs your `accountId` in the client config. Mirror suppressions into your own undeliverable flag through the webhook above so the app stops at enqueue time.
+
 ## Runtimes
 
-The `mailtrap` SDK targets Node (uses Node's HTTPS module). For [Cloudflare Workers](/docs/adapters), call the REST API directly with `fetch`: `POST https://send.api.mailtrap.io/api/send` (production) or `POST https://sandbox.api.mailtrap.io/api/send/{inbox_id}` (sandbox), with header `Authorization: Bearer ${token}`.
+The `mailtrap` SDK is built on axios with Node `http`/`https` keep-alive agents, and its webhook helper uses `node:crypto`, so it targets Node and Node-compatible runtimes. For [Cloudflare Workers](/docs/adapters/cloudflare-workers), call the REST API with the overview's [`resilientFetch` + `fetchGuard`](/docs/email#calling-a-rest-api-with-fetch) client (it never retries the `POST`). The hosts are `send.api.mailtrap.io` (production), `bulk.api.mailtrap.io` (bulk), and `sandbox.api.mailtrap.io` (sandbox, with the inbox id in the path):
+
+```ts title="src/email/mailtrap-workers.ts"
+import { env } from "cloudflare:workers";
+import type { EmailSender } from "../plugins/email.ts";
+import { providerFetch } from "./fetch.ts"; // allowHosts: ["send.api.mailtrap.io", "sandbox.api.mailtrap.io"]
+
+const production = env.MAILTRAP_MODE === "production"; // anything else is sandbox
+const url = production
+  ? "https://send.api.mailtrap.io/api/send"
+  : `https://sandbox.api.mailtrap.io/api/send/${encodeURIComponent(env.MAILTRAP_TEST_INBOX_ID)}`;
+const token = production ? env.MAILTRAP_SENDING_TOKEN : env.MAILTRAP_SANDBOX_TOKEN;
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await providerFetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      signal: msg.signal,
+      body: JSON.stringify({
+        from: { email: env.EMAIL_FROM_ADDRESS, name: "Acme" },
+        to: [{ email: msg.to }],
+        ...(msg.replyTo ? { reply_to: { email: msg.replyTo } } : {}),
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+      }),
+    });
+    if (!res.ok) throw new Error(`Mailtrap send failed with status ${res.status}`);
+    const out = (await res.json()) as { message_ids?: string[] };
+    return { id: out.message_ids?.[0] ?? "" };
+  },
+};
+```
 
 See also [Resend](/docs/email/resend), [Postmark](/docs/email/postmark), and the [email integrations overview](/docs/email).

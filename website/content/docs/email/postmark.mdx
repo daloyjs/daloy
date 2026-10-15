@@ -1,17 +1,18 @@
 ---
 title: Send email from DaloyJS with Postmark
-description: Send transactional email from a DaloyJS API using the official postmark Node SDK. Includes server token setup, ServerClient.sendEmail, message streams, and template rendering.
+description: Send email from DaloyJS with postmark. Message streams, a server-side receipt route, Basic Auth webhooks, inactive recipients, typed errors, and Workers.
 keywords:
   - DaloyJS Postmark
   - postmark Node SDK
   - Postmark ServerClient
   - message streams Postmark
+  - Postmark bounce webhook
   - transactional email DaloyJS
 ---
 
 # Send email from DaloyJS with Postmark
 
-[Postmark](https://postmarkapp.com) is a transactional-first email provider known for high inbox placement and detailed delivery analytics. This guide uses the official [`postmark`](https://github.com/ActiveCampaign/postmark.js) SDK.
+[Postmark](https://postmarkapp.com) is a transactional-first email provider known for high inbox placement and detailed delivery analytics. This guide uses the official [`postmark`](https://github.com/ActiveCampaign/postmark.js) SDK. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.send` / `email.suppress` jobs used below.
 
 <SequenceDiagram title="Send through the postmark SDK" participants={[
           "Route handler",
@@ -23,7 +24,7 @@ keywords:
             from: "Route handler",
             to: "ServerClient",
             label: "client.sendEmail({ From, To, Subject, MessageStream })",
-            detail: "MessageStream defaults to outbound",
+            detail: "MessageStream outbound = transactional",
             kind: "request",
           },
           {
@@ -36,151 +37,260 @@ keywords:
           {
             from: "Postmark API",
             to: "Route handler",
-            label: "{ ErrorCode, MessageID }",
-            detail:
-              "throw unless ErrorCode === 0, else return { id: MessageID }",
+            label: "{ ErrorCode, MessageID } or a typed error",
+            detail: "return { id: MessageID }; 406 = inactive recipient",
             kind: "response",
           },
           {
             from: "Postmark API",
             to: "Webhooks",
             label: "delivery, bounce, spam-complaint events",
-            detail: "verify the request before trusting payloads",
+            detail: "no signatures: Basic Auth in the URL",
             kind: "async",
           },
-        ]} caption="Postmark returns an ErrorCode rather than throwing, so the plugin checks ErrorCode === 0 and surfaces the MessageID as { id }. Pick the outbound or broadcast MessageStream per send." />
+        ]} caption="The SDK throws typed errors for API failures (InactiveRecipientsError for a deactivated address) and returns the MessageID on success. Pick the transactional or a broadcast MessageStream per send." />
 
 ## 1. Provision
 
-1. Create a Postmark server under **Servers -\> New server**, then open it and copy the **Server API Token** from **API Tokens**.
-2. Add a **Sender Signature** (single address) or, for production, configure a full **Sender Domain** with DKIM and Return-Path records.
-3. Decide which **Message Stream** you'll use:
-   - `outbound`: default transactional stream
-   - `broadcast`: bulk/marketing (must be enabled on the server)
+1. Create a Postmark server under **Servers -\> New server**, then open it and copy the **Server API Token** from **API Tokens**. Use one server (and token) per environment.
+2. For production, configure a **Sender Domain** with DKIM and the custom **Return-Path** CNAME so SPF aligns with your `From:` domain for DMARC. A single-address Sender Signature is for testing.
+3. Decide which **Message Stream** each email uses. Every server has a default transactional stream with the ID `outbound`. Bulk and marketing mail belongs in a separate **broadcast** stream that you add to the server; use the stream ID shown on the server's Message Streams tab. Keeping them apart protects transactional reputation (see [deliverability](/docs/email#deliverability)).
 
 ## 2. Install
 
-```ts
-pnpm add postmark
+```package-install
+postmark
 ```
 
 ## 3. Environment variables
 
-```ts
-# .env
+```dotenv title=".env"
 POSTMARK_SERVER_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-POSTMARK_FROM="Acme <no-reply@acme.example.com>"
 POSTMARK_STREAM=outbound
+POSTMARK_WEBHOOK_USER=postmark
+POSTMARK_WEBHOOK_PASSWORD=a-long-random-string-from-your-secret-store
+EMAIL_FROM="Acme <no-reply@mail.acme.example.com>"
 ```
 
-## 4. Plugin
+Add `POSTMARK_SERVER_TOKEN: z.string().min(1)`, `POSTMARK_STREAM: z.string().min(1)`, `POSTMARK_WEBHOOK_USER: z.string().min(1)`, and `POSTMARK_WEBHOOK_PASSWORD: z.string().min(32)` to the overview's [`defineConfig()` schema](/docs/email#common-pattern).
 
-```ts
-// src/plugins/postmark.ts
+## 4. Sender
+
+```ts title="src/email/postmark.ts"
 import { ServerClient } from "postmark";
-import type { App } from "@daloyjs/core";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
 
-const client = new ServerClient(process.env.POSTMARK_SERVER_TOKEN!);
+export const postmark = new ServerClient(config.POSTMARK_SERVER_TOKEN, {
+  timeout: 10, // seconds; the SDK default is 60
+});
 
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function postmarkPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const res = await client.sendEmail({
-        From: process.env.POSTMARK_FROM!,
-        To: to,
-        Subject: subject,
-        TextBody: text,
-        HtmlBody: html,
-        MessageStream: process.env.POSTMARK_STREAM ?? "outbound",
-      });
-      // ErrorCode 0 means success
-      if (res.ErrorCode !== 0) {
-        throw new Error(`Postmark error ${res.ErrorCode}: ${res.Message}`);
-      }
-      return { id: res.MessageID };
-    },
-  });
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
-    };
-  }
-}
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await postmark.sendEmail({
+      From: config.EMAIL_FROM,
+      To: msg.to,
+      ReplyTo: msg.replyTo,
+      Subject: msg.subject,
+      TextBody: msg.text,
+      HtmlBody: msg.html,
+      Headers: msg.headers
+        ? Object.entries(msg.headers).map(([Name, Value]) => ({ Name, Value }))
+        : undefined,
+      MessageStream: config.POSTMARK_STREAM,
+    });
+    // The SDK throws typed errors on failure; keep a defensive check anyway.
+    if (res.ErrorCode !== 0) throw new Error(`Postmark error ${res.ErrorCode}`);
+    return { id: res.MessageID };
+  },
+};
 ```
+
+Postmark has no idempotency key on its send API, so queue sends through the overview's [`email.send` job](/docs/email#send-off-the-request-path) and do not auto-retry a timed-out send.
 
 ## 5. Use it in a route
 
-```ts
+Receipts come from an authenticated user asking about **their** order. The client sends only the order id; the server checks ownership, then builds the recipient and body from the stored order:
+
+```ts title="src/routes/receipts.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { postmarkPlugin } from "./plugins/postmark.ts";
+import { App, NotFoundError, UnauthorizedError, jobIdempotencyKey } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { sendGuards } from "../email/guards.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-postmarkPlugin(app);
+export function receiptRoutes(app: App) {
+  app.post(
+    "/orders/:orderId/receipt",
+    {
+      operationId: "emailReceipt",
+      hooks: sendGuards, // auth + per-IP + per-user limits, see the overview
+      request: { params: z.object({ orderId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/) }) },
+      responses: {
+        202: { description: "Queued", body: z.object({ jobId: z.string() }) },
+      },
+    },
+    async ({ params, state }) => {
+      const sub = state.user?.sub;
+      if (!sub) throw new UnauthorizedError();
+      const order = await findOrderForUser(params.orderId, sub);
+      if (!order) throw new NotFoundError(); // same answer for "missing" and "not yours"
+      const total = (order.totalCents / 100).toFixed(2);
+      const { job } = await app.jobs!.enqueue({
+        name: "email.send",
+        payload: {
+          to: order.customerEmail,
+          subject: `Receipt for order ${order.id}`,
+          text: `Thanks ${order.customerName}. Total: ${total} ${order.currency}`,
+          html: `<p>Thanks ${escapeHtml(order.customerName)}.</p><p>Total: <strong>${total} ${escapeHtml(order.currency)}</strong></p>`,
+        },
+        idempotencyKey: jobIdempotencyKey({ name: "email.send", key: `receipt-${order.id}` }),
+      });
+      return { status: 202, body: { jobId: job.id } };
+    },
+  );
+}
 
-app.post(
-  "/receipts",
-  {
-    operationId: "sendReceipt",
-    request: {
-      body: z.object({
-        to: z.email(),
-        orderId: z.string().min(1),
-        total: z.number().nonnegative(),
-      }),
-    },
-    responses: {
-      202: { description: "Sent", body: z.object({ id: z.string() }) },
-    },
-  },
-  async ({ body, state }) => {
-    const { id } = await state.email.send({
-      to: body.to,
-      subject: `Receipt for order ${body.orderId}`,
-      text: `Total: $${body.total.toFixed(2)}`,
-      html: `<p>Total: <strong>$${body.total.toFixed(2)}</strong></p>`,
-    });
-    return { status: 202, body: { id } };
-  },
-);
+declare function findOrderForUser(
+  orderId: string,
+  userId: string,
+): Promise<{ id: string; customerEmail: string; customerName: string; totalCents: number; currency: string } | null>;
 ```
 
 ## Server-side templates
 
-Create a template in **Templates** (Mustachio syntax), then send it by `TemplateAlias`:
+Create a template in **Templates** (Mustachio syntax), then send it by `TemplateAlias`. Mustachio HTML-escapes double-brace values; keep user values out of the triple-brace raw form (check Postmark's template docs if you rely on it):
 
 ```ts
-await client.sendEmailWithTemplate({
-  From: process.env.POSTMARK_FROM!,
-  To: "user@example.com",
+await postmark.sendEmailWithTemplate({
+  From: config.EMAIL_FROM,
+  To: order.customerEmail, // looked up server-side
   TemplateAlias: "order-receipt",
-  TemplateModel: {
-    name: "Devlin",
-    orderId: "1024",
-    total: "42.00",
-  },
+  TemplateModel: { name: order.customerName, orderId: order.id, total },
   MessageStream: "outbound",
 });
 ```
 
 ## Batch sending
 
-Use `client.sendEmailBatch([...])` or `client.sendEmailBatchWithTemplates([...])` to send up to 500 messages per request, the response is an array with one result per message so you can inspect per-recipient errors.
+Use `postmark.sendEmailBatch([...])` or `postmark.sendEmailBatchWithTemplates([...])` to send up to 500 messages per request. The response is an array with one result per message, so inspect per-recipient errors.
+
+## Errors and inactive recipients [#errors-and-inactive-recipients]
+
+The SDK maps API failures to typed errors exported as `Errors`: `InvalidAPIKeyError` (401), `ApiInputError` (422), `RateLimitExceededError` (429), `InternalServerError` (500), `ServiceUnavailablerError` (503, spelled that way in the SDK), and `UnknownError`. A 422 with Postmark error code **406** becomes `InactiveRecipientsError`: the address hard-bounced, complained, or unsubscribed, and Postmark refuses to send to it. Its `recipients` property lists the addresses. Retrying will never succeed, so mark the address and stop:
+
+```ts
+import { Errors } from "postmark";
+import { JobFatalError } from "@daloyjs/core";
+
+// Inside the overview's "email.send" job handler:
+try {
+  await sender.send({ ...msg, signal });
+} catch (err) {
+  if (err instanceof Errors.InactiveRecipientsError) {
+    for (const email of err.recipients) await markUndeliverable(email.toLowerCase(), "inactive");
+    throw new JobFatalError("Postmark: inactive recipient"); // dead-letter, no retries
+  }
+  throw err; // transient: the worker retries with backoff
+}
+```
+
+From a route handler, never return these messages to the client. Log them and throw a generic error ([never leak provider errors](/docs/email#errors)).
+
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Postmark does not sign webhooks. Protect the endpoint with HTTPS plus Basic Auth by putting the credentials in the webhook URL (`https://postmark:<password>@api.acme.example.com/webhooks/postmark`), and check them with core's `basicAuth()` and constant-time `timingSafeEqual()`. Postmark also publishes its webhook source IPs on [IPs for Firewalls](https://postmarkapp.com/support/article/800-ips-for-firewalls); add them as an extra layer with `ipRestriction()` if your topology exposes the real client IP, but do not rely on IPs alone.
+
+```ts title="src/routes/postmark-webhook.ts"
+import { z } from "zod";
+import { App, basicAuth, jobIdempotencyKey, readBodyLimited, safeJsonParse, timingSafeEqual } from "@daloyjs/core";
+import { config } from "../config.ts";
+
+interface PostmarkEvent {
+  RecordType: string; // "Bounce", "SpamComplaint", "Delivery", ...
+  Type?: string; // on bounces: "HardBounce", "SoftBounce", ...
+  ID?: number;
+  MessageID?: string;
+  Email?: string;
+}
+
+export function postmarkWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/postmark",
+    {
+      operationId: "postmarkEvents",
+      hooks: basicAuth({
+        realm: "postmark-webhooks",
+        verify: (user, pass) => {
+          // Evaluate both so timing does not reveal which half was wrong.
+          const userOk = timingSafeEqual(user, config.POSTMARK_WEBHOOK_USER);
+          const passOk = timingSafeEqual(pass, config.POSTMARK_WEBHOOK_PASSWORD);
+          return userOk && passOk;
+        },
+      }),
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async ({ request }) => {
+      const raw = new TextDecoder().decode(await readBodyLimited(request, 256 * 1024));
+      const event = safeJsonParse(raw) as PostmarkEvent | undefined;
+      const hard =
+        (event?.RecordType === "Bounce" && event.Type === "HardBounce") ||
+        event?.RecordType === "SpamComplaint";
+      if (event && hard && event.Email && event.ID !== undefined) {
+        await app.jobs!.enqueue({
+          name: "email.suppress",
+          payload: { email: event.Email, reason: event.RecordType },
+          // Postmark retries reuse the same record ID.
+          idempotencyKey: jobIdempotencyKey({ name: "email.suppress", key: `pm-${event.RecordType}-${event.ID}` }),
+        });
+      }
+      return { status: 200, body: { ok: true as const } }; // ack fast
+    },
+  );
+}
+```
+
+Postmark retries on 5xx, 408, 429, and network failures, but drops the event on any other 4xx, so a wrong password silently loses events. Watch the webhook's activity in the Postmark UI after you rotate credentials.
+
+## Suppression
+
+Postmark marks a recipient **inactive** after a hard bounce, a spam complaint, or an unsubscribe, tracked per message stream. Sends to an inactive address fail with error 406 as shown above. Reactivate an address from the server's **Suppressions** view or the Suppressions API once the cause is fixed, and mirror the state into your own undeliverable flag through the webhook.
 
 ## Runtimes
 
-The `postmark` SDK currently uses `axios` under the hood, so it targets Node and Node-compatible runtimes (Bun, Deno's Node-compat, AWS Lambda). For [Cloudflare Workers](/docs/adapters), call the REST endpoint directly with `fetch`: `POST https://api.postmarkapp.com/email` with the header `X-Postmark-Server-Token`.
+Postmark SDK v5 (July 2026) replaced axios with the global `fetch` and accepts a custom `fetch` in its options, so you can route it through the overview's guarded client: `new ServerClient(token, { fetch: providerFetch })`. We have not verified v5 on Cloudflare Workers. The conservative edge path is the REST endpoint through [`resilientFetch` + `fetchGuard`](/docs/email#calling-a-rest-api-with-fetch), which never retries the `POST`:
+
+```ts title="src/email/postmark-workers.ts"
+import { env } from "cloudflare:workers";
+import type { EmailSender } from "../plugins/email.ts";
+import { providerFetch } from "./fetch.ts"; // allowHosts: ["api.postmarkapp.com"]
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await providerFetch("https://api.postmarkapp.com/email", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-postmark-server-token": env.POSTMARK_SERVER_TOKEN,
+      },
+      signal: msg.signal,
+      body: JSON.stringify({
+        From: env.EMAIL_FROM,
+        To: msg.to,
+        ReplyTo: msg.replyTo,
+        Subject: msg.subject,
+        TextBody: msg.text,
+        HtmlBody: msg.html,
+        MessageStream: "outbound",
+      }),
+    });
+    const out = (await res.json()) as { ErrorCode: number; MessageID?: string };
+    if (!res.ok || out.ErrorCode !== 0) throw new Error(`Postmark error ${out.ErrorCode}`);
+    return { id: out.MessageID ?? "" };
+  },
+};
+```
 
 See also [Resend](/docs/email/resend), [Mailgun](/docs/email/mailgun), and the [email integrations overview](/docs/email).

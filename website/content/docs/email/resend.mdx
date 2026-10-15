@@ -1,23 +1,24 @@
 ---
 title: Send email from DaloyJS with Resend
-description: Send transactional email from a DaloyJS API using Resend's official Node SDK. Includes API key setup, the resend.emails.send interface, React Email templates, and edge runtime support.
+description: Send email from DaloyJS with the Resend SDK. Idempotency keys, React Email in .tsx, a hardened magic-link route, signed webhooks, suppressions, and Workers.
 keywords:
   - DaloyJS Resend
   - Resend Node SDK
   - React Email DaloyJS
   - resend.emails.send
+  - resend.webhooks.verify
   - edge email DaloyJS
 ---
 
 # Send email from DaloyJS with Resend
 
-[Resend](https://resend.com) is an email API with first-class TypeScript types, edge-runtime support, and tight integration with [React Email](https://react.email) templates. It's an excellent default for new DaloyJS projects.
+[Resend](https://resend.com) is an email API with first-class TypeScript types, a fetch-based SDK, native idempotency keys, and tight integration with [React Email](https://react.email) templates. It's a good default for new DaloyJS projects. Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, `escapeHtml()`, and the `email.send` / `email.suppress` jobs used below.
 
 <SequenceDiagram title="Send through the resend SDK" participants={["Route handler", "Resend SDK", "Resend API", "Webhooks"]} steps={[
           {
             from: "Route handler",
             to: "Resend SDK",
-            label: "resend.emails.send({ from, to, subject })",
+            label: "resend.emails.send({ from, to, subject }, { idempotencyKey })",
             detail: "uses the standard fetch API (edge-friendly)",
             kind: "request",
           },
@@ -25,7 +26,7 @@ keywords:
             from: "Resend SDK",
             to: "Resend API",
             label: "HTTPS request",
-            detail: "Bearer RESEND_API_KEY",
+            detail: "Bearer RESEND_API_KEY, Idempotency-Key header",
             kind: "request",
           },
           {
@@ -38,124 +39,134 @@ keywords:
           {
             from: "Resend API",
             to: "Webhooks",
-            label: "delivered, bounced, complained events",
-            detail: "verify the signature before trusting payloads",
+            label: "email.bounced, email.complained events",
+            detail: "svix-signed; verify before trusting payloads",
             kind: "async",
           },
         ]} caption="resend.emails.send() runs on the standard fetch API, so it works on edge runtimes too. The SDK returns { data, error } rather than throwing, so handle the error branch and return data.id on success." />
 
 ## 1. Provision
 
-1. Sign up at [resend.com](https://resend.com) and add a sending **domain** under **Domains**. Add the SPF, DKIM, and DMARC DNS records Resend lists, then click *Verify*.
-2. Create an **API key** under **API Keys**. Use a “Sending access” key scoped to that domain.
+1. Sign up at [resend.com](https://resend.com) and add a sending **domain** (a subdomain such as `mail.acme.example.com` keeps transactional reputation separate). Add the DKIM, SPF, and return-path records Resend lists, publish DMARC, then click *Verify*.
+2. Create an **API key** under **API Keys** with *Sending access* scoped to that domain. Use a different key per environment.
 
 ## 2. Install
 
-```ts
-pnpm add resend
+```package-install
+resend
 ```
 
 ## 3. Environment variables
 
-```ts
-# .env
+```dotenv title=".env"
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxx
-RESEND_FROM="Acme <no-reply@acme.example.com>"
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
+EMAIL_FROM="Acme <no-reply@mail.acme.example.com>"
 ```
 
-## 4. Plugin
+Add `RESEND_API_KEY: z.string().startsWith("re_")` and `RESEND_WEBHOOK_SECRET: z.string().startsWith("whsec_")` to the overview's [`defineConfig()` schema](/docs/email#common-pattern).
 
-```ts
-// src/plugins/resend.ts
+## 4. Sender
+
+```ts title="src/email/resend.ts"
 import { Resend } from "resend";
-import type { App } from "@daloyjs/core";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+export const resend = new Resend(config.RESEND_API_KEY);
 
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function resendPlugin(app: App) {
-  app.decorate("email", {
-    async send({ to, subject, text, html }) {
-      const { data, error } = await resend.emails.send({
-        from: process.env.RESEND_FROM!,
-        to,
-        subject,
-        text,
-        html,
-      });
-      if (error) throw new Error(error.message);
-      return { id: data?.id ?? "" };
-    },
-  });
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    email: {
-      send(msg: {
-        to: string;
-        subject: string;
-        text?: string;
-        html?: string;
-      }): Promise<{ id: string }>;
-    };
-  }
-}
+export const sender: EmailSender = {
+  async send(msg) {
+    const body = msg.html !== undefined ? { html: msg.html, text: msg.text } : { text: msg.text ?? "" };
+    const { data, error } = await resend.emails.send(
+      {
+        from: config.EMAIL_FROM,
+        to: msg.to,
+        replyTo: msg.replyTo,
+        subject: msg.subject,
+        headers: msg.headers,
+        ...body,
+      },
+      // Resend dedupes on Idempotency-Key, so a retried job never sends twice.
+      { idempotencyKey: msg.idempotencyKey, signal: msg.signal },
+    );
+    if (error) throw new Error(`Resend send failed: ${error.name}`); // log detail, never echo it
+    return { id: data?.id ?? "" };
+  },
+};
 ```
 
-Resend SDK methods return `{ data, error }` rather than throwing, handle the `error` branch and surface it through the [DaloyJS error helpers](/docs/errors).
+Resend SDK methods return `{ data, error }` rather than throwing. Throw on the error branch with a short message, log the details, and return a generic problem+json to the client ([never leak provider errors](/docs/email#errors)). The overview's `email.send` job passes `job.id` as `idempotencyKey`, which is stable across retries.
+
+```ts title="src/app.ts"
+import { App, secureHeaders } from "@daloyjs/core";
+import { emailPlugin } from "./plugins/email.ts";
+import { emailJobs } from "./email/jobs.ts";
+import { sender } from "./email/resend.ts";
+
+export const app = new App();
+app.use(secureHeaders());
+emailPlugin(app, sender);
+emailJobs(app, sender);
+```
 
 ## 5. Use it in a route
 
-```ts
+A passwordless sign-in link has to go to the address the visitor typed, so the content is fixed server-side, the response is identical whether or not the account exists (no account enumeration), and a per-recipient limiter stops one inbox from being flooded:
+
+```ts title="src/routes/magic-link.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { resendPlugin } from "./plugins/resend.ts";
+import { App, every, rateLimit } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 10 }));
-resendPlugin(app);
-
-app.post(
-  "/magic-link",
-  {
-    operationId: "sendMagicLink",
-    request: {
-      body: z.object({ email: z.email() }),
+export function magicLinkRoutes(app: App) {
+  app.post(
+    "/auth/magic-link",
+    {
+      operationId: "sendMagicLink",
+      hooks: every(
+        rateLimit({ windowMs: 10 * 60_000, max: 10 }), // per client IP
+        rateLimit({
+          windowMs: 60 * 60_000,
+          max: 3, // per recipient, however many IPs ask
+          keyGenerator: (ctx) =>
+            `magic-to:${String((ctx as { body?: { email?: string } }).body?.email ?? "").toLowerCase()}`,
+        }),
+      ),
+      request: { body: z.object({ email: z.email() }).strict() },
+      responses: {
+        202: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+      },
     },
-    responses: {
-      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    async ({ body, state }) => {
+      const link = await issueMagicLink(body.email); // null when there is no account
+      if (link) {
+        await state.email.send({
+          to: body.email,
+          subject: "Your sign-in link",
+          text: `Sign in: ${link}`,
+          html: `<p><a href="${escapeHtml(link)}">Sign in to Acme</a></p><p>This link expires in 15 minutes.</p>`,
+        });
+      }
+      return { status: 202, body: { ok: true as const } }; // same answer either way
     },
-  },
-  async ({ body, state }) => {
-    const link = await issueMagicLink(body.email); // your own logic
-    const { id } = await state.email.send({
-      to: body.email,
-      subject: "Your sign-in link",
-      text: `Sign in: ${link}`,
-      html: `<p>Sign in: <a href="${link}">${link}</a></p>`,
-    });
-    return { status: 202, body: { id } };
-  },
-);
-
-async function issueMagicLink(_email: string) {
-  return "https://acme.example.com/auth/callback?token=...";
+  );
 }
+
+declare function issueMagicLink(email: string): Promise<string | null>; // your auth provider
 ```
+
+Who issues and verifies the token is an identity concern; see [auth](/docs/auth) before building your own.
 
 ## React Email templates
 
-Resend reads the `react` field and renders it to HTML for you, so you can ship type-safe email templates as React components:
+Resend reads the `react` field and renders it to HTML for you. React escapes text children by default, which takes care of [HTML injection](/docs/email#escape-html) for interpolated values. The SDK imports `@react-email/render` as an optional peer, and pnpm's strict layout does not expose the copy nested under `@react-email/components`, so install both:
 
-```ts
-pnpm add @react-email/components react react-dom
+```package-install
+@react-email/components @react-email/render react react-dom
 ```
 
-```ts
-// emails/welcome.tsx
+```tsx title="emails/welcome.tsx"
 import { Html, Button, Heading, Text } from "@react-email/components";
 
 export default function Welcome({ name }: { name: string }) {
@@ -167,24 +178,106 @@ export default function Welcome({ name }: { name: string }) {
     </Html>
   );
 }
+```
 
-// in the handler
+```tsx title="src/email/send-welcome.tsx"
 import Welcome from "../../emails/welcome.tsx";
+import { resend } from "./resend.ts";
+import { config } from "../config.ts";
 
-await resend.emails.send({
-  from: process.env.RESEND_FROM!,
-  to,
-  subject: "Welcome to Acme",
-  react: Welcome({ name: "Devlin" }),
-});
+export async function sendWelcome(user: { id: string; email: string; name: string }) {
+  const { error } = await resend.emails.send(
+    { from: config.EMAIL_FROM, to: user.email, subject: "Welcome to Acme", react: <Welcome name={user.name} /> },
+    { idempotencyKey: `welcome-${user.id}` },
+  );
+  if (error) throw new Error(`Resend send failed: ${error.name}`);
+}
 ```
 
 ## Batch sending
 
-Use `resend.batch.send([...])` to enqueue up to 100 messages in a single API call, handy for fan-out notifications without queueing infrastructure.
+Use `resend.batch.send([...])` to send up to 100 messages in one API call, handy for fan-out notifications. Each message is still built server-side; do not batch client-supplied recipients.
+
+## Webhooks: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Create a webhook for `email.bounced`, `email.complained`, and `email.suppressed` in the Resend dashboard and copy its signing secret. Resend signs with Svix headers (`svix-id`, `svix-timestamp`, `svix-signature`), and `resend.webhooks.verify()` checks the signature and the timestamp tolerance for you. It throws on failure and returns the parsed event on success:
+
+```ts title="src/routes/resend-webhook.ts"
+import { z } from "zod";
+import { App, UnauthorizedError, jobIdempotencyKey, readBodyLimited } from "@daloyjs/core";
+import { resend } from "../email/resend.ts";
+import { config } from "../config.ts";
+
+export function resendWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/resend",
+    {
+      operationId: "resendEvents",
+      responses: {
+        200: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+        401: { description: "Rejected" },
+      },
+    },
+    async ({ request }) => {
+      // No body schema: verify the exact bytes Resend signed.
+      const raw = new TextDecoder().decode(await readBodyLimited(request, 1_048_576));
+      const id = request.headers.get("svix-id") ?? "";
+      let event: ReturnType<typeof resend.webhooks.verify>;
+      try {
+        event = resend.webhooks.verify({
+          payload: raw,
+          headers: {
+            id,
+            timestamp: request.headers.get("svix-timestamp") ?? "",
+            signature: request.headers.get("svix-signature") ?? "",
+          },
+          webhookSecret: config.RESEND_WEBHOOK_SECRET,
+        });
+      } catch {
+        throw new UnauthorizedError("invalid signature");
+      }
+
+      if (event.type === "email.bounced" || event.type === "email.complained") {
+        // Resend reports hard bounces with bounce.type "Permanent"; check its event docs for subtypes.
+        const hard = event.type === "email.complained" || event.data.bounce.type === "Permanent";
+        for (const [i, email] of (hard ? event.data.to : []).entries()) {
+          await app.jobs!.enqueue({
+            name: "email.suppress",
+            payload: { email, reason: event.type },
+            // svix-id is stable across Resend's retries of the same event.
+            idempotencyKey: jobIdempotencyKey({ name: "email.suppress", key: `resend-${id}-${i}` }),
+          });
+        }
+      }
+      return { status: 200, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+Without the SDK (another runtime, or to avoid the dependency), the scheme is HMAC-SHA256 over the `svix-id` value, a dot, the `svix-timestamp` value, a dot, and the raw body, keyed with the base64-decoded part of the secret after `whsec_`. The `svix-signature` header holds a space-separated list of `v1,<base64>` entries; accept if any matches, and reject timestamps more than five minutes from now:
+
+```ts
+import { verifyWebhookSignature } from "@daloyjs/core";
+
+const secret = Uint8Array.from(atob(webhookSecret.slice("whsec_".length)), (c) => c.charCodeAt(0));
+const fresh = Math.abs(Date.now() / 1000 - Number(svixTimestamp)) <= 300;
+const candidates = svixSignature.split(" ").filter((s) => s.startsWith("v1,"));
+let valid = false;
+for (const candidate of candidates) {
+  if (await verifyWebhookSignature({ payload: `${svixId}.${svixTimestamp}.${raw}`, signature: candidate.slice(3), secret })) {
+    valid = true;
+  }
+}
+if (!fresh || !valid) throw new UnauthorizedError("invalid signature");
+```
+
+## Suppressions
+
+Resend adds an address to your team-wide suppression list automatically after a hard bounce or a spam complaint, and skips later sends to it (you get an `email.suppressed` event). Some mailbox providers, Gmail among them, do not send complaint feedback, so you will not see every complaint. Manage the list in the dashboard or with `resend.suppressions.add()`, `list()`, `get()`, and `remove()`; only remove an address after the cause is fixed, or it is suppressed again. Keep your own undeliverable flag through the `email.suppress` job too.
 
 ## Runtimes
 
-The `resend` SDK uses the standard `fetch` API, so it runs on Node 18+, Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare Workers without adapters. Pair it with the [edge adapters](/docs/adapters) shipped by DaloyJS.
+The `resend` SDK uses the standard `fetch` API, so it runs on Node, Bun, Deno, AWS Lambda, Vercel, and Cloudflare Workers without adapters. On Workers, read the key from `cloudflare:workers` `env` (or `process.env` with `nodejs_compat`; see [secrets](/docs/email#secrets)) and pair it with the [Workers adapter](/docs/adapters/cloudflare-workers).
 
 See also [Postmark](/docs/email/postmark), [SendGrid](/docs/email/sendgrid), and the [email integrations overview](/docs/email).

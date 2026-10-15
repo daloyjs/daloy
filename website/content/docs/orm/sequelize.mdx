@@ -1,6 +1,6 @@
 ---
 title: Use Sequelize with DaloyJS
-description: Connect DaloyJS to PostgreSQL, MySQL, MariaDB, MSSQL, or SQLite using Sequelize. Model-based queries, transactions, and a practical plugin setup for Node.js runtimes.
+description: Connect DaloyJS to PostgreSQL, MySQL, MariaDB, MSSQL, or SQLite with Sequelize v6. Model-based queries, transactions, and a plugin setup for Node.js.
 keywords:
   - Sequelize DaloyJS
   - Sequelize TypeScript
@@ -40,18 +40,22 @@ keywords:
 
 ## 1. Install
 
-```ts
+```bash
 pnpm add sequelize pg pg-hstore
 pnpm add -D @types/validator @types/node typescript
 ```
 
 Swap the driver package if you target MySQL, MariaDB, MSSQL, or SQLite instead of Postgres.
 
+This guide targets **Sequelize v6**, the current stable line (`sequelize@latest` is 6.37 as of October 2026). Sequelize v7 ships under a new package name, `@sequelize/core`, and is still in alpha, so its APIs may change before a stable release.
+
 ## 2. Define a model
 
-```ts
-// src/db/sequelize.ts
-import { Sequelize, DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize";
+The scaffolded `tsconfig.json` sets `verbatimModuleSyntax`, and Node's type stripping (what `daloy dev` runs) needs type-only imports marked as such, so import the attribute helpers with `import type`:
+
+```ts title="src/db/sequelize.ts"
+import { Sequelize, DataTypes, Model } from "sequelize";
+import type { CreationOptional, InferAttributes, InferCreationAttributes } from "sequelize";
 
 export const sequelize = new Sequelize(process.env.DATABASE_URL!, {
   dialect: "postgres",
@@ -128,7 +132,7 @@ declare module "@daloyjs/core" {
 ```ts
 // src/server.ts
 import { z } from "zod";
-import { App, HttpError } from "@daloyjs/core";
+import { App, NotFoundError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { sequelizePlugin } from "./db/plugin.ts";
 
@@ -153,9 +157,7 @@ app.get(
   },
   async ({ params, state }) => {
     const user = await state.db.User.findByPk(params.id);
-    if (!user) {
-      throw new HttpError(404, { title: "User not found" });
-    }
+    if (!user) throw new NotFoundError("User not found");
     return { status: 200, body: user.toJSON() };
   },
 );
@@ -166,12 +168,12 @@ serve(app, { port: 3000 });
 
 ## Transactions
 
-Use managed transactions so DaloyJS can map one handler invocation to one atomic unit of work.
+Use managed transactions so DaloyJS can map one handler invocation to one atomic unit of work. This example assumes `Order` and `Inventory` models defined like `User` above, exported on `db`, and a route that declares `201`.
 
 ```ts
 handler: async ({ body, state }) => {
   const created = await state.db.sequelize.transaction(async (transaction) => {
-    const order = await state.db.Order.create(body, { transaction });
+    const order = await state.db.Order.create({ sku: body.sku, qty: body.qty }, { transaction });
     await state.db.Inventory.decrement("stock", {
       by: body.qty,
       where: { sku: body.sku },
@@ -186,16 +188,18 @@ handler: async ({ body, state }) => {
 
 ## Migrations
 
-Sequelize supports migrations via the CLI, but many teams keep model definitions in TypeScript and run explicit migration files through `sequelize-cli` or Umzug. Keep that workflow outside your request path and initialize models before calling `app.ready()`.
+Sequelize supports migrations via the CLI, but many teams keep model definitions in TypeScript and run explicit migration files through `sequelize-cli` or Umzug. Run migrations as a deploy step, never at app boot (see [migrations](/docs/orm#migrations)), and never call `sequelize.sync()` in production.
 
-```ts
+```bash
 pnpm add -D sequelize-cli
 pnpm sequelize-cli migration:generate --name create-users
 pnpm sequelize-cli db:migrate
 ```
 
+`sequelize-cli` is CommonJS-first. In a scaffolded DaloyJS app (`"type": "module"`), keep `.sequelizerc` and the config file it points to in CommonJS, for example `config/config.cjs`, and check the CLI docs for your version before writing migrations as ES modules.
+
 ## Runtime constraints
 
-Sequelize depends on Node-oriented drivers, so it is best on the Node.js adapter. For edge runtimes, prefer [Drizzle](/docs/orm/drizzle), [Prisma with Driver Adapters](/docs/orm/prisma), or [Supabase](/docs/orm/supabase).
+Sequelize depends on Node-oriented drivers, so it is best on the Node.js adapter. `onClose()` runs on the Node.js, Bun, and Deno adapters only; on Lambda, Vercel, or Azure Functions keep the pool small (`pool: { max: 1 }`) and see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle). For edge runtimes, prefer [Drizzle](/docs/orm/drizzle), [Prisma with driver adapters](/docs/orm/prisma), or [Supabase](/docs/orm/supabase).
 
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), or the [ODM overview](/docs/odm) if you are working with document databases.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.

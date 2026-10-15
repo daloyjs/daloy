@@ -1,35 +1,68 @@
 ---
 title: Use AWS Aurora DSQL with DaloyJS
-description: Connect a DaloyJS API on AWS Lambda or Node.js to Aurora DSQL, AWS's distributed serverless PostgreSQL. Uses IAM-based auth tokens with the standard pg driver.
+description: Connect a DaloyJS API on AWS Lambda or Node.js to Aurora DSQL with a least-privilege IAM role, a pooled pg connection that refreshes tokens, and retries.
 keywords:
   - Aurora DSQL DaloyJS
   - AWS distributed Postgres
   - DSQL Lambda
   - IAM auth Postgres
+  - Aurora DSQL connector
   - Aurora DSQL Drizzle
 ---
 
 # Use AWS Aurora DSQL with DaloyJS
 
-[Aurora DSQL](https://docs.aws.amazon.com/aurora-dsql/) is AWS's serverless, distributed PostgreSQL service. It speaks the Postgres wire protocol, so you use the standard `pg` driver, but auth is short-lived IAM tokens instead of a static password. Pair it with the [Lambda adapter](/docs/adapters) for a fully managed AWS-native stack.
+[Aurora DSQL](https://docs.aws.amazon.com/aurora-dsql/) is AWS's serverless, distributed PostgreSQL-compatible service. It speaks the Postgres wire protocol, so you use the standard `pg` driver, but the password is a short-lived IAM auth token instead of a static secret. Pair it with the [Lambda adapter](/docs/adapters/aws-lambda) for an AWS-native stack.
 
 ## 1. Provision a cluster
 
-Create a cluster in the AWS console or via the CLI. Note the endpoint hostname and the AWS region.
+Create a cluster in the AWS console or via the CLI. Note the endpoint hostname (`<cluster-id>.dsql.<region>.on.aws`) and the cluster ARN.
 
-```ts
-aws dsql create-cluster --region us-east-1
+```bash
+aws dsql create-cluster --region eu-west-1
 ```
 
-## 2. Install
+## 2. Create a least-privilege database role
 
-```ts
-pnpm add pg @aws-sdk/dsql-signer
+DSQL has a built-in `admin` role. Use it to set up the schema and run migrations, not for application traffic. Connect once as `admin` (for example from CloudShell with `psql`) and create a login role for the app, mapped to the IAM role your Lambda function or server runs as:
+
+```sql
+CREATE ROLE app WITH LOGIN;
+AWS IAM GRANT app TO 'arn:aws:iam::123456789012:role/my-api-runtime';
+
+CREATE SCHEMA app;
+GRANT USAGE ON SCHEMA app TO app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO app;
 ```
 
-## 3. Generate a token and connect
+Create your tables in the `app` schema. `ON ALL TABLES` covers only tables that exist when it runs, so repeat the `GRANT` in the migration that adds a table. List the IAM mappings with `SELECT * FROM sys.iam_pg_role_mappings;` and remove one with `AWS IAM REVOKE`.
 
-DSQL tokens expire (default \~15 minutes), so build a connection helper that refreshes the password before opening a connection. For Lambda, create one client per invocation. For long-lived Node processes, refresh on a timer or on auth errors.
+Then give the runtime IAM role only `dsql:DbConnect` on this cluster. `dsql:DbConnectAdmin` (which signs `admin` tokens) belongs to the migration pipeline only.
+
+```json title="iam-policy.json"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "dsql:DbConnect",
+      "Resource": "arn:aws:dsql:eu-west-1:123456789012:cluster/<cluster-id>"
+    }
+  ]
+}
+```
+
+## 3. Install
+
+```package-install
+pg @aws-sdk/dsql-signer
+```
+
+```package-install dev
+@types/pg
+```
+
+## 4. How the token works
 
 <FlowDiagram title="IAM token auth flow" numbered steps={[
           {
@@ -39,128 +72,188 @@ DSQL tokens expire (default \~15 minutes), so build a connection helper that ref
           },
           {
             label: "Sign a token",
-            detail: "signer.getDbConnectAdminAuthToken()",
+            detail: "signer.getDbConnectAuthToken() · role app",
           },
           {
-            label: "Short-lived token",
-            detail: "expires in ~15 minutes",
+            label: "Open a connection",
+            detail: "token checked once, at connect",
           },
           {
-            label: "pg Client",
-            detail: "password: token · ssl rejectUnauthorized: true",
+            label: "Reuse it",
+            detail: "valid until the 60-minute connection limit",
           },
           {
-            label: "client.connect()",
-            detail: "Postgres wire protocol over TCP",
+            label: "Pool recycles",
+            detail: "maxLifetimeSeconds < 3600 · new token per connection",
             tone: "success",
           },
-        ]} caption="DSQL replaces a static password with a short-lived IAM token (~15 min). Sign a fresh token per Lambda invocation, or refresh it on a timer for long-lived Node processes." />
+        ]} caption="The token only authenticates a new connection. An open connection stays valid after the token expires, until DSQL closes it at 60 minutes, so recycle pooled connections before that." />
 
-```ts
-// src/db/dsql.ts
-import { Client } from "pg";
+Signing is a local operation; it does not call AWS. The token (15 minutes by default) is checked only when a connection opens, and an established connection stays valid after it expires. The limits that matter are server-side: DSQL closes every connection after **60 minutes** and aborts any transaction older than **5 minutes**. So you do not need a token per request; you need a fresh token for every **new** connection, and a pool that retires connections before the 60-minute mark.
+
+## 5. A module-scope pool
+
+```ts title="src/db/dsql.ts"
+import { Pool } from "pg";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";
 
-const signer = new DsqlSigner({
-  hostname: process.env.DSQL_ENDPOINT!,
-  region: process.env.AWS_REGION ?? "us-east-1",
+const hostname = process.env.DSQL_ENDPOINT;
+if (!hostname) throw new Error("DSQL_ENDPOINT is not set");
+
+// <cluster-id>.dsql.<region>.on.aws: derive the region instead of guessing.
+const region = /^[a-z0-9]+\.dsql\.([a-z0-9-]+)\.on\.aws$/.exec(hostname)?.[1];
+if (!region) throw new Error(`Cannot derive the AWS region from DSQL_ENDPOINT "${hostname}"`);
+
+const signer = new DsqlSigner({ hostname, region });
+
+export const pool = new Pool({
+  host: hostname,
+  port: 5432,
+  user: "app",
+  database: "postgres",
+  // Called for every new connection, so each one gets a fresh token.
+  password: () => signer.getDbConnectAuthToken(),
+  ssl: { rejectUnauthorized: true },
+  max: 5,
+  idleTimeoutMillis: 60_000,
+  // Retire connections well before DSQL's 60-minute connection limit.
+  maxLifetimeSeconds: 50 * 60,
 });
 
-export async function createDsqlClient() {
-  const token = await signer.getDbConnectAdminAuthToken();
-  const client = new Client({
-    host: process.env.DSQL_ENDPOINT!,
-    port: 5432,
-    user: "admin",
-    password: token,
-    database: "postgres",
-    ssl: { rejectUnauthorized: true },
-  });
-  await client.connect();
-  return client;
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Pool;
+  }
 }
 ```
 
-## 4. Plugin pattern (long-lived Node)
+Keep the `declare module` block in the module that creates the pool, not in a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
 
-```ts
-// src/db/plugin.ts
+### Or use the AWS connector
+
+AWS recommends its [Aurora DSQL Connector for node-postgres](https://github.com/awslabs/aurora-dsql-connectors/tree/main/node/node-postgres) (`@aws/aurora-dsql-node-postgres-connector`, pre-1.0 on npm). It wraps `pg` `Client` and `Pool`, generates a token per connection, reads the region from the hostname, and has a `transaction()` helper that retries optimistic-concurrency conflicts:
+
+```package-install
+@aws/aurora-dsql-node-postgres-connector @aws-sdk/credential-providers @aws-sdk/dsql-signer pg
+```
+
+```ts title="src/db/dsql.ts"
+import { AuroraDSQLPool } from "@aws/aurora-dsql-node-postgres-connector";
+
+export const pool = new AuroraDSQLPool({
+  host: process.env.DSQL_ENDPOINT!,
+  user: "app",
+  max: 5,
+  idleTimeoutMillis: 60_000,
+});
+```
+
+## 6. Wire it into the app
+
+On Node, Bun, or Deno, decorate the pool and drain it on shutdown:
+
+```ts title="src/db/plugin.ts"
 import type { App } from "@daloyjs/core";
-import { createDsqlClient } from "./dsql.ts";
+import { pool } from "./dsql.ts";
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
-export async function dsqlPlugin(app: App) {
-  const client = await createDsqlClient();
-  app.decorate("db", client);
+export function dsqlPlugin(app: App) {
+  app.decorate("db", pool);
+  // Runs on the Node, Bun, and Deno adapters after in-flight requests drain.
   app.onClose(async () => {
-    await client.end();
+    await pool.end();
   });
 }
 ```
 
-## 5. Lambda pattern (per-invocation)
+On the [Lambda adapter](/docs/adapters/aws-lambda), use the same module-scope pool: warm invocations reuse its connections, `password()` signs a new token whenever the pool opens one, and `maxLifetimeSeconds` keeps every connection under the 60-minute limit. Lambda has no shutdown hook, so `onClose()` never runs there; the small `max` and the idle timeout keep a frozen container from holding many connections.
 
-On the [Lambda adapter](/docs/adapters), create a client per request and close it when the response is done, so the IAM token doesn't expire between invocations of a warm container. Use hooks rather than `app.decorate()`: `decorate()` is for values fixed at startup, it throws if the same key is set twice, and it must run before the routes are registered. Register the hooks before your routes:
-
-```ts
+```ts title="src/handler.ts"
 import { App } from "@daloyjs/core";
 import { toLambdaHandler } from "@daloyjs/core/lambda";
-import { createDsqlClient } from "./db/dsql.ts";
+import { pool } from "./db/dsql.ts";
 
 const app = new App();
-
-app.use({
-  // A fresh client (and IAM token) for each request.
-  preBody: async (ctx) => {
-    ctx.state.db = await createDsqlClient();
-  },
-  // Runs last, on success and error paths alike.
-  onResponse: async (_res, ctx) => {
-    await ctx?.state.db?.end();
-  },
-});
+app.decorate("db", pool);
 
 // ...register routes that read state.db
 
 export const handler = toLambdaHandler(app);
 ```
 
-## 6. Augment app state
+<Callout type="note" title="Fallback: one client per request">If a pool does not fit your setup, open a `pg` `Client` in a `preBody` hook (`ctx.state.db = client`) and call `client.end()` in an `onResponse` hook, registered before the routes. It works, but every request pays a TCP, TLS, and auth handshake and counts against DSQL's 100-connections-per-second cluster rate.</Callout>
 
-Add the `declare module` block to the same module that creates the client, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+## 7. Retry optimistic concurrency conflicts
 
-```ts
-// src/db/dsql.ts (same module as createDsqlClient above)
-declare module "@daloyjs/core" {
-  interface AppState {
-    db: Client;
+DSQL uses optimistic concurrency control: transactions never wait on locks, and a conflicting transaction fails at `COMMIT` with SQLSTATE `40001` (the AWS connector also retries `OC000` and `OC001`). Keep transactions short and idempotent, and retry them:
+
+```ts title="src/db/retry.ts"
+import type { Pool, PoolClient } from "pg";
+
+const RETRYABLE = new Set(["40001", "OC000", "OC001"]);
+
+export async function withTransaction<T>(
+  pool: Pool,
+  work: (client: PoolClient) => Promise<T>,
+  maxRetries = 3,
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const result = await work(client);
+      await client.query("commit");
+      return result;
+    } catch (err) {
+      await client.query("rollback").catch(() => {});
+      const code = (err as { code?: string }).code;
+      if (!code || !RETRYABLE.has(code) || attempt >= maxRetries) throw err;
+      // Exponential backoff with jitter: 50 ms, 100 ms, 200 ms, ...
+      await new Promise((r) => setTimeout(r, 50 * 2 ** attempt * (0.5 + Math.random())));
+    } finally {
+      client.release();
+    }
   }
 }
 ```
 
+Let unexpected errors throw: DaloyJS redacts 5xx `detail` in production, so the driver error is not echoed to clients.
+
+## 8. Limits that affect ORM migrations
+
+DSQL is PostgreSQL-compatible, not identical. These rules (from the [AWS migration guide](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-postgresql-compatibility-migration-guide.html) and [quotas](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/CHAP_quotas.html)) break most migration tools' defaults:
+
+- A transaction can hold only **one DDL statement**, and DDL and DML need separate transactions. Run each migration statement on its own, and turn off any "wrap the whole migration in one transaction" behavior.
+- Use `CREATE INDEX ASYNC` instead of `CREATE INDEX`, and `DELETE FROM` instead of `TRUNCATE`.
+- No temporary tables, triggers, or procedural languages such as PL/pgSQL (SQL functions are supported).
+- A write transaction can modify at most **3,000 rows** and **10 MiB**, and lives at most **5 minutes**, so batch backfills.
+- The isolation level is fixed at Repeatable Read, there is one database (`postgres`) per cluster, and up to 10 schemas.
+- Prefer UUID primary keys over sequential ids to spread writes; see [sequences and identity columns](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/sequences-identity-columns.html) if you need them.
+
+Run migrations from CI with an `admin` token (`signer.getDbConnectAdminAuthToken()`, which needs `dsql:DbConnectAdmin`), then re-grant the `app` role on any new tables.
+
 ## With Drizzle ORM
 
-```ts
-pnpm add drizzle-orm
-// src/db/drizzle.ts
-import { drizzle } from "drizzle-orm/node-postgres";
-import { createDsqlClient } from "./dsql.ts";
+```package-install
+drizzle-orm
+```
 
-export async function createDb() {
-  const client = await createDsqlClient();
-  return drizzle({ client });
-}
+```ts title="src/db/drizzle.ts"
+import { drizzle } from "drizzle-orm/node-postgres";
+import { pool } from "./dsql.ts";
+
+export const db = drizzle({ client: pool });
 ```
 
 ## With Prisma
 
-Use the [pg Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/postgresql) and inject a Postgres connection that uses the IAM token. The same caveats as above apply: tokens expire, so refresh per Lambda invocation.
+Use the [pg driver adapter](https://www.prisma.io/docs/orm/overview/databases/postgresql) and pass it the token-refreshing pool: `new PrismaPg(pool)` from `@prisma/adapter-pg`, then `new PrismaClient({ adapter })` from your generated client. See [Prisma](/docs/orm/prisma). Check the limits above before running `prisma migrate` against DSQL.
 
 ## Things to remember
 
-- DSQL is **TCP**-only, so it does *not* work on Cloudflare Workers. Use [Neon](/docs/databases/neon) or [PlanetScale](/docs/databases/planetscale) there.
-- IAM tokens expire, refresh on every Lambda invocation, or wrap re-connection logic around long-lived Node processes.
-- DSQL has Postgres-compatible semantics but not 100% feature parity. Check the [known issues](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/known-issues.html) before relying on niche extensions.
+- Cloudflare Workers are not covered by this guide. Hyperdrive stores static credentials, and DSQL only accepts short-lived IAM tokens. On Workers, use [Neon](/docs/databases/neon), [PlanetScale](/docs/databases/planetscale), or another Postgres host through [Hyperdrive](/docs/databases/hyperdrive).
+- Tokens only gate new connections; the 60-minute connection limit and 5-minute transaction limit are what your pool and transactions must respect.
+- Check the [known issues](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/known-issues.html) before relying on niche extensions or features.
 
 See also the [database hosting overview](/docs/databases) or jump back to [Prisma](/docs/orm/prisma) / [Drizzle](/docs/orm/drizzle).

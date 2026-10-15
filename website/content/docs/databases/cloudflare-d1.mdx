@@ -1,46 +1,52 @@
 ---
 title: Use Cloudflare D1 with DaloyJS
-description: Run a DaloyJS API on Cloudflare Workers backed by D1, Cloudflare's built-in SQLite-compatible database. Uses Worker bindings instead of a network driver.
+description: Run a DaloyJS API on Cloudflare Workers backed by D1, Cloudflare's SQLite-compatible database, using a typed Worker binding, read replication, and Time Travel.
 keywords:
   - Cloudflare D1 DaloyJS
   - D1 Workers binding
   - Cloudflare SQLite
   - Wrangler D1
+  - D1 read replication
   - D1 Drizzle
 ---
 
 # Use Cloudflare D1 with DaloyJS
 
-[Cloudflare D1](https://developers.cloudflare.com/d1/) is a serverless SQLite-compatible database built into Cloudflare Workers. You access it through a Worker binding (no network driver, no auth token, no TCP), making it the lowest-friction database for the [Cloudflare adapter](/docs/adapters).
+[Cloudflare D1](https://developers.cloudflare.com/d1/) is a serverless SQLite-compatible database built into Cloudflare Workers. A Worker reaches it through a binding (no network driver, no auth token in your code, no connection to manage), making it the lowest-friction database for the [Cloudflare Workers adapter](/docs/adapters/cloudflare-workers). If you already have Postgres or MySQL, use [Hyperdrive](/docs/databases/hyperdrive) instead.
 
 ## 1. Provision via Wrangler
 
-```ts
+```bash
 pnpm add -D wrangler
-pnpm dlx wrangler d1 create my-app-db
+pnpm wrangler d1 create my-app-db
 ```
 
-Add the returned binding to your `wrangler.toml`:
+Add the returned binding to your `wrangler.jsonc`:
 
-```ts
-[[d1_databases]]
-binding = "DB"
-database_name = "my-app-db"
-database_id = "<id-from-create>"
+```jsonc title="wrangler.jsonc"
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "my-app-db", "database_id": "<id-from-create>" }
+  ]
+}
 ```
 
 ## 2. Type the binding
 
-Use a regular `.ts` module (not a `.d.ts`, which `skipLibCheck` would silently skip) so the import below resolves and the shape stays type-checked:
+Generate types from your Wrangler config instead of writing an `Env` interface by hand:
 
-```ts
-// src/types/env.ts
-export interface Env {
-  DB: D1Database;
-}
+```bash
+pnpm wrangler types
 ```
 
-## 3. Decorate the app per-request
+This writes `worker-configuration.d.ts` with your bindings, so `env.DB` from `cloudflare:workers` is typed as `D1Database` without a cast. Rerun it whenever you change `wrangler.jsonc`, and do not edit the generated file.
+
+## 3. Decorate the app with the binding
 
 D1 bindings live on `env`, not `process.env`. Import `env` from `cloudflare:workers` and decorate the app with the binding once, before you register routes. Do not decorate inside the Worker's `fetch` handler: `decorate()` throws on the second request, and a decoration added after the routes were registered never reaches them.
 
@@ -65,18 +71,23 @@ D1 bindings live on `env`, not `process.env`. Import `env` from `cloudflare:work
           },
         ]} caption="D1 bindings live on env, not process.env, so import env from cloudflare:workers and decorate the app with env.DB before registering routes." />
 
-```ts
+```ts title="src/index.ts"
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { App, secureHeaders } from "@daloyjs/core";
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
-import type { Env } from "./types/env.ts";
 
-const app = new App();
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: D1Database;
+  }
+}
+
+const app = new App({ production: true, behindProxy: { hops: 1 } });
 app.use(secureHeaders());
 // Decorate before the routes: a route captures its decorations when it is
 // registered, and decorate() throws if called again on a later request.
-app.decorate("db", (env as Env).DB);
+app.decorate("db", env.DB);
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
@@ -100,46 +111,82 @@ app.get(
 export default toFetchHandler(app);
 ```
 
-## 4. Augment app state
+Keep the `declare module` block in the Worker module itself, not in a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a mistake inside a `.d.ts` fails silently and `state.db` degrades to `any`. Bind request values with `.bind()` (`prepare("select * from todos where id = ?").bind(id)`), never by string concatenation.
 
-Add the `declare module` block to the Worker module itself, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a mistake inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+## Read replication and the Sessions API
 
-```ts
-// src/index.ts (same module as the Worker above)
+D1 can serve reads from replicas in other regions. Turn on read replication in the dashboard (database **Settings**) or the REST API, then run queries through a **session** so a client always reads data at least as new as its last write. A session starts from a constraint (`"first-unconstrained"`, the default, or `"first-primary"`) or from a **bookmark** returned by an earlier session. Cloudflare's example passes the bookmark back and forth in an `x-d1-bookmark` header. Check [Cloudflare's read replication docs](https://developers.cloudflare.com/d1/best-practices/read-replication/) for the current release status.
+
+A session is a per-request value, so set it in a hook instead of `decorate()`:
+
+```ts title="src/index.ts"
 declare module "@daloyjs/core" {
   interface AppState {
-    db: D1Database;
+    d1: D1DatabaseSession;
   }
 }
+
+app.use({
+  preBody: (ctx) => {
+    // The bookmark comes from the client: treat it as untrusted input.
+    const bookmark = ctx.request.headers.get("x-d1-bookmark");
+    const start = bookmark && bookmark.length <= 256 ? bookmark : "first-unconstrained";
+    ctx.state.d1 = env.DB.withSession(start);
+  },
+  onSend: (res, ctx) => {
+    const next = ctx?.state.d1?.getBookmark();
+    if (next) res.headers.set("x-d1-bookmark", next);
+  },
+});
+
+// ...register routes that query state.d1.prepare(...) instead of state.db
 ```
+
+Register the hook before the routes. Use `"first-primary"` for routes that must read the latest committed data. Browser clients on another origin need `x-d1-bookmark` in the `cors()` `exposedHeaders` and `allowedHeaders` options.
 
 ## Migrations
 
-```ts
-pnpm dlx wrangler d1 migrations create my-app-db init
-pnpm dlx wrangler d1 migrations apply my-app-db --local
-pnpm dlx wrangler d1 migrations apply my-app-db --remote
+```bash
+pnpm wrangler d1 migrations create my-app-db init
+pnpm wrangler d1 migrations apply my-app-db --local
+pnpm wrangler d1 migrations apply my-app-db --remote
 ```
+
+Run one-off SQL with `wrangler d1 execute`, against the local copy used by `wrangler dev` or the real database:
+
+```bash
+pnpm wrangler d1 execute my-app-db --local --command "select count(*) from todos"
+pnpm wrangler d1 execute my-app-db --remote --file ./seed.sql
+```
+
+## Backups: Time Travel and export
+
+- **Time Travel** restores a database to any minute in the retention window (30 days on Workers Paid, 7 days on Free): `pnpm wrangler d1 time-travel info my-app-db` and `pnpm wrangler d1 time-travel restore my-app-db --timestamp=<unix-or-rfc3339>`. A restore overwrites the database in place and cancels in-flight queries.
+- **Export** a SQL dump for longer retention or local copies: `pnpm wrangler d1 export my-app-db --remote --output=./backup.sql`. See [import and export](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
 
 ## With Drizzle ORM
 
-```ts
-pnpm add drizzle-orm
-// src/db/drizzle.ts
-import { drizzle } from "drizzle-orm/d1";
-import type { Env } from "../types/env.ts";
-
-export const createDb = (env: Env) => drizzle(env.DB);
+```package-install
+drizzle-orm
 ```
+
+```ts title="src/db/drizzle.ts"
+import { env } from "cloudflare:workers";
+import { drizzle } from "drizzle-orm/d1";
+
+export const db = drizzle(env.DB);
+```
+
+Decorate `db` before the routes, as above.
 
 ## With Prisma
 
-Prisma supports D1 via the [D1 Driver Adapter](https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1). Construct the adapter inside the Worker handler since it needs the runtime binding.
+Prisma supports D1 through the [D1 driver adapter](https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1) (`@prisma/adapter-d1`). With Prisma 7, generate the client with the `prisma-client` generator and an `output` path, construct `new PrismaD1(env.DB)` from the imported `env`, pass it as `adapter`, and decorate the client before the routes, like the binding above. Prisma Migrate does not apply migrations to D1 directly; generate SQL with `prisma migrate diff` and apply it with `wrangler d1 migrations`. See [Prisma](/docs/orm/prisma).
 
 ## Limitations to know
 
-- D1 only runs in Cloudflare Workers, no Node.js, Lambda, or Edge runtime support.
+- The binding exists only inside Workers. Outside Workers (Node, Lambda, CI scripts) D1 is reachable only through Cloudflare's REST API, which is meant for administration and tooling rather than serving application traffic. Node can also run your Worker locally through `wrangler dev`.
 - Local development uses `wrangler dev` with a local SQLite file. Behavior is close but not identical to production.
-- For multi-runtime portability, prefer [Turso](/docs/databases/turso) (libSQL) instead.
+- For multi-runtime portability, prefer [Turso](/docs/databases/turso) (libSQL), or Postgres through [Hyperdrive](/docs/databases/hyperdrive) on Workers and directly elsewhere.
 
-See also [Turso](/docs/databases/turso), [Neon](/docs/databases/neon), and the [database hosting overview](/docs/databases).
+See also [Turso](/docs/databases/turso), [Cloudflare Hyperdrive](/docs/databases/hyperdrive), [Neon](/docs/databases/neon), and the [database hosting overview](/docs/databases).

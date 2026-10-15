@@ -1,6 +1,6 @@
 ---
 title: Database hosting & serverless data providers
-description: "Pick the right managed database host or embedded analytical engine for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, DuckDB, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers."
+description: "Pick a managed database or embedded engine for DaloyJS: Neon, PlanetScale, Supabase, Turso, DuckDB, D1, Aurora DSQL and Hyperdrive, compared by runtime support."
 keywords:
   - DaloyJS database hosting
   - serverless Postgres
@@ -10,6 +10,7 @@ keywords:
   - Turso DaloyJS
   - DuckDB DaloyJS
   - Cloudflare D1 DaloyJS
+  - Cloudflare Hyperdrive DaloyJS
   - Aurora DSQL DaloyJS
 sitemap:
   priority: 0.8
@@ -17,68 +18,178 @@ sitemap:
 
 # Database hosting & serverless data providers
 
-DaloyJS doesn't ship a database. It runs on Node, Bun, Deno, Cloudflare Workers, AWS Lambda, Deno Deploy, and Fastly Compute, so the right database depends on which [adapter](/docs/adapters) you target.
+DaloyJS doesn't ship a database. It runs on [Node](/docs/adapters/node), [Bun](/docs/adapters/bun), [Deno](/docs/adapters/deno), [Cloudflare Workers](/docs/adapters/cloudflare-workers), [AWS Lambda](/docs/adapters/aws-lambda), [Vercel](/docs/adapters/vercel), [Netlify](/docs/adapters/netlify), [Azure Functions](/docs/adapters/azure-functions), and [Fastly Compute](/docs/adapters/fastly), so the right database depends on which adapter you target.
 
 The pages in this section cover **where your data lives**: managed hosts and their drivers, separately from **how you query it** (see [ORMs](/docs/orm) and [ODMs](/docs/odm)). Most providers here pair with Drizzle or Prisma rather than replacing them.
 
-## Why this matters on edge runtimes
+## How each runtime reaches the database
 
-Cloudflare Workers don't expose raw TCP sockets, so the classic `pg` or `mysql2` drivers will not connect directly. The providers below solve that by offering an **HTTP / WebSocket driver**, an **HTTP data API**, or a runtime-native binding. Pick a host whose driver matches the runtime you ship to.
+Long-lived servers (Node, Bun, Deno) and Node-based serverless functions (Lambda, Vercel, Netlify, Azure Functions) open ordinary TCP connections, so the standard `pg` and `mysql2` drivers work there.
+
+Cloudflare Workers can open outbound TCP too, through the `connect()` API from `cloudflare:sockets`, and `pg` (8.13.0 or later) and `mysql2` (3.13.0 or later) run on Workers with the `nodejs_compat` flag. A Worker cannot keep a connection open between requests, though, so every request would pay a fresh TCP, TLS and auth handshake to a database that may be far away. Cloudflare recommends putting [Hyperdrive](/docs/databases/hyperdrive) in front of Postgres or MySQL: it keeps a warm connection pool near the database and can cache reads. The other two options on Workers are an **HTTP / WebSocket driver** (Neon, PlanetScale MySQL, Turso, Supabase) and a **Workers binding** (D1).
 
 <LayerStack title="What sits between your handler and the data" flow="down" layers={[
           {
             title: "DaloyJS app on a runtime",
             detail: "Same route code on any adapter",
-            items: ["Node", "Workers", "Lambda"],
+            items: ["Node", "Bun / Deno", "Workers", "Lambda", "Vercel"],
             tone: "accent",
           },
           {
             title: "Driver style",
             detail: "How the runtime reaches the database",
             items: [
+              "TCP (pg, mysql2)",
+              "TCP via Hyperdrive",
               "HTTP / WebSocket",
-              "fetch data API",
               "Workers binding",
-              "TCP (pg)",
+              "Embedded",
             ],
           },
           {
-            title: "Managed database host",
+            title: "Database host or engine",
             detail: "Where your data actually lives",
-            items: ["Neon", "PlanetScale", "Turso", "DuckDB", "D1"],
+            items: ["Neon", "PlanetScale", "Supabase", "Turso", "DuckDB", "D1", "Aurora DSQL"],
             tone: "muted",
           },
-        ]} caption="On edge runtimes only HTTP, fetch, or native bindings work. Raw TCP does not. The driver style is the layer that decides whether a host can run on Workers." />
+        ]} caption="The driver style decides where a host can run. On Workers, use TCP through Hyperdrive, an HTTP driver, or a binding; elsewhere, plain TCP drivers work." />
 
 ## Supported providers
 
-- [Neon](/docs/databases/neon): serverless Postgres with branching, scale-to-zero, and an HTTP/WebSocket driver (`@neondatabase/serverless`).
-- [PlanetScale](/docs/databases/planetscale): managed MySQL with Vitess, branching, deploy requests, and an HTTP driver (`@planetscale/database`).
+- [Neon](/docs/databases/neon): serverless Postgres with branching, scale-to-zero, and an HTTP/WebSocket driver (`@neondatabase/serverless`). Also reachable with `pg` over TCP or through Hyperdrive.
+- [PlanetScale](/docs/databases/planetscale): managed MySQL on Vitess with an HTTP driver (`@planetscale/database`), plus PlanetScale Postgres, which you reach with standard Postgres drivers.
 - [Supabase](/docs/orm/supabase): hosted Postgres plus auth, storage, and realtime via the fetch-based `@supabase/supabase-js`.
-- [Turso](/docs/databases/turso): distributed libSQL (SQLite fork) via `@libsql/client`. Works over HTTP for edge runtimes.
+- [Turso](/docs/databases/turso): libSQL (SQLite fork) via `@libsql/client`, over HTTP on edge runtimes.
 - [DuckDB](/docs/databases/duckdb): embedded OLAP SQL engine for analytics, local files, Parquet, and ad hoc reporting inside Node.js services.
-- [Cloudflare D1](/docs/databases/cloudflare-d1): SQLite-compatible database bundled with Workers, accessed through a runtime binding (no network driver).
-- [AWS Aurora DSQL](/docs/databases/aurora-dsql): distributed PostgreSQL on AWS, ideal for the [Lambda adapter](/docs/adapters).
+- [Cloudflare D1](/docs/databases/cloudflare-d1): SQLite-compatible database built into Workers, accessed through a runtime binding.
+- [AWS Aurora DSQL](/docs/databases/aurora-dsql): distributed PostgreSQL on AWS with IAM token auth, a natural fit for the [Lambda adapter](/docs/adapters/aws-lambda).
+- [Cloudflare Hyperdrive](/docs/databases/hyperdrive): not a database but a pooling and caching layer that lets a Worker use `pg` or `mysql2` against any of the Postgres or MySQL hosts above (and RDS, Aurora, or your own server).
 
 ## Runtime compatibility
 
-| Provider | Driver style | Node.js | Bun / Deno | Cloudflare Workers | AWS Lambda |
-| --- | --- | --- | --- | --- | --- |
-| Neon | HTTP & WebSocket | Yes | Yes | Yes | Yes |
-| PlanetScale | HTTP | Yes | Yes | Yes | Yes |
-| Supabase | fetch-based | Yes | Yes | Yes | Yes |
-| Turso (libSQL) | HTTP & WebSocket | Yes | Yes | Yes | Yes |
-| DuckDB | embedded native library | Yes | Limited | No | Yes |
-| Cloudflare D1 | Workers binding | No (local dev only) | No | Yes | No |
-| Aurora DSQL | TCP (pg) | Yes | Yes | No | Yes |
+"Yes" means the provider's documented driver runs there. Vercel, Netlify, and Azure Functions run Node.js by default, so Node-compatible drivers are expected to work, but the combinations marked "Not verified" have not been tested for this guide. Fastly Compute is a WebAssembly runtime with no TCP and outbound `fetch` only to configured backends.
+
+| Provider | Driver style | Node.js | Bun / Deno | Cloudflare Workers | AWS Lambda | Vercel | Netlify | Azure Functions | Fastly Compute |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Neon | HTTP / WebSocket, or TCP (`pg`) | Yes | Yes | Yes (HTTP, or TCP via Hyperdrive) | Yes | Not verified | Not verified | Not verified | Not verified |
+| PlanetScale MySQL | HTTP (`@planetscale/database`) | Yes | Yes | Yes (HTTP, or TCP via Hyperdrive) | Yes | Not verified | Not verified | Not verified | Not verified |
+| PlanetScale Postgres | TCP (`pg`) | Yes | Yes | Yes (TCP via Hyperdrive) | Yes | Not verified | Not verified | Not verified | No |
+| Supabase | fetch-based | Yes | Yes | Yes (HTTP) | Yes | Not verified | Not verified | Not verified | Not verified |
+| Turso (libSQL) | HTTP / WebSocket | Yes | Yes | Yes (HTTP) | Yes | Not verified | Not verified | Not verified | Not verified |
+| DuckDB | embedded native library | Yes | Limited | No | Yes | Not verified | Not verified | Not verified | No |
+| Cloudflare D1 | Workers binding | REST API, or local dev via Wrangler | REST API only | Yes (binding) | REST API only | REST API only | REST API only | REST API only | REST API only |
+| Aurora DSQL | TCP (`pg`) + IAM token | Yes | Not verified | Not covered by this guide | Yes | Not verified | Not verified | Not verified | No |
+| Any Postgres / MySQL | TCP (`pg`, `mysql2`) | Yes | Yes | Yes (TCP via Hyperdrive) | Yes | Not verified | Not verified | Not verified | No |
+
+The D1 REST API is meant for administration and tooling, not for serving application traffic from outside Workers.
 
 ## Choosing one
 
-- You target Cloudflare Workers exclusively: D1 (built-in) or Neon / PlanetScale / Turso over HTTP.
+- You target Cloudflare Workers exclusively: D1 (built-in), any Postgres or MySQL through [Hyperdrive](/docs/databases/hyperdrive), or Neon / PlanetScale / Turso over HTTP.
 - You want MySQL with database branching: PlanetScale.
 - You want auth + storage + realtime in one package: Supabase.
 - You're all-in on AWS with the Lambda adapter: Aurora DSQL or RDS Postgres via standard `pg`.
 - You need SQLite-style data close to users: Turso or D1.
 - You need embedded analytics over files or local data: DuckDB on Node.js or Lambda.
 
-Once you've picked a host, layer your query API on top: [Drizzle ORM](/docs/orm/drizzle) works with every provider above, and [Prisma](/docs/orm/prisma) works with most of them through Driver Adapters or standard Postgres/MySQL connectors.
+## Connection lifecycle
+
+How you open and close connections depends on whether the process outlives the request.
+
+<BranchDiagram title="Who owns the connection" source={{
+          eyebrow: "your adapter",
+          label: "Process lifetime",
+          detail: "does it outlive one request?",
+        }} branches={[
+          {
+            eyebrow: "node / bun / deno",
+            label: "Long-lived server",
+            detail: "one pool per process · app.onClose() drains it",
+            tone: "success",
+          },
+          {
+            eyebrow: "lambda / vercel / netlify / azure",
+            label: "Serverless function",
+            detail: "module-scope pool · small max · idle timeout · no shutdown hook",
+          },
+          {
+            eyebrow: "workers",
+            label: "Per-request isolate",
+            detail: "client per request, or Hyperdrive · HTTP drivers · bindings",
+            tone: "accent",
+          },
+        ]} caption="Long-lived servers own a pool and close it on shutdown. Serverless functions reuse a module-scope pool without a shutdown hook. Workers open per request or go through Hyperdrive." />
+
+- **Long-lived servers.** Create one pool per process at startup, `app.decorate()` it, and close it with `app.onClose()`. `onClose()` and `onShutdown()` run only on the Node, Bun, and Deno adapters, after in-flight requests drain. See [Lifecycle & health](/docs/security/lifecycle-health).
+- **Serverless functions (Lambda, Vercel, Netlify, Azure Functions).** There is no shutdown hook to rely on: a warm container is frozen and later discarded without notice. Create the pool at module scope so warm invocations reuse it, keep `max` small (each concurrent instance holds its own connections), set an idle timeout so frozen connections are dropped, and set a maximum connection lifetime below any server-side limit (Aurora DSQL closes connections after 60 minutes). Prefer the provider's pooled endpoint (Neon `-pooler`, PlanetScale PgBouncer on port 6432, RDS Proxy) when there is one.
+- **Cloudflare Workers.** A socket cannot be shared across requests. Use an HTTP driver or a D1 binding, create and close a TCP client inside the request, or let [Hyperdrive](/docs/databases/hyperdrive) hold the pool for you.
+
+## Readiness checks for the database
+
+`app.readinesscheck()` reports `503` while the app is draining or a plugin is still registering. It does **not** query your database. If your orchestrator should stop routing to an instance that cannot reach the database, add a separate, token-protected route that runs a cheap query with a timeout:
+
+```ts title="src/ready-db.ts"
+import { z } from "zod";
+import { bearerAuth, timingSafeEqual, type App } from "@daloyjs/core";
+import { pool } from "./db/pool.ts";
+
+const READY_TOKEN = process.env.READY_TOKEN!;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("db readiness timeout")), ms);
+    work.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+export function dbReadiness(app: App) {
+  app.get(
+    "/readyz/db",
+    {
+      operationId: "dbReadiness",
+      hooks: bearerAuth({ validate: (token) => timingSafeEqual(token, READY_TOKEN) }),
+      responses: {
+        200: { description: "Database reachable", body: z.object({ status: z.literal("ok") }) },
+        503: { description: "Database unreachable", body: z.object({ status: z.literal("unavailable") }) },
+      },
+    },
+    async () => {
+      try {
+        await withTimeout(pool.query("select 1"), 2_000);
+        return { status: 200, body: { status: "ok" as const } };
+      } catch (err) {
+        // Log the driver error server-side; never return it to the caller.
+        app.log.warn({ event: "readyz.db.failed", err }, "database readiness check failed");
+        return { status: 503, body: { status: "unavailable" as const } };
+      }
+    },
+  );
+}
+```
+
+Keep the probe cheap and rate limited (put `rateLimit()` in front of it if the app does not already have one), and point only the readiness probe at it, not the liveness probe: a database outage should take an instance out of rotation, not restart every replica at once.
+
+## Credentials
+
+Keep connection strings and tokens out of the repository and out of logs. On Workers, store them with `pnpm wrangler secret put DATABASE_URL` (or use a Hyperdrive binding, which keeps the credentials in the Hyperdrive config). On AWS, read them from Secrets Manager or SSM Parameter Store at cold start, or skip passwords entirely with IAM auth (Aurora DSQL, RDS IAM). Never echo driver errors to clients: they can contain hostnames, usernames, and SQL. DaloyJS redacts 5xx `detail` in production, so let unexpected errors throw and log them server-side.
+
+## Region placement
+
+Latency between the function and the database usually dominates. Put serverless functions in the same region as the primary database (Vercel and Lambda let you pick it), use read replicas for far-away readers, and on Workers combine Hyperdrive with [Smart Placement](/docs/adapters/cloudflare-workers#wrangler-jsonc) so the Worker runs near the database instead of near the user when it makes several queries per request.
+
+## Local development
+
+Run Postgres or MySQL in Docker for TCP drivers, use a Neon or PlanetScale development branch, `turso dev` or a local SQLite file for libSQL, and `wrangler dev` for D1 (local SQLite) and Hyperdrive (`localConnectionString`). Keep the same driver and schema in development as in production so dialect differences surface early.
+
+## Backups and branching
+
+Every managed host here has point-in-time restore or snapshots (D1 calls it Time Travel), and Neon and PlanetScale also offer database branches, which pair well with preview deployments. Check the retention window on your plan before you depend on it, and test a restore at least once.
+
+## Migrations
+
+Run migrations from CI or a one-off task with a privileged role, not from the request path, and let the app connect with a role that can only read and write data. Use the tooling of your query layer: [Drizzle Kit](/docs/orm/drizzle), [Prisma Migrate](/docs/orm/prisma), `wrangler d1 migrations` for D1, and PlanetScale deploy requests for PlanetScale MySQL.
+
+Once you've picked a host, layer your query API on top: [Drizzle ORM](/docs/orm/drizzle) works with every provider above except DuckDB, and [Prisma](/docs/orm/prisma) works with most of them through driver adapters.

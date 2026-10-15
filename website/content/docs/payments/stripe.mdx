@@ -1,152 +1,139 @@
 ---
 title: Accept payments with Stripe in DaloyJS
-description: Integrate Stripe Checkout from a DaloyJS API using the official stripe Node SDK and @stripe/stripe-js. Covers Stripe CLI setup, Checkout Sessions, webhook signature verification with the raw body, idempotency keys, refunds, and runtime caveats.
+description: "Stripe Checkout from a DaloyJS API with stripe-node 23: server-side Price IDs, session.url redirects, async webhook verification, dedupe via jobs, and refunds."
 keywords:
   - DaloyJS Stripe
   - stripe node sdk
   - Stripe Checkout Sessions
-  - Stripe webhook constructEvent
+  - Stripe webhook constructEventAsync
   - "@stripe/stripe-js"
   - Stripe idempotency key
 ---
 
 # Accept payments with Stripe in DaloyJS
 
-[Stripe](https://stripe.com/) is one of the most common starting points for SaaS, subscriptions, marketplaces, and card payments. This guide uses the official [`stripe`](https://github.com/stripe/stripe-node) Node SDK on the server, [`@stripe/stripe-js`](https://www.npmjs.com/package/@stripe/stripe-js) in the browser, and Stripe-hosted Checkout Sessions so card details never touch your DaloyJS app.
+[Stripe](https://stripe.com/) is one of the most common starting points for SaaS, subscriptions, marketplaces, and card payments. This guide uses the official [`stripe`](https://github.com/stripe/stripe-node) Node SDK (v23.x) on the server, Stripe-hosted Checkout Sessions so card details never touch your DaloyJS app, and a plain browser redirect to the session URL.
 
 ## What you should know up front
 
-- Start with Checkout Sessions. [Stripe Checkout](https://docs.stripe.com/checkout/quickstart) is the fastest secure path: your server creates a session, the browser redirects to Stripe, and Stripe handles the hosted payment page, payment method collection, SCA, wallets, localization, and receipts.
-- Use Stripe.js on the client, not raw card forms. `@stripe/stripe-js` is a small loader for Stripe's hosted `https://js.stripe.com` script. Stripe says this is required for PCI compliance. Do not bundle or self-host Stripe.js.
-- Webhook verification needs the raw body. `stripe.webhooks.constructEvent()` requires the exact raw request body, the `Stripe-Signature` header, and the endpoint secret. JSON parsing before verification will break the signature check.
-- Send idempotency keys on mutating retries. Stripe accepts idempotency keys on every `POST`. Generate a UUID per logical attempt and reuse it when retrying the same create or update call.
-- Stripe is separate from PayPal. Keep this guide next to [Braintree](/docs/payments/braintree), not under it. Braintree is PayPal's gateway. Stripe is a separate provider.
+- Start with Checkout Sessions. [Stripe Checkout](https://docs.stripe.com/checkout/quickstart) is the fastest secure path: your server creates a session, the browser goes to Stripe, and Stripe handles the hosted payment page, payment method collection, SCA, wallets, localization, and receipts.
+- Prices live on the server. Create Products and Prices in Stripe and pass Price IDs (`price_...`). The browser sends only an order id. See [never trust client amounts](/docs/payments#never-trust-client-amounts).
+- `redirectToCheckout` is gone. Stripe [removed `stripe.redirectToCheckout`](https://docs.stripe.com/changelog/clover/2025-09-30/remove-redirect-to-checkout) from Stripe.js in the 2025-09-30 (Clover) release. Redirect with `window.location.assign(session.url)` instead.
+- Webhook verification needs the raw body. `constructEventAsync()` checks the `Stripe-Signature` header (`t=` timestamp, `v1=` HMAC-SHA256 hex over `t` + `.` + raw body) against your endpoint secret, with a default 5 minute tolerance. Parsing before verification breaks the check.
+- Derive idempotency keys from your order. Stripe accepts idempotency keys on every `POST`. A key built from the order id and cart version (not a fresh UUID per call) makes a retried request a no-op.
+- Stripe is separate from PayPal. Braintree is PayPal's gateway; see the [Braintree guide](/docs/payments/braintree) for PayPal wallets.
 
 ## 1. Provision
 
 1. Create a Stripe account or sandbox from the [Stripe Dashboard](https://dashboard.stripe.com/register).
-2. Install and authenticate the [Stripe CLI](https://docs.stripe.com/get-started/development-environment?lang=node) so you can create test products, forward webhooks, and run local integration checks.
-3. Copy your test **Secret key** and **Publishable key** from Developers - API keys. Keep the secret key server-side only.
-4. Add a webhook endpoint for your app and copy its **Signing secret**, which starts with `whsec_`. For local development, `stripe listen` prints a different secret than the Dashboard endpoint.
+2. Install and authenticate the [Stripe CLI](https://docs.stripe.com/get-started/development-environment?lang=node) so you can create test products, forward webhooks, and trigger events.
+3. Create a Product and Price for each SKU and store the Price ID next to the SKU in your catalogue.
+4. Copy your test **Secret key** from Developers - API keys. Keep it server-side only.
+5. Add a webhook endpoint for your app and copy its **Signing secret** (`whsec_...`). For local development, `stripe listen` prints a different secret than the Dashboard endpoint.
 
 ## 2. Install
 
-```ts
-pnpm add stripe @stripe/stripe-js
+```package-install
+stripe
 ```
 
-`stripe` belongs in your server application. `@stripe/stripe-js` belongs in browser code that redirects to Checkout or renders Elements. Neither package is a runtime dependency of`@daloyjs/core`.
+`stripe` belongs in your server application. The redirect flow below needs no browser package; add `@stripe/stripe-js` only if you render embedded Checkout or Elements. Neither package is a runtime dependency of `@daloyjs/core`.
 
 ## 3. Environment variables
 
-```ts
-# .env
+```bash title=".env"
 STRIPE_SECRET_KEY=sk_test_replace_me
-STRIPE_PUBLISHABLE_KEY=pk_test_replace_me
 STRIPE_WEBHOOK_SECRET=whsec_replace_me
 STRIPE_SUCCESS_URL=https://your-app.example.com/checkout/success?session_id={CHECKOUT_SESSION_ID}
 STRIPE_CANCEL_URL=https://your-app.example.com/cart
-STRIPE_CURRENCY=usd
 ```
 
-Only `STRIPE_PUBLISHABLE_KEY` is safe to expose to the browser. Treat `sk_` keys and `whsec_` webhook secrets as production credentials.
+Treat `sk_` keys and `whsec_` webhook secrets as production credentials. Only the publishable `pk_` key may reach the browser, and only if you use Stripe.js.
 
 ## 4. Plugin
 
-```ts
-// src/plugins/stripe.ts
-import { randomUUID } from "node:crypto";
+```ts title="src/plugins/stripe.ts"
 import Stripe from "stripe";
 import type { App } from "@daloyjs/core";
 
-let client: Stripe | null = null;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  // Pin the API version your code was written against; upgrade deliberately.
+  apiVersion: "2026-09-30.endive",
+  maxNetworkRetries: 2,
+  timeout: 20_000,
+  // Cloudflare Workers / other fetch-only runtimes:
+  // httpClient: Stripe.createFetchHttpClient(),
+});
 
-function getStripe() {
-  client ??= new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    maxNetworkRetries: 2,
-    timeout: 20_000,
-  });
-  return client;
-}
+// WebCrypto-based verifier: works on Node 24+, Deno, Bun, and Workers.
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 export interface StripeClient {
   raw: Stripe;
   createCheckoutSession(input: {
     lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
-    successUrl?: string;
-    cancelUrl?: string;
+    orderId: string;
     customerEmail?: string;
-    clientReferenceId?: string;
-    metadata?: Record<string, string>;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ id: string; url: string }>;
   retrieveCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session>;
   refund(input: {
     paymentIntent: string;
     amount?: number;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ id: string; status: string | null }>;
-  constructWebhookEvent(rawBody: Buffer | string, signature: string | null): Stripe.Event;
+  constructWebhookEvent(rawBody: Uint8Array, signature: string | null): Promise<Stripe.Event>;
 }
+
+// Exported so job handlers (which run outside a request) can use it too.
+export const stripeClient: StripeClient = {
+  raw: stripe,
+
+  async createCheckoutSession({ lineItems, orderId, customerEmail, idempotencyKey }) {
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        line_items: lineItems,
+        success_url: process.env.STRIPE_SUCCESS_URL!,
+        cancel_url: process.env.STRIPE_CANCEL_URL!,
+        customer_email: customerEmail,
+        client_reference_id: orderId,
+        metadata: { orderId },
+      },
+      { idempotencyKey },
+    );
+    if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL");
+    return { id: session.id, url: session.url };
+  },
+
+  retrieveCheckoutSession(sessionId) {
+    return stripe.checkout.sessions.retrieve(sessionId);
+  },
+
+  async refund({ paymentIntent, amount, idempotencyKey }) {
+    const refund = await stripe.refunds.create(
+      { payment_intent: paymentIntent, amount },
+      { idempotencyKey },
+    );
+    return { id: refund.id, status: refund.status };
+  },
+
+  async constructWebhookEvent(rawBody, signature) {
+    if (!signature) throw new Error("Missing Stripe-Signature header");
+    return stripe.webhooks.constructEventAsync(
+      Buffer.from(rawBody), // on Workers, pass new TextDecoder().decode(rawBody)
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!,
+      undefined, // default 300 s tolerance; never pass 0
+      cryptoProvider,
+    );
+  },
+};
 
 // Call with the root app, not through app.register(): a decoration made
 // inside a registered plugin is visible only to that plugin's own routes.
 export function stripePlugin(app: App) {
-  const stripe = getStripe();
-  const wrapped: StripeClient = {
-    raw: stripe,
-
-    async createCheckoutSession({
-      lineItems,
-      successUrl = process.env.STRIPE_SUCCESS_URL!,
-      cancelUrl = process.env.STRIPE_CANCEL_URL!,
-      customerEmail,
-      clientReferenceId,
-      metadata,
-      idempotencyKey = randomUUID(),
-    }) {
-      const session = await stripe.checkout.sessions.create(
-        {
-          mode: "payment",
-          line_items: lineItems,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-          customer_email: customerEmail,
-          client_reference_id: clientReferenceId,
-          metadata,
-        },
-        { idempotencyKey },
-      );
-
-      if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL");
-      return { id: session.id, url: session.url };
-    },
-
-    retrieveCheckoutSession(sessionId) {
-      return stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "line_items"],
-      });
-    },
-
-    async refund({ paymentIntent, amount, idempotencyKey = randomUUID() }) {
-      const refund = await stripe.refunds.create(
-        { payment_intent: paymentIntent, amount },
-        { idempotencyKey },
-      );
-      return { id: refund.id, status: refund.status };
-    },
-
-    constructWebhookEvent(rawBody, signature) {
-      if (!signature) throw new Error("Missing Stripe-Signature header");
-      return stripe.webhooks.constructEvent(
-        rawBody,
-        signature,
-        process.env.STRIPE_WEBHOOK_SECRET!,
-      );
-    },
-  };
-
-  app.decorate("stripe", wrapped);
+  app.decorate("stripe", stripeClient);
 }
 
 declare module "@daloyjs/core" {
@@ -163,14 +150,14 @@ declare module "@daloyjs/core" {
             from: "Browser",
             to: "DaloyJS route",
             label: "POST /checkout/stripe",
-            detail: "cart id, line items, customer email",
+            detail: "{ orderId } only",
             kind: "request",
           },
           {
             from: "DaloyJS route",
             to: "Stripe",
             label: "checkout.sessions.create",
-            detail: "success_url, cancel_url, idempotencyKey",
+            detail: "Price IDs from your catalogue + idempotencyKey",
             kind: "request",
           },
           {
@@ -183,101 +170,81 @@ declare module "@daloyjs/core" {
           {
             from: "DaloyJS route",
             to: "Browser",
-            label: "200 { sessionId, url }",
-            detail: "browser redirects to Stripe-hosted page",
+            label: "200 { url }",
+            detail: "window.location.assign(url)",
             kind: "response",
           },
-        ]} caption="Your server owns prices, currencies, redirect URLs, metadata, and idempotency. The browser only asks to start checkout and then redirects to Stripe." />
+        ]} caption="Your server owns prices, currencies, redirect URLs, metadata, and idempotency. The browser only names the order it wants to pay and then follows the hosted URL." />
 
-```ts
+This uses the [shared app wiring](/docs/payments#app-wiring) (session, `csrf()` and `rateLimit()` scoped away from `/webhooks/**`) and the `orders` module from the overview.
+
+```ts title="src/routes/checkout-stripe.ts"
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { stripePlugin } from "./plugins/stripe.ts";
+import { idempotency } from "@daloyjs/core";
+import { stripePlugin } from "../plugins/stripe.ts";
+import { orders } from "../orders.ts";
 
-const app = new App();
-app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 stripePlugin(app);
 
 app.post(
   "/checkout/stripe",
   {
     operationId: "createStripeCheckoutSession",
+    // Safe client retries of this POST (scoped per signed-in user).
+    hooks: idempotency({ scope: (ctx) => ctx.state.session.get<string>("userId") }),
     request: {
-      body: z.object({
-        cartId: z.string().min(1).max(80),
-        customerEmail: z.email().optional(),
-        items: z.array(
-          z.object({
-            name: z.string().min(1).max(120),
-            quantity: z.number().int().positive().max(99),
-            unitAmount: z.number().int().positive(), // cents for USD
-          }),
-        ).min(1).max(50),
-      }),
+      body: z.object({ orderId: z.string().min(1).max(80) }).strict(),
     },
     responses: {
-      200: {
-        description: "checkout session",
-        body: z.object({ sessionId: z.string(), url: z.url() }),
-      },
+      200: { description: "checkout session", body: z.object({ url: z.url() }) },
     },
   },
   async ({ body, state }) => {
+    const order = await orders.forCheckout(body.orderId, state.session.get<string>("userId"));
+
     const session = await state.stripe.createCheckoutSession({
-      clientReferenceId: body.cartId,
-      customerEmail: body.customerEmail,
-      metadata: { cartId: body.cartId },
-      idempotencyKey: `checkout:${body.cartId}`,
-      lineItems: body.items.map((item) => ({
-        quantity: item.quantity,
-        price_data: {
-          currency: process.env.STRIPE_CURRENCY ?? "usd",
-          unit_amount: item.unitAmount,
-          product_data: { name: item.name },
-        },
-      })),
+      orderId: order.id,
+      // Price IDs, never client-supplied amounts.
+      lineItems: order.lines.map((line) => ({ price: line.stripePriceId!, quantity: line.quantity })),
+      // The cart version makes a changed cart a new logical request.
+      idempotencyKey: `checkout:${order.id}:v${order.version}`,
     });
 
-    return { status: 200, body: { sessionId: session.id, url: session.url } };
+    return { status: 200, body: { url: session.url } };
   },
 );
 ```
 
+Stripe rejects a reused idempotency key whose parameters differ from the first request, which is why the key carries the cart version: a changed cart gets a new key instead of an error.
+
 ## 6. Redirect from the browser
 
-If your route returns a `session.url`, a plain `window.location.assign(url)` is enough. If you prefer redirecting by Session ID, load Stripe.js from `@stripe/stripe-js` and call `redirectToCheckout`:
-
-```ts
-import { loadStripe } from "@stripe/stripe-js";
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-
-export async function startCheckout(cartId: string) {
+```ts title="app/cart/checkout-button.tsx"
+export async function startCheckout(orderId: string, csrfToken: string) {
   const res = await fetch("/checkout/stripe", {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ cartId, items: collectCartItems() }),
+    headers: {
+      "content-type": "application/json",
+      "x-csrf-token": csrfToken,
+      "idempotency-key": `checkout-${orderId}`,
+    },
+    body: JSON.stringify({ orderId }),
   });
-  const { sessionId, url } = await res.json();
-
-  const stripe = await stripePromise;
-  if (stripe) {
-    await stripe.redirectToCheckout({ sessionId });
-    return;
-  }
-
+  if (!res.ok) throw new Error("Could not start checkout");
+  const { url } = (await res.json()) as { url: string };
   window.location.assign(url);
 }
 ```
 
+If you would rather keep the shopper on your page, Stripe also offers embedded Checkout (rendered with `@stripe/stripe-js`) and the Payment Element. Both still take server-created sessions or intents, so the server-side pricing above does not change; follow [Stripe's Checkout docs](https://docs.stripe.com/payments/checkout) for the options that match your pinned API version.
+
 <Callout type="note" title="CSP note">
-<p>Include <code>{"https://js.stripe.com"}</code>{" "}and Stripe's required frame/connect endpoints in your content security policy when you render Stripe.js or Elements.</p>
+<p>If you render Stripe.js, embedded Checkout, or Elements, add <code>{"https://js.stripe.com"}</code>{" "}and Stripe's required frame and connect endpoints to your content security policy. A plain redirect needs no CSP changes.</p>
 </Callout>
 
 ## 7. Receive and verify webhooks
 
-<SequenceDiagram title="Webhook verification" participants={["Stripe", "DaloyJS route", "Your queue"]} steps={[
+<SequenceDiagram title="Webhook verification" participants={["Stripe", "DaloyJS route", "Job worker"]} steps={[
           {
             from: "Stripe",
             to: "DaloyJS route",
@@ -288,7 +255,7 @@ export async function startCheckout(cartId: string) {
           {
             from: "DaloyJS route",
             to: "DaloyJS route",
-            label: "webhooks.constructEvent",
+            label: "constructEventAsync",
             detail: "raw body + signature + whsec_ secret",
             kind: "note",
           },
@@ -301,102 +268,111 @@ export async function startCheckout(cartId: string) {
           },
           {
             from: "DaloyJS route",
-            to: "Your queue",
-            label: "Dedupe on event.id, then enqueue and ack",
-            detail: "200 fast, fulfill asynchronously",
+            to: "Job worker",
+            label: "enqueue keyed by event.id, then 200",
+            detail: "worker refetches the session and fulfils",
             kind: "async",
           },
-        ]} caption="Stripe webhook verification fails if the body was parsed or re-serialized first. Verify the raw bytes, dedupe on event.id, and handle fulfillment from the signed event or by refetching the Checkout Session." />
+        ]} caption="Verify the raw bytes, let the job store's atomic idempotency key collapse Stripe's retries of the same event, and fulfil in the worker after refetching the Checkout Session." />
 
-```ts
+The route follows the [shared webhook pattern](/docs/payments#webhook-pattern): verify, dedupe atomically on `event.id` through the job idempotency key, enqueue, and acknowledge.
+
+```ts title="src/webhooks/stripe.ts"
 import { z } from "zod";
 import type Stripe from "stripe";
-import { readBodyLimited } from "@daloyjs/core";
+import { readBodyLimited, jobIdempotencyKey } from "@daloyjs/core";
 
 app.post(
   "/webhooks/stripe",
   {
     operationId: "stripeWebhook",
+    // No request.body schema: the raw bytes stay readable for verification.
     responses: {
       200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
       400: { description: "bad signature", body: z.object({ error: z.string() }) },
     },
   },
   async ({ request, state }) => {
-    // Keep webhook reads bounded and preserve the exact bytes Stripe signed.
-    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
-    const signature = request.headers.get("stripe-signature");
+    const raw = await readBodyLimited(request, 1_048_576);
 
     let event: Stripe.Event;
     try {
-      event = state.stripe.constructWebhookEvent(raw, signature);
+      event = await state.stripe.constructWebhookEvent(raw, request.headers.get("stripe-signature"));
     } catch {
       return { status: 400, body: { error: "invalid signature" } };
     }
 
-    if (await seenStripeEvent(event.id)) {
-      return { status: 200, body: { ok: true as const } };
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
+      await app.jobs!.enqueue({
+        name: "stripe.checkout_paid",
+        payload: { eventId: event.id, sessionId: event.data.object.id },
+        idempotencyKey: jobIdempotencyKey({ name: "stripe.checkout_paid", key: event.id }),
+      });
     }
-
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
-        // Fulfill idempotently on session.id or session.payment_intent.
-        await enqueuePaidOrder(session.id, session.client_reference_id);
-        break;
-      }
-      case "checkout.session.expired":
-        // Release cart reservation, if you hold one.
-        break;
-      case "charge.refunded":
-      case "refund.updated":
-        // Reconcile refund state.
-        break;
-    }
-
+    // Ack every verified event, including types you do not handle.
     return { status: 200, body: { ok: true as const } };
   },
 );
 ```
 
-During local development, forward events with the Stripe CLI:
+The worker refetches the session, checks it is paid, and lets `orders.markPaid()` compare the amount and currency with the stored order:
 
-```ts
-stripe listen --forward-to localhost:3000/webhooks/stripe
+```ts title="src/jobs/stripe.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { stripeClient } from "../plugins/stripe.ts";
+import { orders } from "../orders.ts";
+
+export const handleStripeCheckoutPaid: JobHandler<{ eventId: string; sessionId: string }> = async ({ job }) => {
+  const session = await stripeClient.retrieveCheckoutSession(job.payload.sessionId);
+  if (session.payment_status !== "paid") return; // async methods: wait for async_payment_succeeded
+  await orders.markPaid(session.metadata!.orderId!, {
+    amountMinor: session.amount_total!,
+    currency: session.currency!,
+    providerRef: String(session.payment_intent),
+  });
+};
+
+// One useJobs() per app; jobStore is your durable JobStore (MemoryJobStore in dev).
+app.useJobs({ store: jobStore, startWorker: true, handlers: { "stripe.checkout_paid": handleStripeCheckoutPaid } });
 ```
 
-The CLI prints a temporary `whsec_` secret. Use that local secret for forwarded events. Do not mix it with the Dashboard endpoint secret.
+Stripe retries failed deliveries for up to three days in live mode and does not guarantee ordering, which is why the worker reads the current session state instead of trusting the event body.
 
-## 8. Refunds
+## 8. Testing
+
+```shell
+stripe listen --forward-to localhost:3000/webhooks/stripe
+stripe trigger checkout.session.completed
+```
+
+The CLI prints a temporary `whsec_` secret. Use that local secret for forwarded events; do not mix it with the Dashboard endpoint secret. For automated tests, sign a payload with the core `signWebhookPayload({ payload, secret, timestamp })` and send `Stripe-Signature: t=<timestamp>,v1=<hex>`. See [testing](/docs/payments#testing).
+
+## 9. Refunds
+
+Expose refunds only through a [protected refund route](/docs/payments#protected-refunds) (auth, role, ownership, amount cap, audit log). The plugin call itself:
 
 ```ts
-// Full refund by PaymentIntent id.
+// Partial refund, amount in the smallest currency unit.
 await state.stripe.refund({
-  paymentIntent: "pi_xxx",
-  idempotencyKey: "refund:order_123",
-});
-
-// Partial refund, amount is in the smallest currency unit.
-await state.stripe.refund({
-  paymentIntent: "pi_xxx",
-  amount: 250, // $2.50 for USD
-  idempotencyKey: "refund:order_123:partial_1",
+  paymentIntent: order.providerRef!,
+  amount: 250, // 2.50 USD
+  idempotencyKey: `refund:${order.id}:${order.refundedMinor}:250`,
 });
 ```
 
 ## Errors
 
-The SDK throws structured `Stripe.errors.StripeError` subclasses for API, card, authentication, rate-limit, and connection failures. Preserve `requestId`, `code`, `decline_code`, and `payment_intent` in internal logs, but return a stable [problem+json](/docs/errors) shape to clients.
+The SDK throws `Stripe.errors.StripeError` subclasses for API, card, authentication, rate-limit, and connection failures. Log `requestId`, `code`, `decline_code`, and `payment_intent` internally, and return a stable [problem+json](/docs/errors) shape to clients. Card declines are the only detail worth surfacing, and even then as your own message, not Stripe's raw text.
 
 ## Runtimes
 
-The official `stripe` package is a server-side SDK and currently supports Node.js LTS versions 18+. It fits DaloyJS Node, serverless, and AWS Lambda deployments. The same SDK also documents a Deno npm import path. For strict edge workers, keep Checkout creation on a Node route or call Stripe's REST API with `fetch` from an isolated plugin instead of assuming every Node SDK feature works in the worker runtime.
+`stripe` 23.x declares Node `>=20` and supports Node LTS releases; DaloyJS's Node `^24 || >=26` requirement already satisfies that. The package also ships Deno (`npm:stripe`), Bun, and worker export targets. On Cloudflare Workers, pass `httpClient: Stripe.createFetchHttpClient()` and verify webhooks with `constructEventAsync()` plus `Stripe.createSubtleCryptoProvider()`, as in the plugin above. Vercel Node.js functions, AWS Lambda, and Azure Functions run the Node build unchanged. Vercel Edge is not verified here; see the [runtime table](/docs/payments#runtime-compatibility).
 
 ## Modernisation notes
 
 - Do not make Stripe a framework dependency. Keep it in the application, behind a plugin, so apps that use Braintree, Adyen, Square, or no payments at all keep a dependency-free DaloyJS core.
-- Use Checkout first, Payment Intents when you need control. Payment Intents are the lower-level API for custom payment forms and advanced flows. Start there only when hosted Checkout cannot model the experience.
-- Pin your API behavior deliberately. Stripe SDK types track the latest API shape. If your account uses an older pinned API version, test upgrades carefully and keep type suppressions rare and local.
-- Never use real card details in test mode. Use Stripe test cards or test `PaymentMethod` IDs. Real payment method details belong only in live mode through Stripe-hosted collection.
+- Use Checkout first, Payment Intents when you need control. Payment Intents are the lower-level API for custom payment forms and advanced flows.
+- Pin `apiVersion` deliberately. stripe-node types track the latest API version at release, and a new API version comes with a new SDK major. Upgrade both together and read the changelog.
+- Never use real card details in test mode. Use Stripe test cards or test `PaymentMethod` IDs.
 
 See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), [Square guide](/docs/payments/square), and [problem+json errors](/docs/errors).

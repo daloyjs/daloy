@@ -1,6 +1,6 @@
 ---
 title: Use Ottoman with DaloyJS
-description: Connect DaloyJS to Couchbase using Ottoman. Define document schemas and models, inject them through a plugin, and keep Couchbase-specific work isolated from handlers.
+description: Connect DaloyJS to Couchbase using Ottoman. Define document schemas and models, inject them through a plugin, and build indexes as a deploy step.
 keywords:
   - Ottoman DaloyJS
   - Couchbase DaloyJS
@@ -11,14 +11,14 @@ keywords:
 
 # Use Ottoman with DaloyJS
 
-[Ottoman](https://ottomanjs.com) is an ODM for Couchbase. Use it when your application stores JSON documents in Couchbase buckets, scopes, and collections and you want model definitions, validation, query helpers, and indexes around that document layer.
+[Ottoman](https://ottomanjs.com) is an ODM for Couchbase. Use it when your application stores JSON documents in Couchbase buckets, scopes, and collections and you want model definitions, validation, query helpers, and indexes around that document layer. This guide targets Ottoman 2 (`ottoman@latest` is 2.5 as of October 2026).
 
 <FlowDiagram title="Ottoman setup" numbered steps={[
           { label: "Install", detail: "pnpm add ottoman couchbase" },
           { label: "Schema & model", detail: "new Schema · model('User')" },
           {
             label: "Plugin",
-            detail: "connect · start · decorate('db')",
+            detail: "connect · decorate('db') · onClose",
             tone: "accent",
           },
           { label: "Augment state", detail: "interface AppState { db }" },
@@ -27,44 +27,43 @@ keywords:
             detail: "state.db.User.findById()",
             tone: "success",
           },
-        ]} caption="Ottoman connects once and runs ottoman.start() to build indexes before traffic arrives. Handlers then read the decorated state.db model surface." />
+        ]} caption="Ottoman connects once at startup and handlers read the decorated state.db model surface. Collections and indexes are created by ottoman.start() in a separate deploy step, not on every boot." />
 
 ## 1. Install
 
-```ts
+```bash
 pnpm add ottoman couchbase
 ```
 
 ## 2. Define a schema and model
 
-```ts
-// src/db/ottoman.ts
-import { Ottoman, Schema, model } from "ottoman";
+Set the collection per model in the third `model()` argument. Ottoman resolves the name as model option, then the `Ottoman` instance option, then the model name.
 
-export const ottoman = new Ottoman({
-  collectionName: "users",
-});
+```ts title="src/db/ottoman.ts"
+import { Ottoman, Schema } from "ottoman";
+
+export const ottoman = new Ottoman();
 
 const userSchema = new Schema({
   email: { type: String, required: true },
   name: { type: String, required: false },
 });
 
+// A N1QL (GSI) index on email. It serves the findOne({ email }) query below.
 userSchema.index.findByEmail = {
   by: "email",
   type: "n1ql",
 };
 
-export const User = model("User", userSchema);
+export const User = ottoman.model("User", userSchema, { collectionName: "users" });
 export const db = { ottoman, User };
 ```
 
 ## 3. Create an Ottoman plugin
 
-Connect once during app startup, build indexes with `ottoman.start()`, decorate the app with the models you want handlers to use, and close the connection on shutdown.
+Connect once during app startup, decorate the app with the models you want handlers to use, and close the connection on shutdown. Collections and indexes are created separately, below.
 
-```ts
-// src/db/plugin.ts
+```ts title="src/db/plugin.ts"
 import type { App } from "@daloyjs/core";
 import { db, ottoman } from "./ottoman.ts";
 
@@ -74,11 +73,11 @@ export async function ottomanPlugin(app: App) {
   await ottoman.connect({
     connectionString: process.env.COUCHBASE_CONNECTION_STRING!,
     bucketName: process.env.COUCHBASE_BUCKET!,
+    // A data-only user: read and write on the app's collections, nothing else.
     username: process.env.COUCHBASE_USERNAME!,
     password: process.env.COUCHBASE_PASSWORD!,
   });
 
-  await ottoman.start();
   app.decorate("db", db);
 
   app.onClose(async () => {
@@ -87,12 +86,14 @@ export async function ottomanPlugin(app: App) {
 }
 ```
 
+`onClose()` runs on the Node.js, Bun, and Deno adapters only; see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) for the serverless platforms.
+
 ## 4. Augment app state types
 
 Add the `declare module` block to the same module that exports `db`, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
 
-```ts
-// src/db/ottoman.ts (the module that exports db)
+```ts title="src/db/ottoman.ts"
+// the module that exports db
 declare module "@daloyjs/core" {
   interface AppState {
     db: typeof db;
@@ -102,10 +103,12 @@ declare module "@daloyjs/core" {
 
 ## 5. Use it in routes
 
-```ts
-// src/server.ts
+In the Ottoman source, `findById()` and `findOne()` reject with the Couchbase SDK's `DocumentNotFoundError` when nothing matches, rather than resolving to `null`. Map that error to a `404`, and keep a `null` check as a fallback.
+
+```ts title="src/server.ts"
 import { z } from "zod";
-import { App, HttpError } from "@daloyjs/core";
+import { DocumentNotFoundError } from "couchbase";
+import { App, NotFoundError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { ottomanPlugin } from "./db/plugin.ts";
 
@@ -118,30 +121,50 @@ const UserSchema = z.object({
 const app = new App();
 await ottomanPlugin(app);
 
+async function orNotFound<T>(lookup: Promise<T | null | undefined>): Promise<T> {
+  try {
+    const doc = await lookup;
+    if (!doc) throw new NotFoundError("User not found");
+    return doc;
+  } catch (err) {
+    if (err instanceof DocumentNotFoundError) throw new NotFoundError("User not found");
+    throw err;
+  }
+}
+
 app.get(
   "/users/:id",
   {
     operationId: "getUser",
-    request: { params: z.object({ id: z.string() }) },
+    request: { params: z.object({ id: z.string().min(1).max(250) }) },
     responses: {
       200: { description: "Found", body: UserSchema },
       404: { description: "Not found" },
     },
   },
   async ({ params, state }) => {
-    const user = await state.db.User.findById(params.id);
-    if (!user) {
-      throw new HttpError(404, { title: "User not found" });
-    }
-
+    const user = await orNotFound(state.db.User.findById(params.id));
     return {
       status: 200,
-      body: {
-        id: user.id,
-        email: user.email,
-        name: user.name ?? null,
-      },
+      body: { id: user.id, email: user.email, name: user.name ?? null },
     };
+  },
+);
+
+app.get(
+  "/users/by-email/:email",
+  {
+    operationId: "getUserByEmail",
+    request: { params: z.object({ email: z.email() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    // Served by the findByEmail N1QL index declared on the schema.
+    const user = await orNotFound(state.db.User.findOne({ email: params.email }));
+    return { status: 200, body: { id: user.id, email: user.email, name: user.name ?? null } };
   },
 );
 
@@ -149,26 +172,24 @@ await app.ready();
 serve(app, { port: 3000 });
 ```
 
-## Indexes and queries
+Keep filter values primitive (`z.string()`, `z.email()`) so a request can never inject a query operator object into `findOne()` or `find()`.
 
-Define indexes next to the schema and run `ottoman.start()` during startup so query helpers are ready before the server accepts traffic. Keep index creation out of request handlers.
+## Indexes are a deploy step
 
-```ts
-app.get(
-  "/users/by-email/:email",
-  {
-    operationId: "getUserByEmail",
-    request: { params: z.object({ email: z.email() }) },
-    responses: { 200: { description: "Found", body: UserSchema } },
-  },
-  async ({ params, state }) => {
-    const user = await state.db.User.findOne({ email: params.email });
-    if (!user) {
-      throw new HttpError(404, { title: "User not found" });
-    }
-    return { status: 200, body: { id: user.id, email: user.email, name: user.name ?? null } };
-  },
-);
+`ottoman.start()` creates the collections and indexes your models declare. Run it from a deploy or migration script, not on every app boot: concurrent instances race to build the same indexes, and the credential that may create indexes and collections should not be the one your API runs with.
+
+```ts title="scripts/ensure-indexes.ts"
+import { ottoman } from "../src/db/ottoman.ts";
+
+await ottoman.connect({
+  connectionString: process.env.COUCHBASE_CONNECTION_STRING!,
+  bucketName: process.env.COUCHBASE_BUCKET!,
+  // A deploy-only user allowed to manage collections and query indexes.
+  username: process.env.COUCHBASE_ADMIN_USERNAME!,
+  password: process.env.COUCHBASE_ADMIN_PASSWORD!,
+});
+await ottoman.start();
+await ottoman.close();
 ```
 
 ## Transactions
@@ -177,6 +198,6 @@ Ottoman is best for model-centric Couchbase document access. If a workflow requi
 
 ## Runtime constraints
 
-Ottoman depends on the Couchbase Node.js SDK, so it is a Node.js-first ODM. It is not a fit for Cloudflare Workers. For edge-compatible data access, use the [SQL ORM overview](/docs/orm) and choose a compatible client.
+Ottoman depends on the Couchbase Node.js SDK, which ships a native module, so it is a Node.js-first ODM. It is not a fit for Cloudflare Workers, and we have not verified Bun, Deno, or the serverless platforms. For edge-compatible data access, use the [SQL ORM overview](/docs/orm) and choose a compatible client.
 
-Compare with [Mongoose](/docs/odm/mongoose) for MongoDB, [Prisma](/docs/orm/prisma) for SQL, or return to the [ODM overview](/docs/odm).
+Compare with [Mongoose](/docs/odm/mongoose) for MongoDB, the [SQL ORM overview](/docs/orm), or return to the [ODM overview](/docs/odm).

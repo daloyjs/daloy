@@ -1,0 +1,220 @@
+---
+title: Use Cloudflare Hyperdrive with DaloyJS
+description: Run a DaloyJS API on Cloudflare Workers against standard Postgres or MySQL through Hyperdrive, with pg or mysql2, per-request clients, and query caching notes.
+keywords:
+  - Cloudflare Hyperdrive DaloyJS
+  - Hyperdrive Postgres
+  - Hyperdrive MySQL
+  - pg Cloudflare Workers
+  - mysql2 Cloudflare Workers
+  - Workers connection pooling
+---
+
+# Use Cloudflare Hyperdrive with DaloyJS
+
+[Hyperdrive](https://developers.cloudflare.com/hyperdrive/) lets a Worker talk to an existing Postgres or MySQL database with the ordinary `pg`, `postgres`, or `mysql2` drivers. It is not a database: it keeps a pool of warm connections close to your database, so each Worker request skips the TCP, TLS, and auth handshakes to the origin, and it can cache the results of read-only queries at the edge.
+
+Use it with any standard Postgres or MySQL host: [Neon](/docs/databases/neon), [Supabase](/docs/orm/supabase), [PlanetScale](/docs/databases/planetscale) (Postgres and MySQL), Amazon RDS, Aurora Postgres or MySQL, or your own server.
+
+<SequenceDiagram title="One request through Hyperdrive" participants={["DaloyJS Worker", "Hyperdrive", "Database"]} steps={[
+          {
+            from: "DaloyJS Worker",
+            to: "Hyperdrive",
+            label: "new Client(env.HYPERDRIVE.connectionString)",
+            detail: "per request · connect is fast and local",
+            kind: "request",
+          },
+          {
+            from: "Hyperdrive",
+            to: "Hyperdrive",
+            label: "Cached read? return it",
+            detail: "eligible SELECTs only · max_age 60 s by default",
+            kind: "note",
+          },
+          {
+            from: "Hyperdrive",
+            to: "Database",
+            label: "Query on a pooled, warm connection",
+            detail: "no new TCP / TLS / auth handshake",
+            kind: "request",
+          },
+          {
+            from: "Database",
+            to: "DaloyJS Worker",
+            label: "Rows",
+            kind: "response",
+          },
+          {
+            from: "Hyperdrive",
+            to: "Hyperdrive",
+            label: "Request ends: client cleaned up",
+            detail: "origin connection stays in the pool",
+            kind: "async",
+          },
+        ]} caption="The Worker opens a cheap client per request. Hyperdrive answers cacheable reads itself and runs everything else on a warm pooled connection near the database." />
+
+## 1. Create a Hyperdrive config
+
+```bash
+pnpm add -D wrangler
+pnpm wrangler hyperdrive create my-db --connection-string="postgres://app_user:password@db.example.com:5432/app"
+```
+
+Use a `mysql://` connection string for MySQL. Connect Hyperdrive with a role that only has the privileges the app needs, not the database owner. Caching is on by default; pass `--caching-disabled` to turn it off, or `--max-age` to change how long results are kept.
+
+## 2. Bind it in wrangler.jsonc
+
+```jsonc title="wrangler.jsonc"
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "<id-from-create>",
+      // Used by `wrangler dev` instead of the real config.
+      "localConnectionString": "postgres://postgres:postgres@localhost:5432/app"
+    }
+  ]
+}
+```
+
+Then generate the binding types, so `env.HYPERDRIVE` is typed as `Hyperdrive` without a cast:
+
+```bash
+pnpm wrangler types
+```
+
+## 3. Install a driver
+
+```package-install
+pg
+```
+
+```package-install dev
+@types/pg
+```
+
+Cloudflare's Hyperdrive guides require `pg` 8.13.0 or later, `postgres` 3.4.5 or later, and `mysql2` 3.13.0 or later.
+
+## 4. Decorate a client factory
+
+Sockets cannot be created at module scope or shared across requests, so do not decorate a connected client. Decorate a small factory once, before the routes, and call it inside the handler. Creating a client per request is cheap because Hyperdrive holds the real pool. Hyperdrive cleans up the client when the request ends and keeps the origin connection pooled, so calling `client.end()` is optional.
+
+```ts title="src/index.ts"
+import { env } from "cloudflare:workers";
+import { Client } from "pg";
+import { z } from "zod";
+import { App, secureHeaders } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    connectDb: () => Promise<Client>;
+  }
+}
+
+const app = new App({ production: true, behindProxy: { hops: 1 } });
+app.use(secureHeaders());
+
+// Decorate before the routes. The factory runs inside each request.
+app.decorate("connectDb", async () => {
+  const client = new Client({ connectionString: env.HYPERDRIVE.connectionString });
+  await client.connect();
+  return client;
+});
+
+const UserSchema = z.object({ id: z.uuid(), email: z.email() });
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const db = await state.connectDb();
+    const { rows } = await db.query<{ id: string; email: string }>(
+      "select id, email from users where id = $1 limit 1",
+      [params.id],
+    );
+    const user = rows[0];
+    return user
+      ? { status: 200, body: user }
+      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+  },
+);
+
+export default toFetchHandler(app);
+```
+
+Always pass request values as parameters (`$1`), never by string concatenation. See [SQL injection](/docs/security/sql-injection).
+
+### postgres.js
+
+```ts
+import postgres from "postgres";
+
+// Inside the request, as with pg:
+const sql = postgres(env.HYPERDRIVE.connectionString, {
+  max: 5, // connections per request
+  fetch_types: false, // skip the type round trip if you do not use array types
+  prepare: true, // prepared statements also help Hyperdrive caching
+});
+const rows = await sql`select id, email from users where id = ${id}`;
+```
+
+### MySQL with mysql2
+
+```ts
+import { createConnection } from "mysql2/promise";
+
+// Inside the request:
+const conn = await createConnection({
+  host: env.HYPERDRIVE.host,
+  user: env.HYPERDRIVE.user,
+  password: env.HYPERDRIVE.password,
+  database: env.HYPERDRIVE.database,
+  port: env.HYPERDRIVE.port,
+  disableEval: true, // required for mysql2 on Workers
+});
+const [rows] = await conn.query("select id, email from users where id = ?", [id]);
+```
+
+## With Drizzle ORM
+
+```ts
+import { drizzle } from "drizzle-orm/node-postgres";
+
+// Inside the request, after state.connectDb():
+const db = drizzle({ client: await state.connectDb() });
+```
+
+For Prisma, use `@prisma/adapter-pg` with `env.HYPERDRIVE.connectionString` and build the client inside the request; see [Prisma](/docs/orm/prisma).
+
+## Query caching caveats
+
+- Only eligible read-only queries are cached. Writes and queries that call volatile or stable functions (`NOW()`, `CURRENT_DATE`, `RANDOM()`) are never cached; pass such values in as parameters if you want the query cached.
+- Writes do **not** invalidate the cache. A `SELECT` right after an `UPDATE` can return the old row until `max_age` (60 seconds by default, plus a short `stale_while_revalidate` window) expires.
+- For read-after-write paths (auth, sessions, balances, anything an ORM or auth library issues for you), bind a second Hyperdrive config for the same database created with `--caching-disabled`, and use it for those queries. Both configs count toward the origin's connection limit.
+- Do not try to control caching with SQL comments; Cloudflare documents that detection is text-based and parser behavior varies.
+
+## Local development
+
+`wrangler dev` connects to `localConnectionString` (or the `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` environment variable) directly, so run a local Postgres or MySQL in Docker or point it at a development branch. Add `sslmode=require` (Postgres) or `sslMode=REQUIRED` (MySQL) when the database needs TLS. Caching does not apply locally; `wrangler dev --remote` runs on Cloudflare's network with caching on.
+
+## Things to remember
+
+- Hyperdrive needs a database reachable from Cloudflare (public endpoint, or a private network through Cloudflare Tunnel) and uses the static credentials stored in the config. Databases that only accept short-lived IAM tokens, such as [Aurora DSQL](/docs/databases/aurora-dsql), are not covered by this guide.
+- Hyperdrive pools for you, so the provider's own pooler is usually unnecessary. Check Cloudflare's provider guide for which connection string to use.
+- Combine Hyperdrive with [Smart Placement](/docs/adapters/cloudflare-workers#wrangler-jsonc) when one request runs several sequential queries.
+- Hyperdrive does not report database health to DaloyJS. For a database readiness probe, see [Readiness checks](/docs/databases#readiness-checks-for-the-database).
+
+See also the [Cloudflare Workers adapter](/docs/adapters/cloudflare-workers), [Cloudflare D1](/docs/databases/cloudflare-d1), and the [database hosting overview](/docs/databases).

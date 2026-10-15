@@ -1,6 +1,6 @@
 ---
 title: Use TypeORM with DaloyJS
-description: "Integrate TypeORM with DaloyJS using a DataSource plugin: decorator-based entities, repositories, migrations, and transactions wired into your contract-first routes."
+description: "Integrate TypeORM 1.x with DaloyJS: decorator entities, a DataSource plugin, repositories, migrations, transactions, and the build step decorators need."
 keywords:
   - TypeORM DaloyJS
   - TypeORM plugin
@@ -11,7 +11,7 @@ keywords:
 
 # Use TypeORM with DaloyJS
 
-[TypeORM](https://typeorm.io) gives you decorator-based entities and the active-record / data-mapper patterns familiar to Java and .NET teams. It runs best on the [Node.js adapter](/docs/adapters).
+[TypeORM](https://typeorm.io) gives you decorator-based entities and the active-record / data-mapper patterns familiar to Java and .NET teams. This guide targets **TypeORM 1.x** (npm `latest` is 1.1 as of October 2026; the old 0.3 line is on the `legacy` tag) and runs best on the [Node.js adapter](/docs/adapters/node). TypeORM 1.0 requires Node.js 20 or newer.
 
 <FlowDiagram numbered title="One request through TypeORM" caption="Zod validates the request, the handler gets a repository off the DataSource on state.db, runs the entity query, then the response schema checks the body on the way out." steps={[
           {
@@ -40,14 +40,18 @@ keywords:
 
 ## 1. Install
 
-```ts
-pnpm add typeorm reflect-metadata pg
+```bash
+pnpm add typeorm@^1 reflect-metadata pg
 pnpm add -D @types/node
 ```
 
-TypeORM relies on `reflect-metadata` and decorator metadata. Make sure your `tsconfig.json` enables them:
+## 2. Decorators need a real build step
 
-```ts
+<Callout type="warning">**TypeORM entities do not run under `daloy dev` as scaffolded.** `daloy dev` runs `node --watch`, and Node's built-in type stripping removes types only: it does not transform decorators or emit decorator metadata, so a decorated entity fails to load. The scaffolded `tsconfig.json` also sets `verbatimModuleSyntax` and `erasableSyntaxOnly`, which target that strip-only mode. Compile TypeORM projects with a transpiler that supports legacy decorators and run the output: `tsc` with the flags below, or SWC with `decoratorMetadata` enabled. esbuild-based runners (tsx included) do not emit decorator metadata.</Callout>
+
+Enable legacy decorators in the `tsconfig.json` you build with:
+
+```json title="tsconfig.json"
 {
   "compilerOptions": {
     "experimentalDecorators": true,
@@ -57,10 +61,11 @@ TypeORM relies on `reflect-metadata` and decorator metadata. Make sure your `tsc
 }
 ```
 
-## 2. Define an entity
+Then develop against the compiled output, for example `tsc -w` in one terminal and `node --watch --env-file=.env dist/server.js` in another. Give every column an explicit `type` (as below) so column types never depend on emitted design-type metadata, whichever compiler you use.
 
-```ts
-// src/db/entities/User.ts
+## 3. Define an entity
+
+```ts title="src/db/entities/User.ts"
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm";
 
 @Entity("users")
@@ -68,21 +73,22 @@ export class User {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ unique: true })
+  @Column({ type: "text", unique: true })
   email!: string;
 
   @Column({ type: "text", nullable: true })
   name!: string | null;
 
-  @CreateDateColumn({ name: "created_at" })
+  @CreateDateColumn({ type: "timestamptz", name: "created_at" })
   createdAt!: Date;
 }
 ```
 
-## 3. Configure the DataSource
+## 4. Configure the DataSource
 
-```ts
-// src/db/data-source.ts
+TypeORM 1.0 no longer loads `.env` files or `TYPEORM_*` environment variables on its own. Load configuration yourself (`node --env-file=.env`, or `import "dotenv/config"` at the entrypoint).
+
+```ts title="src/db/data-source.ts"
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { User } from "./entities/User.ts";
@@ -91,16 +97,17 @@ export const AppDataSource = new DataSource({
   type: "postgres",
   url: process.env.DATABASE_URL,
   entities: [User],
-  migrations: ["src/db/migrations/*.ts"],
+  // Resolved from the project root against the compiled output, so the same
+  // glob works for the app and for the CLI after `pnpm build`.
+  migrations: ["dist/db/migrations/*.js"],
   synchronize: false, // use migrations in production
   logging: process.env.NODE_ENV !== "production",
 });
 ```
 
-## 4. Create a TypeORM plugin
+## 5. Create a TypeORM plugin
 
-```ts
-// src/db/plugin.ts
+```ts title="src/db/plugin.ts"
 import type { App } from "@daloyjs/core";
 import { AppDataSource } from "./data-source.ts";
 
@@ -117,12 +124,14 @@ export async function typeormPlugin(app: App) {
 }
 ```
 
-## 5. Augment app state types
+`onClose()` runs on the Node.js, Bun, and Deno adapters only; see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) for Lambda, Vercel, and Azure Functions.
+
+## 6. Augment app state types
 
 Add the `declare module` block to the same module that creates the plugin, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
 
-```ts
-// src/db/plugin.ts (same module as the plugin above)
+```ts title="src/db/plugin.ts"
+// same module as the plugin above
 declare module "@daloyjs/core" {
   interface AppState {
     db: typeof AppDataSource;
@@ -130,13 +139,12 @@ declare module "@daloyjs/core" {
 }
 ```
 
-## 6. Use repositories in routes
+## 7. Use repositories in routes
 
-```ts
-// src/server.ts
+```ts title="src/server.ts"
 import "reflect-metadata";
 import { z } from "zod";
-import { App } from "@daloyjs/core";
+import { App, NotFoundError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { typeormPlugin } from "./db/plugin.ts";
 import { User } from "./db/entities/User.ts";
@@ -144,12 +152,16 @@ import { User } from "./db/entities/User.ts";
 const app = new App();
 await typeormPlugin(app);
 
+// Dates go over the wire as ISO strings: z.coerce.date() has no
+// representation in the generated OpenAPI document.
 const UserSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   name: z.string().nullable(),
-  createdAt: z.coerce.date(),
+  createdAt: z.iso.datetime(),
 });
+
+const toUser = (user: User) => ({ ...user, createdAt: user.createdAt.toISOString() });
 
 app.get(
   "/users/:id",
@@ -164,9 +176,8 @@ app.get(
   async ({ params, state }) => {
     const repo = state.db.getRepository(User);
     const user = await repo.findOneBy({ id: params.id });
-    return user
-      ? { status: 200, body: user }
-      : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: toUser(user) };
   },
 );
 
@@ -179,8 +190,9 @@ app.post(
   },
   async ({ body, state }) => {
     const repo = state.db.getRepository(User);
+    // Safe only because z.object() strips unknown keys (no mass assignment).
     const created = await repo.save(repo.create(body));
-    return { status: 201, body: created };
+    return { status: 201, body: toUser(created) };
   },
 );
 
@@ -188,29 +200,40 @@ await app.ready();
 serve(app, { port: 3000 });
 ```
 
+<Callout type="security">**Never let `undefined` reach a `where`.** On TypeORM 0.3, `repo.findOneBy({ id: undefined })` drops the condition and returns the **first row in the table**, a classic account-takeover bug when an ID comes from an optional field. TypeORM 1.0 throws on `null` and `undefined` in `find*` and repository `where` options by default; keep that default (do not set `invalidWhereValuesBehavior` to `"ignore"`), and keep IDs required in your Zod schemas. Use `IsNull()` when you really mean `IS NULL`.</Callout>
+
 ## Transactions
 
+This example assumes `Order` and `Inventory` entities and a route that declares `201`.
+
 ```ts
+import { Inventory } from "./db/entities/Inventory.ts";
+import { Order } from "./db/entities/Order.ts";
+
 handler: async ({ body, state }) => {
-  return state.db.transaction(async (manager) => {
-    const order = await manager.save(Order, manager.create(Order, body));
+  const order = await state.db.transaction(async (manager) => {
+    const created = await manager.save(Order, manager.create(Order, { sku: body.sku, qty: body.qty }));
     await manager.decrement(Inventory, { sku: body.sku }, "stock", body.qty);
-    return { status: 201, body: order };
+    return created;
   });
+  return { status: 201, body: { id: order.id, sku: order.sku, qty: order.qty } };
 }
 ```
 
 ## Migrations
 
-```ts
-pnpm typeorm migration:generate src/db/migrations/InitUser -d src/db/data-source.ts
-pnpm typeorm migration:run -d src/db/data-source.ts
+Generate against the compiled DataSource, rebuild so the new migration lands in `dist/`, then run it as a deploy step, never at app boot (see [migrations](/docs/orm#migrations)):
+
+```bash
+pnpm build
+pnpm typeorm migration:generate src/db/migrations/InitUser -d dist/db/data-source.js
+pnpm build
+pnpm typeorm migration:run -d dist/db/data-source.js
 ```
 
 ## Runtime notes
 
-- TypeORM uses Node-only APIs (filesystem, native drivers). It does **not** run on Cloudflare Workers, use [Drizzle](/docs/orm/drizzle) or [Supabase](/docs/orm/supabase) there.
-- On Bun and Deno, prefer `drizzle`-style postgres clients unless you need TypeORM's decorators.
+- TypeORM is built around long-lived Node.js processes and native drivers. We have not verified it on Cloudflare Workers, Bun, or Deno; use [Drizzle](/docs/orm/drizzle) or [Supabase](/docs/orm/supabase) on the edge.
 - Always import `reflect-metadata` once at the entrypoint, before anything else.
 
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) if you need document models.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.
