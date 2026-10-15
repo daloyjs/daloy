@@ -92,6 +92,7 @@ import {
   CORS_WILDCARD_ORIGIN_MARKER,
   CSRF_HOOK_MARKER,
   _mergePreBodyWithEarlyRejections,
+  _orderBeforeHandleForReplay,
   REQUIRE_SCOPES_AGGREGATE_KEY,
   REQUIRE_SCOPES_HOOK_MARKER,
   SECURE_HEADERS_MARKER,
@@ -2967,8 +2968,8 @@ export class App<
         "cache-before-tenancy",
         cacheBeforeTenancy,
         `Route ${cacheBeforeTenancy.method} ${cacheBeforeTenancy.path} runs responseCache() ` +
-          `before tenancy() in its effective hook chain. The cache key is built before the tenant ` +
-          `is resolved, so every tenant would share one cache entry and one tenant's response ` +
+          `or idempotency() before tenancy() in its effective hook chain. The stored-response key ` +
+          `is built before the tenant is resolved, so every tenant would share one entry and one tenant's response ` +
           `would be served to the next caller (CWE-524 cross-tenant cached-response disclosure). ` +
           `Register tenancy() first — as a global hook (new App({ hooks: tenancy(...) })) or an ` +
           `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
@@ -5501,6 +5502,13 @@ export class App<
           }
           return finalizeFast(preBody, stripFingerprint);
         }
+        // If a deferred preBody hook (such as `requestDecompression()`) inflated
+        // the body onto `DALOY_REQUEST_RAW_BODY`, re-check `bodyLimitBytes` on
+        // routes without a body schema so raw-body handlers cannot read an
+        // inflated payload that exceeds `bodyLimitBytes`.
+        if (def.request?.body === undefined) {
+          capRequestBody(request, this.options.bodyLimitBytes);
+        }
       }
 
       // Validation remains sync-first; only an async schema or an actual body
@@ -6205,7 +6213,11 @@ function securityMarkersFromHooks(
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
-    if (cacheIndex === -1 && record[RESPONSE_CACHE_HOOK_MARKER] === true)
+    if (
+      cacheIndex === -1 &&
+      (record[RESPONSE_CACHE_HOOK_MARKER] === true ||
+        record[IDEMPOTENCY_HOOK_MARKER] === true)
+    )
       cacheIndex = i;
     if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true)
       tenancyIndex = i;
@@ -6379,7 +6391,7 @@ function mergeHooks(layers: Hooks[]): Hooks {
       .filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
   const requiredScopes = requiredScopesFromHooks(layers);
   const beforeHandle = mergeBeforeHandle(
-    firstResponse(pick("beforeHandle")),
+    firstResponse(_orderBeforeHandleForReplay(layers)),
     requiredScopes,
   );
   const hooks: Hooks = {
@@ -7440,8 +7452,13 @@ function capRequestBody(request: Request, limit: number): void {
     DALOY_REQUEST_RAW_BODY
   ];
   if (cached instanceof Uint8Array && cached.byteLength <= limit) return;
+  const cachedOverLimit =
+    cached instanceof Uint8Array && cached.byteLength > limit;
   let limited: ReadableStream<Uint8Array> | null | undefined;
   const stream = (): ReadableStream<Uint8Array> | null => {
+    if (cachedOverLimit) {
+      throw new PayloadTooLargeError(limit);
+    }
     if (limited !== undefined) return limited;
     if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > limit) {
       throw new PayloadTooLargeError(limit);

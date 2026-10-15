@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-15
+
 ### Added
 
 - OTLP trace export. `new App({ telemetry: { traces: true } })` traces every
@@ -65,6 +67,23 @@ For the forward-looking plan and the full thematic release log, see
 - `AppTelemetry.endpoint` (also logged in the `telemetry.otlp` boot line) is
   now origin + path only. Userinfo, query and fragment are stripped because
   they can carry credentials, and it is `null` when no exporter is active.
+- `requestDecompression()` runs as a deferred `preBody` hook instead of in
+  `onRequest`: only on matched routes, and only after every other `preBody`
+  hook (auth, rate limits, IP rules, CSRF) has passed. Unauthenticated,
+  rate-limited and `404` / `405` requests are no longer read or inflated.
+- The Node adapter answers `Expect: 100-continue` only when the body is
+  actually read, for every `Content-Length`. Previously a small declared body
+  got `100 Continue` before auth and routing ran. Small bodies are also no
+  longer pre-allocated at their declared `Content-Length` before any byte
+  arrives.
+- `idempotency()` adds the request origin to its fingerprint. A record
+  stored before the upgrade in a shared store answers a retry served by the
+  new version with `422` instead of a replay, until its TTL runs out.
+- `MemorySessionStore` holds at most `maxEntries` live sessions
+  (`new MemorySessionStore(maxEntries)`, default 10,000), dropping expired
+  sessions first, then the oldest.
+- `MemoryResponseCacheStore` counts stored header names and values, not just
+  bodies, against `maxBytes`.
 
 ### Fixed
 
@@ -87,6 +106,40 @@ For the forward-looking plan and the full thematic release log, see
   instead of corrupting the series (and `_sum`) for the life of the process.
 - `httpMetrics()` no longer parses the request URL on every response; it
   does so only when an `exclude` predicate needs the pathname.
+- `requestDecompression()` now replaces the request's body readers, so a
+  raw-body handler calling `request.text()`, `json()`, `arrayBuffer()`,
+  `bytes()`, `blob()`, `formData()`, `body` or `clone()` on a
+  `Content-Encoding: gzip` request gets the inflated payload instead of a
+  "Body is unusable" error. On routes without a body schema the inflated
+  body is checked against `bodyLimitBytes` again (`413`).
+- `MemorySessionStore.touch()` no longer revives an expired session.
+
+### Security
+
+- `parseForwardedClientCert()` / `clientCertAuth({ header: { format: "xfcc" } })`
+  toggled quote state on every `"`, ignoring Envoy's `\"` escape. A client
+  certificate whose Subject contained escaped quotes around
+  `;DNS=allowed.internal;` had that text parsed as a top-level SAN, passing
+  `allowSANs`. Escapes are now honored, and a malformed header (unbalanced or
+  stray quotes, a pair without `=`) fails closed.
+- `responseCache()` and `idempotency()` mounted before a `beforeHandle` auth
+  hook (`markAuthHook()` or `some()`) could serve a stored response before
+  that hook ran, so an anonymous or revoked caller got a cached `200`. Such
+  auth hooks now run ahead of the replay, with `app.use()` and inside
+  `every()`. Only hooks between the replay and the last auth hook move.
+- `idempotency()` partitions store keys by the tenant `tenancy()` resolved,
+  so two tenants sharing an `Idempotency-Key` and body no longer replay each
+  other's response. Mounting `idempotency()` before `tenancy()` now refuses
+  to boot in production, as `responseCache()` already did.
+- `idempotency()` releases its reservation through a per-request finalizer.
+  An `onSend` / `onError` hook that threw before `idempotency()`'s own
+  `onSend` made the key replay that hook's error response for the whole TTL.
+  A reservation evicted from `MemoryIdempotencyStore` while its handler ran
+  can no longer overwrite or delete a newer request's reservation.
+- `jwk()` waits `min(fetchTtlSeconds, 10)` seconds between refresh attempts
+  while serving stale keys after a failed refresh; previously every request
+  during an IdP outage triggered another fetch and waited on it. JWKS
+  responses over 1 MiB are refused.
 
 ## [1.10.0] - 2026-10-12
 

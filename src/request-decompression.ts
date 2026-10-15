@@ -27,12 +27,14 @@
  * line works on Node, Bun, Deno, Cloudflare Workers, and Vercel. Zero
  * runtime dependencies.
  *
- * The middleware runs in the {@link "./types.js".Hooks.onRequest} phase — before
- * the per-request context (and therefore before schema-body validation) is
- * built — and stashes the inflated bytes on the request so the framework's own
- * body reader transparently sees the decompressed payload. That means it works
- * for both schema-validated bodies and handlers that read the raw body
- * themselves. Register it globally with `app.use(requestDecompression(...))`.
+ * The middleware runs as a deferred `preBody` hook: only on matched routes,
+ * and only after every other `preBody` hook in the chain (authentication,
+ * rate limits, IP rules, CSRF) has passed, so an unauthenticated or unrouted
+ * request is never read or inflated. It then installs the inflated bytes as
+ * the request body, so schema-validated bodies and raw-body readers
+ * (`request.text()`, `json()`, `arrayBuffer()`, `bytes()`, `blob()`,
+ * `formData()`, `body`, `clone()`) all see the decompressed payload. Register
+ * it globally with `app.use(requestDecompression(...))`.
  *
  * Secure-by-default posture:
  * - Only `gzip` and `deflate` are accepted (the encodings `DecompressionStream`
@@ -47,8 +49,12 @@
  */
 
 import { HttpError, PayloadTooLargeError } from "./errors.js";
+import {
+  DEFERRED_PRE_BODY_HOOK_MARKER,
+  DEFERRED_PRE_BODY_ONLY_MARKER,
+} from "./middleware.js";
 import { readBodyLimited } from "./security.js";
-import type { Hooks } from "./types.js";
+import type { Hooks, PreBodyContext } from "./types.js";
 
 /**
  * Internal Symbol (shared via the global registry, same key the adapters and
@@ -58,6 +64,96 @@ import type { Hooks } from "./types.js";
  * rather than imported to avoid an `app.ts` import cycle.
  */
 const REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
+const REQUEST_BODY_SOLICIT = Symbol.for("daloyjs.request.bodySolicit");
+const INFLATED_DECODER = new TextDecoder();
+
+function installInflatedBody(request: Request, inflated: Uint8Array): void {
+  const target = request as unknown as Record<symbol, unknown>;
+  target[REQUEST_RAW_BODY] = inflated;
+  let consumed = false;
+  const consume = (): Uint8Array => {
+    if (consumed) {
+      throw new TypeError("Body is unusable: Body has already been read");
+    }
+    consumed = true;
+    return inflated;
+  };
+  let streamInstance: ReadableStream<Uint8Array> | null | undefined;
+  const getStream = (): ReadableStream<Uint8Array> | null => {
+    if (streamInstance !== undefined) return streamInstance;
+    let pulled = false;
+    streamInstance = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (!pulled) {
+            pulled = true;
+            const bytes = consume();
+            if (bytes.byteLength > 0) controller.enqueue(bytes);
+          }
+          controller.close();
+        },
+      },
+      { highWaterMark: 0 }
+    );
+    return streamInstance;
+  };
+  const contentType = (): string => request.headers.get("content-type") ?? "";
+  Object.defineProperties(request, {
+    body: { configurable: true, get: getStream },
+    bodyUsed: {
+      configurable: true,
+      get: () => consumed || (streamInstance != null && streamInstance.locked),
+    },
+    bytes: {
+      configurable: true,
+      value: async () => new Uint8Array(consume()),
+    },
+    arrayBuffer: {
+      configurable: true,
+      value: async () => {
+        const b = consume();
+        return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+      },
+    },
+    text: {
+      configurable: true,
+      value: async () => INFLATED_DECODER.decode(consume()),
+    },
+    json: {
+      configurable: true,
+      value: async () => JSON.parse(INFLATED_DECODER.decode(consume())),
+    },
+    blob: {
+      configurable: true,
+      value: async () => new Blob([consume() as BlobPart], { type: contentType() }),
+    },
+    formData: {
+      configurable: true,
+      value: async () =>
+        new Request(request.url, {
+          method: "POST",
+          headers: { "content-type": contentType() },
+          body: consume() as BodyInit,
+        }).formData(),
+    },
+    clone: {
+      configurable: true,
+      value: () => {
+        if (consumed || (streamInstance != null && streamInstance.locked)) {
+          throw new TypeError("Request body is already used");
+        }
+        const cloned = new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body: new Uint8Array(inflated) as BodyInit,
+          signal: request.signal,
+        });
+        installInflatedBody(cloned, new Uint8Array(inflated));
+        return cloned;
+      },
+    },
+  });
+}
 
 /** Default cap on the compressed request body (bytes) before inflation: 1 MiB. */
 const DEFAULT_MAX_COMPRESSED_BYTES = 1024 * 1024;
@@ -405,7 +501,7 @@ async function inflateGuarded(
  * with `413` (thrown mid-inflation).
  *
  * @param opts - Bomb-guard caps and the encoding allowlist. `maxDecompressedBytes` is required.
- * @returns A {@link "./types.js".Hooks} bundle exposing only an `onRequest` hook.
+ * @returns A {@link "./types.js".Hooks} bundle exposing a deferred `preBody` hook.
  * @throws {TypeError} At construction when a cap is invalid.
  * @since 0.37.0
  */
@@ -439,8 +535,11 @@ export function requestDecompression(opts: RequestDecompressionOptions): Hooks {
     onBomb: opts.onBomb,
   };
 
-  return {
-    async onRequest(request: Request): Promise<void> {
+  const decompressPreBody = async (ctx: PreBodyContext<any>): Promise<void> => {
+    // Only inflate on matched routes; cold 404/405 paths should never spend
+    // CPU or buffer memory decompressing an unrouted request body.
+    if (ctx.routePath === undefined) return;
+    const { request } = ctx;
       const ceRaw = request.headers.get("content-encoding");
       if (!ceRaw) return;
       const ce = ceRaw.trim().toLowerCase();
@@ -464,11 +563,22 @@ export function requestDecompression(opts: RequestDecompressionOptions): Hooks {
       const method = request.method.toUpperCase();
       if (method === "GET" || method === "HEAD") return;
 
+    const declared = request.headers.get("content-length");
+    if (declared !== null) {
+      const declaredBytes = Number(declared);
+      if (Number.isFinite(declaredBytes) && declaredBytes > maxCompressedBytes) {
+        throw new PayloadTooLargeError(maxCompressedBytes);
+      }
+    }
+    // Solicit deferred `Expect: 100-continue` bodies only after auth, header,
+    // and compressed-size checks have succeeded.
+    const target = request as unknown as Record<symbol, unknown>;
+    (target[REQUEST_BODY_SOLICIT] as (() => void) | undefined)?.();
+
       // Read the compressed body under the compressed-size cap (413 if over).
       const compressed = await readBodyLimited(request, maxCompressedBytes);
-      const target = request as unknown as Record<symbol, unknown>;
       if (compressed.byteLength === 0) {
-        target[REQUEST_RAW_BODY] = compressed;
+      installInflatedBody(request, compressed);
         return;
       }
 
@@ -477,9 +587,16 @@ export function requestDecompression(opts: RequestDecompressionOptions): Hooks {
       if (inflated.byteLength > caps.maxDecompressedBytes) {
         throw new PayloadTooLargeError(caps.maxDecompressedBytes);
       }
-      // Stash the inflated bytes so the framework's body reader returns them
-      // transparently (schema-validated bodies and raw-body handlers alike).
-      target[REQUEST_RAW_BODY] = inflated;
-    },
+    // Stash the inflated bytes and install standard Request body readers so
+    // both schema-validated bodies and raw-body handlers (`request.text()`,
+    // `request.json()`, `request.arrayBuffer()`, `request.bytes()`, etc.)
+    // read the decompressed payload consistently across all runtimes.
+    installInflatedBody(request, inflated);
   };
+
+  return {
+    preBody: decompressPreBody,
+    [DEFERRED_PRE_BODY_HOOK_MARKER]: [decompressPreBody],
+    [DEFERRED_PRE_BODY_ONLY_MARKER]: true,
+  } as Hooks;
 }

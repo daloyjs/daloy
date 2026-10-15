@@ -109,7 +109,7 @@ function FootprintBarChart({
   return (
     <ChartContainer
       config={footprintConfig}
-      className="aspect-auto h-[360px] w-full"
+      className="aspect-auto h-90 w-full"
     >
       <BarChart
         accessibilityLayer
@@ -143,7 +143,7 @@ function FootprintBarChart({
                 <div className="flex w-full items-center justify-between gap-4">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <span
-                      className="size-2.5 shrink-0 rounded-[2px]"
+                      className="size-2.5 shrink-0 rounded-xs"
                       style={{ background: `var(--color-${name})` }}
                     />
                     {footprintConfig[name as keyof typeof footprintConfig]
@@ -186,7 +186,7 @@ function ThroughputBarChart() {
   return (
     <ChartContainer
       config={throughputConfig}
-      className="aspect-auto h-[300px] w-full"
+      className="aspect-auto h-75 w-full"
     >
       <BarChart
         accessibilityLayer
@@ -219,7 +219,7 @@ function ThroughputBarChart() {
                 <div className="flex w-full items-center justify-between gap-4">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <span
-                      className="size-2.5 shrink-0 rounded-[2px]"
+                      className="size-2.5 shrink-0 rounded-xs"
                       style={{ background: `var(--color-${name})` }}
                     />
                     {throughputConfig[name as keyof typeof throughputConfig]
@@ -332,7 +332,7 @@ const TABS = [
     description:
       "Both frameworks run a comparable middleware stack on the same routes at 100 connections. This is the fair version of the throughput question: what does it cost once both sides actually do work?",
     takeaway:
-      "With comparable middleware on both sides, DaloyJS leads Hono on every scenario: ~25.2k vs ~19.7k req/s on static routes (~28% ahead) and ~22.5k vs ~14.3k on the POST body route (~58% ahead) — while also Zod-validating that body. Security and validation on by default no longer costs you the benchmark.",
+      "With comparable middleware on both sides, DaloyJS leads Hono on every scenario: ~25.2k vs ~19.7k req/s on static routes (~28% ahead) and ~22.5k vs ~14.3k on the POST body route (~58% ahead), while also Zod-validating that body. Security and validation on by default no longer costs you the benchmark.",
     soWhat:
       "Security and validation are essentially free at the framework layer. Your real bottleneck will be the database and the network, not DaloyJS.",
     render: () => <ThroughputBarChart />,

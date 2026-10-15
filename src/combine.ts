@@ -9,6 +9,9 @@
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import {
   _mergePreBodyWithEarlyRejections,
+  _orderBeforeHandleForReplay,
+  DEFERRED_PRE_BODY_HOOK_MARKER,
+  DEFERRED_PRE_BODY_ONLY_MARKER,
   EARLY_REJECTION_HOOK_MARKER,
   REQUIRE_SCOPES_HOOK_MARKER,
 } from "./middleware.js";
@@ -185,10 +188,14 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
   const earlyRejectionHooks = (hooks as Record<PropertyKey, unknown>)[
     EARLY_REJECTION_HOOK_MARKER
   ];
+  const deferredPreBodyHooks = (hooks as Record<PropertyKey, unknown>)[
+    DEFERRED_PRE_BODY_HOOK_MARKER
+  ];
   if (
     !hooks.preBody &&
     !hooks.beforeHandle &&
-    !Array.isArray(earlyRejectionHooks)
+    !Array.isArray(earlyRejectionHooks) &&
+    !Array.isArray(deferredPreBodyHooks)
   )
     return hooks;
   const matches = compileExceptMatcher(when);
@@ -215,6 +222,14 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
       earlyRejectionHooks.map((hook) => {
         if (typeof hook !== "function") return hook;
         return async (ctx: PreBodyContext<any> | BaseContext<any, any>) =>
+          (await matches(ctx)) ? undefined : hook(ctx);
+      });
+  }
+  if (Array.isArray(deferredPreBodyHooks)) {
+    (wrapped as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_HOOK_MARKER] =
+      deferredPreBodyHooks.map((hook) => {
+        if (typeof hook !== "function") return hook;
+        return async (ctx: PreBodyContext<any>) =>
           (await matches(ctx)) ? undefined : hook(ctx);
       });
   }
@@ -306,9 +321,17 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
       for (const fn of onRequest) await fn(req);
     };
   }
-  const preBody = _mergePreBodyWithEarlyRejections(layers);
-  if (preBody !== undefined) merged.preBody = preBody;
-  const beforeHandle = pick("beforeHandle");
+  const nonDeferredPreBody = _mergePreBodyWithEarlyRejections(layers, false);
+  if (nonDeferredPreBody !== undefined) {
+    merged.preBody = nonDeferredPreBody;
+  } else {
+    const allPreBody = _mergePreBodyWithEarlyRejections(layers, true);
+    if (allPreBody !== undefined) {
+      merged.preBody = allPreBody;
+      (merged as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_ONLY_MARKER] = true;
+    }
+  }
+  const beforeHandle = _orderBeforeHandleForReplay(layers);
   if (beforeHandle.length > 0) {
     merged.beforeHandle = async (ctx) => {
       for (const fn of beforeHandle) {
@@ -362,7 +385,17 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
   for (const hooks of layers) {
     const record = hooks as Record<PropertyKey, unknown>;
     for (const key of Object.getOwnPropertySymbols(record)) {
-      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined)
+      if (key === DEFERRED_PRE_BODY_ONLY_MARKER) continue;
+      if (key === DEFERRED_PRE_BODY_HOOK_MARKER) {
+        const existing = (merged as Record<PropertyKey, unknown>)[key];
+        const incoming = record[key];
+        (merged as Record<PropertyKey, unknown>)[key] = [
+          ...(Array.isArray(existing) ? existing : []),
+          ...(Array.isArray(incoming) ? incoming : []),
+        ];
+        continue;
+      }
+      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined && (merged as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_ONLY_MARKER] !== true)
         continue;
       if (key === EARLY_REJECTION_HOOK_MARKER) {
         const existing = (merged as Record<PropertyKey, unknown>)[key];

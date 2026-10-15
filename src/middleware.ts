@@ -722,33 +722,79 @@ export const EARLY_REJECTION_HOOK_MARKER: unique symbol = Symbol.for(
   "daloyjs.middleware.earlyRejectionHooks"
 );
 
+/**
+ * Internal list of deferred `preBody` hooks (such as `requestDecompression()`)
+ * that must run only after all perimeter and authentication `preBody` hooks
+ * in the chain have succeeded, so an unauthenticated, banned, or rate-limited
+ * request never triggers body reads or decompression.
+ *
+ * @internal
+ */
+export const DEFERRED_PRE_BODY_HOOK_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.deferredPreBodyHooks"
+);
+
+/**
+ * Marks a `Hooks` bundle whose `preBody` function consists solely of its
+ * {@link DEFERRED_PRE_BODY_HOOK_MARKER} entries, so `_mergePreBodyWithEarlyRejections`
+ * can defer it behind later perimeter `preBody` layers.
+ *
+ * @internal
+ */
+export const DEFERRED_PRE_BODY_ONLY_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.deferredPreBodyOnly"
+);
+
 type EarlyRejectionHook = (ctx: PreBodyContext<any>) => void | Response | Promise<void | Response>;
 
 /**
  * Compose `preBody` hooks while honoring request-budget hooks registered
- * before the guard that rejects. Used internally by App and hook combinators.
- * A rejection counts whether the guard returns a `Response` or throws; when a
- * pending budget is exhausted its 429 replaces the rejection, otherwise the
- * original Response / error is surfaced.
+ * before the guard that rejects, and deferring body-inflating `preBody` hooks
+ * until after all perimeter/authentication `preBody` hooks pass.
  *
  * @param layers - Hook layers in registration order.
+ * @param includeDeferred - When `false`, only non-deferred `preBody` hooks are
+ *   composed (used by `every()` so outer composition still defers).
  * @returns A composed `preBody` hook, or `undefined` when no layer has one.
  * @internal
  */
 export function _mergePreBodyWithEarlyRejections(
-  layers: Hooks[]
+  layers: Hooks[],
+  includeDeferred = true
 ): NonNullable<Hooks["preBody"]> | undefined {
-  if (!layers.some((hooks) => hooks.preBody !== undefined)) return undefined;
+  const hasNormal = layers.some(
+    (hooks) =>
+      hooks.preBody !== undefined &&
+      (hooks as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_ONLY_MARKER] !== true
+  );
+  // Layers are fixed once composed, so collect the deferred hooks here rather
+  // than rescanning and allocating on every request.
+  const deferred: NonNullable<Hooks["preBody"]>[] = [];
+  if (includeDeferred) {
+    for (const hooks of layers) {
+      const defList = (hooks as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_HOOK_MARKER];
+      if (!Array.isArray(defList)) continue;
+      for (const candidate of defList) {
+        if (typeof candidate === "function") {
+          deferred.push(candidate as NonNullable<Hooks["preBody"]>);
+        }
+      }
+    }
+  }
+  if (!hasNormal && deferred.length === 0) return undefined;
   return async (ctx) => {
     const pending: EarlyRejectionHook[] = [];
     for (const hooks of layers) {
-      const early = (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER];
+      const record = hooks as Record<PropertyKey, unknown>;
+      const early = record[EARLY_REJECTION_HOOK_MARKER];
       if (Array.isArray(early)) {
         for (const candidate of early) {
           if (typeof candidate === "function") pending.push(candidate as EarlyRejectionHook);
         }
       }
-      if (hooks.preBody === undefined) continue;
+      if (hooks.preBody === undefined || record[DEFERRED_PRE_BODY_ONLY_MARKER] === true) {
+        continue;
+      }
       let result: Awaited<ReturnType<NonNullable<Hooks["preBody"]>>>;
       try {
         result = await hooks.preBody(ctx);
@@ -774,8 +820,61 @@ export function _mergePreBodyWithEarlyRejections(
       }
       return response;
     }
+    for (const fn of deferred) {
+      const result = await fn(ctx);
+      if (result instanceof Response) return result;
+    }
     return undefined;
   };
+}
+
+// Same global-registry keys `responseCache()` and `idempotency()` stamp. Kept
+// as `Symbol.for` here (not imported) to avoid an import cycle.
+const REPLAY_RESPONSE_CACHE_MARKER = Symbol.for("daloyjs.response-cache.hook");
+const REPLAY_IDEMPOTENCY_MARKER = Symbol.for("daloyjs.idempotency.hook");
+
+/**
+ * Order `beforeHandle` hooks so a stored-response replay (`responseCache()`,
+ * `idempotency()`) can never answer before a later `beforeHandle`
+ * authentication hook (one stamped with {@link AUTH_HOOK_MARKER}, e.g. via
+ * {@link markAuthHook} or {@link some}) has run.
+ *
+ * Only the span from the first replay hook to the last auth hook after it is
+ * reordered: inside it, non-replay hooks keep their relative order and run
+ * first, then the replay hooks. Hooks outside that span keep their position,
+ * so the common case (auth registered before the cache) is untouched.
+ *
+ * @param layers - Hook layers in registration order.
+ * @returns The `beforeHandle` functions in execution order.
+ * @internal
+ */
+export function _orderBeforeHandleForReplay(
+  layers: Hooks[]
+): NonNullable<Hooks["beforeHandle"]>[] {
+  const fns: NonNullable<Hooks["beforeHandle"]>[] = [];
+  const replay: boolean[] = [];
+  const auth: boolean[] = [];
+  for (const hooks of layers) {
+    if (typeof hooks.beforeHandle !== "function") continue;
+    const record = hooks as Record<PropertyKey, unknown>;
+    fns.push(hooks.beforeHandle);
+    replay.push(
+      record[REPLAY_RESPONSE_CACHE_MARKER] === true || record[REPLAY_IDEMPOTENCY_MARKER] === true
+    );
+    auth.push(record[AUTH_HOOK_MARKER] === true);
+  }
+  const firstReplay = replay.indexOf(true);
+  if (firstReplay === -1) return fns;
+  const lastAuth = auth.lastIndexOf(true);
+  if (lastAuth <= firstReplay) return fns;
+  const span = fns.slice(firstReplay, lastAuth + 1);
+  const spanReplay = replay.slice(firstReplay, lastAuth + 1);
+  return [
+    ...fns.slice(0, firstReplay),
+    ...span.filter((_, i) => !spanReplay[i]),
+    ...span.filter((_, i) => spanReplay[i]),
+    ...fns.slice(lastAuth + 1),
+  ];
 }
 
 /**

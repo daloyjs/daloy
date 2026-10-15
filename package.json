@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/core",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops \u2014 distributed via pnpm.",
   "type": "module",
   "publishConfig": {
@@ -268,7 +268,7 @@
     "bench:json-e2e": "node --import tsx bench/json-body-e2e.bench.ts",
     "bench:ablation": "pnpm build && node --import tsx bench/ablation.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts tests/red-team-attacks-11.test.ts tests/red-team-attacks-12.test.ts tests/red-team-attacks-13.test.ts tests/red-team-attacks-14.test.ts tests/red-team-attacks-15.test.ts tests/red-team-attacks-16.test.ts tests/red-team-attacks-17.test.ts tests/red-team-attacks-18.test.ts",
+    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts tests/red-team-attacks-11.test.ts tests/red-team-attacks-12.test.ts tests/red-team-attacks-13.test.ts tests/red-team-attacks-14.test.ts tests/red-team-attacks-15.test.ts tests/red-team-attacks-16.test.ts tests/red-team-attacks-17.test.ts tests/red-team-attacks-18.test.ts tests/red-team-attacks-19.test.ts",
     "red-team:live": "node --import tsx red-team-live/run.ts",
     "red-team:live:mcp": "node --import tsx red-team-live/mcp-attacks.ts",
     "red-team:live:wave2": "node --import tsx red-team-live/skill-wave2-attacks.ts",

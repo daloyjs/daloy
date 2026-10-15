@@ -470,4 +470,21 @@ test("POST responses carry CORS headers for browser-based clients", async () => 
   const { res } = await legacyRpc(40, "tools/list");
 
   assert.equal(res.headers.get("access-control-allow-origin"), "*");
+  assert.ok(res.headers.get("ratelimit"));
+  assert.ok(res.headers.get("ratelimit-policy"));
+});
+
+test("[unhappy] POST enforces the shared site API rate limit with 429 problem+json", async () => {
+  const ip = "203.0.113.199";
+  let last: Response | undefined;
+  for (let i = 0; i <= 120; i++) {
+    last = await post(
+      { jsonrpc: "2.0", id: 100 + i, method: "tools/list", params: {} },
+      { "mcp-protocol-version": "2025-06-18", "x-forwarded-for": ip }
+    );
+  }
+  assert.equal(last?.status, 429);
+  assert.equal(last?.headers.get("access-control-allow-origin"), "*");
+  assert.ok(last?.headers.get("retry-after"));
+  assert.equal(last?.headers.get("ratelimit-remaining"), "0");
 });

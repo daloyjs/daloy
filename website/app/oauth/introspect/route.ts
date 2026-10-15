@@ -1,8 +1,10 @@
 import { introspectToken } from "@/lib/site-oauth";
 import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import { readBodyLimited } from "@/lib/read-body-limited";
 import { siteApiHeaders } from "@/lib/site-rate-limit";
 
 const ALLOW = "POST, OPTIONS";
+const MAX_FORM_BODY_BYTES = 16 * 1024;
 
 /**
  * OAuth 2.0 Token Introspection (RFC 7662).
@@ -41,7 +43,22 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const result = introspectToken(new URLSearchParams(await request.text()));
+  // Streamed under a byte cap: a chunked body with no Content-Length is
+  // cancelled once it passes the limit instead of being buffered whole.
+  const body = await readBodyLimited(request, MAX_FORM_BODY_BYTES);
+  if (!body.ok) {
+    return Response.json(
+      {
+        error: "invalid_request",
+        error_description: "Request body too large.",
+      },
+      { status: 413, headers },
+    );
+  }
+
+  const result = introspectToken(
+    new URLSearchParams(new TextDecoder().decode(body.bytes)),
+  );
   if (!result.ok) {
     return Response.json(result.body, { status: result.status, headers });
   }

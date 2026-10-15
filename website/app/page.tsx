@@ -19,6 +19,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
@@ -162,7 +163,7 @@ const FEATURES: readonly Feature[] = [
     icon: ShieldCheckIcon,
     title: "Secure runtime defaults",
     body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: body limits, request timeouts, prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, and 5xx detail redaction in production. In production it refuses to boot on the misconfigurations it knows about, such as weak session secrets or session cookies without CSRF.",
-    span: "lg:col-span-2",
+    span: "md:col-span-2 lg:col-span-2",
     badges: [
       "Body limits (1MB default)",
       "Request timeouts",
@@ -181,18 +182,6 @@ const FEATURES: readonly Feature[] = [
       value: "0",
       label: "transitive packages in @daloyjs/core",
     },
-  },
-  {
-    icon: FileCodeIcon,
-    title: "Contract-first by design",
-    body: "One route definition is the source of truth for validation, types, OpenAPI 3.1, the typed client, and built-in contract tests, so drift has fewer places to hide.",
-    span: "lg:col-span-1",
-    badges: [
-      "Runtime validation",
-      "OpenAPI 3.1 spec",
-      "Hey API typed client",
-      "Built-in contract tests",
-    ],
   },
   {
     icon: LockIcon,
@@ -215,6 +204,17 @@ const FEATURES: readonly Feature[] = [
     badges: ["AGENTS.md included", "Context skills", "Readable over MCP"],
   },
   {
+    icon: BroadcastIcon,
+    title: "Streaming & observability",
+    body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
+    span: "lg:col-span-1",
+    badges: [
+      "Backpressure-safe SSE",
+      "NDJSON streaming",
+      "OTel HTTP server spans",
+    ],
+  },
+  {
     icon: GlobeIcon,
     title: "Runtime-portable",
     body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda: same app, same tests.",
@@ -229,22 +229,23 @@ const FEATURES: readonly Feature[] = [
     ],
   },
   {
+    icon: FileCodeIcon,
+    title: "Contract-first by design",
+    body: "One route definition is the source of truth for validation, types, OpenAPI 3.1, the typed client, and built-in contract tests, so drift has fewer places to hide.",
+    span: "lg:col-span-1",
+    badges: [
+      "Runtime validation",
+      "OpenAPI 3.1 spec",
+      "Hey API typed client",
+      "Built-in contract tests",
+    ],
+  },
+  {
     icon: RocketLaunchIcon,
     title: "Hey API typed clients",
     body: "Run pnpm gen and get a fully typed fetch SDK, for any consumer, in any TS project, generated from your real spec. Or skip codegen with the in-process typed client.",
     span: "lg:col-span-1",
     badges: ["pnpm gen", "Zero config", "End-to-end typed fetch SDK"],
-  },
-  {
-    icon: BroadcastIcon,
-    title: "Streaming & observability",
-    body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
-    span: "lg:col-span-1",
-    badges: [
-      "Backpressure-safe SSE",
-      "NDJSON streaming",
-      "OTel HTTP server spans",
-    ],
   },
   {
     icon: CubeIcon,
@@ -262,9 +263,9 @@ const FEATURES: readonly Feature[] = [
 
 const COMPARISON_ROWS = [
   {
-    want: "Best OpenAPI ergonomics",
-    best: "FastAPI",
-    give: "Built-in OpenAPI 3.1 from one route definition",
+    want: "Portable supply-chain hardening for the apps you build",
+    best: "pnpm defaults + zero-runtime-dep core",
+    give: "Hardened pnpm install settings, source-verified lockfiles, SBOM + npm provenance",
   },
   {
     want: "Serverless / edge fit",
@@ -282,14 +283,14 @@ const COMPARISON_ROWS = [
     give: "End-to-end typed handlers, typed context, typed client",
   },
   {
+    want: "Best OpenAPI ergonomics",
+    best: "FastAPI",
+    give: "Built-in OpenAPI 3.1 from one route definition",
+  },
+  {
     want: "Best typed client codegen",
     best: "Hey API",
     give: "pnpm gen → fully typed fetch SDK",
-  },
-  {
-    want: "Portable supply-chain hardening for the apps you build",
-    best: "pnpm defaults + zero-runtime-dep core",
-    give: "Hardened pnpm install settings, source-verified lockfiles, SBOM + npm provenance",
   },
 ] as const;
 
@@ -348,11 +349,12 @@ export default function HomePage() {
               className="float-up max-w-3xl text-base font-medium text-foreground/80 text-pretty sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              AI agents write backend code faster than humans can audit it.
-              DaloyJS provides the runtime defense and performance floor:
-              secure defaults that refuse to start on misconfigurations, zero
-              runtime dependencies against supply-chain attacks, and
-              high-throughput execution under agent-scale load.
+              DaloyJS ships secure defaults, refuses to start in production on
+              the misconfigurations it knows about, and runs with zero runtime
+              dependencies and a hardened, provenance-signed publish pipeline.
+              No framework makes an app fully secure or stops every
+              supply-chain attack, so the docs say what is on by default, what
+              you turn on, and the risks that remain.
             </h2>
             <div
               className="float-up mt-2 flex flex-col gap-3 sm:flex-row"
@@ -395,10 +397,9 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
-            <ContractFlowVisual />
             <div
-              className="float-up mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground"
-              style={{ animationDelay: "320ms" }}
+              className="float-up mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground"
+              style={{ animationDelay: "280ms" }}
             >
               <span>
                 <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy
@@ -407,21 +408,21 @@ export default function HomePage() {
                 <span className="whitespace-nowrap text-foreground">da-loy</span>
                 ).
               </span>
-              <span className="hidden sm:inline text-border">•</span>
+              <span aria-hidden className="text-border">•</span>
               <Link
                 href={"/about" as Route}
                 className="underline underline-offset-4 hover:text-foreground"
               >
                 About
               </Link>
-              <span className="hidden sm:inline text-border">•</span>
+              <span aria-hidden className="text-border">•</span>
               <Link
                 href="/about-the-name"
                 className="underline underline-offset-4 hover:text-foreground"
               >
                 The name
               </Link>
-              <span className="hidden sm:inline text-border">•</span>
+              <span aria-hidden className="text-border">•</span>
               <Link
                 href="/docs/tutorials/bookstore"
                 className="underline underline-offset-4 hover:text-foreground"
@@ -437,7 +438,10 @@ export default function HomePage() {
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-balance">
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              Security &amp; Supply Chain
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               Security defaults: the defense layer for AI-generated code
             </h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
@@ -456,26 +460,24 @@ export default function HomePage() {
               return (
                 <Card
                   key={f.title}
-                  className={`${accent.card} ${f.span ?? "lg:col-span-1"} group float-up flex flex-col justify-between transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
+                  className={`${accent.card} ${f.span ?? "lg:col-span-1"} group float-up transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
-                  <div>
-                    <CardHeader>
-                      <span
-                        className={`${accent.icon} mb-2 inline-flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110`}
-                      >
-                        <f.icon className="size-6" />
-                      </span>
-                      <CardTitle>{f.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="text-sm leading-relaxed">
-                        {f.body}
-                      </CardDescription>
-                    </CardContent>
-                  </div>
+                  <CardHeader>
+                    <span
+                      className={`${accent.icon} mb-2 inline-flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110`}
+                    >
+                      <f.icon className="size-6" />
+                    </span>
+                    <CardTitle>{f.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1">
+                    <CardDescription className="text-sm leading-relaxed">
+                      {f.body}
+                    </CardDescription>
+                  </CardContent>
                   {f.badges && f.badges.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 px-6 pb-6 pt-1">
+                    <CardFooter className="flex-wrap gap-1.5">
                       {f.badges.map((badge) => (
                         <span
                           key={badge}
@@ -484,11 +486,11 @@ export default function HomePage() {
                           {badge}
                         </span>
                       ))}
-                    </div>
+                    </CardFooter>
                   )}
                   {f.stat && (
-                    <div className="px-6 pb-6 pt-1">
-                      <div className="flex items-baseline gap-2.5 rounded-lg border border-border/60 bg-background/60 px-3 py-2 dark:bg-background/40">
+                    <CardFooter>
+                      <div className="flex w-full items-baseline gap-2.5 rounded-lg border border-border/60 bg-background/60 px-3 py-2 dark:bg-background/40">
                         <span className="font-mono text-3xl font-extrabold tracking-tight text-foreground">
                           {f.stat.value}
                         </span>
@@ -496,7 +498,7 @@ export default function HomePage() {
                           {f.stat.label}
                         </span>
                       </div>
-                    </div>
+                    </CardFooter>
                   )}
                 </Card>
               );
@@ -554,7 +556,7 @@ export default function HomePage() {
           </div>
 
           <Card className="mb-10 border-olive-200/70 bg-olive-50/55 dark:border-olive-900/70 dark:bg-olive-950/18 dim:border-olive-900/60 dim:bg-olive-950/15">
-            <CardContent className="grid gap-8 pt-6 lg:grid-cols-2 lg:items-center">
+            <CardContent className="grid gap-8 pt-2 lg:grid-cols-2 lg:items-center">
               <div className="flex flex-col gap-4">
                 <span className="inline-flex size-11 items-center justify-center rounded-xl bg-olive-100 text-olive-700 ring-1 ring-olive-200/80 dark:bg-olive-950/40 dark:text-olive-200 dark:ring-olive-800/70 dim:bg-olive-950/35 dim:text-olive-100">
                   <PlugsConnectedIcon className="size-6" />
@@ -608,8 +610,9 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col gap-4">
-                <div className="flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100">
+                <div className="flex items-center justify-between gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100">
                   <code className="text-sm break-all">{MCP_ENDPOINT_URL}</code>
+                  <CodeCopyButton code={MCP_ENDPOINT_URL} />
                 </div>
                 <ul className="flex flex-col gap-3 text-sm">
                   {MCP_TOOLS.map((tool) => (
@@ -659,6 +662,9 @@ export default function HomePage() {
               payloads, and emits the live OpenAPI 3.1 spec and typed client.
             </p>
           </div>
+          <div className="mb-8">
+            <ContractFlowVisual />
+          </div>
           <div className="float-up" style={{ animationDelay: "120ms" }}>
             <CodeBlock
               code={HELLO_WORLD}
@@ -705,13 +711,18 @@ export default function HomePage() {
       {/* Comparison */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-balance">
-            Competitor strengths, fewer tradeoffs
-          </h2>
-          <p className="mb-10 text-center leading-8 text-muted-foreground">
-            DaloyJS is not trying to win one checkbox. It is trying to remove
-            the glue work between the best ideas developers already like.
-          </p>
+          <div className="mb-10 text-center">
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              Ecosystem Tradeoffs
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
+              Competitor strengths, fewer tradeoffs
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
+              DaloyJS is not trying to win one checkbox. It is trying to remove
+              the glue work between the best ideas developers already like.
+            </p>
+          </div>
 
           {/* Mobile view: Stacked card format */}
           <div className="space-y-4 md:hidden">

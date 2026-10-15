@@ -241,3 +241,13 @@ test("GET /md/* publishes the rate-limit quota without a deprecation signal", as
   assert.ok(res.headers.get("ratelimit-limit"));
   assert.equal(res.headers.get("api-version"), SITE_API_VERSION);
 });
+
+test("[unhappy] GET /md/* short-circuits unknown non-docs paths as 404 without SSRF self-fetch", async () => {
+  const res = await getPageMarkdown(
+    new Request("https://evil.example/md/not-a-real-marketing-page"),
+    { params: Promise.resolve({ slug: ["not-a-real-marketing-page"] }) },
+  );
+  assert.equal(res.status, 404);
+  const body = await res.text();
+  assert.match(body, /Not Found/);
+});

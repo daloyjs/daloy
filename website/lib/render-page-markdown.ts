@@ -9,6 +9,7 @@
 
 import { parseHTML } from "linkedom";
 
+import { BLOG_POSTS } from "@/lib/blog-posts";
 import { getDocPage } from "@/lib/docs-content";
 import { notFoundMarkdown } from "@/lib/not-found-body";
 import { buildPageMarkdown } from "@/lib/page-markdown";
@@ -18,6 +19,92 @@ const markdownCache = new Map<string, string>();
 
 /** Header the Markdown handler sends on the HTML self-fetch. */
 const HTML_ACCEPT = "text/html";
+
+/** Known non-docs marketing paths on the site. */
+const MARKETING_PATHS: ReadonlySet<string> = new Set([
+  "/",
+  "/blog",
+  "/about",
+  "/contact",
+  "/privacy",
+  "/about-the-name",
+]);
+
+function isKnownSitePath(path: string): boolean {
+  if (MARKETING_PATHS.has(path)) {
+    return true;
+  }
+  if (path.startsWith("/blog/")) {
+    const slug = path.slice("/blog/".length);
+    return BLOG_POSTS.some((post) => post.slug === slug);
+  }
+  return false;
+}
+
+/**
+ * Resolve a safe self-fetch origin. Outside production a loopback origin
+ * (`localhost`, `127.0.0.1`, `[::1]`) is honored so `next dev` and the tests
+ * render their own server; everything else, and every origin in production,
+ * is pinned to the canonical `SITE_URL` so a forged `Host` header cannot steer
+ * the server-side `fetch()` to an attacker-chosen host or loopback port (SSRF).
+ *
+ * @param origin - Origin derived from the inbound request URL.
+ * @returns The origin the HTML self-fetch may target.
+ */
+export function resolveSafeOrigin(origin: string): string {
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const parsed = new URL(origin);
+      if (
+        (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+        (parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1" ||
+          parsed.hostname === "[::1]")
+      ) {
+        return parsed.origin;
+      }
+    } catch {
+      // Fall back to SITE_URL below.
+    }
+  }
+  return SITE_URL;
+}
+
+/** Redirect hops the HTML self-fetch follows, all within the pinned origin. */
+const MAX_SELF_FETCH_REDIRECTS = 3;
+
+/**
+ * Fetch `url` as HTML, following redirects only while they stay on `origin`.
+ * A redirect to any other origin ends the fetch (`null`) before a request is
+ * sent there, so a self-fetch can never be bounced to a third-party host.
+ *
+ * @param origin - The pinned origin from {@link resolveSafeOrigin}.
+ * @param url - Absolute URL on `origin`.
+ * @returns The final non-redirect response, or `null` on an off-origin or
+ *   excessive redirect chain.
+ */
+async function fetchSameOrigin(
+  origin: string,
+  url: string,
+): Promise<Response | null> {
+  let target = url;
+  for (let hop = 0; hop <= MAX_SELF_FETCH_REDIRECTS; hop++) {
+    const response = await fetch(target, {
+      headers: { accept: HTML_ACCEPT },
+      redirect: "manual",
+    });
+    if (response.status < 300 || response.status > 399) {
+      return response;
+    }
+    const location = response.headers.get("location");
+    await response.body?.cancel().catch(() => undefined);
+    if (!location) return null;
+    const next = new URL(location, target);
+    if (next.origin !== origin) return null;
+    target = next.href;
+  }
+  return null;
+}
 
 function cacheKey(origin: string, path: string): string {
   return `${origin}\0${path}`;
@@ -78,12 +165,12 @@ async function renderHtmlAsMarkdown(
     return cached;
   }
 
-  const response = await fetch(`${origin}${path === "/" ? "/" : path}`, {
-    headers: { accept: HTML_ACCEPT },
-    redirect: "follow",
-  });
+  const response = await fetchSameOrigin(
+    origin,
+    `${origin}${path === "/" ? "/" : path}`,
+  );
 
-  if (!response.ok) {
+  if (!response || !response.ok) {
     return null;
   }
 
@@ -123,6 +210,7 @@ export async function renderPathMarkdown(
   pathname: string,
 ): Promise<MarkdownRenderResult> {
   const path = canonicalMarkdownPath(pathname);
+  const safeOrigin = resolveSafeOrigin(origin);
 
   if (isDocsPath(path)) {
     const page = await getDocPage(path === "/docs" ? "/docs" : path);
@@ -130,7 +218,7 @@ export async function renderPathMarkdown(
       return { markdown: notFoundMarkdown(path), status: 404 };
     }
 
-    const markdown = await renderHtmlAsMarkdown(origin, page.href);
+    const markdown = await renderHtmlAsMarkdown(safeOrigin, page.href);
     if (!markdown) {
       return {
         markdown: "Failed to render markdown for this page.\n",
@@ -140,7 +228,11 @@ export async function renderPathMarkdown(
     return { markdown, status: 200 };
   }
 
-  const markdown = await renderHtmlAsMarkdown(origin, path);
+  if (!isKnownSitePath(path)) {
+    return { markdown: notFoundMarkdown(path), status: 404 };
+  }
+
+  const markdown = await renderHtmlAsMarkdown(safeOrigin, path);
   if (!markdown) {
     return { markdown: notFoundMarkdown(path), status: 404 };
   }

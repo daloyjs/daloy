@@ -287,17 +287,26 @@ function parseNodeSubjectAltName(san: string | undefined): readonly string[] {
 
 /**
  * Split a string on a single-character separator while ignoring separators that
- * appear inside double-quoted spans. No backtracking — single linear scan.
+ * appear inside double-quoted spans (honoring backslash escapes). Returns
+ * `null` when quotes or escapes are unbalanced so callers fail closed.
+ * No backtracking — single linear scan.
  *
  * @internal
  */
-function splitRespectingQuotes(value: string, sep: string): string[] {
+function splitRespectingQuotes(value: string, sep: string): string[] | null {
   const out: string[] = [];
   let current = "";
   let inQuotes = false;
+  let escaped = false;
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]!;
-    if (ch === '"') {
+    if (escaped) {
+      escaped = false;
+      current += ch;
+    } else if (inQuotes && ch === "\\") {
+      escaped = true;
+      current += ch;
+    } else if (ch === '"') {
       inQuotes = !inQuotes;
       current += ch;
     } else if (ch === sep && !inQuotes) {
@@ -307,21 +316,41 @@ function splitRespectingQuotes(value: string, sep: string): string[] {
       current += ch;
     }
   }
+  if (inQuotes || escaped) return null;
   out.push(current);
   return out;
 }
 
-function unquote(value: string): string {
+function unquote(value: string): string | undefined {
   const trimmed = value.trim();
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
+  if (trimmed.startsWith('"')) {
+    if (trimmed.length < 2 || !trimmed.endsWith('"')) return undefined;
+    let out = "";
+    let escaped = false;
+    for (let i = 1; i < trimmed.length - 1; i++) {
+      const ch = trimmed[i]!;
+      if (escaped) {
+        escaped = false;
+        out += ch;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        return undefined;
+      } else {
+        out += ch;
+      }
   }
+    return escaped ? undefined : out;
+  }
+  if (trimmed.includes('"')) return undefined;
   return trimmed;
 }
 
 function cnFromDN(dn: string | undefined): string | undefined {
   if (!dn) return undefined;
-  for (const rdn of splitRespectingQuotes(dn, ",")) {
+  const rdns = splitRespectingQuotes(dn, ",");
+  if (!rdns) return undefined;
+  for (const rdn of rdns) {
     const eq = rdn.indexOf("=");
     if (eq === -1) continue;
     const key = rdn.slice(0, eq).trim();
@@ -338,10 +367,14 @@ function cnFromDN(dn: string | undefined): string | undefined {
  * result is a trusted-proxy assertion, not cryptographic verification by this
  * parser. The terminator must verify client certificates, strip incoming XFCC,
  * and replace it with its own value. Append-only forwarding is insufficient.
+ * Quoted values honor Envoy's `\"` escapes, so an escaped quote inside a
+ * Subject cannot end the quoted span and smuggle a top-level `DNS=` / `URI=`
+ * SAN.
  *
  * @param headerValue Raw XFCC header value; `null`/`undefined` are tolerated.
  * @returns The certificate parsed from the first XFCC element, or `undefined`
- *   for an empty or unparseable header. Only trust this header behind a proxy
+ *   for an empty or unparseable header (including unbalanced quotes, a stray
+ *   unescaped quote, or a pair without `=`, which fail closed). Only trust this header behind a proxy
  *   you control that strips client-supplied XFCC.
  * @since 0.37.0
  */
@@ -351,18 +384,24 @@ export function parseForwardedClientCert(
   if (typeof headerValue !== "string" || headerValue.trim().length === 0) {
     return undefined;
   }
-  const firstElement = splitRespectingQuotes(headerValue, ",")[0];
+  const elements = splitRespectingQuotes(headerValue, ",");
+  const firstElement = elements?.[0];
   if (!firstElement || firstElement.trim().length === 0) return undefined;
+  const pairs = splitRespectingQuotes(firstElement, ";");
+  if (!pairs) return undefined;
   let subjectDN: string | undefined;
   let fingerprint256: string | undefined;
   let serialNumber: string | undefined;
   let pem: string | undefined;
   const sans: string[] = [];
-  for (const pair of splitRespectingQuotes(firstElement, ";")) {
-    const eq = pair.indexOf("=");
-    if (eq === -1) continue;
-    const key = pair.slice(0, eq).trim().toLowerCase();
-    const value = unquote(pair.slice(eq + 1));
+  for (const pair of pairs) {
+    const trimmedPair = pair.trim();
+    if (trimmedPair.length === 0) continue;
+    const eq = trimmedPair.indexOf("=");
+    if (eq === -1) return undefined;
+    const key = trimmedPair.slice(0, eq).trim().toLowerCase();
+    const value = unquote(trimmedPair.slice(eq + 1));
+    if (value === undefined) return undefined;
     if (value.length === 0) continue;
     switch (key) {
       case "subject":

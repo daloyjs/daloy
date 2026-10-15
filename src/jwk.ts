@@ -29,6 +29,7 @@
  * @since 0.22.0
  */
 import { ForbiddenError } from "./errors.js";
+import { readResponseBodyUpTo } from "./internal-body.js";
 import {
   assertAudienceConfigured,
   createJwtVerifier,
@@ -136,7 +137,9 @@ export interface JwkOptions {
    * to), so an unreachable IdP at boot still rejects. Tokens are always
    * cryptographically verified and `exp`-checked regardless. Set to `0` to
    * disable and fail closed the moment the TTL lapses. Default `3600` (1h).
-   * Ignored when `jwks` is not a URL.
+   * After a failed refresh the stale set is served without refetching for a
+   * cooldown of `min(fetchTtlSeconds, 10)` seconds, so an IdP outage does not
+   * trigger an outbound fetch per request. Ignored when `jwks` is not a URL.
    *
    * @since 0.41.0
    */
@@ -204,6 +207,9 @@ function findJwkByKid(jwks: JwkSet, kid: string): JsonWebKey | undefined {
   return undefined;
 }
 
+const MAX_JWKS_BYTES = 1_048_576;
+const JWKS_TEXT_DECODER = new TextDecoder();
+
 function makeJwksLoader(
   source: JwkSource,
   fetchImpl: typeof fetch,
@@ -215,10 +221,22 @@ function makeJwksLoader(
       throw new Error("jwk(): jwks URL must be https:// — refusing plaintext JWKS source.");
     }
     let cache: JwksCacheEntry | undefined;
+    let lastFailedRefreshAt = 0;
+    const retryCooldownMs = Math.min(ttlSeconds * 1000, 10_000);
     let inflight: Promise<JwkSet> | undefined;
     return () => {
       const now = Date.now();
       if (cache && now - cache.fetchedAt < ttlSeconds * 1000) {
+        return Promise.resolve(cache.jwks);
+      }
+      if (
+        cache &&
+        maxStaleSeconds > 0 &&
+        retryCooldownMs > 0 &&
+        lastFailedRefreshAt > 0 &&
+        now - lastFailedRefreshAt < retryCooldownMs &&
+        now - cache.fetchedAt < (ttlSeconds + maxStaleSeconds) * 1000
+      ) {
         return Promise.resolve(cache.jwks);
       }
       if (inflight) return inflight;
@@ -231,10 +249,20 @@ function makeJwksLoader(
           if (!res.ok) {
             throw new Error(`jwk(): JWKS fetch failed with status ${res.status}.`);
           }
-          const body = (await res.json()) as unknown;
+          let body: unknown;
+          if (res instanceof Response && res.body !== null) {
+            const bytes = await readResponseBodyUpTo(res, MAX_JWKS_BYTES);
+            if (bytes === null) {
+              throw new Error(`jwk(): JWKS response exceeded maximum size (${MAX_JWKS_BYTES} bytes).`);
+            }
+            body = JSON.parse(JWKS_TEXT_DECODER.decode(bytes));
+          } else {
+            body = await (res as Response).json();
+          }
           if (!isJwkSet(body)) {
             throw new Error("jwk(): JWKS response is not a valid JWK Set (missing keys[]).");
           }
+          lastFailedRefreshAt = 0;
           cache = { jwks: body, fetchedAt: Date.now() };
           return body;
         } catch (err) {
@@ -249,6 +277,7 @@ function makeJwksLoader(
             maxStaleSeconds > 0 &&
             Date.now() - cache.fetchedAt < (ttlSeconds + maxStaleSeconds) * 1000
           ) {
+            lastFailedRefreshAt = Date.now();
             return cache.jwks;
           }
           throw err;

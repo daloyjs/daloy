@@ -478,12 +478,30 @@ function makeSessionContext(
 
 // ---------- Stores ----------
 
+/** Default cap on live session records in {@link MemorySessionStore}. */
+const DEFAULT_MAX_SESSION_ENTRIES = 10_000;
+
 /**
  * In-memory `SessionStore`. Suitable for tests and single-process deployments.
- * Expired records are dropped on access.
+ * Expired records are dropped on access, and live capacity is bounded by
+ * `maxEntries` (default 10,000) with expired-first then FIFO eviction.
  */
 export class MemorySessionStore implements SessionStore {
   private readonly map = new Map<string, SessionRecord>();
+  private readonly maxEntries: number;
+
+  /**
+   * @param maxEntries - Maximum live records retained. Default: `10_000`.
+   * @throws Error when `maxEntries` is not a positive integer.
+   */
+  constructor(maxEntries: number = DEFAULT_MAX_SESSION_ENTRIES) {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+      throw new Error(
+        `MemorySessionStore: maxEntries must be a positive integer; got ${String(maxEntries)}.`
+      );
+    }
+    this.maxEntries = maxEntries;
+  }
 
   /** Load a record; expired records are deleted and reported as `null`. */
   get(sid: string): SessionRecord | null {
@@ -498,6 +516,14 @@ export class MemorySessionStore implements SessionStore {
 
   /** Store (or overwrite) a record for a session id. */
   set(sid: string, record: SessionRecord): void {
+    if (!this.map.has(sid) && this.map.size >= this.maxEntries) {
+      this.prune();
+      while (this.map.size >= this.maxEntries) {
+        const oldest = this.map.keys().next();
+        if (oldest.done) break;
+        this.map.delete(oldest.value);
+      }
+    }
     this.map.set(sid, record);
   }
 
@@ -517,10 +543,17 @@ export class MemorySessionStore implements SessionStore {
     return true;
   }
 
-  /** Extend an existing record's expiry (ms since epoch) without rewriting data. */
+  /** Extend an existing, unexpired record's expiry (ms since epoch) without rewriting data. */
   touch(sid: string, expiresAt: number): void {
-    const rec = this.map.get(sid);
+    const rec = this.get(sid);
     if (rec) rec.expiresAt = expiresAt;
+  }
+
+  private prune(): void {
+    const now = Date.now();
+    for (const [k, v] of this.map) {
+      if (v.expiresAt <= now) this.map.delete(k);
+    }
   }
 
   /** Test helper. Remove every record. */

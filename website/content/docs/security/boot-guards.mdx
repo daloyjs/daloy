@@ -233,6 +233,8 @@ Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `
 
 `responseCache()` folds the resolved tenant into its cache key automatically, which is what keeps one tenant's cached response from being served to another (CWE-524). That only works if the tenant is already in `ctx.state` when the key is built, and both middlewares resolve in `beforeHandle`, in registration order. Mounted *before* `tenancy()`, the cache would key every tenant's response identically and leak silently, behind a perfectly ordinary-looking `x-cache: HIT`.
 
+`idempotency()` partitions its store keys by tenant the same way, so the guard covers it too: an `idempotency()` mounted ahead of `tenancy()` would let one tenant replay another's stored response for a shared `Idempotency-Key`.
+
 In production with `secureDefaults` on, that ordering refuses to boot. The fix is registration order, not configuration:
 
 ```ts

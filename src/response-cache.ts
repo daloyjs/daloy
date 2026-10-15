@@ -401,9 +401,9 @@ export class MemoryResponseCacheStore implements ResponseCacheStore {
    */
   set(key: string, entry: CachedResponse, _ttlMs?: number): void {
     const existing = this.map.get(key);
-    if (existing) this.bytes -= existing.body.length;
+    if (existing) this.bytes -= entryFootprintBytes(existing);
     this.map.set(key, entry);
-    this.bytes += entry.body.length;
+    this.bytes += entryFootprintBytes(entry);
     if (this.map.size > this.maxEntries || this.bytes > this.maxBytes) this.evict();
   }
 
@@ -416,7 +416,7 @@ export class MemoryResponseCacheStore implements ResponseCacheStore {
   /** Remove one entry, keeping the byte counter in step. */
   private drop(key: string, entry: CachedResponse): void {
     this.map.delete(key);
-    this.bytes -= entry.body.length;
+    this.bytes -= entryFootprintBytes(entry);
   }
 
   /**
@@ -452,6 +452,15 @@ export class MemoryResponseCacheStore implements ResponseCacheStore {
 interface PendingCache {
   key: string;
   freshnessOverrideMs: number | null;
+}
+
+function entryFootprintBytes(entry: CachedResponse): number {
+  let total = entry.body.length;
+  for (let i = 0; i < entry.headers.length; i++) {
+    const pair = entry.headers[i]!;
+    total += pair[0].length + pair[1].length;
+  }
+  return total;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -786,6 +795,12 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
     refreshReq.headers.set("cache-control", "no-cache");
     void Promise.resolve()
       .then(() => revalidate(refreshReq))
+      .then((res) => {
+        if (res instanceof Response && res.body && !res.bodyUsed) {
+          return res.body.cancel().catch(() => undefined);
+        }
+        return undefined;
+      })
       .catch(() => undefined)
       .finally(() => refreshing.delete(key));
   }

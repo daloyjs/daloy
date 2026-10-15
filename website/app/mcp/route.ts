@@ -16,6 +16,12 @@ import {
   SITE_API_RATE_WINDOW_SEC,
   SITE_API_VERSION,
 } from "@/lib/site-api";
+import { readBodyLimited } from "@/lib/read-body-limited";
+import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import {
+  rateLimitHeaders,
+  type RateLimitSnapshot,
+} from "@/lib/site-rate-limit";
 
 /**
  * Public Model Context Protocol (MCP) endpoint for the DaloyJS documentation.
@@ -210,14 +216,25 @@ const handler = createMcpHandler(
 );
 
 /**
- * Clone a handler response with the permissive CORS headers attached, so
- * browser-based MCP clients can read it.
+ * Clone a handler response with the permissive CORS headers and optional
+ * RateLimit headers attached, so browser-based MCP clients can read it and
+ * self-throttle against the advertised quota.
  *
- * @param response - The response produced by `mcp-handler`.
- * @returns The same response with CORS headers merged in.
+ * @param response - The response produced by `mcp-handler` or an early guard.
+ * @param snapshot - Optional rate-limit snapshot for this request.
+ * @returns The same response with CORS and RateLimit headers merged in.
  */
-function withCors(response: Response): Response {
+function withCors(
+  response: Response,
+  snapshot?: RateLimitSnapshot
+): Response {
   const headers = new Headers(response.headers);
+  if (snapshot) {
+    headers.set("API-Version", SITE_API_VERSION);
+    for (const [key, value] of Object.entries(rateLimitHeaders(snapshot))) {
+      headers.set(key, value);
+    }
+  }
   for (const [key, value] of Object.entries(CORS_HEADERS)) {
     headers.set(key, value);
   }
@@ -229,16 +246,20 @@ function withCors(response: Response): Response {
 }
 
 /**
- * MCP Streamable HTTP `POST` handler. Enforces the body-size cap, then
- * delegates the wire protocol to `mcp-handler`.
+ * MCP Streamable HTTP `POST` handler. Enforces the shared site API rate limit
+ * and body-size cap, then delegates the wire protocol to `mcp-handler`.
  *
  * @param request - The inbound HTTP request.
- * @returns The MCP response with CORS headers attached.
+ * @returns The MCP response with CORS and RateLimit headers attached.
  */
 export async function POST(request: Request): Promise<Response> {
+  const quota = consumeSiteApiQuota(request);
+  if (quota.limited) {
+    return withCors(quota.response, quota.snapshot);
+  }
+
   // Body-size guard (header hint first, then the actual payload) — kept in
   // front of the library so an oversized payload is refused before parsing.
-  const declaredLength = Number(request.headers.get("content-length") ?? "");
   const tooLarge = (): Response =>
     withCors(
       new Response(
@@ -257,14 +278,11 @@ export async function POST(request: Request): Promise<Response> {
           status: 413,
           headers: { "content-type": "application/json; charset=utf-8" },
         }
-      )
+      ),
+      quota.snapshot
     );
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-    return tooLarge();
-  }
-
-  const body = await request.arrayBuffer();
-  if (body.byteLength > MAX_BODY_BYTES) {
+  const body = await readBodyLimited(request, MAX_BODY_BYTES);
+  if (!body.ok) {
     return tooLarge();
   }
 
@@ -273,9 +291,10 @@ export async function POST(request: Request): Promise<Response> {
       new Request(request.url, {
         method: "POST",
         headers: request.headers,
-        body,
+        body: body.bytes,
       })
-    )
+    ),
+    quota.snapshot
   );
 }
 

@@ -279,7 +279,13 @@ Each subsection names the class, a one-line description, the framework primitive
 `requireScopes()` hooks before replaying a response. Missing or revoked scopes
 defer to the normal authorization chain without reserving or capturing data.
 Custom resource-authorization hooks must still run before replay middleware;
-the framework cannot infer application ownership rules.
+the framework cannot infer application ownership rules. From 1.11.0 a
+`beforeHandle` hook stamped with `markAuthHook()` (or composed with `some()`)
+is moved ahead of a replay registered before it, with `app.use()` and inside
+`every()`; unmarked hooks keep registration order. `idempotency()` also
+partitions keys by the `tenancy()`-resolved tenant and refuses to boot in
+production when mounted ahead of `tenancy()`. Regression tests:
+`tests/red-team-attacks-19.test.ts`.
 
 `httpSignatureAuth()` runs in `preBody`, so stored-response hooks cannot skip
 signature verification. Explicit optional authentication remains optional.
@@ -310,7 +316,10 @@ JWKS URL fetches use `redirect: "error"`; configure the final HTTPS endpoint
 directly. A redirect cannot install a replacement key set or downgrade to
 plaintext transport. Failed refreshes retain only previously trusted keys
 within the configured stale-key grace period. Custom fetch implementations
-must honor the redirect policy.
+must honor the redirect policy. From 1.11.0 a failed refresh starts a
+cooldown of `min(fetchTtlSeconds, 10)` seconds before the next attempt, so an
+IdP outage cannot turn every request into an outbound fetch, and JWKS bodies
+over 1 MiB are refused.
 
 `rateLimit()` and `loginThrottle()` configured without their own trust
 options follow the App's `behindProxy` posture (via `resolveClientIp`), so
@@ -352,6 +361,10 @@ the option skips only fingerprint restrictions. Chain verification, validity,
 other configured allowlists, and custom verification remain enforced.
 The TLS terminator must still validate the certificate chain; forwarded
 certificate headers require a trusted proxy that strips caller-supplied values.
+From 1.11.0 Envoy XFCC parsing honors `\"` escapes inside quoted values, so a
+certificate Subject cannot smuggle a top-level `DNS=` / `URI=` SAN, and a
+malformed XFCC header (unbalanced or stray quotes, a pair without `=`)
+provides no identity.
 
 #### Body-size DoS + structural DoS
 

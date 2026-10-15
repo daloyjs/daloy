@@ -186,3 +186,22 @@ test("introspection requires form encoding and rejects GET", async () => {
   assert.equal(viaGet.status, 405);
   assert.equal(viaGet.headers.get("allow"), "POST, OPTIONS");
 });
+
+test("[unhappy] introspection rejects oversized form bodies with 413", async () => {
+  const oversizedHeader = await postIntrospect(
+    new Request("http://localhost/oauth/introspect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": String(64 * 1024),
+      },
+      body: "token=abc",
+    }),
+  );
+  assert.equal(oversizedHeader.status, 413);
+
+  const oversizedBody = await postIntrospect(
+    formPost(`token=${"a".repeat(20 * 1024)}`),
+  );
+  assert.equal(oversizedBody.status, 413);
+});

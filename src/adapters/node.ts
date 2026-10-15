@@ -237,9 +237,18 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     // bytes from the Node socket directly so the Request constructor gets a
     // Uint8Array body instead of `Readable.toWeb(req)`. This skips the
     // WHATWG-stream adapter that dominates POST throughput on Node.
+    // Skip pre-buffering when `onBodyPull !== undefined` (`Expect: 100-continue`):
+    // an RFC 9110 client withholds its body until `100 Continue` arrives, and
+    // the server must not solicit that body before route matching, auth/WAF/rate
+    // `preBody` hooks, and `Content-Length` / `Content-Encoding` checks pass.
     const cl = req.headers["content-length"];
     const n = cl ? Number(cl) : NaN;
-    if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
+    if (
+      onBodyPull === undefined &&
+      Number.isFinite(n) &&
+      n >= 0 &&
+      n <= bufferedBodyMaxBytes
+    ) {
       bufferRequestBody(req, n).then(
         (bytes) => dispatchToApp(app, req, res, trustProxy, bytes, onBodyPull),
         (e) => writeAdapterError(res, e)
@@ -260,40 +269,12 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
   // actually reaches for the body.
   //
   // Node's default is to answer `100 Continue` for anyone who asks, which
-  // solicits a body the framework may be about to refuse outright. A route with
-  // a request-body schema and a declared `Content-Length` over `bodyLimitBytes`
-  // is rejected by `readBodyLimited` *before* it reads a byte, so the interim
-  // `100` invited megabytes that could only ever be discarded — measured as
-  // `100` then `413` on the wire.
-  //
-  // Deferring to the first actual read makes the framework's own read decision
-  // the predicate, and that is what keeps this honest. An earlier attempt
-  // refused at header time against `bodyLimitBytes` directly, but that limit is
-  // only enforced where a body is *parsed*, so a route that declares no body
-  // schema never applies it: the same request answered `413` with `Expect` and
-  // `200` without it. `Expect` is a hint about when to send the body (RFC 9110
-  // §10.1.1), so it must never change the outcome — only when the client
-  // learns it. Keying off the read keeps the two paths in agreement by
-  // construction rather than by test coverage.
+  // solicits a body the framework may be about to refuse outright (404/405,
+  // 401/403/429 in `preBody`, 415 unsupported Content-Type/Encoding, or 413
+  // over `bodyLimitBytes`). Deferring the `100` to the first actual body pull
+  // ensures perimeter and auth checks run first and keeps `Expect` and
+  // non-`Expect` outcomes identical across every route and `Content-Length`.
   server.on("checkContinue", (req, res) => {
-    const cl = req.headers["content-length"];
-    const n = cl ? Number(cl) : NaN;
-    if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
-      // Small declared body: `handleRequest` buffers it eagerly, before dispatch,
-      // so there is no later read to key off. It is also under the buffer cap,
-      // so soliciting it immediately costs nothing worth deferring.
-      res.writeContinue();
-      handleRequest(req, res);
-      return;
-    }
-    // Streaming path (no `Content-Length`, or one above the buffer cap): answer
-    // the interim `100` the first time the framework pulls the body stream.
-    //
-    // The socket's own `resume` event is deliberately NOT the trigger. Node also
-    // resumes the stream on a microtask when it drains a body nobody read, which
-    // races the response: measured, that fired the `100` even for a request whose
-    // body was never wanted, and beat the `413` to the wire. The consumer's first
-    // `pull` is the only signal that means "the framework wants these bytes".
     let sent = false;
     handleRequest(req, res, () => {
       if (sent || res.headersSent || res.writableEnded) return;
@@ -447,15 +428,16 @@ function dispatchToApp(
 
 function bufferRequestBody(req: IncomingMessage, expected: number): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
-    // Pre-allocate to the declared Content-Length. The caller has already
-    // checked `expected <= BUFFERED_BODY_MAX_BYTES` (1 MiB) so this
-    // allocation is bounded and DoS-safe. Skipping the intermediate
-    // `chunks: Buffer[]` array + `Buffer.concat` avoids one full-body
-    // copy per request — significant at 1 MiB bodies under load.
-    // Use `Buffer.alloc` (zero-filled) rather than `Buffer.allocUnsafe`:
-    // the unsafe variant returns uninitialized memory and is forbidden by
-    // `verify:no-unsafe-buffer`. Any unwritten tail is sliced off below.
-    const out = expected > 0 ? Buffer.alloc(expected) : null;
+    // Lazy allocation + single-chunk zero-copy fast path:
+    // - Do NOT allocate `Buffer.alloc(expected)` on header arrival (which would
+    //   let a Slowloris client sending `Content-Length: 262144` and 0 body bytes
+    //   pin 256 KiB of zeroed memory per socket before sending a single byte).
+    // - When the entire body arrives in a single TCP segment (the common case
+    //   for JSON API requests), return a zero-copy `Uint8Array` view over that
+    //   chunk without allocating or copying.
+    // - Only allocate `Buffer.alloc(expected)` if a second chunk arrives.
+    let firstChunk: Buffer | null = null;
+    let out: Buffer | null = null;
     let received = 0;
     let settled = false;
     const onData = (chunk: Buffer) => {
@@ -468,21 +450,32 @@ function bufferRequestBody(req: IncomingMessage, expected: number): Promise<Uint
         reject(new Error("Request body exceeded declared Content-Length"));
         return;
       }
-      // out is non-null here because next > 0 implies expected > 0.
-      chunk.copy(out!, received);
+      if (firstChunk === null) {
+        firstChunk = chunk;
+      } else {
+        if (out === null) {
+          out = Buffer.alloc(expected);
+          firstChunk.copy(out, 0);
+        }
+        chunk.copy(out, received);
+      }
       received = next;
     };
     const onEnd = () => {
       if (settled) return;
       settled = true;
       cleanup();
-      if (received === 0) {
+      if (received === 0 || firstChunk === null) {
         resolve(new Uint8Array(0));
+        return;
+      }
+      if (out === null) {
+        resolve(new Uint8Array(firstChunk.buffer, firstChunk.byteOffset, firstChunk.byteLength));
         return;
       }
       // Trust Content-Length: if the client under-delivered we still
       // resolve the prefix actually received (matches prior behavior).
-      const buf = received === expected ? out! : out!.subarray(0, received);
+      const buf = received === expected ? out : out.subarray(0, received);
       resolve(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
     };
     const onErr = (err: Error) => {

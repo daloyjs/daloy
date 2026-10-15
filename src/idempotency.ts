@@ -36,12 +36,19 @@ import { BadRequestError, ConflictError, HttpError, PayloadTooLargeError } from 
 import { isDisconnectResponse, markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
 import { APP_BODY_LIMIT_HOOK, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
+import { registerRequestFinalizer } from "./request-finalizers.js";
 import type { BaseContext, Hooks } from "./types.js";
 
 const enc = new TextEncoder();
 
 /** Internal `ctx.state` key carrying the reservation between hooks. */
 const PENDING_STATE_KEY = "__idempotencyPending";
+
+/** Symbol written onto `ctx.state` by `tenancy()` when a tenant is resolved. */
+const TENANCY_RESOLVED_MARKER = Symbol.for("daloyjs.tenancy.resolved");
+
+/** Symbol stamped on in-flight records to prevent evicted reservations from clobbering a newer reservation. */
+const RESERVATION_TOKEN = Symbol.for("daloyjs.idempotency.reservationToken");
 
 /**
  * Process-wide registry of in-memory stores shared by
@@ -336,8 +343,20 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
    * @returns Nothing. A new entry may evict the oldest retained record.
    */
   complete(key: string, record: IdempotencyRecord, _ttlMs?: number): void {
-    if (!this.map.has(key)) {
+    const current = this.map.get(key);
+    if (!current) {
       this.reserve(key, record, _ttlMs);
+      return;
+    }
+    const expectedToken = (record as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN];
+    const currentToken = (current as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN];
+    if (
+      expectedToken !== undefined &&
+      currentToken !== undefined &&
+      expectedToken !== currentToken
+    ) {
+      // The original reservation was evicted while the handler ran and a newer
+      // request has already reserved or completed the same key; do not clobber it.
       return;
     }
     this.map.set(key, record);
@@ -345,6 +364,21 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
 
   /** @inheritDoc */
   release(key: string): void {
+    this.map.delete(key);
+  }
+
+  /**
+   * Release `key` only when it is still held by `token` (or has no token).
+   * Prevents a late-failing request whose reservation was evicted under memory
+   * pressure from deleting a newer request's reservation for the same key.
+   *
+   * @internal
+   */
+  releaseIfToken(key: string, token: symbol): void {
+    const current = this.map.get(key);
+    if (!current) return;
+    const currentToken = (current as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN];
+    if (currentToken !== undefined && currentToken !== token) return;
     this.map.delete(key);
   }
 
@@ -381,6 +415,7 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
 interface PendingReservation {
   storeKey: string;
   fingerprint: string;
+  token: symbol;
 }
 
 function getSubtle(): SubtleCrypto {
@@ -492,7 +527,7 @@ async function computeFingerprint(
   maxBodyBytes: number
 ): Promise<string> {
   const url = new URL(ctx.request.url);
-  const material = `${method}\n${url.pathname}${url.search}\n${await bodyMaterial(ctx, maxBodyBytes)}`;
+  const material = `${method}\n${url.origin}${url.pathname}${url.search}\n${await bodyMaterial(ctx, maxBodyBytes)}`;
   return sha256Hex(material);
 }
 
@@ -762,15 +797,22 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
             "`allowUnscopedCallers: true` if these callers are genuinely interchangeable."
         );
       }
+      const tenant = (ctx.state as Record<PropertyKey, unknown>)[TENANCY_RESOLVED_MARKER];
+      const tenantTag =
+        typeof tenant === "string" && tenant.length > 0
+          ? `${await sha256Hex(`tenant:${tenant}`)}:`
+          : "";
       const scopeTag = scopeRaw ? `${await sha256Hex(scopeRaw)}:` : "";
-      const storeKey = `${keyPrefix}${scopeTag}${key}`;
+      const storeKey = `${keyPrefix}${tenantTag}${scopeTag}${key}`;
       const now = Date.now();
+      const token = Symbol("idempotencyReservation");
       const record: IdempotencyRecord = {
         fingerprint,
         status: "in-flight",
         createdAt: now,
         expiresAt: now + ttlMs,
       };
+      (record as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN] = token;
 
       const reserveResult = store.reserve(storeKey, record, ttlMs);
       const existing = isPromiseLike(reserveResult) ? await reserveResult : reserveResult;
@@ -796,10 +838,23 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
         return buildReplayResponse(existing.response!, replayHeaderName);
       }
 
-      (ctx.state as Record<string, unknown>)[PENDING_STATE_KEY] = {
+      const state = ctx.state as Record<string, unknown>;
+      state[PENDING_STATE_KEY] = {
         storeKey,
         fingerprint,
+        token,
       } satisfies PendingReservation;
+      registerRequestFinalizer(ctx, () => {
+        const orphaned = state[PENDING_STATE_KEY] as PendingReservation | undefined;
+        if (!orphaned) return;
+        delete state[PENDING_STATE_KEY];
+        if (store instanceof MemoryIdempotencyStore) {
+          store.releaseIfToken(orphaned.storeKey, orphaned.token);
+          return;
+        }
+        const r = store.release(orphaned.storeKey);
+        if (isPromiseLike(r)) r.catch(() => undefined);
+      });
       return undefined;
     },
 
@@ -811,33 +866,39 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       // Consume once: a replayed response on a later retry must not re-store.
       delete state[PENDING_STATE_KEY];
 
+      const releasePending = async (): Promise<void> => {
+        if (store instanceof MemoryIdempotencyStore) {
+          store.releaseIfToken(pending.storeKey, pending.token);
+          return;
+        }
+        await store.release(pending.storeKey);
+      };
+
       // A dispatcher-built disconnect response (`disconnectStatusCode`) is
       // not a handler outcome. Release so the client's retry runs again
       // instead of replaying an empty 499 for the whole TTL.
       if (isDisconnectResponse(res) || !cacheableStatus(res.status)) {
-        await store.release(pending.storeKey);
+        await releasePending();
         return undefined;
       }
 
       const captured = await captureResponse(res, maxResponseBytes);
       if (captured === null) {
         // Body too large to cache safely: drop the reservation so retries work.
-        await store.release(pending.storeKey);
+        await releasePending();
         return undefined;
       }
 
       const now = Date.now();
-      const completeResult = store.complete(
-        pending.storeKey,
-        {
+      const completedRecord: IdempotencyRecord = {
           fingerprint: pending.fingerprint,
           status: "completed",
           response: captured,
           createdAt: now,
           expiresAt: now + ttlMs,
-        },
-        ttlMs
-      );
+      };
+      (completedRecord as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN] = pending.token;
+      const completeResult = store.complete(pending.storeKey, completedRecord, ttlMs);
       if (isPromiseLike(completeResult)) await completeResult;
       return undefined;
     },

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { findForbiddenLockfileSources } from "../scripts/verify-lockfile-sources.ts";
 
 async function readWorkspaceFile(path: string) {
-  return readFile(new URL(`../${path}`, import.meta.url), "utf8");
+  return (await readFile(new URL(`../${path}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 }
 
 test("root npmrc blocks install-time supply-chain attack paths", async () => {

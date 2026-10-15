@@ -260,13 +260,13 @@ Ordering still matters, and it is enforced rather than merely documented: becaus
 
 A cache hit returns a response from `beforeHandle`, which ends the hook chain. Any gate running in that *same* phase could therefore be skipped by a hit above it. That is why the network-identity gates (`geoBlock()`, `ipRestriction()`, `botGuard()`, `autoBan()` and `ipReputation()`) run in `preBody`, which always precedes `beforeHandle`. They hold whether you mount them above or below the cache. Authentication (`bearerAuth()`, `basicAuth()`, `clientCertAuth()`, `httpSignatureAuth()`) runs in `preBody` for the same reason.
 
-This matters for a hand-written gate: a custom guard in `beforeHandle` *can* be preempted by a cache hit mounted ahead of it. Put your own access-control checks in `preBody` too, or register them before the cache.
+This matters for a hand-written gate. A custom auth hook stamped with `markAuthHook()` (or composed with `some()`) that runs in `beforeHandle` is moved ahead of the cache automatically, both with `app.use()` and inside `every()`, so a hit cannot skip it. An unmarked custom guard in `beforeHandle` *can* still be preempted by a cache hit mounted ahead of it: put it in `preBody`, mark it with `markAuthHook()`, or register it before the cache.
 
 ## Other security notes [#security-notes]
 
 - Responses carrying `Set-Cookie` or `Cache-Control: private | no-store | no-cache` are never stored, the same skip posture as `etag()`.
 - Only `200 OK` is cached unless you widen `cacheableStatus`, so error pages do not poison the cache.
-- Stored bodies are capped by `maxBodyBytes` to bound memory growth from large replies, and `MemoryResponseCacheStore` is bounded on both entry count (`maxEntries`, default 10,000) and retained body bytes (`maxBytes`, default 64 MiB). Both limits are needed: expiry-based pruning alone cannot bound a burst of requests for distinct URLs, because every entry in it is unexpired for the whole TTL.
+- Stored bodies are capped by `maxBodyBytes` to bound memory growth from large replies, and `MemoryResponseCacheStore` is bounded on both entry count (`maxEntries`, default 10,000) and retained bytes (`maxBytes`, default 64 MiB, counting each entry's body plus its stored header names and values). Both limits are needed: expiry-based pruning alone cannot bound a burst of requests for distinct URLs, because every entry in it is unexpired for the whole TTL.
 - Use `varyHeaders` (or a custom `keyGenerator`) to partition the cache whenever the response depends on a request header such as `Accept-Language` without saying so in `Vary`.
 - Hop-by-hop headers (`Connection`, `Transfer-Encoding`, `TE`, …) and the `X-Request-Id` correlation id are stripped before an entry is stored, so a cached reply never replays another request's trace id or corrupts message framing. Add a custom correlation header to `excludeHeaders`.
 - Partition components are length-prefixed, so a principal or tenant id containing the key delimiter cannot be crafted to collide with another partition (cache-key injection).

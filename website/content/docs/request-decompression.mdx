@@ -22,7 +22,7 @@ DaloyJS core deliberately does **not** decompress request bodies. It is *safe by
 
 DaloyJS ships `requestDecompression()`, the opt-in middleware that adds request decompression **with the bomb guard baked in**. It inflates the body with two independent caps enforced *during* inflation, so a bomb is aborted long before it is fully materialised in memory.
 
-<FlowDiagram title="onRequest decompression" numbered steps={[
+<FlowDiagram title="Deferred preBody decompression" numbered steps={[
           {
             label: "Compressed body",
             detail: "Content-Encoding: gzip",
@@ -56,7 +56,7 @@ import { App, requestDecompression } from "@daloyjs/core";
 
 const app = new App();
 
-// Register globally so it runs before schema-body validation.
+// Register globally; it still waits for auth and routing before inflating.
 app.use(requestDecompression({
   maxDecompressedBytes: 1024 * 1024, // inflated body never exceeds 1 MiB
   maxCompressedBytes: 64 * 1024,     // reject compressed uploads over 64 KiB
@@ -64,7 +64,11 @@ app.use(requestDecompression({
 }));
 ```
 
-The middleware runs in the `onRequest` phase, before the per-request context (and therefore before schema-body validation) is built, and stashes the inflated bytes on the request so the framework's own body reader transparently sees the decompressed payload. That means it works for both schema-validated bodies *and* handlers that read the raw body themselves.
+The middleware runs as a **deferred `preBody` hook**. Wherever you register it, it waits until the request has matched a route and every other `preBody` hook in the chain has passed: `bearerAuth()`, `apiKeyAuth()`, `jwk()`, `session()`, `rateLimit()`, `ipAccessControl()`, `csrf()`, and the rest. An unauthenticated, rate-limited, or unrouted (`404` / `405`) request is rejected before a single compressed byte is read or inflated, and the work stays inside the `requestTimeoutMs` budget.
+
+Once it runs, it installs the inflated bytes as the request body, so schema-validated bodies and handlers that read the raw body (`request.text()`, `request.json()`, `request.arrayBuffer()`, `request.bytes()`, `request.blob()`, `request.formData()`, `request.body`, `request.clone()`) all see the decompressed payload.
+
+With `Expect: 100-continue`, the Node adapter sends `100 Continue` only when the body is actually read. A request rejected by auth or routing gets its final status without the client ever being asked to upload the body.
 
 ## The two caps
 
@@ -120,4 +124,4 @@ app.use(requestDecompression({
 
 ## Relationship to `bodyLimitBytes`
 
-`bodyLimitBytes` caps the body the app reads, which, with this guard installed, is the *inflated* payload. Keep `maxDecompressedBytes` at or below `bodyLimitBytes` so a request that survives the bomb guard still fits the limit the rest of the stack assumes. Without this middleware, `bodyLimitBytes` only ever sees the compressed bytes, which is exactly why an unguarded decompression step is dangerous.
+`bodyLimitBytes` caps the body the app reads, which, with this guard installed, is the *inflated* payload. That holds on routes without a body schema too: a handler reading `request.text()` gets a `413` when the inflated body is over `bodyLimitBytes`, even if it fits `maxDecompressedBytes`. Keep `maxDecompressedBytes` at or below `bodyLimitBytes` so a request that survives the bomb guard still fits the limit the rest of the stack assumes. Without this middleware, `bodyLimitBytes` only ever sees the compressed bytes, which is exactly why an unguarded decompression step is dangerous.

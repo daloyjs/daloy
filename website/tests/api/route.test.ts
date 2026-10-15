@@ -223,6 +223,25 @@ test("POST /oauth/token rejects unsupported grants and unknown scopes", async ()
   assert.equal(scopeBody.error, "invalid_scope");
 });
 
+test("[unhappy] POST /oauth/token rejects oversized form bodies with 413", async () => {
+  const oversizedHeader = await postToken(
+    new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": String(64 * 1024),
+      },
+      body: "grant_type=client_credentials",
+    }),
+  );
+  assert.equal(oversizedHeader.status, 413);
+
+  const oversizedBody = await postToken(
+    formPost(`grant_type=client_credentials&pad=${"a".repeat(20 * 1024)}`),
+  );
+  assert.equal(oversizedBody.status, 413);
+});
+
 test("GET /oauth/token is 405; GET /oauth/authorize responds with OAuth JSON", async () => {
   const token = getToken(new Request("http://localhost/oauth/token"));
   assert.equal(token.status, 405);
