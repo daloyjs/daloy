@@ -60,3 +60,8 @@ build-out
 # `red-team-live/` (the harness) or `tests/` (a regression), both of which are
 # type-checked and run in CI; scratch material stays out of git entirely.
 tmp/
+
+
+
+.agents/skills/automated-release/**
+.claude/skills/automated-release/**
