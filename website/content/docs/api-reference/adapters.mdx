@@ -1,6 +1,6 @@
 ---
 title: "API reference: Runtime adapters"
-description: "DaloyJS runtime adapter reference: serve() for Node.js, Bun, and Deno, plus fetch-handler adapters for Cloudflare Workers, Vercel, Fastly Compute, and AWS Lambda."
+description: "DaloyJS runtime adapter reference: serve() for Node.js, Bun, and Deno, plus handler adapters for Workers, Vercel, Fastly, AWS Lambda, and Azure Functions."
 keywords:
   - DaloyJS adapters API
   - DaloyJS serve reference
@@ -27,9 +27,9 @@ The runtime adapters wrap the same `app.fetch(Request)` dispatch for each platfo
             detail: "/cloudflare · /vercel · /fastly",
           },
           {
-            eyebrow: "aws",
-            label: "toLambdaHandler(app)",
-            detail: "/lambda (APIGW v1 + v2)",
+            eyebrow: "aws · azure",
+            label: "toLambdaHandler · toAzureHandler",
+            detail: "/lambda (APIGW v1 + v2) · /azure (v4)",
           },
         ]} converge={{
           eyebrow: "same behavior",
@@ -155,9 +155,11 @@ toRouteHandlers(app: App): RouteHandlers;     // Next.js App Router route.ts
 ## `@daloyjs/core/fastly` [#daloyjs-core-fastly]
 
 ```ts
-toFastlyHandler(app: App): (req: Request) => Promise<Response>;
-installFastlyListener(app: App): void;   // wires addEventListener("fetch", ...)
+toFastlyHandler(app: App): (req: Request, waitUntil?: (p: Promise<unknown>) => void) => Promise<Response>;
+installFastlyListener(app: App): void;   // wires addEventListener("fetch", ...) and event.waitUntil
 ```
+
+Pass the fetch event's `waitUntil` so the OTLP telemetry flush can finish after the response; without it the flush is fire-and-forget.
 
 ## `@daloyjs/core/lambda` [#daloyjs-core-lambda]
 
@@ -174,6 +176,32 @@ type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;
 // containing \ / ? # @ % or whitespace) is refused with 400.
 // X-Forwarded-Proto is honoured only as http or https; anything else is https.
 ```
+
+## `@daloyjs/core/azure` [#daloyjs-core-azure]
+
+```ts
+toAzureHandler(app: App, opts?: AzureHandlerOptions): AzureHttpHandler;
+  // azure.http("api", { route: "{*path}", methods: [...], handler: toAzureHandler(app) })
+
+interface AzureHandlerOptions {
+  stream?: boolean;  // return the body as a ReadableStream; pair with app.setup({ enableHttpStream: true })
+}
+type AzureHttpHandler = (request: AzureHttpRequestLike, context?: unknown) => Promise<AzureHttpResponseInit>;
+
+interface AzureHttpResponseInit {
+  status: number;
+  headers: Record<string, string>;            // every header except set-cookie
+  cookies?: AzureCookie[];                    // one entry per Set-Cookie
+  body?: ReadableStream<Uint8Array> | ArrayBuffer;
+}
+
+// The request body is passed in as a stream, so bodyLimitBytes is enforced
+// while reading. An unparseable request URL is answered with 400.
+// Partitioned / Priority cookie attributes have no Azure field and are dropped.
+// Azure exposes no TCP peer: getConnInfo() is undefined; use behindProxy.
+```
+
+<AutoTypeTable path="src/adapters/azure.ts" name="AzureHandlerOptions" />
 
 ## Test-only / internal helpers [#test-only-internal-helpers]
 

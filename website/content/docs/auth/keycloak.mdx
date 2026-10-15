@@ -1,0 +1,172 @@
+---
+title: Protect a DaloyJS API with Keycloak
+description: Protect a DaloyJS API with self-hosted Keycloak. The built-in jwk() verifies realm tokens; requireRoles() reads realm and client roles. No vendor SDK needed.
+keywords:
+  - DaloyJS Keycloak
+  - Keycloak JWT verification
+  - Keycloak realm roles
+  - Keycloak client roles
+  - Keycloak audience mapper
+  - self-hosted OIDC
+---
+
+# Protect a DaloyJS API with Keycloak
+
+[Keycloak](https://www.keycloak.org) is the most widely deployed open-source identity provider: you run it yourself, and it handles login, MFA, social and enterprise federation, and token issuance. It speaks standard OpenID Connect, so a DaloyJS API needs no Keycloak SDK. The built-in `jwk()` verifies the realm's access tokens, and `requireRoles()` reads Keycloak's realm and client roles.
+
+<AuthRole role="resource-server">
+<p>Keycloak owns the accounts, the login screens, and the tokens. Your DaloyJS API only checks the access token on each request and decides what the caller may do. If you are weighing self-hosted Keycloak against a hosted provider, read{" "}<a href="/docs/auth/architecture">Auth architecture</a>{" "}first: running an IdP is an operational commitment.</p>
+</AuthRole>
+
+<SequenceDiagram title="Keycloak access-token verification" participants={[
+          "Client app",
+          "Keycloak realm",
+          "DaloyJS API",
+          "Realm JWKS",
+        ]} steps={[
+          {
+            from: "Client app",
+            to: "Keycloak realm",
+            label: "Authorization code + PKCE; Keycloak mints an access token (RS256)",
+            detail: "iss = https://sso.example.com/realms/acme",
+            kind: "async",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <access token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Realm JWKS",
+            label: "jwk() fetches signing keys (cached)",
+            detail: "GET {issuer}/protocol/openid-connect/certs",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "jwk() checks iss, aud, expiry; requireRoles() reads realm_access.roles",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "401 bad token · 403 missing role · 200 otherwise",
+            kind: "response",
+          },
+        ]} caption="Keycloak is a standard OIDC provider, so the built-in jwk() verifies its tokens against the realm JWKS. Roles live in nested claims, which requireRoles() reads through a small reader function." />
+
+## 1. Configure the realm
+
+1. Create a **realm** (for example `acme`), or use an existing one. Your issuer is `https://<keycloak-host>/realms/<realm>`. Keycloak 16 and older add `/auth` before `/realms`.
+2. Create a **client** for your front end (public client, *Standard flow* with PKCE) and note its client ID.
+3. Create a client for the **API** itself (for example `books-api`). It does not need a flow enabled; it exists so tokens can name it as their audience and so you can define client roles on it.
+4. **Add an audience mapper.** By default Keycloak access tokens do not name your API in `aud`. Create a client scope (for example `books-api-audience`) with an **Audience** mapper whose *Included Client Audience* is `books-api`, with *Add to access token* on, and add that scope to the front-end client as a default scope.
+5. Define **realm roles** (shared across clients) or **client roles** on `books-api`, and assign them to users or groups.
+
+Check the result: decode a fresh access token locally and confirm `iss`, an `aud` that includes `books-api`, and the roles you assigned.
+
+## 2. Install
+
+Nothing beyond `@daloyjs/core`.
+
+## 3. Environment variables
+
+```bash
+# .env
+KEYCLOAK_ISSUER=https://sso.example.com/realms/acme
+KEYCLOAK_AUDIENCE=books-api
+```
+
+## 4. Verify tokens
+
+```ts
+// src/auth.ts
+import { jwk } from "@daloyjs/core";
+
+const issuer = process.env.KEYCLOAK_ISSUER!;
+
+export const keycloak = jwk({
+  jwks: `${issuer}/protocol/openid-connect/certs`,
+  algorithms: ["RS256"],
+  issuer,
+  audience: process.env.KEYCLOAK_AUDIENCE!,
+  maxLifetimeSeconds: 3_600, // Keycloak's default access-token lifespan is 5 minutes
+});
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    user?: { sub?: string; scopes: string[]; claims: Record<string, unknown> };
+  }
+}
+```
+
+If you changed the realm's signing algorithm (for example to `ES256` or `PS256`), list it in `algorithms` instead. `jwk()` accepts asymmetric algorithms only.
+
+## 5. Guard routes with roles
+
+Keycloak nests roles: realm roles in `realm_access.roles`, client roles in `resource_access.<client-id>.roles`. Pass `requireRoles()` a reader for the one you use:
+
+```ts
+import { z } from "zod";
+import { App, rateLimit, requireRoles, requireScopes, secureHeaders } from "@daloyjs/core";
+import { keycloak } from "./auth.ts";
+
+const realmRoles = (claims: Record<string, unknown>) =>
+  (claims.realm_access as { roles?: unknown } | undefined)?.roles;
+
+const apiRoles = (claims: Record<string, unknown>) =>
+  (claims.resource_access as Record<string, { roles?: unknown }> | undefined)?.["books-api"]?.roles;
+
+const app = new App();
+app.use(secureHeaders());
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.use(keycloak);
+
+app.get(
+  "/books",
+  {
+    hooks: requireRoles(["reader", "editor"], { claim: realmRoles, match: "any" }),
+    responses: { 200: { description: "OK", body: z.array(z.string()) } },
+  },
+  () => ({ status: 200, body: [] }),
+);
+
+app.delete(
+  "/books/:id",
+  {
+    hooks: requireRoles(["books-admin"], { claim: apiRoles }),
+    responses: { 204: { description: "Deleted" } },
+  },
+  () => ({ status: 204, body: undefined }),
+);
+```
+
+Prefer **client roles** for API permissions: they are scoped to `books-api`, so a role named `admin` in another client cannot unlock your API. A reader that finds nothing (no `resource_access`, a different client) means "no roles", and the request gets `403`.
+
+Keycloak also emits OAuth scopes in `scope` (space-delimited). Custom client scopes such as `books:write` work with `requireScopes()` as usual.
+
+## Service accounts (machine-to-machine)
+
+To let a backend call the API with no user, enable **Service accounts roles** on that backend's client and assign it client roles on `books-api`. It gets tokens through the client credentials grant, and they verify with the same `jwk()` setup. Pin which clients may call internal routes with the `azp` claim:
+
+```ts
+jwk({
+  jwks: `${issuer}/protocol/openid-connect/certs`,
+  algorithms: ["RS256"],
+  issuer,
+  audience: process.env.KEYCLOAK_AUDIENCE!,
+  verify: (claims) => ["billing-worker", "books-frontend"].includes(String(claims.azp)), // false -> 403
+});
+```
+
+## Running Keycloak
+
+- **Serve it over HTTPS with a stable hostname.** The issuer is part of every token, so set Keycloak's `hostname` option to the public URL. A token issued as `http://localhost:8080/realms/acme` will not verify against `https://sso.example.com/realms/acme`.
+- **Your API must reach the JWKS URL.** In Kubernetes or Docker Compose, the in-cluster hostname often differs from the public issuer. The `jwks` URL must still be `https://`; point it at an internal TLS endpoint, or keep it on the public hostname.
+- **Key rotation.** When you rotate realm keys, keep the old key *passive* until every token signed with it has expired. `jwk()` picks the new `kid` up automatically.
+- **Same pattern for other self-hosted IdPs.** Zitadel, Authentik, Ory Hydra, and Dex all publish a JWKS; only the URLs and the roles claim change. For Zitadel, roles live in `urn:zitadel:iam:org:project:roles` as an object keyed by role name: `requireRoles(["admin"], { claim: (c) => Object.keys((c["urn:zitadel:iam:org:project:roles"] as object | undefined) ?? {}) })`.
+
+See also [Auth architecture](/docs/auth/architecture), [Entra ID](/docs/auth/entra-id), and the [auth overview](/docs/auth).

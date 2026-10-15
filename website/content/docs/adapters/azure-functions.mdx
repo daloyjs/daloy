@@ -1,0 +1,143 @@
+---
+title: Azure Functions adapter
+description: Run a DaloyJS REST API on Azure Functions with the Node.js v4 programming model. One catch-all HTTP trigger, cookies, streaming, and body limits intact.
+keywords:
+  - DaloyJS Azure Functions
+  - Azure Functions v4 Node.js
+  - toAzureHandler
+  - Azure HTTP trigger
+  - enableHttpStream
+  - host.json routePrefix
+---
+
+# Azure Functions
+
+The Azure adapter plugs a DaloyJS app into one catch-all HTTP trigger of the Azure Functions **Node.js v4 programming model**. The v4 `HttpRequest` looks like a web `Request` but is not one, and the host expects an `HttpResponseInit` object back, so `toAzureHandler(app)` converts both directions. Routing, validation, and errors all stay in DaloyJS.
+
+<FlowDiagram title="Azure Functions request path" steps={[
+          {
+            eyebrow: "platform",
+            label: "HTTP trigger",
+            detail: "route: {*path} · HttpRequest",
+          },
+          {
+            eyebrow: "adapter",
+            label: "toAzureHandler(app)",
+            detail: "body stream in · cookies out",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          {
+            eyebrow: "platform",
+            label: "HttpResponseInit",
+            detail: "status · headers · cookies · body",
+            tone: "success",
+          },
+        ]} caption="One catch-all trigger forwards every request to app.fetch. The adapter streams the request body in, so bodyLimitBytes still applies, and moves each Set-Cookie onto Azure's cookies channel on the way out." />
+
+## When to choose Azure Functions
+
+- Your organisation already runs on Azure and wants per-request billing with Entra ID, Key Vault, and VNet integration close by.
+- You want a serverless REST API next to Azure Storage, Service Bus, or Cosmos DB triggers in the same Function App.
+- You need the Flex Consumption or Premium plans for VNet access or always-ready instances.
+
+## Install
+
+The adapter ships with `@daloyjs/core` and needs no Azure types at runtime. Your Function App still installs the Azure runtime package:
+
+```package-install
+@daloyjs/core @azure/functions
+```
+
+Use a Node.js version that Azure Functions supports **and** DaloyJS requires (Node 24 LTS or newer). Check the Azure Functions supported-languages table for your plan before you deploy.
+
+## Register one catch-all trigger
+
+```ts title="src/functions/api.ts"
+import { app as azure } from "@azure/functions";
+import { toAzureHandler } from "@daloyjs/core/azure";
+import { app } from "../app.js";
+
+azure.http("api", {
+  route: "{*path}",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+  authLevel: "anonymous", // DaloyJS does the auth; see below
+  handler: toAzureHandler(app),
+});
+```
+
+Azure prefixes HTTP routes with `/api` by default. Set the prefix to empty so your DaloyJS routes keep their own paths:
+
+```json title="host.json"
+{
+  "version": "2.0",
+  "extensions": {
+    "http": { "routePrefix": "" }
+  }
+}
+```
+
+If you keep the `/api` prefix instead, mount your routes under `/api` in the app.
+
+## Streaming responses
+
+By default the Functions host buffers the whole response. For Server-Sent Events, NDJSON, or large downloads, turn on HTTP streams in the host and tell the adapter to hand the body over as a stream:
+
+```ts title="src/functions/api.ts"
+import { app as azure } from "@azure/functions";
+import { toAzureHandler } from "@daloyjs/core/azure";
+import { app } from "../app.js";
+
+azure.setup({ enableHttpStream: true });
+
+azure.http("api", {
+  route: "{*path}",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: toAzureHandler(app, { stream: true }),
+});
+```
+
+Set both together. `stream: true` without `enableHttpStream` still works, but Azure buffers the stream anyway.
+
+## Auth level
+
+`authLevel: "anonymous"` means Azure does not check a function key, and DaloyJS route auth (`bearerAuth()`, `jwk()`, sessions) is the gate. Use `authLevel: "function"` only as an extra outer key check, for example for an internal API called by another service. A function key is a shared secret, not user identity, so it does not replace route-level auth.
+
+## Client IP
+
+Azure does not expose the TCP peer to the handler, so `getConnInfo(ctx.request)` is `undefined` on Azure. The platform front end forwards the caller in `X-Forwarded-For` instead. Declare the proxy posture so `rateLimit()` and `resolveClientIp()` read the right entry:
+
+```ts title="src/app.ts"
+import { App } from "@daloyjs/core";
+
+export const app = new App({
+  behindProxy: { hops: 1 }, // add 1 per extra proxy (Front Door, API Management)
+});
+```
+
+<Callout type="warning">Check what your plan actually sends before you pick `hops`. Log `x-forwarded-for` from one real request: DaloyJS accepts only plain IP addresses there, so an entry with a port (`203.0.113.7:51234`) resolves to no client IP rather than a guessed one.</Callout>
+
+## What the adapter does for you
+
+- **Body limits.** The request body is passed in as the host's stream, so `bodyLimitBytes` is enforced while the body is read. An oversized body gets `413`.
+- **Cookies.** The Functions host keeps one value per header name, so the adapter moves every `Set-Cookie` onto the `cookies` array of the response. `Partitioned` and `Priority` have no Azure field and are dropped. A malformed `Set-Cookie` without `name=value` is left out.
+- **Bad requests.** A request URL that cannot be parsed is answered with a `400` problem+json, never an unhandled exception.
+- **Telemetry.** OTLP data is flushed before the handler returns, because a scaled-in instance gets no shutdown hook.
+
+## Gotchas
+
+- Shutdown hooks (`app.onShutdown`, `app.onClose`) are not wired on Azure: the platform owns the process lifecycle, so do not rely on them for flushing state.
+- `GET` and `HEAD` bodies are ignored, the same as a web `Request`.
+- Only the v4 programming model is supported. The older v3 model (`context.res`, `function.json` per function) has a different handler shape; migrate the Function App to v4 first.
+
+## See also
+
+- [Adapters overview](/docs/adapters)
+- [AWS Lambda](/docs/adapters/aws-lambda): the same buffered-or-streamed choice on AWS.
+- [Reverse proxy and client IPs](/docs/deployment#reverse-proxy) · [Boot guards](/docs/security/boot-guards)

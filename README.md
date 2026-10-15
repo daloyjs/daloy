@@ -64,7 +64,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | You want                                                   | Today's best-of                                                       | What DaloyJS gives you                                                                                                                                                                                    |
 | ---------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Best **OpenAPI ergonomics**                                | [FastAPI](https://fastapi.tiangolo.com)                               | OpenAPI 3.1 from a single route definition; `docs: true` mounts `/docs` and `/openapi.json`.                                                                                                              |
-| Best **Vercel / serverless / edge fit**                    | [Hono](https://hono.dev/docs/)                                        | Web-standard `Request → Response` core with adapters for Node, Bun, Deno, Cloudflare, Vercel, Fastly, and Lambda.                                                                                         |
+| Best **Vercel / serverless / edge fit**                    | [Hono](https://hono.dev/docs/)                                        | Web-standard `Request → Response` core with adapters for Node, Bun, Deno, Cloudflare, Vercel, Fastly, Lambda, and Azure.                                                                                |
 | Mature **Swagger / docs / ops** in Node                    | [Fastify](https://fastify.dev/docs/latest/Reference/)                 | Encapsulated plugins, structured logger, graceful shutdown, request ids, and lifecycle hooks — all first-party.                                                                                           |
 | Modern **TS-first DX**, Bun acceptable                     | [Elysia](https://elysiajs.com/at-glance.html)                         | End-to-end typed handlers, typed context, and a typed in-process client — no codegen step required.                                                                                                       |
 | Best-in-class **typed client codegen** for any consumer    | [Hey API](https://heyapi.dev/openapi-ts/get-started)                  | One `pnpm gen` command emits a fully-typed fetch SDK from your live OpenAPI spec.                                                                                                                         |
@@ -77,7 +77,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 
 ```
 framework test suite passing · ≥90% line + function coverage / ≥92% branch coverage · typechecks on TypeScript 7 with `strict: true`
-runs on Node, Bun, Deno, Cloudflare, Vercel, Fastly, Lambda
+runs on Node, Bun, Deno, Cloudflare (and self-hosted workerd), Vercel, Fastly, Lambda, Azure Functions
 ~25M static-route ops/sec · ~2.2M dynamic-route ops/sec on M-class CPU
 ```
 
@@ -477,7 +477,7 @@ Don't build your own authorization server — verify tokens from a vetted one.
 
 - **API as a resource server (default):** verify JWTs with `jwk()` against the
   provider's JWKS (asymmetric-only algorithm allowlist, `issuer`/`audience`
-  enforced), then authorize per route with `requireScopes()`.
+  enforced), then authorize per route with `requireScopes()` or `requireRoles()`.
 - **Browser app:** use the back-end-for-frontend (BFF) pattern — run the
   authorization-code + PKCE flow server-side, keep tokens in a `session()`
   cookie (never in JavaScript), and protect mutations with `csrf()`.
@@ -573,6 +573,7 @@ import {
 } from "@daloyjs/core/vercel"; // Vercel Node / Edge / Next.js / Netlify Edge
 import { installFastlyListener } from "@daloyjs/core/fastly"; // Fastly Compute
 import { toLambdaHandler } from "@daloyjs/core/lambda"; // AWS Lambda / Netlify Functions / Lambda Function URLs
+import { toAzureHandler } from "@daloyjs/core/azure"; // Azure Functions (Node.js v4 programming model)
 ```
 
 The core only ever sees `Request → Response`. Adapters live at the edge.
@@ -620,7 +621,11 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 
 ### Runtimes and deployment
 
-- Adapters for Node (Heroku, Railway, Render, Fly.io), Bun, Deno, Cloudflare Workers, Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, and AWS Lambda / Netlify Functions / Lambda Function URLs, including backpressure-safe Lambda response streaming via `toLambdaStreamHandler()`.
+- Adapters for Node (Heroku, Railway, Render, Fly.io, Google Cloud Run), Bun, Deno, Cloudflare Workers (also self-hosted workerd), Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, AWS Lambda / Netlify Functions / Lambda Function URLs (including behind CloudFront), and Azure Functions, including backpressure-safe Lambda response streaming via `toLambdaStreamHandler()`.
+- Azure Functions adapter at `@daloyjs/core/azure`: `toAzureHandler(app)` serves the whole app from one catch-all v4 HTTP trigger, streams the request body in so `bodyLimitBytes` still applies, moves every `Set-Cookie` onto Azure's `cookies` channel (the host keeps one value per header name), answers an unparseable URL with `400`, awaits the OTLP flush, and supports streamed responses with `{ stream: true }` plus `enableHttpStream`. Typed structurally, so the core takes no dependency on `@azure/functions`.
+- Real-runtime CI smoke suite (`pnpm smoke:deno`, `smoke:bun`, `smoke:workerd`): the published `dist/` build is served through the real Deno, Bun, and workerd adapters, on checksum-pinned runtime binaries, and probed for routing, secure headers, schema and body-limit rejection, problem+json, multiple `Set-Cookie`, and conn-info that never comes from a spoofable header.
+- Fastly Compute adapter flushes OTLP telemetry through the fetch event's `waitUntil` (`installFastlyListener`), and `toFastlyHandler` accepts an optional `waitUntil`.
+- Deno: the adapter and `deno-basic` template stay supported while the Deno runtime is in upstream maintenance mode; the docs cover moving off Deno Deploy (shutting down around April 2027) to Cloudflare Workers, a self-hosted container, or Node/Bun.
 - `daloy dev` watch loop delegates to the host runtime's native watcher (`node --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
 - `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening. The completion summary surfaces official install links (nodejs.org, pnpm.io, bun.sh) for any runtime or package manager your selections need but that is missing from `PATH`, and skips a doomed dependency install when the chosen package manager is absent.
 - Container-first templates: `HEALTHCHECK` to `/readyz`, `STOPSIGNAL SIGTERM`, non-root user, `tini` as PID 1; from 1.5.4 base images are pinned by digest.
@@ -688,6 +693,7 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 - `bearerAuth()` and `basicAuth()` with per-scheme `verify(credentials, ctx)` revalidation hooks, typed-context `onAuthSuccess` callback, and `Cache-Control: no-store` on every 401 challenge.
 - `jwk()` asymmetric-only JWKS middleware: refuses `HS*` at construction, cross-checks `kid` and JWT-vs-JWK `alg`, requires `https://` JWKS URLs with TTL caching + in-flight-promise dedup, normalizes `scope` / `scp` / `scopes` claims, including Microsoft Entra ID's space-delimited string `scp` (1.10.0). Optional `maxLifetimeSeconds` requires expiry and caps accepted token lifetimes; see [authentication safeguards](https://daloyjs.dev/docs/security/auth-slice).
 - `requireScopes()` with RFC-6750 `WWW-Authenticate: Bearer` challenge and per-request scope aggregation. From 1.10.0, `{ phase: "preBody" }` authorizes before the body is read (`403`, not `400`, for a malformed body from an under-scoped caller), and `{ phase: "preBody", match: "any" }` accepts any one of several scopes.
+- `requireRoles()` for role-, group-, and permission-based authorization: reads any list-valued claim (`roles` by default, a named claim such as `cognito:groups`, `groups`, `permissions`, or a namespaced URL claim, or a reader function for nested claims like Keycloak's `realm_access.roles`), with all-of or any-of matching. It always runs in `preBody`, so it refuses before body I/O and before `idempotency()` / `responseCache()` replays, fails closed on missing or malformed claims, refuses `__proto__`-style claim names, and its `403` never names the missing role. `bearerAuth({ validate })` can now return a user object that becomes `ctx.state.user`, so provider SDKs (Cognito, LoginRadius, Okta's verifier) plug into `requireScopes()` and `requireRoles()` too.
 - `session()` with signed cookies and pluggable stores.
 - `idempotency()` with `Idempotency-Key` fingerprinting + byte-for-byte response replay, in-flight `409`, `422` on key reuse with a different payload, and a pluggable `IdempotencyStore` (in-memory default) at `@daloyjs/core/idempotency`.
 - `responseCache()` server-side body cache (cache-key + TTL with `s-maxage`/`max-age` orchestration, request `no-store`/`no-cache` directives, recursion-safe stale-while-revalidate, proactive `varyHeaders` keying, `X-Cache` HIT/MISS/STALE marker, pluggable `ResponseCacheStore` whose in-memory default is bounded on both entry count and retained bytes) at `@daloyjs/core/response-cache`. Never caches `Set-Cookie`, `private`/`no-store`/`no-cache`, or `Vary: *` responses, and strips `Age`/hop-by-hop/`X-Request-Id` from stored entries so a hit never replays another request's correlation id. **Fail-closed on every principal dimension (CWE-524):** the key is the full _effective request URI_ including the authority (RFC 9111 §4), so hostnames never share entries; requests carrying `Authorization` **or** `Cookie` bypass the shared cache unless a `principal` names the caller (then each gets its own entry) or the header is explicitly declared shareable; a tenant resolved by `tenancy()` is folded into the key automatically — with a boot guard that refuses to start if the cache is mounted ahead of `tenancy()`; and the response's **own `Vary` header** is honoured as a secondary key (RFC 9111 §4.1), so the `Vary: Origin` written by `cors()` and the `Vary: Accept-Encoding` written by `compression()` keep one caller's allowed origin — or their gzipped bytes — from being served to the next, with each variant stored separately so they all stay warm. Complements `etag()`/`compression()`, which do not cache bodies.

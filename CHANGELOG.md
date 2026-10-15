@@ -17,6 +17,94 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `requireRoles(roles, { claim, match })`: role-, group-, and permission-based
+  authorization next to `requireScopes()`. It reads a list-valued claim from
+  `ctx.state.user.claims` (as `jwk()` stamps it) or from `ctx.state.user`
+  itself: `roles` by default, any named top-level claim read verbatim
+  (`cognito:groups`, `groups`, `permissions`, `https://acme.example/roles`),
+  or a reader function for nested claims (Keycloak `realm_access.roles`,
+  Zitadel's role object). Values may be arrays or space-delimited strings.
+  It always runs in `preBody`, so an unauthorized caller is refused before
+  the body is read and before `idempotency()` / `responseCache()` can replay
+  a stored response. Fails closed (missing, malformed, or throwing claims
+  mean no roles), reads only own properties, refuses `__proto__` /
+  `constructor` / `prototype` claim names, and the `403` does not name the
+  missing role. New exports: `requireRoles`, `RequireRolesOptions`,
+  `RoleClaimReader`.
+- `bearerAuth({ validate })` may resolve to a user-shaped object, which is
+  stamped on `ctx.state.user`, so a provider SDK or an introspection call
+  plugs into `requireScopes()` and `requireRoles()` the same way `jwk()`
+  does. Returning `true` or a falsy value behaves as before.
+- Auth docs: the overview now leads with the built-in `jwk()` (pattern A)
+  and `bearerAuth()` with a provider SDK (pattern B) instead of a
+  hand-written bearer hook, and adds roles, service-to-service calls,
+  OpenAPI security, testing with locally signed tokens, a "not supported"
+  section (opaque-token introspection, DPoP, certificate-bound tokens), and
+  a wider runtime table. Auth0, Okta, and Entra ID guides use `jwk()` with
+  no extra package; Cognito and LoginRadius use `bearerAuth()`; new
+  Keycloak guide (realm and client roles, audience mapper, service
+  accounts).
+
+- Azure Functions adapter at `@daloyjs/core/azure` (and `@daloyjs/daloy/azure`
+  on JSR). `toAzureHandler(app)` serves the whole app from one catch-all
+  HTTP trigger of the Node.js v4 programming model. The request body is
+  passed in as the host's stream, so `bodyLimitBytes` is enforced while
+  reading; every `Set-Cookie` is moved onto the response `cookies` array
+  because the Functions host keeps one value per header name (`Partitioned`
+  and `Priority` have no Azure field and are dropped); an unparseable
+  request URL gets a `400` problem+json; OTLP telemetry is awaited before
+  the handler returns. `{ stream: true }` returns the body as a
+  `ReadableStream` for use with `app.setup({ enableHttpStream: true })`.
+  Typed structurally, so the core takes no dependency on `@azure/functions`.
+  New exports: `toAzureHandler`, `AzureHandlerOptions`, `AzureHttpHandler`,
+  `AzureHttpRequestLike`, `AzureHttpResponseInit`, `AzureCookie`.
+- Real-runtime smoke suite in CI. A new `runtimes` job serves the built
+  `dist/` through the real Deno, Bun, and workerd adapters on
+  checksum-pinned binaries (Deno 2.9.6, Bun 1.4.3, workerd 1.20261008.1)
+  and checks routing, secure headers, schema and body-limit rejection,
+  problem+json, multiple `Set-Cookie`, and that the client address never
+  comes from a spoofable header. Run locally with `pnpm smoke:deno`,
+  `pnpm smoke:bun`, or `pnpm smoke:workerd <path-to-workerd>` after
+  `pnpm build`.
+- Docs: adapter capability table on the adapters overview, an Azure
+  Functions guide, self-hosting on workerd, CloudFront in front of a Lambda
+  Function URL (Lambda@Edge is not a supported target), Google Cloud
+  Run, and Kubernetes (probes, `preStop` and grace-period timing, probe
+  auth, Ingress hops).
+
+### Fixed
+
+- Deployment docs claimed the Node adapter keeps `keepAliveTimeout` above
+  the load balancer's idle timeout. It uses 5 seconds, below AWS ALB's
+  60-second default, so the page now says to raise it on the handle
+  (`serve(app).server.keepAliveTimeout = 65_000`), as the Node adapter
+  guide already did. The page's Dockerfile also lost stray indentation on
+  its `FROM` lines and now installs with `--ignore-scripts`.
+
+### Changed
+
+- `JwkSet.keys` is typed `Array<JsonWebKey & { kid?: string }>` instead of
+  the DOM `JsonWebKey[]`, which has no `kid`. An in-memory key set built
+  from `crypto.subtle.exportKey("jwk", ...)` plus an inline `kid` (the usual
+  way to test `jwk()`) now type-checks without a cast. Widening only;
+  existing code is unaffected.
+- Fastly Compute adapter now flushes OTLP telemetry after each response.
+  `installFastlyListener(app)` hands the flush to the fetch event's
+  `waitUntil`; `toFastlyHandler(app)` takes an optional `waitUntil` second
+  argument and otherwise starts the flush fire-and-forget. Before this,
+  telemetry on Fastly was only exported when something else flushed it.
+- Deno docs reflect the October 2026 news that the Deno team joined
+  Cloudflare: Deno Deploy shuts down around April 2027 and the runtime
+  moves to upstream maintenance mode. The Deno adapter and `deno-basic`
+  template stay supported. The guide drops the Deno Deploy deploy steps
+  for a "Moving off Deno Deploy" section (Cloudflare Workers, a
+  self-hosted container, or Node/Bun), documents both the JSR and npm
+  install routes, and fixes the minimal server example, which registered
+  `SIGTERM`/`SIGINT` listeners on top of the ones `serve()` already
+  installs.
+
 ## [1.11.0] - 2026-10-15
 
 ### Added

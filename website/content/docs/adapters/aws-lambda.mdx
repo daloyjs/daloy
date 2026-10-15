@@ -113,6 +113,18 @@ ENV PORT=8080 AWS_LWA_PORT=8080
 CMD ["node", "dist/server.js"]
 ```
 
+## CloudFront and Lambda@Edge [#cloudfront-and-lambda-edge]
+
+To serve the API from CloudFront's edge (custom domain, WAF, caching), put **CloudFront in front of a Function URL** and keep the regular `toLambdaHandler(app)` entry. Lock the Function URL to CloudFront with origin access control (`AuthType: AWS_IAM` plus an OAC on the distribution) so nobody can bypass the CDN and its WAF.
+
+CloudFront adds one proxy hop. Declare it so `rateLimit()` keys on the real client:
+
+```ts
+export const app = new App({ behindProxy: { hops: 1 } });
+```
+
+**Lambda@Edge is not a supported target.** It uses a different event shape (`Records[0].cf.request`), caps request and response bodies far below a normal API, and has no response streaming. Keep edge functions for small header and redirect tweaks, and let the Function URL serve the API.
+
 ## Gotchas
 
 - Callback-style handlers (`(event, context, callback) => ...`) are not supported on supported Node versions. Always use `async` handlers. The DaloyJS adapter does.

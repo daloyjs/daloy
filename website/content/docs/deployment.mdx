@@ -1,8 +1,9 @@
 ---
 title: Deployment
-description: Deploy DaloyJS REST APIs to containers, Node PaaS platforms, and edge or serverless providers. Production-ready guides for Docker, Fly.io, Render, Railway, Heroku, Replit, Vercel, Cloudflare Workers, Bun, and Deno.
+description: Deploy DaloyJS REST APIs to containers, Node PaaS platforms, and serverless providers. Guides for Docker, Fly.io, Render, Cloud Run, Vercel, Workers, and Azure.
 keywords:
   - deploy DaloyJS
+  - DaloyJS Kubernetes deployment
   - DaloyJS Docker deployment
   - Fly.io deployment
   - Render deployment
@@ -11,6 +12,8 @@ keywords:
   - Replit deployment
   - Cloudflare Workers deployment
   - Vercel deployment
+  - Google Cloud Run deployment
+  - Azure Functions deployment
 sitemap:
   priority: 0.8
 ---
@@ -53,12 +56,28 @@ These providers all run the [Node adapter](/docs/adapters/node). What changes is
 <Card title="Replit" href="/docs/deployment/replit">Node web server on Autoscale or Reserved VM with Publishing commands, Secrets, and port checks.</Card>
 </Cards>
 
+### Google Cloud Run [#google-cloud-run]
+
+Cloud Run runs the [Docker image below](#docker-node-distroless) as-is. Three things matter:
+
+- **Listen on `$PORT`.** Cloud Run injects it (default `8080`): `serve(app, { port: Number(process.env.PORT ?? 8080) })`.
+- **Shutdown budget.** Cloud Run sends `SIGTERM` and waits 10 seconds before `SIGKILL`. The Node adapter's default `shutdownTimeoutMs` is also 10 seconds, so lower it (for example to `8_000`) to finish draining before the kill.
+- **Client IPs.** Requests arrive through Google's front end, so set `behindProxy: { hops: 1 }`. Add one hop for each extra proxy, for example an external Application Load Balancer in front of Cloud Run.
+
+```bash
+gcloud run deploy my-api --source . --region europe-north1 --allow-unauthenticated
+```
+
+`--allow-unauthenticated` only makes the service reachable; your DaloyJS routes still do their own auth. Cloud Run functions (the former Cloud Functions) expect an Express-style `(req, res)` handler, which DaloyJS does not ship, so deploy the API as a Cloud Run **service** instead.
+
 ## Production checklist
 
 - Set `NODE_ENV=production` (or `env: "production"`). 5xx `detail` is already redacted when `NODE_ENV` is unset, but production mode also turns on the refuse-to-boot guards and turns off auto-mounted docs.
 - Set a sane `bodyLimitBytes` per route group (don't default to 1 MiB everywhere).
 - Set `requestTimeoutMs` to less than your load balancer's idle timeout.
 - Mount `secureHeaders()`, `requestId()`, and `rateLimit()` globally.
+- Declare `behindProxy` for your platform (see [Reverse proxy](#reverse-proxy)). Behind any proxy, leaving it unset makes production answer `500` to the first request that carries `X-Forwarded-For`.
+- Register health and readiness probes with [`app.healthcheck()` and `app.readinesscheck()`](/docs/security/lifecycle-health#3-app-healthcheck-and-app-readinesscheck) and point your platform's checks at them.
 - Wire your structured logger and propagate `request-id` to downstream calls.
 - Run contract tests in CI, fail the build if the spec drifts.
 - Use `pnpm install --frozen-lockfile` in CI. Never `pnpm install`.
@@ -67,23 +86,23 @@ These providers all run the [Node adapter](/docs/adapters/node). What changes is
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-    FROM node:24-bookworm AS deps
+FROM node:24-bookworm AS deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod
+    pnpm install --frozen-lockfile --prod --ignore-scripts
 
-    FROM node:24-bookworm AS build
+FROM node:24-bookworm AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-    FROM gcr.io/distroless/nodejs24-debian12 AS runtime
+FROM gcr.io/distroless/nodejs24-debian12 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps  /app/node_modules ./node_modules
@@ -93,6 +112,8 @@ USER 1000
 EXPOSE 3000
 CMD ["dist/server.js"]
 ```
+
+Pin each base image by digest in production (`node:24-bookworm@sha256:<digest>`) so a re-pushed tag cannot change what you build. Distroless has no shell, so there is no `HEALTHCHECK` line: let the platform probe `/healthz` over HTTP instead. Prefer a `HEALTHCHECK` baked into the image? The `create-daloy` container templates ship an Alpine variant with `tini` as PID 1, `STOPSIGNAL SIGTERM`, a `wget`-based `HEALTHCHECK`, and digest-pinned bases.
 
 ### Signed images + SBOM attestation [#signed-images-sbom-attestation]
 
@@ -111,6 +132,38 @@ cosign verify-attestation \
   ghcr.io/<owner>/<repo>@sha256:<digest>
 ```
 
+## Kubernetes [#kubernetes]
+
+The same image runs on Kubernetes (EKS, GKE, AKS, or your own cluster). Wire the probes and the shutdown timing so a rollout never drops requests:
+
+```yaml
+# deployment.yaml (container spec excerpt)
+spec:
+  terminationGracePeriodSeconds: 30   # longer than preStop + shutdownTimeoutMs
+  containers:
+    - name: api
+      image: ghcr.io/acme/api@sha256:<digest>
+      ports: [{ containerPort: 3000 }]
+      readinessProbe:
+        httpGet: { path: /readyz, port: 3000 }
+        periodSeconds: 5
+      livenessProbe:
+        httpGet: { path: /healthz, port: 3000 }
+        periodSeconds: 10
+      lifecycle:
+        preStop:
+          sleep: { seconds: 5 }       # let endpoints drop the pod first
+      securityContext:
+        runAsNonRoot: true
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+```
+
+- **Shutdown order.** Kubernetes runs `preStop`, then sends `SIGTERM`, then kills the pod when `terminationGracePeriodSeconds` runs out. The short `preStop` sleep gives Services and Ingress time to stop routing to the pod, then `serve()` drains for up to `shutdownTimeoutMs`. Keep `preStop` plus `shutdownTimeoutMs` under the grace period. The `sleep` action needs Kubernetes 1.30 or newer; distroless images have no `sleep` binary for an `exec` hook.
+- **Readiness while draining.** `/readyz` answers `503` as soon as draining starts, so the pod leaves the load balancer even if `preStop` is skipped.
+- **Probe auth.** In production `app.healthcheck()` refuses to register without a `token` or `acknowledgeUnauthenticated: true`. A kubelet probe can send a fixed `Authorization` header (`httpHeaders`), but that value sits in the pod spec. If you acknowledge unauthenticated probes instead, block `/healthz` and `/readyz` at your Ingress so they are not public.
+- **Client IPs.** One Ingress controller or cloud load balancer in front is `behindProxy: { hops: 1 }`. Add a hop for each extra layer, such as a CDN in front of the Ingress.
+
 ## Graceful shutdown
 
 The Node adapter installs SIGTERM/SIGINT handlers by default. DaloyJS stops accepting new requests (returning 503) and waits up to `shutdownTimeoutMs` for in-flight requests to drain.
@@ -127,16 +180,16 @@ await app.shutdown(15_000);
 
 ## Reverse proxy
 
-If you sit behind nginx / Caddy / a load balancer / a PaaS edge (Railway, Render, Fly, Heroku), declare the proxy posture so DaloyJS resolves the real client IP and stops refusing forwarded requests:
+If you sit behind nginx / Caddy / a load balancer / a Kubernetes Ingress / a PaaS edge (Railway, Render, Fly, Heroku, Cloud Run), declare the proxy posture so DaloyJS resolves the real client IP and stops refusing forwarded requests:
 
 - Set `behindProxy: { hops: N }` on `new App({ ... })`, where `N` is the number of trusted proxy hops in front of the app (a single edge proxy is `1`. Cloudflare in front of one PaaS edge is `2`). In production an **unconfigured** posture makes DaloyJS return `500` on the first request carrying an `X-Forwarded-*` header, so a misconfigured chain cannot feed spoofable client IPs to `rateLimit()`, request-id propagation, or audit logs. Use `behindProxy: "none"` when the app faces the public internet directly.
 - Once the posture is declared, `rateLimit()` keys on the resolved client IP automatically, no custom `keyGenerator` required.
 - Make the LB's idle timeout **greater** than DaloyJS's `requestTimeoutMs`.
-- Make DaloyJS's `keepAliveTimeout` **greater** than the LB's. The Node adapter does this for you.
+- Make the server's `keepAliveTimeout` **greater** than the LB's idle timeout, or the LB can reuse a socket Node just closed and return a `502`. The Node adapter sets it to 5 seconds, which is shorter than most load balancers (AWS ALB defaults to 60 seconds), so raise it on the handle: `serve(app).server.keepAliveTimeout = 65_000`.
 
 ## Edge / serverless REST APIs [#edge-serverless-rest-apis]
 
-DaloyJS can run on Vercel Functions, Cloudflare Workers, Netlify Functions, AWS Lambda, Fastly Compute, and Deno Deploy because the core is Web-standard `Request -> Response`. Use these targets when you want per-request billing or a managed edge/serverless runtime instead of a long-lived Node process.
+DaloyJS can run on Vercel Functions, Cloudflare Workers (or self-hosted workerd), Netlify Functions, AWS Lambda, Azure Functions, and Fastly Compute because the core is Web-standard `Request -> Response`. Deno Deploy also works until it shuts down around April 2027; see [Moving off Deno Deploy](/docs/adapters/deno#moving-off-deno-deploy). Use these targets when you want per-request billing or a managed edge/serverless runtime instead of a long-lived Node process.
 
 For a standalone Vercel REST API, create a single `api/index.ts` function and export the web-standard fetch handler, plus a `vercel.json` rewrite so DaloyJS routes at the site root (without it the root domain 404s):
 
@@ -151,4 +204,4 @@ export default toFetchHandler(app);
 // { "rewrites": [{ "source": "/(.*)", "destination": "/api" }] }
 ```
 
-See [Vercel](/docs/adapters/vercel), [Cloudflare Workers](/docs/adapters/cloudflare-workers), [Netlify](/docs/adapters/netlify), [AWS Lambda](/docs/adapters/aws-lambda), and [Fastly Compute](/docs/adapters/fastly) for platform-specific entry files.
+See [Vercel](/docs/adapters/vercel), [Cloudflare Workers](/docs/adapters/cloudflare-workers), [Netlify](/docs/adapters/netlify), [AWS Lambda](/docs/adapters/aws-lambda), [Azure Functions](/docs/adapters/azure-functions), and [Fastly Compute](/docs/adapters/fastly) for platform-specific entry files.

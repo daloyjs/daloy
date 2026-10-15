@@ -7,12 +7,15 @@ keywords:
   - Deno TLS
   - Deno graceful shutdown
   - AbortController Deno
-  - Deno Deploy
+  - Deno Deploy migration
+  - JSR @daloyjs/daloy
 ---
 
 # Deno
 
-The Deno adapter wraps `Deno.serve`: the stable, modern entry point that replaced the old `Deno.serveHttp`. Graceful shutdown uses an `AbortController`, which is the pattern Deno itself recommends.
+The Deno adapter wraps `Deno.serve`: the stable, modern entry point that replaced the old `Deno.serveHttp`. It handles `SIGTERM`/`SIGINT` for you and also accepts an `AbortSignal`, the pattern Deno itself recommends.
+
+<Callout type="warning">**Deno's future changed in October 2026.** The Deno team joined Cloudflare. **Deno Deploy shuts down about six months after that announcement (around April 2027)**, and the Deno runtime moves to maintenance mode: monthly security and bug-fix releases for twelve months, after which it continues as a community open-source project. JSR keeps running. DaloyJS keeps the Deno adapter and the `deno-basic` template, and CI runs the adapter on a real Deno binary on every change. If you deploy to Deno Deploy today, plan your move now: see [Moving off Deno Deploy](#moving-off-deno-deploy).</Callout>
 
 <LayerStack title="Deno adapter stack" layers={[
           {
@@ -30,13 +33,14 @@ The Deno adapter wraps `Deno.serve`: the stable, modern entry point that replace
             detail: "stable Deno.serve, TS built in",
             tone: "muted",
           },
-        ]} caption="serve() drives the stable Deno.serve and threads an AbortController signal through for graceful shutdown. The same src/server.ts runs locally and on Deno Deploy." />
+        ]} caption="serve() drives the stable Deno.serve, listens for SIGTERM/SIGINT, and also stops when an optional AbortSignal fires. The same src/server.ts runs locally and in a container." />
 
 ## When to choose Deno
 
 - You want a web-standard runtime with TypeScript built in and no transpile step.
-- You deploy to Deno Deploy, or to a container running the official Deno image.
+- You self-host in a container running the official Deno image.
 - You like Deno's permissions model and don't need the full npm ecosystem.
+- You are fine with an upstream runtime in maintenance mode. For a new project with a long life ahead, Node, Bun, or Cloudflare Workers are the safer picks today.
 
 ## Scaffold
 
@@ -50,14 +54,27 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch
 
 ## Install
 
-`@daloyjs/core` is published to npm. Deno can consume it directly via the `npm:` specifier. This is the same pattern used by the official `deno-basic` scaffolder template.
+The same source ships to two registries: [JSR as `@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) and npm as `@daloyjs/core`. The `deno-basic` template uses JSR and maps it to the `@daloyjs/core` names, so your imports look the same as on Node:
 
 ```jsonc
-// deno.json
+// deno.json (what deno-basic ships)
 {
   "imports": {
-    "@daloyjs/core":  "npm:@daloyjs/core@latest",
-    "@daloyjs/core/": "npm:@daloyjs/core@latest/",
+    "@daloyjs/core":      "jsr:@daloyjs/daloy@^1",
+    "@daloyjs/core/deno": "jsr:@daloyjs/daloy@^1/deno",
+    "zod":                "npm:zod@^4.4.3"
+  }
+}
+```
+
+Prefer npm? Deno reads it through the `npm:` specifier with the same import names. Both routes stay supported. npm does not depend on JSR, so it is the fallback if JSR's hosting or governance ever changes.
+
+```jsonc
+// deno.json (npm instead of JSR)
+{
+  "imports": {
+    "@daloyjs/core":  "npm:@daloyjs/core@^1",
+    "@daloyjs/core/": "npm:@daloyjs/core@^1/",
     "zod":            "npm:zod@^4.4.3"
   }
 }
@@ -70,39 +87,39 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch
 import { serve } from "@daloyjs/core/deno";
 import { app } from "./app.ts";
 
-const ac = new AbortController();
-
 serve(app, {
   port: 3000,
   hostname: "0.0.0.0",
-  signal: ac.signal,
   onListen: ({ hostname, port }) =>
     console.log(`listening on http://${hostname}:${port}`),
   // HTTPS:
   // cert: Deno.readTextFileSync("./cert.pem"),
   // key:  Deno.readTextFileSync("./key.pem"),
 });
-
-Deno.addSignalListener("SIGTERM", () => ac.abort());
-Deno.addSignalListener("SIGINT", () => ac.abort());
 ```
+
+That is all you need for graceful shutdown. `serve()` listens for `SIGTERM` and `SIGINT` itself (`handleSignals` defaults to `true`), drains your `app.onShutdown` hooks for up to `shutdownTimeoutMs` (default 10 seconds), and then stops `Deno.serve` so in-flight requests can finish. Do not add your own `Deno.addSignalListener` calls on top.
+
+To stop the server from your own code, for example in a test, use the handle `serve()` returns or pass an `AbortSignal`:
+
+```ts
+const ac = new AbortController();
+const server = serve(app, {
+  port: 0,               // let the OS pick a free port
+  handleSignals: false,  // tests manage their own lifecycle
+  signal: ac.signal,     // aborting this also shuts down
+});
+
+// later
+await server.shutdown(); // or ac.abort()
+```
+
+Other options: `onError` returns a fallback `Response` when the handler itself throws, and `shutdownTimeoutMs` changes the drain budget. The full list is in the [API reference](/docs/api-reference/adapters#daloyjs-core-deno).
 
 ## Run it
 
 ```bash
 deno run --allow-net --allow-env --allow-read src/server.ts
-```
-
-## Deploy to Deno Deploy
-
-Deno Deploy reads the entry script directly. Point your project at `src/server.ts`. The same file you run locally is what runs in production.
-
-```bash
-# install once
-deno install -gArf jsr:@deno/deployctl
-
-# deploy
-deployctl deploy --project=my-api src/server.ts
 ```
 
 ## Dockerfile
@@ -115,13 +132,44 @@ EXPOSE 3000
 CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]
 ```
 
+The container route keeps working whatever happens to Deno Deploy. Run it on any container host: Fly.io, Render, Railway, Google Cloud Run, Azure Container Apps, or your own Kubernetes.
+
+## Moving off Deno Deploy [#moving-off-deno-deploy]
+
+Your DaloyJS app does not change when you move: routes, schemas, and hooks only ever see `Request -> Response`. Only the entry file changes. Pick a target:
+
+### Cloudflare Workers
+
+The closest match to Deno Deploy (global, per-request, no servers), and Cloudflare offers migration help to paying Deno Deploy customers. Swap the entry file for the Workers one:
+
+```ts
+// src/index.ts
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+import { app } from "./app.ts";
+
+export default toFetchHandler(app);
+```
+
+Then follow the [Cloudflare Workers guide](/docs/adapters/cloudflare-workers) for `wrangler.jsonc`, secrets, and bindings. Replace `Deno.env.get(...)` with Worker bindings and `Deno.*` file APIs with R2 or KV.
+
+### Self-hosted Deno in a container
+
+Keep `src/server.ts` exactly as it is and ship the [Dockerfile](#dockerfile) above. This is the smallest change, but you stay on a runtime in maintenance mode.
+
+### Node or Bun
+
+Import `serve` from `@daloyjs/core/node` or `@daloyjs/core/bun` instead of `/deno`, swap the `jsr:`/`npm:` import map for a `package.json`, and replace `Deno.*` APIs with their Node equivalents. See the [Node](/docs/adapters/node) and [Bun](/docs/adapters/bun) guides.
+
+Whichever you pick, run your contract tests against the new entry before you switch traffic. The app should answer the same way it did on Deno Deploy.
+
 ## Gotchas
 
 - Do not use `Deno.serveHttp`. It is deprecated. The DaloyJS adapter uses `Deno.serve` exclusively.
-- On Deno Deploy you do not get `SIGTERM`. The platform manages shutdown. The `AbortController` wiring above is for self-hosted Deno only.
+- Platform-managed hosts (Deno Deploy, Netlify Edge Functions, Supabase Edge Functions) never send your code `SIGTERM`. The built-in signal handling only matters when you run the Deno process yourself.
 - Use `--allow-net` (and others) explicitly, Deno's default-deny permissions are the point.
 
 ## See also
 
 - [Adapters overview](/docs/adapters)
+- [Cloudflare Workers](/docs/adapters/cloudflare-workers): the usual next home for Deno Deploy apps.
 - [Netlify Edge Functions](/docs/adapters/netlify): also Deno-based.

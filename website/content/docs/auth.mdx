@@ -1,25 +1,29 @@
 ---
 title: DaloyJS auth docs
-description: "DaloyJS auth docs: protect an API with authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, Clerk, LoginRadius, or Better Auth. Compares SDKs, runtime support, and the common bearer-auth plugin pattern."
+description: "Protect a DaloyJS API with tokens from Entra ID, Auth0, Okta, Cognito, Keycloak, Clerk, or Better Auth, using the built-in jwk(), requireScopes(), and requireRoles()."
 keywords:
   - DaloyJS auth docs
   - DaloyJS authentication
   - DaloyJS authorization
+  - JWT bearer auth
+  - JWKS verification
+  - requireScopes
+  - requireRoles
   - AWS Cognito DaloyJS
   - Entra ID DaloyJS
   - Auth0 DaloyJS
   - Okta DaloyJS
+  - Keycloak DaloyJS
   - Clerk DaloyJS
   - LoginRadius DaloyJS
   - Better Auth DaloyJS
-  - JWT bearer auth
 sitemap:
   priority: 0.8
 ---
 
 # DaloyJS auth docs
 
-DaloyJS does not bundle a user database or login UI. It ships primitives that plug in a hosted identity provider (IdP). Your API receives a bearer token, verifies it with the provider's JWKS or SDK, and gates routes by scope, role, or organization. The pages in this section show how to wire up the seven most common IdPs.
+DaloyJS does not bundle a user database or login UI. A hosted or self-hosted identity provider (IdP) owns accounts and issues tokens. Your API receives a bearer token, **verifies** it, and gates routes by scope, role, or organization. DaloyJS ships the verifying and gating parts, so for most providers you install nothing extra.
 
 New to this? Start with [Auth architecture: where DaloyJS fits in OAuth2 & OpenID Connect](/docs/auth/architecture). It explains why DaloyJS is a **resource server** (it verifies tokens, it does not issue them), how that compares to .NET and Duende IdentityServer, whether you actually need Auth0/Okta/Clerk or can self-host an open-source IdP, and the two architectures we recommend.
 
@@ -27,130 +31,249 @@ New to this? Start with [Auth architecture: where DaloyJS fits in OAuth2 & OpenI
 <p>Every page in this section wires DaloyJS up as the thing that{" "}<em>checks</em> a token. The provider owns the accounts, the login screen, the password resets, and the token lifetime. That split keeps the high-blast-radius problems with a team whose full-time job is solving them.</p>
 </AuthRole>
 
+## What DaloyJS ships
+
+These are framework features, not recipes. They run before the request body is read, and every one fails closed.
+
+| Built-in | What it does |
+| --- | --- |
+| [`jwk()`](/docs/api-reference/security#jwk-jwks-verification) | Verifies JWT access tokens against your IdP's JWKS URL. Asymmetric algorithm allowlist, required `kid`, `iss` / `aud` / `exp` / `nbf` checks, key caching and rotation, no redirects followed. No dependencies, every runtime. |
+| `requireScopes()` | Requires OAuth scopes. Reads `scope`, `scp` (Entra, Okta), or `scopes`. `401` without a caller, `403` without the scope. |
+| `requireRoles()` | Requires roles, groups, or permissions from any claim: `roles`, `groups`, `cognito:groups`, `permissions`, or a nested claim through a reader function. |
+| `bearerAuth()` | Extracts the bearer token safely and hands it to *your* verifier (a provider SDK, an introspection call). Return a user object and the scope and role guards work on it. |
+| `basicAuth()` | HTTP Basic for internal tools, with constant-time comparison guidance. |
+| [`createJwtVerifier()`](/docs/api-reference/security#jwt-signer-and-verifier) | The lower-level verifier behind `jwk()`, for custom flows. |
+| [Sessions](/docs/security/session), [CSRF](/docs/security/csrf) | Cookie sessions for a backend-for-frontend. |
+| [mTLS](/docs/mtls), [HTTP message signatures](/docs/http-signatures) | Service and webhook identity without bearer tokens. |
+
 ## Supported providers
 
-- [AWS Cognito](/docs/auth/aws-cognito): pay-as-you-go user pools with hosted sign-in. Use `aws-jwt-verify` to verify access and ID tokens with zero runtime dependencies. Runs on Node, edge, and Lambda.
-- [Microsoft Entra ID (MSAL)](/docs/auth/entra-id): enterprise SSO for Microsoft 365 / Azure AD users. Verify tokens with the OIDC JWKS using `jose`. Acquire downstream tokens with `@azure/msal-node` when needed.
-- [Auth0](/docs/auth/auth0): developer-friendly IdP with universal login, MFA, and rich rule engine. Verify access tokens with `jose` against your tenant's issuer URL.
-- [Okta](/docs/auth/okta): workforce identity with custom authorization servers and granular policies. Use the official `@okta/jwt-verifier` for access and ID tokens.
-- [Clerk](/docs/auth/clerk): modern, embeddable authentication with user, organization, and billing primitives. Use `@clerk/backend` `authenticateRequest()` to authenticate any `Request`.
-- [LoginRadius](/docs/auth/loginradius): customer identity, social login, registration, and profile APIs. Use `loginradius-sdk` to validate LoginRadius access tokens and load profiles from a Node-style DaloyJS runtime.
-- [Better Auth](/docs/auth/better-auth): self-hosted authentication for email/password, OAuth, sessions, and plugins. Mount its standard `Request -> Response` handler under DaloyJS and guard API routes with `auth.api.getSession()`.
+- [Microsoft Entra ID](/docs/auth/entra-id): enterprise SSO for Microsoft 365 and Azure. `jwk()` against the tenant JWKS; app roles through `requireRoles()`.
+- [Auth0](/docs/auth/auth0): universal login, MFA, social login. `jwk()` against your tenant; RBAC permissions through `requireRoles()`.
+- [Okta](/docs/auth/okta): workforce identity with custom authorization servers. `jwk()` against the authorization server; groups through `requireRoles()`.
+- [AWS Cognito](/docs/auth/aws-cognito): user pools with hosted sign-in. The official `aws-jwt-verify` SDK through `bearerAuth()`, or `jwk()`.
+- [Keycloak](/docs/auth/keycloak): the most widely used self-hosted, open-source IdP. `jwk()` against the realm; realm and client roles through `requireRoles()`.
+- [Clerk](/docs/auth/clerk): embeddable auth with users, organizations, and billing. `@clerk/backend` `authenticateRequest()`.
+- [LoginRadius](/docs/auth/loginradius): customer identity and social login. `loginradius-sdk` on Node-style runtimes.
+- [Better Auth](/docs/auth/better-auth): self-hosted email/password, OAuth, and sessions. Mount its handler and guard routes with `auth.api.getSession()`.
 
 <BranchDiagram title="One resource server, many identity providers" source={{
           label: "DaloyJS API (resource server)",
-          detail: "verifies tokens/sessions, gates routes by scope/role",
+          detail: "jwk() / bearerAuth() verify · requireScopes() / requireRoles() gate",
           eyebrow: "your code",
           tone: "accent",
         }} branches={[
-          { label: "AWS Cognito", detail: "aws-jwt-verify" },
-          { label: "Microsoft Entra ID", detail: "jose + OIDC JWKS" },
-          { label: "Auth0", detail: "jose" },
-          { label: "Okta", detail: "@okta/jwt-verifier" },
-          { label: "Clerk", detail: "@clerk/backend" },
-          { label: "LoginRadius", detail: "loginradius-sdk" },
-          { label: "Better Auth", detail: "auth.handler + getSession" },
-        ]} caption="DaloyJS stays the resource server in every case. Most providers swap a verifier SDK behind the same interface. Better Auth is the exception (mount its handler and use getSession for cookie/session auth)." />
+          { label: "Entra ID · Auth0 · Okta", detail: "jwk() + JWKS URL" },
+          { label: "Keycloak · Zitadel · any OIDC", detail: "jwk() + JWKS URL" },
+          { label: "AWS Cognito", detail: "aws-jwt-verify or jwk()" },
+          { label: "Clerk · LoginRadius", detail: "provider SDK" },
+          { label: "Better Auth", detail: "handler + getSession" },
+        ]} caption="Any provider that issues JWT access tokens with a JWKS endpoint plugs into the built-in jwk(). Providers with their own SDK or opaque tokens plug into bearerAuth(). Either way, the same scope and role guards gate your routes." />
 
-## Runtime compatibility at a glance
+## Pattern A: any OIDC provider with `jwk()` [#pattern-jwk]
 
-| Provider | Node / Bun / Deno | Cloudflare Workers | AWS Lambda |
-| --- | --- | --- | --- |
-| AWS Cognito (`aws-jwt-verify`) | Yes | Yes (Web Crypto) | Yes |
-| Entra ID (`jose`) | Yes | Yes | Yes |
-| Auth0 (`jose`) | Yes | Yes | Yes |
-| Okta (`@okta/jwt-verifier`) | Yes | No (Node-only) | Yes |
-| Clerk (`@clerk/backend`) | Yes | Yes | Yes |
-| LoginRadius (`loginradius-sdk`) | Yes (Node-style) | No | Yes |
-| Better Auth (`better-auth`) | Yes | Depends on database adapter | Yes |
+If your provider issues JWT access tokens and publishes a JWKS URL (Entra ID, Auth0, Okta custom authorization servers, Keycloak, Zitadel, Authentik, Ory, Cognito), this is all you need:
 
-## Common pattern
+```ts title="src/app.ts"
+import { App, every, jwk, requireRoles, requireScopes } from "@daloyjs/core";
 
-Each provider page implements the same three steps: install the verifier SDK, decorate the root app's `ctx.state` with a `verifier` (decorations made inside `app.register()` stay scoped to that plugin's routes), then guard routes with a small preBody hook (or `beforeHandle` for body-aware guards) that requires a token (and optional scopes).
+const issuer = process.env.OIDC_ISSUER!; // exactly as the token's `iss`
 
-<FlowDiagram numbered title="The same three steps on every provider page" steps={[
-          {
-            label: "Install the verifier SDK",
-            detail: "pnpm add <provider-sdk>",
-          },
-          {
-            label: "Decorate the app with a verifier",
-            detail: "ctx.state.verifier on every route",
-          },
-          {
-            label: "Guard routes",
-            detail: "requireAuth(...scopes)",
-            tone: "accent",
-          },
-        ]} caption="Most provider pages follow this shape (verifier + plugin + guard). Better Auth differs: it requires mounting its handler for auth routes and uses getSession for protection instead of a bearer verifier." />
+export const app = new App();
 
-```ts
-// src/plugins/auth.ts
-import {
-  ForbiddenError,
-  UnauthorizedError,
-  type App,
-  type Hooks,
-} from "@daloyjs/core";
+// 1. Authenticate every route: 401 on a missing, expired, or forged token.
+app.use(
+  jwk({
+    jwks: process.env.OIDC_JWKS_URL!,   // from the issuer's /.well-known/openid-configuration
+    algorithms: ["RS256"],              // asymmetric only; match what your IdP signs with
+    issuer,
+    audience: process.env.OIDC_AUDIENCE!, // your API's identifier
+    maxLifetimeSeconds: 86_400,         // also makes `exp` mandatory
+  }),
+);
 
-export interface Principal {
-  sub: string;
-  scopes?: string[];
-  claims: Record<string, unknown>;
-}
+// 2. Authorize per route: 403 when the caller lacks the scope or role.
+app.get("/books", {
+  hooks: requireScopes(["books:read"], { phase: "preBody" }),
+  responses: { 200: { description: "OK" } },
+}, () => ({ status: 200, body: [] }));
 
-export interface TokenVerifier {
-  verify(token: string): Promise<Principal>;
-}
-
-// Call this on the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function authPlugin(app: App, verifier: TokenVerifier) {
-  app.decorate("verifier", verifier);
-}
-
-export function requireAuth(...requiredScopes: string[]): Hooks {
-  return {
-    preBody: async (ctx) => {
-      const header = ctx.request.headers.get("authorization") ?? "";
-      const [scheme, token] = header.split(" ");
-      if (scheme?.toLowerCase() !== "bearer" || !token) {
-        throw new UnauthorizedError("Missing bearer token");
-      }
-
-      let principal: Principal;
-      try {
-        principal = await ctx.state.verifier.verify(token);
-      } catch {
-        throw new UnauthorizedError("Invalid or expired token");
-      }
-
-      const scopes = principal.scopes ?? [];
-      if (requiredScopes.some((scope) => !scopes.includes(scope))) {
-        throw new ForbiddenError("Insufficient scope");
-      }
-
-      ctx.state.principal = principal;
-      // continue (no return value)
-    },
-  };
-}
-
-declare module "@daloyjs/core" {
-  interface AppState {
-    verifier: TokenVerifier;
-    principal?: Principal;
-  }
-}
+app.delete("/books/:id", {
+  hooks: every(requireScopes(["books:write"], { phase: "preBody" }), requireRoles(["admin"])),
+  responses: { 204: { description: "Deleted" } },
+}, () => ({ status: 204, body: undefined }));
 ```
 
-Each provider page implements `TokenVerifier` with the official SDK so the rest of your application stays IdP-agnostic.
+`jwk()` puts the verified token on `ctx.state.user` as `{ sub, scopes, claims }`, so a handler reads `ctx.state.user.sub` or any claim without parsing the token again. Use the `verify` option for checks beyond the standard claims, such as an allowlist of tenant IDs (`tid`) or client IDs (`azp`).
+
+To protect only part of the API, put `jwk()` on the routes (or a registered plugin) instead of `app.use()`, or exclude public paths with `except()`.
+
+## Pattern B: a provider SDK or opaque tokens with `bearerAuth()` [#pattern-bearer]
+
+Some providers want their own SDK (Cognito's `aws-jwt-verify`, LoginRadius), and some tokens are opaque strings you have to check with the IdP. `bearerAuth()` extracts the token (refusing malformed and duplicated `Authorization` headers) and calls your `validate`. Return a user object, and `requireScopes()` and `requireRoles()` work exactly as in pattern A:
+
+```ts title="src/auth.ts"
+import { App, bearerAuth, requireRoles } from "@daloyjs/core";
+import { CognitoJwtVerifier } from "aws-jwt-verify";
+
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: process.env.COGNITO_USER_POOL_ID!,
+  tokenUse: "access",
+  clientId: process.env.COGNITO_CLIENT_ID!,
+});
+
+export const app = new App();
+
+app.use(
+  bearerAuth({
+    realm: "books-api",
+    validate: async (token) => {
+      try {
+        const claims = await verifier.verify(token);
+        // Same shape jwk() produces, so the built-in guards can read it.
+        return { sub: claims.sub, scopes: claims.scope?.split(" ") ?? [], claims };
+      } catch {
+        return false; // 403
+      }
+    },
+  }),
+);
+
+app.get("/admin/stats", {
+  hooks: requireRoles(["admins"], { claim: "cognito:groups" }),
+  responses: { 200: { description: "OK" } },
+}, () => ({ status: 200, body: {} }));
+```
+
+A `validate` that returns `false` answers `403`; a missing or malformed header answers `401` with a `WWW-Authenticate` challenge before `validate` runs.
+
+## Roles, groups, and permissions [#roles]
+
+OAuth scopes say what a *client* may do. Many IdPs put what a *user* may do in a separate claim. `requireRoles()` reads it:
+
+| Provider | Where roles live | Guard |
+| --- | --- | --- |
+| Entra ID | `roles` (app roles) | `requireRoles(["Books.Admin"])` |
+| Auth0 (RBAC) | `permissions` | `requireRoles(["delete:books"], { claim: "permissions" })` |
+| Auth0 (Actions) | namespaced, e.g. `https://acme.example/roles` | `requireRoles(["admin"], { claim: "https://acme.example/roles" })` |
+| Okta | `groups` (once you add a groups claim) | `requireRoles(["Engineering"], { claim: "groups" })` |
+| Cognito | `cognito:groups` | `requireRoles(["admins"], { claim: "cognito:groups" })` |
+| Keycloak | `realm_access.roles` (nested) | `requireRoles(["admin"], { claim: (c) => (c.realm_access as { roles?: unknown } \| undefined)?.roles })` |
+| Zitadel | `urn:zitadel:iam:org:project:roles` (object keyed by role) | `requireRoles(["admin"], { claim: (c) => Object.keys((c["urn:zitadel:iam:org:project:roles"] as object \| undefined) ?? {}) })` |
+
+- A string `claim` names one top-level claim exactly, so namespaced names with dots and colons work. Its value can be an array or a space-delimited string.
+- `match: "any"` accepts the caller when it holds at least one listed role. The default, `"all"`, requires every one.
+- It always runs in `preBody`: an unauthorized caller is refused before the body is read and before `idempotency()` or `responseCache()` could replay a stored response to it. Register your auth hook first.
+- It fails closed. A missing claim, a non-list value, or a reader that throws all mean "no roles", and the `403` does not say which role was missing.
+
+Roles decide *what kind* of action a caller may take. Whether they may touch *this* record is still your code's job: apply [resource authorization](/docs/security/resource-authorization) to every user- or tenant-owned row.
+
+## Service-to-service calls [#service-to-service]
+
+A backend calling your API with no user present uses the OAuth **client credentials** flow. The token is still a JWT from the same issuer, so pattern A verifies it unchanged. What differs is the authorization:
+
+- **Entra ID** puts granted *application* roles in `roles` with no `scp`, so guard machine routes with `requireRoles()` rather than `requireScopes()`.
+- **Auth0** marks these tokens with `gty: "client-credentials"` and puts granted scopes in `scope`.
+- **Pin the caller.** Allowlist the client ID (`azp` or `client_id`, depending on the IdP) in `jwk({ verify })` so a token issued to another client of the same tenant cannot call internal routes.
+- For callers you control end to end, [mTLS](/docs/mtls) or [HTTP message signatures](/docs/http-signatures) avoid bearer tokens entirely.
+
+## OpenAPI and the docs UI [#openapi]
+
+Declare the scheme once and mark protected routes with `auth`. The generated OpenAPI document then lists the requirement per operation, and Scalar and Swagger UI show an **Authorize** button:
+
+```ts
+const app = new App({
+  openapi: {
+    info: { title: "Books API", version: "1.0.0" },
+    securitySchemes: { bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
+  },
+});
+
+app.get("/books", {
+  auth: { scheme: "bearer", scopes: ["books:read"] },
+  hooks: requireScopes(["books:read"], { phase: "preBody" }),
+  responses: { 200: { description: "OK" } },
+}, () => ({ status: 200, body: [] }));
+```
+
+`auth` is a declaration, not enforcement: the hooks do the checking. In production, DaloyJS [refuses to boot](/docs/security/boot-guards) when a route declares `auth` but no authentication hook runs on it, so the spec cannot claim protection the code does not have. For an OAuth2 or OpenID Connect scheme with login flows in the docs UI, see [OpenAPI docs](/docs/openapi).
+
+## Testing protected routes [#testing]
+
+Do not call your real IdP from tests. Generate a key pair, sign tokens with `createJwtSigner()`, and hand `jwk()` the public key as an in-memory key set:
+
+```ts title="tests/auth.test.ts"
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { App, createJwtSigner, jwk, requireRoles } from "@daloyjs/core";
+
+const pair = await crypto.subtle.generateKey(
+  { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"],
+);
+const publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+const signer = createJwtSigner({
+  alg: "ES256",
+  key: await crypto.subtle.exportKey("jwk", pair.privateKey),
+  maxLifetimeSeconds: 3600,
+  header: { kid: "test" },
+});
+
+function tokenFor(claims: Record<string, unknown>) {
+  const now = Math.floor(Date.now() / 1000);
+  return signer.sign({ sub: "u1", iss: "https://issuer.test", aud: "books", iat: now, exp: now + 300, ...claims });
+}
+
+test("only admins can delete", async () => {
+  const app = new App();
+  app.use(jwk({
+    jwks: { keys: [{ ...publicJwk, kid: "test", alg: "ES256", use: "sig" }] },
+    algorithms: ["ES256"],
+    issuer: "https://issuer.test",
+    audience: "books",
+  }));
+  app.delete("/books/:id", {
+    hooks: requireRoles(["admin"]),
+    responses: { 204: { description: "Deleted" } },
+  }, () => ({ status: 204, body: undefined }));
+
+  const as = async (roles: string[]) =>
+    app.request("/books/1", {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${await tokenFor({ roles })}` },
+    });
+  assert.equal((await as(["admin"])).status, 204);
+  assert.equal((await as(["reader"])).status, 403);
+  assert.equal((await app.request("/books/1", { method: "DELETE" })).status, 401);
+});
+```
+
+Build the app from a function that takes its auth config, so tests pass the test key set and production passes the real JWKS URL. Never ship a test key or a test issuer in production config.
+
+## Not supported (yet) [#not-supported]
+
+- **Opaque tokens and introspection (RFC 7662).** There is no built-in introspection client. Call your IdP's `/introspect` endpoint from `bearerAuth({ validate })` with your client credentials, and cache positive results briefly, because every request otherwise costs a network round-trip. Okta's org authorization server and Auth0 tokens without an audience are opaque.
+- **DPoP (RFC 9449) and certificate-bound tokens (RFC 8705).** DaloyJS does not verify proof-of-possession, so a stolen bearer token works for whoever holds it. Keep token lifetimes short, require TLS everywhere, and use [mTLS](/docs/mtls) for high-value service-to-service calls.
+- **Issuing tokens.** Login, refresh tokens, and consent belong to your IdP. See [Auth architecture](/docs/auth/architecture).
+
+## Runtime compatibility [#runtimes]
+
+| Approach | Node-based hosts<sup>1</sup> | Deno | Cloudflare Workers, workerd | Fastly Compute |
+| --- | --- | --- | --- | --- |
+| Built-in `jwk()` | Yes | Yes | Yes | Yes<sup>2</sup> |
+| AWS Cognito (`aws-jwt-verify`) | Yes | Yes | Yes (Web Crypto) | Not verified |
+| Clerk (`@clerk/backend`) | Yes | Yes | Yes | Not verified |
+| Okta SDK (`@okta/jwt-verifier`) | Yes | Not verified | No (Node-only) | No |
+| LoginRadius (`loginradius-sdk`) | Yes | Not verified | No | No |
+| Better Auth (`better-auth`) | Yes | Yes | Depends on database adapter | Not verified |
+
+1. Node.js, Bun, Vercel Functions, Netlify Functions, AWS Lambda, Azure Functions, Google Cloud Run.
+2. Fastly blocks undeclared outbound requests: declare your IdP's host as a backend in `fastly.toml` so `jwk()` can fetch the JWKS.
 
 ## Security checklist
 
-- Always verify the signature. Never trust an unverified JWT. Decode-only utilities are for debugging. Use the provider's JWKS endpoint with key caching and automatic rotation (every SDK on the following pages handles this).
-- Check `iss` and `aud`. Pin the expected issuer URL and audience/client ID. A correct signature on the wrong audience is still a token confusion attack.
-- Authorize after you authenticate. A valid token only proves the caller is who they say they are. Enforce scopes, roles, or organization membership for every privileged action, then apply [resource authorization](/docs/security/resource-authorization) to every user-owned or tenant-owned record.
-- Use TLS everywhere. Bearer tokens are plaintext-equivalent. Require HTTPS and set the [`secureHeaders`](/docs/security) middleware (`Strict-Transport-Security`).
-- Rate-limit token-issuing routes. Login redirects, token-exchange endpoints, and any introspection passthroughs should go through [`rateLimit`](/docs/security) (or the [Redis store](/docs/security/rate-limit-redis)) so abuse can't drive cost or lock out users.
-- Protect cookies and CSRF. If you also use session cookies (for an admin panel, say), enable [CSRF](/docs/security/csrf) and use `SameSite=Lax` + `Secure` + `HttpOnly` via the built-in [session middleware](/docs/security/session).
+- Always verify the signature. Never trust an unverified JWT. Decode-only utilities are for debugging.
+- Pin `iss` and `aud`. A correct signature on the wrong audience is still a token confusion attack. `jwk()` refuses to start in production without an `audience` unless you opt out with `allowAnyAudience: true` (and then check `client_id` yourself, as on [Cognito](/docs/auth/aws-cognito)).
+- Authorize after you authenticate. A valid token only proves who the caller is. Enforce scopes or roles for every privileged action, then apply [resource authorization](/docs/security/resource-authorization) to every user- or tenant-owned record.
+- Use TLS everywhere. Bearer tokens are plaintext-equivalent. Require HTTPS and set [`secureHeaders`](/docs/security) (`Strict-Transport-Security`).
+- Rate-limit login redirects, token exchanges, and introspection passthroughs with [`rateLimit`](/docs/security) (or the [Redis store](/docs/security/rate-limit-redis)) so abuse can't drive cost or lock out users.
+- If you also use session cookies (for an admin panel, say), enable [CSRF](/docs/security/csrf) and use `SameSite=Lax` + `Secure` + `HttpOnly` via the built-in [session middleware](/docs/security/session).

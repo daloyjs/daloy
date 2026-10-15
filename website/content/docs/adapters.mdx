@@ -1,6 +1,6 @@
 ---
 title: Adapters & runtimes
-description: Run the same DaloyJS REST API on Node.js, Bun, Deno, Cloudflare Workers, Netlify, Fastly Compute, and AWS Lambda without rewriting handlers.
+description: Run one DaloyJS REST API on Node.js, Bun, Deno, Cloudflare Workers, Vercel, Netlify, Fastly, AWS Lambda, and Azure Functions without rewriting a handler.
 keywords:
   - runtime adapters
   - Cloudflare Workers TypeScript
@@ -8,8 +8,10 @@ keywords:
   - Bun framework
   - Deno HTTP framework
   - AWS Lambda framework
+  - Azure Functions framework
   - Netlify Functions
   - Fastly Compute
+  - workerd self-hosting
 sitemap:
   priority: 0.8
 ---
@@ -25,14 +27,13 @@ DaloyJS is a REST API backend framework. The core only ever sees `Request → Re
         }} branches={[
           {
             eyebrow: "runtime",
-            label: "Node.js",
-            detail: "@daloyjs/core/node",
+            label: "Node.js · Bun",
+            detail: "@daloyjs/core/node · /bun",
           },
-          { eyebrow: "runtime", label: "Bun", detail: "@daloyjs/core/bun" },
           { eyebrow: "runtime", label: "Deno", detail: "@daloyjs/core/deno" },
           {
             eyebrow: "edge",
-            label: "Cloudflare Workers",
+            label: "Cloudflare Workers / workerd",
             detail: "@daloyjs/core/cloudflare",
           },
           {
@@ -45,6 +46,11 @@ DaloyJS is a REST API backend framework. The core only ever sees `Request → Re
             label: "Fastly / AWS Lambda",
             detail: "@daloyjs/core/fastly · /lambda",
           },
+          {
+            eyebrow: "serverless",
+            label: "Azure Functions",
+            detail: "@daloyjs/core/azure",
+          },
         ]} caption="The core only ever sees a Request and returns a Response. Each thin adapter handles one platform's sockets, signals, or event shape, so the same app ships everywhere without a rewrite." />
 
 ## Pick a target
@@ -54,17 +60,41 @@ DaloyJS is a REST API backend framework. The core only ever sees `Request → Re
 <Cards>
 <Card title="Node.js" href="/docs/adapters/node">Long-lived process on Node 24 LTS or Node 26+. Sane request/header/keep-alive timeouts and SIGTERM-driven graceful shutdown.</Card>
 <Card title="Bun" href="/docs/adapters/bun">Native Bun.serve for REST APIs. Fast startup, built-in TLS, Unix sockets, and hot reload in dev.</Card>
-<Card title="Deno" href="/docs/adapters/deno">Stable Deno.serve with AbortSignal-based shutdown. Runs anywhere, including Deno Deploy.</Card>
+<Card title="Deno" href="/docs/adapters/deno">Stable Deno.serve with built-in signal handling. Self-host in a container; Deno Deploy shuts down around April 2027.</Card>
 </Cards>
 
 ### Edge & serverless (platform owns the process) [#edge-and-serverless-platform-owns-the-process]
 
 <Cards>
-<Card title="Cloudflare Workers" href="/docs/adapters/cloudflare-workers">Modules-format Worker. wrangler.jsonc, nodejs\_compat, and bindings for KV, R2, D1, DO, Queues, Hyperdrive.</Card>
+<Card title="Cloudflare Workers" href="/docs/adapters/cloudflare-workers">Modules-format Worker with bindings for KV, R2, D1, DO, Queues, Hyperdrive. Also runs self-hosted on workerd.</Card>
+<Card title="Vercel" href="/docs/adapters/vercel">Vercel Functions on Fluid compute, or mounted inside a Next.js App Router route handler.</Card>
 <Card title="Netlify" href="/docs/adapters/netlify">Edge Functions (Deno) and Functions v2 (Node, fetch-style). The v1 lambda shape is legacy.</Card>
 <Card title="Fastly Compute" href="/docs/adapters/fastly">JS Compute via @fastly/js-compute and the fetch-event listener model, wrapped by installFastlyListener.</Card>
-<Card title="AWS Lambda" href="/docs/adapters/aws-lambda">API Gateway HTTP API v2.0, REST API v1.0, Function URLs, and streamifyResponse for streaming.</Card>
+<Card title="AWS Lambda" href="/docs/adapters/aws-lambda">API Gateway HTTP API v2.0, REST API v1.0, Function URLs behind CloudFront, and streamifyResponse for streaming.</Card>
+<Card title="Azure Functions" href="/docs/adapters/azure-functions">Node.js v4 programming model. One catch-all HTTP trigger, cookies mapped for you, optional HTTP streams.</Card>
 </Cards>
+
+Containers on Google Cloud Run, Fly.io, Render, Railway, or Kubernetes use the Node adapter. See [Deployment](/docs/deployment).
+
+## What each adapter gives you [#capabilities]
+
+Every adapter runs the same routing, validation, security headers, and problem+json errors. What differs is what the platform hands the adapter:
+
+| Adapter | Real client peer | Streaming responses | WebSockets (`app.ws`) | Graceful shutdown | OTLP telemetry flush |
+| --- | --- | --- | --- | --- | --- |
+| Node (`/node`) | Yes, from the socket | Yes | Yes | `SIGTERM`/`SIGINT` | Interval + on shutdown |
+| Bun (`/bun`) | Yes, from the socket | Yes | Yes | `SIGTERM`/`SIGINT` | Interval + on shutdown |
+| Deno (`/deno`) | Yes, from the socket | Yes | No | `SIGTERM`/`SIGINT` | Interval + on shutdown |
+| Cloudflare Workers, workerd (`/cloudflare`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `ctx.waitUntil` |
+| Vercel, Netlify v2 / Edge (`/vercel`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `waitUntil` when present |
+| Fastly Compute (`/fastly`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `event.waitUntil` |
+| AWS Lambda (`/lambda`) | Yes, from the event | Buffered, or `toLambdaStreamHandler` | No | Platform-managed | Awaited before returning |
+| Azure Functions (`/azure`) | No, use `behindProxy` | Buffered, or `stream: true` | No | Platform-managed | Awaited before returning |
+
+- **Real client peer** is what `getConnInfo(ctx.request)` returns. It never comes from a header a client could fake. Where the platform does not expose it, declare `behindProxy` so `rateLimit()` and `resolveClientIp()` read the platform's `X-Forwarded-For`. See [Reverse proxy](/docs/deployment#reverse-proxy).
+- **Graceful shutdown** means the adapter drains your `app.onShutdown` hooks on a signal. On platform-managed hosts your code is never sent `SIGTERM`, so do not rely on shutdown hooks there.
+
+The Node adapter runs the whole test suite. Deno, Bun, and workerd also run a smoke suite on the real runtime binaries in CI, against the published `dist/` build, on every change.
 
 ## Roll your own
 
@@ -81,5 +111,5 @@ export default {
 
 ## See also
 
-- [Deployment](/docs/deployment): Docker, reverse proxies, health checks, and Node platform guides (Fly.io, Render, Railway, Heroku).
+- [Deployment](/docs/deployment): Docker, reverse proxies, health checks, and platform guides (Fly.io, Render, Railway, Heroku, Google Cloud Run).
 - [Scaffolder](/docs/scaffolder): `pnpm create daloy` ships runtime-specific templates.

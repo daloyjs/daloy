@@ -201,3 +201,89 @@ jobs:
 
       - name: Verify create-daloy package
         run: pnpm --filter create-daloy test
+
+  # Real-runtime smoke tests. The unit suite stubs the `Bun` / `Deno` globals,
+  # so this job is what proves the published `dist/` actually serves requests
+  # on Deno, Bun, and workerd (the open-source Cloudflare Workers runtime).
+  # Each runtime is a checksum-pinned release download rather than a setup
+  # action, the same pattern `release.yml` uses for its Deno publisher; a
+  # mismatched archive fails `sha256sum --check` before anything executes.
+  # Bump a version by updating its URL and digest together (the digests are
+  # published on each GitHub release page).
+  runtimes:
+    name: Runtime smoke (Deno, Bun, workerd)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install checksum-pinned runtimes
+        run: |
+          set -euo pipefail
+          bin_dir="${RUNNER_TEMP}/runtimes"
+          mkdir -p "${bin_dir}"
+          cd "${bin_dir}"
+
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            'https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-unknown-linux-gnu.zip' \
+            --output deno.zip
+          echo '394f07f4da2bebe6ce6f1e7ce0fa16429b29b08c35e3fac3fe25972676dff4b2  deno.zip' | sha256sum --check --strict
+          unzip -q deno.zip deno
+
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            'https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64.zip' \
+            --output bun.zip
+          echo '3e730528d89775f03f87f05c06787c4df4099d0a37f3f252e7b829cb23816e18  bun.zip' | sha256sum --check --strict
+          unzip -q -j bun.zip 'bun-linux-x64/bun'
+
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            'https://github.com/cloudflare/workerd/releases/download/v1.20261008.1/workerd-linux-64.gz' \
+            --output workerd.gz
+          echo 'a7c6dab0b3c2336eff0296edb83e2aa45d412d6e86f2e3b9ff89b380d829a2ae  workerd.gz' | sha256sum --check --strict
+          gunzip workerd.gz
+
+          chmod +x deno bun workerd
+          echo "${bin_dir}" >> "${GITHUB_PATH}"
+
+      - name: Smoke test on Deno
+        env:
+          DENO_NO_UPDATE_CHECK: "1"
+        run: pnpm smoke:deno
+
+      - name: Smoke test on Bun
+        run: pnpm smoke:bun
+
+      - name: Smoke test on workerd
+        run: pnpm smoke:workerd "${RUNNER_TEMP}/runtimes/workerd"

@@ -122,6 +122,7 @@ Quick map of subpath modules exposed by the package:
 @daloyjs/core/vercel                // Vercel Functions / Edge / Next.js App Router
 @daloyjs/core/fastly                // Fastly Compute@Edge
 @daloyjs/core/lambda                // AWS Lambda (API Gateway v1 + v2 / Function URLs)
+@daloyjs/core/azure                 // Azure Functions (Node.js v4 programming model)
 ```
 
 You can import any feature two ways: from the root `@daloyjs/core` barrel (convenient and tree-shakeable), or from its own subpath (for example `@daloyjs/core/jwt`) for the smallest possible bundle without relying on a bundler's tree-shaking. Both resolve to the same code. Runtime **adapters** are the one exception: they are available *only* as subpaths (for example `@daloyjs/core/node`), so runtime-specific code such as `node:http` never leaks into an edge or Worker bundle.

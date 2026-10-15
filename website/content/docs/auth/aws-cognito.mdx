@@ -1,12 +1,13 @@
 ---
 title: Protect a DaloyJS API with AWS Cognito
-description: Authenticate and authorize requests in a DaloyJS API with Amazon Cognito user pools, using the official aws-jwt-verify library to validate access and ID tokens with JWKS, scopes, and groups.
+description: Protect a DaloyJS API with Amazon Cognito user pools. Verify access tokens with aws-jwt-verify or the built-in jwk(), and gate routes by scope and Cognito group.
 keywords:
   - DaloyJS Cognito
   - aws-jwt-verify
   - CognitoJwtVerifier
   - Cognito access token
   - Cognito scopes
+  - cognito:groups
 ---
 
 # Protect a DaloyJS API with AWS Cognito
@@ -49,7 +50,7 @@ keywords:
           {
             from: "DaloyJS API",
             to: "Client app",
-            label: "Return protected data after requireAuth passes",
+            label: "Return protected data after the scope or group guard passes",
             kind: "response",
           },
         ]} caption="The DaloyJS API only verifies the access token Cognito issued. It never sees user passwords, and the JWKS is cached so most requests verify without a network round-trip." />
@@ -72,15 +73,16 @@ pnpm add aws-jwt-verify
 # .env
 COGNITO_USER_POOL_ID=us-east-1_AbCdEfGhI
 COGNITO_CLIENT_ID=1example23456789
-COGNITO_REQUIRED_SCOPE=my-api/read
 ```
 
-## 4. Plugin
+## 4. Verify tokens
+
+`bearerAuth()` extracts the token safely and hands it to the SDK. Returning a user object puts it on `ctx.state.user`, which is what the built-in scope and role guards read.
 
 ```ts
-// src/plugins/cognito.ts
+// src/auth.ts
 import { CognitoJwtVerifier } from "aws-jwt-verify";
-import type { App } from "@daloyjs/core";
+import { bearerAuth } from "@daloyjs/core";
 
 const verifier = CognitoJwtVerifier.create({
   userPoolId: process.env.COGNITO_USER_POOL_ID!,
@@ -88,35 +90,24 @@ const verifier = CognitoJwtVerifier.create({
   clientId: process.env.COGNITO_CLIENT_ID!,
 });
 
-export interface Principal {
-  sub: string;
-  scopes: string[];
-  groups: string[];
-  claims: Record<string, unknown>;
-}
+// Pre-fetch the JWKS so the first request isn't slowed by a cold cache.
+void verifier.hydrate();
 
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function cognitoPlugin(app: App) {
-  app.decorate("verifier", {
-    async verify(token: string): Promise<Principal> {
-      const payload = await verifier.verify(token);
-      return {
-        sub: String(payload.sub),
-        scopes: typeof payload.scope === "string" ? payload.scope.split(" ") : [],
-        groups: (payload["cognito:groups"] as string[]) ?? [],
-        claims: payload as Record<string, unknown>,
-      };
-    },
-  });
-  // Pre-fetch the JWKS so the first request isn't slowed by a cold cache
-  void verifier.hydrate();
-}
+export const cognito = bearerAuth({
+  realm: "my-api",
+  validate: async (token) => {
+    try {
+      const claims = await verifier.verify(token);
+      return { sub: claims.sub, scopes: claims.scope?.split(" ") ?? [], claims };
+    } catch {
+      return false; // 403
+    }
+  },
+});
 
 declare module "@daloyjs/core" {
   interface AppState {
-    verifier: { verify(token: string): Promise<Principal> };
-    principal?: Principal;
+    user?: { sub?: string; scopes: string[]; claims: Record<string, unknown> };
   }
 }
 ```
@@ -127,32 +118,57 @@ declare module "@daloyjs/core" {
 
 ```ts
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { cognitoPlugin } from "./plugins/cognito.ts";
-import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
+import { App, rateLimit, requireRoles, requireScopes, secureHeaders } from "@daloyjs/core";
+import { cognito } from "./auth.ts";
 
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-cognitoPlugin(app);
+app.use(cognito);
 
 app.get(
   "/me",
   {
-    hooks: requireAuth(process.env.COGNITO_REQUIRED_SCOPE!),
+    hooks: requireScopes(["my-api/read"], { phase: "preBody" }),
     responses: {
-      200: {
-        description: "OK",
-        body: z.object({ sub: z.string(), groups: z.array(z.string()) }),
-      },
+      200: { description: "OK", body: z.object({ sub: z.string() }) },
     },
   },
-  ({ state }) => ({
-    status: 200,
-    body: { sub: state.principal!.sub, groups: state.principal!.groups },
-  }),
+  ({ state }) => ({ status: 200, body: { sub: String(state.user?.sub) } }),
+);
+
+// Cognito groups arrive in `cognito:groups`.
+app.get(
+  "/admin/stats",
+  {
+    hooks: requireRoles(["admins"], { claim: "cognito:groups" }),
+    responses: { 200: { description: "OK" } },
+  },
+  () => ({ status: 200, body: {} }),
 );
 ```
+
+## Without the SDK: `jwk()` [#jwk]
+
+The built-in `jwk()` verifies Cognito tokens too. The catch: Cognito **access tokens have no `aud` claim**, they carry `client_id` instead. So turn off the audience check and do Cognito's two checks yourself in `verify` (a `false` answers `403`):
+
+```ts
+import { jwk } from "@daloyjs/core";
+
+const region = "us-east-1";
+const issuer = `https://cognito-idp.${region}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`;
+
+export const cognito = jwk({
+  jwks: `${issuer}/.well-known/jwks.json`,
+  algorithms: ["RS256"],
+  issuer,
+  allowAnyAudience: true, // access tokens carry client_id, not aud
+  verify: (claims) =>
+    claims.token_use === "access" && claims.client_id === process.env.COGNITO_CLIENT_ID,
+});
+```
+
+Do not skip that `verify`. Without it, an ID token, or an access token issued to a different app client of the same pool, would be accepted.
 
 ## Trusting multiple pools or IdPs
 

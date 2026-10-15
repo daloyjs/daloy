@@ -46,6 +46,8 @@ Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based
 
 Edge Functions run on a Deno-based runtime. Use `toWebHandler`, the same helper as the Vercel adapter, because the input/output shape is identical.
 
+<Callout type="note">In October 2026 the Deno team joined Cloudflare and the Deno runtime moved to maintenance mode. Netlify has not announced changes to Edge Functions. Your DaloyJS code does not depend on Deno-specific APIs here, so if Netlify ever changes the Edge runtime, the same `toWebHandler(app)` export moves to Functions v2 below unchanged. For an API with no hard need for the edge, Functions v2 is the lower-risk default today.</Callout>
+
 ```ts
 // netlify/edge-functions/api.ts
 import { toWebHandler } from "@daloyjs/core/vercel";

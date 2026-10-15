@@ -60,8 +60,12 @@ const ALLOWED_JWK_ALGS: ReadonlySet<JwkAlgorithm> = new Set([
 
 /** Minimal JWKS document shape (RFC 7517 §5). */
 export interface JwkSet {
-  /** Public JWKs; each entry should carry a `kid` so tokens can select their key. */
-  keys: JsonWebKey[];
+  /**
+   * Public JWKs; each entry should carry a `kid` so tokens can select their key.
+   * Typed as the Web Crypto `JsonWebKey` plus `kid` (since 1.12.0), so a key
+   * exported with `crypto.subtle.exportKey("jwk", ...)` can be tagged inline.
+   */
+  keys: Array<JsonWebKey & { kid?: string }>;
 }
 
 /**

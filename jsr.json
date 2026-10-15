@@ -12,6 +12,7 @@
     "./vercel": "./src/adapters/vercel.ts",
     "./fastly": "./src/adapters/fastly.ts",
     "./lambda": "./src/adapters/lambda.ts",
+    "./azure": "./src/adapters/azure.ts",
     "./client": "./src/client.ts",
     "./openapi": "./src/openapi.ts",
     "./openapi-diff": "./src/openapi-diff.ts",

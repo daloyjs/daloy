@@ -16,6 +16,8 @@ import {
 import { toFetchHandler as toCloudflareFetchHandler } from "../src/adapters/cloudflare.js";
 import { toWebHandler } from "../src/adapters/vercel.js";
 import { toLambdaHandler } from "../src/adapters/lambda.js";
+import { toFastlyHandler, installFastlyListener } from "../src/adapters/fastly.js";
+import { toAzureHandler } from "../src/adapters/azure.js";
 
 // ---------- fixtures ----------
 
@@ -768,5 +770,79 @@ test("Lambda adapter awaits telemetry flush before returning", async () => {
     },
   });
   assert.equal(result.statusCode, 200);
+  assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
+});
+
+test("Fastly listener flushes telemetry through the event's waitUntil", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  type Listener = (event: {
+    request: Request;
+    respondWith: (r: Promise<Response>) => void;
+    waitUntil: (p: Promise<unknown>) => void;
+  }) => void;
+  let listener: Listener | undefined;
+  const g = globalThis as { addEventListener?: unknown };
+  const prev = g.addEventListener;
+  g.addEventListener = (_type: string, fn: Listener) => {
+    listener = fn;
+  };
+  try {
+    installFastlyListener(app);
+  } finally {
+    if (prev === undefined) delete g.addEventListener;
+    else g.addEventListener = prev;
+  }
+  const waited: Promise<unknown>[] = [];
+  const response = await new Promise<Response>((resolve) => {
+    listener!({
+      request: new Request("http://test.local/ping"),
+      respondWith: (r) => void r.then(resolve),
+      waitUntil: (p) => {
+        waited.push(p);
+      },
+    });
+  });
+  assert.equal(response.status, 200);
+  assert.equal(waited.length, 1);
+  await waited[0];
+  assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
+});
+
+test("Fastly handler without waitUntil still starts the telemetry flush", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  const res = await toFastlyHandler(app)(new Request("http://test.local/ping"));
+  assert.equal(res.status, 200);
+  await app.telemetry!.flush();
+  assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
+});
+
+test("Azure adapter awaits telemetry flush before returning", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  const result = await toAzureHandler(app)(new Request("http://test.local/ping"));
+  assert.equal(result.status, 200);
   assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
 });

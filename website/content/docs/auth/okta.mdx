@@ -1,17 +1,18 @@
 ---
 title: Protect a DaloyJS API with Okta
-description: Authenticate and authorize requests in a DaloyJS API with Okta. Uses the official @okta/jwt-verifier to validate access and ID tokens from an Okta Custom Authorization Server, with scope and claim assertions.
+description: Protect a DaloyJS API with Okta. The built-in jwk() verifies tokens from an Okta Custom Authorization Server on every runtime; requireRoles() checks Okta groups.
 keywords:
   - DaloyJS Okta
   - "@okta/jwt-verifier"
   - Okta access token
   - Okta authorization server
   - Okta scopes
+  - Okta groups claim
 ---
 
 # Protect a DaloyJS API with Okta
 
-[Okta](https://developer.okta.com) provides workforce and customer identity with granular policies and the API Access Management add-on for issuing custom-scoped access tokens. This guide uses the official [`@okta/jwt-verifier`](https://github.com/okta/okta-jwt-verifier-js) package (4.x, stable) to validate tokens from a Custom Authorization Server.
+[Okta](https://developer.okta.com) provides workforce and customer identity with granular policies and the API Access Management add-on for issuing custom-scoped access tokens. This guide verifies tokens from a Custom Authorization Server with the built-in `jwk()`, which runs on every DaloyJS runtime. The official [`@okta/jwt-verifier`](https://github.com/okta/okta-jwt-verifier-js) is Node-only; the end of the page shows how to plug it in if you prefer it.
 
 <SequenceDiagram title="Okta access-token verification" participants={[
           "Client app",
@@ -35,21 +36,21 @@ keywords:
           {
             from: "DaloyJS API",
             to: "Okta JWKS",
-            label: "OktaJwtVerifier fetches signing keys (cached 1h)",
-            detail: "jwksRequestsPerMinute throttles fetches",
+            label: "jwk() fetches signing keys (cached)",
+            detail: "GET {issuer}/v1/keys",
             kind: "async",
           },
           {
             from: "DaloyJS API",
             to: "DaloyJS API",
             label:
-              "verifyAccessToken checks issuer, audience, scp & assertClaims",
+              "jwk() checks issuer, audience, expiry; requireScopes() checks scp",
             kind: "note",
           },
           {
             from: "DaloyJS API",
             to: "Client app",
-            label: "Return protected data after requireAuth passes",
+            label: "Return protected data after jwk() and requireScopes() pass",
             kind: "response",
           },
         ]} caption="Only tokens from a Custom Authorization Server are meant to be verified by your app. The Org Authorization Server issues opaque tokens that you introspect instead, never verify locally." />
@@ -62,132 +63,130 @@ keywords:
 
 ## 2. Install
 
-```ts
-pnpm add @okta/jwt-verifier
-```
+Nothing beyond `@daloyjs/core`.
 
 ## 3. Environment variables
 
-```ts
+```bash
 # .env
 OKTA_ISSUER=https://dev-12345.okta.com/oauth2/default
-OKTA_CLIENT_ID=0oa1example2345
 OKTA_AUDIENCE=api://default
-OKTA_REQUIRED_SCOPE=items:read
 ```
 
-## 4. Plugin
+## 4. Verify tokens
 
 ```ts
-// src/plugins/okta.ts
-import OktaJwtVerifier from "@okta/jwt-verifier";
-import type { App } from "@daloyjs/core";
+// src/auth.ts
+import { jwk } from "@daloyjs/core";
 
-const verifier = new OktaJwtVerifier({
-  issuer: process.env.OKTA_ISSUER!,
-  clientId: process.env.OKTA_CLIENT_ID,
-  // Defaults shown for transparency:
-  cacheMaxAge: 60 * 60 * 1000, // 1 hour
-  jwksRequestsPerMinute: 10,
+const issuer = process.env.OKTA_ISSUER!;
+
+export const okta = jwk({
+  jwks: `${issuer}/v1/keys`,
+  algorithms: ["RS256"],
+  issuer,
+  audience: process.env.OKTA_AUDIENCE!,
+  maxLifetimeSeconds: 86_400,
 });
-
-export interface Principal {
-  sub: string;
-  scopes: string[];
-  groups: string[];
-  claims: Record<string, unknown>;
-}
-
-const expectedAudience = process.env.OKTA_AUDIENCE!;
-
-// Call with the root app, not through app.register(): a decoration made
-// inside a registered plugin is visible only to that plugin's own routes.
-export function oktaPlugin(app: App) {
-  app.decorate("verifier", {
-    async verify(token: string): Promise<Principal> {
-      const { claims } = await verifier.verifyAccessToken(token, expectedAudience);
-      const scopes = Array.isArray(claims.scp)
-        ? (claims.scp as string[])
-        : typeof claims.scp === "string"
-          ? (claims.scp as string).split(" ")
-          : [];
-      const groups = Array.isArray(claims.groups) ? (claims.groups as string[]) : [];
-      return { sub: String(claims.sub), scopes, groups, claims };
-    },
-  });
-}
 
 declare module "@daloyjs/core" {
   interface AppState {
-    verifier: { verify(token: string): Promise<Principal> };
-    principal?: Principal;
+    // What jwk() stamps on every authenticated request.
+    user?: { sub?: string; scopes: string[]; claims: Record<string, unknown> };
   }
 }
 ```
+
+Okta puts granted scopes in `scp` as an array; `jwk()` reads it into `ctx.state.user.scopes`, so `requireScopes()` works unchanged.
 
 ## 5. Guard a route
 
 ```ts
 import { z } from "zod";
-import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { oktaPlugin } from "./plugins/okta.ts";
-import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
+import { App, rateLimit, requireScopes, secureHeaders } from "@daloyjs/core";
+import { okta } from "./auth.ts";
 
 const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-oktaPlugin(app);
+app.use(okta);
 
 app.get(
   "/items",
   {
     operationId: "listItems",
-    hooks: requireAuth(process.env.OKTA_REQUIRED_SCOPE!),
+    hooks: requireScopes(["items:read"], { phase: "preBody" }),
     responses: {
       200: { description: "OK", body: z.object({ user: z.string() }) },
     },
   },
-  ({ state }) => ({ status: 200, body: { user: state.principal!.sub } }),
+  ({ state }) => ({ status: 200, body: { user: String(state.user?.sub) } }),
 );
 ```
 
-## Custom claim assertions
+## Groups
 
-The verifier can enforce extra claims at construction time. For example, to require that the token includes both `items:read` and `items:write` in the space-separated `scp` claim:
+Okta does not put groups in access tokens by default. In the authorization server, add a **Claims** entry named `groups` (value type *Groups*, with a filter such as *Matches regex* `.*`, included in the access token). Then:
 
 ```ts
-const verifier = new OktaJwtVerifier({
-  issuer: process.env.OKTA_ISSUER!,
-  clientId: process.env.OKTA_CLIENT_ID,
-  assertClaims: {
-    "scp.includes": ["items:read", "items:write"],
-    "groups.includes": ["Engineering"],
+import { requireRoles } from "@daloyjs/core";
+
+app.get(
+  "/reports",
+  {
+    hooks: requireRoles(["Engineering"], { claim: "groups" }),
+    responses: { 200: { description: "OK" } },
   },
-});
+  () => ({ status: 200, body: {} }),
+);
 ```
 
-## Verifying ID tokens
+## Extra claim checks
 
-Use `verifyIdToken(token, expectedClientId, expectedNonce?)` if your client also sends ID tokens (for example, to populate a user profile). Pass the nonce only when the original auth request included one.
-
-## Custom JWKS URI
-
-When the JWKS isn't under the issuer (e.g. you front Okta with a proxy), pass `jwksUri` explicitly:
+For anything beyond issuer, audience, expiry, scopes, and groups, use the `verify` hook. Returning `false` answers `403`:
 
 ```ts
-const verifier = new OktaJwtVerifier({
-  issuer: process.env.OKTA_ISSUER!,
-  clientId: process.env.OKTA_CLIENT_ID,
-  jwksUri: "https://dev-12345.okta.com/oauth2/v1/keys",
+jwk({
+  jwks: `${issuer}/v1/keys`,
+  algorithms: ["RS256"],
+  issuer,
+  audience: process.env.OKTA_AUDIENCE!,
+  verify: (claims) => claims.cid === process.env.OKTA_CLIENT_ID, // only this client app
 });
 ```
 
-## Runtimes
+If the JWKS sits behind a proxy rather than under the issuer, point `jwks` at that `https://` URL instead. `jwk()` refuses redirects when fetching keys.
 
-`@okta/jwt-verifier` is a **Node-only** library (it imports Node modules transitively). It works on Node, Bun, and AWS Lambda. For [Cloudflare Workers](/docs/adapters), use `jose`'s `createRemoteJWKSet` + `jwtVerify` against the same issuer (the [Auth0](/docs/auth/auth0) page shows that exact pattern, only the issuer URL changes).
+## Using `@okta/jwt-verifier` instead
+
+On Node-based runtimes you can keep Okta's own SDK and plug it into `bearerAuth()`. Return a user object so `requireScopes()` and `requireRoles()` keep working:
+
+```ts
+import OktaJwtVerifier from "@okta/jwt-verifier";
+import { bearerAuth } from "@daloyjs/core";
+
+const verifier = new OktaJwtVerifier({ issuer: process.env.OKTA_ISSUER! });
+
+app.use(
+  bearerAuth({
+    realm: "items-api",
+    validate: async (token) => {
+      try {
+        const { claims } = await verifier.verifyAccessToken(token, process.env.OKTA_AUDIENCE!);
+        const scopes = Array.isArray(claims.scp) ? (claims.scp as string[]) : [];
+        return { sub: claims.sub, scopes, claims };
+      } catch {
+        return false; // 403
+      }
+    },
+  }),
+);
+```
+
+The SDK imports Node modules, so it does not run on Cloudflare Workers or Fastly. ID tokens are for your front end, not your API; if you must check one, use `verifier.verifyIdToken(token, clientId, nonce)`.
 
 ## Org server vs Custom Authorization Server
 
-Only tokens from a **Custom Authorization Server** are meant to be verified by your app, those issuers look like `https://{domain}/oauth2/{asId}`. The Org Authorization Server (`https://{domain}`) issues opaque tokens that only Okta should consume. Validate those via the `/introspect` endpoint instead.
+Only tokens from a **Custom Authorization Server** are meant to be verified by your app, those issuers look like `https://{domain}/oauth2/{asId}`. The Org Authorization Server (`https://{domain}`) issues opaque tokens that only Okta should consume. Validate those via the `/introspect` endpoint instead, from `bearerAuth({ validate })`; see [opaque tokens](/docs/auth#not-supported).
 
 See also [Auth0](/docs/auth/auth0), [Clerk](/docs/auth/clerk), and the [auth integrations overview](/docs/auth).

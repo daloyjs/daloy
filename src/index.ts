@@ -252,6 +252,7 @@ export {
   CSRF_HOOK_MARKER,
   fetchMetadata,
   requireScopes,
+  requireRoles,
   REQUIRE_SCOPES_AGGREGATE_KEY,
   REQUIRE_SCOPES_HOOK_MARKER,
   _resetSharedRateLimitStoresForTests,
@@ -480,6 +481,8 @@ export type {
   FetchMetadataOptions,
   BasicAuthOptions,
   RequireScopesOptions,
+  RequireRolesOptions,
+  RoleClaimReader,
 } from "./middleware.js";
 export type { BearerAuthOptions, BearerAuthVerifyHook } from "./middleware.js";
 

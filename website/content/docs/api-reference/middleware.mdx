@@ -24,7 +24,7 @@ Built-in middleware, the `every`/`some`/`except` composition primitives, typed d
           },
           {
             title: "Authentication & access",
-            items: ["bearerAuth()", "jwk()", "requireScopes()", "csrf()"],
+            items: ["bearerAuth()", "jwk()", "requireScopes()", "requireRoles()", "csrf()"],
             tone: "accent",
           },
           {
@@ -37,7 +37,7 @@ Built-in middleware, the `every`/`some`/`except` composition primitives, typed d
 ## Built-in middleware
 
 <AuthRole role="resource-server">
-<p>The authentication middleware on this page (<code>bearerAuth()</code>{", "}<code>jwk()</code>{", "}<code>requireScopes()</code>{", "}<code>basicAuth()</code>) all sit on the receiving end of a token. They read a credential that something else issued and decide whether this request continues. None of them issue credentials, and{" "}<code>basicAuth()</code> in particular is for machine-to-machine and internal endpoints, not for logging in end users.</p>
+<p>The authentication middleware on this page (<code>bearerAuth()</code>{", "}<code>jwk()</code>{", "}<code>requireScopes()</code>{", "}<code>requireRoles()</code>{", "}<code>basicAuth()</code>) all sit on the receiving end of a token. They read a credential that something else issued and decide whether this request continues. None of them issue credentials, and{" "}<code>basicAuth()</code> in particular is for machine-to-machine and internal endpoints, not for logging in end users.</p>
 </AuthRole>
 
 ```ts
@@ -56,6 +56,8 @@ csrf(opts?: CsrfOptions): Hooks
 fetchMetadata(opts?: FetchMetadataOptions): Hooks   // Sec-Fetch-Site/Mode/Dest enforcement
 requireScopes(scopes: string[], opts?: RequireScopesOptions): Hooks
                                                       // { phase?: "beforeHandle" | "preBody"; match?: "all" | "any" }
+requireRoles(roles: string[], opts?: RequireRolesOptions): Hooks
+                                                      // { claim?: string | (claims) => unknown; match?: "all" | "any" }; always preBody
 ipRestriction(opts: IpRestrictionOptions): Hooks    // CIDR allow/deny
 loadShedding(opts?: LoadSheddingOptions): Hooks
 etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache-Control skip
@@ -104,7 +106,33 @@ app.use(every(
 
 <AutoTypeTable path="src/middleware.ts" name="RequireScopesOptions" />
 
+### `requireRoles()` options [#require-roles-options]
+
+`requireRoles()` authorizes by role, group, or permission instead of OAuth scope. It reads a list-valued claim from `ctx.state.user.claims` (what `jwk()` stamps), or from `ctx.state.user` itself when an auth helper stamped a plain object (`basicAuth()`, or `bearerAuth()` whose `validate` returned one). No caller is a `401` with `WWW-Authenticate: Bearer`; a caller without the roles is a `403` that does not name them.
+
+```ts
+import { jwk, requireRoles } from "@daloyjs/core";
+
+app.use(jwk({ jwks, algorithms: ["RS256"], issuer, audience }));
+
+requireRoles(["Books.Admin"]);                                   // Entra app roles (`roles`)
+requireRoles(["admins"], { claim: "cognito:groups" });           // a named top-level claim
+requireRoles(["delete:books"], { claim: "permissions" });        // Auth0 RBAC
+requireRoles(["editor", "admin"], {                              // Keycloak, any one role
+  claim: (c) => (c.realm_access as { roles?: unknown } | undefined)?.roles,
+  match: "any",
+});
+```
+
+- A string `claim` is one top-level claim name, read verbatim, so names containing dots or colons work. `__proto__`, `constructor`, and `prototype` are refused at construction, and only the claims object's own properties are read.
+- The claim value may be an array of strings or a space-delimited string. Anything else, a missing claim, or a reader that throws counts as no roles (fail closed).
+- The check always runs in `preBody`, before the body is read and before `idempotency()` or `responseCache()` could replay a stored response, so there is no `phase` option. Register the authentication hook first.
+
+<AutoTypeTable path="src/middleware.ts" name="RequireRolesOptions" />
+
 ### `BearerAuthOptions` [#bearer-auth-options]
+
+Since 1.12.0, `validate` may return a user-shaped object instead of `true`. It is stamped on `ctx.state.user`, so `requireScopes()` (reading `scopes`) and `requireRoles()` work with any verifier: a provider SDK, an introspection call, or a test stub. Return `{ sub, scopes, claims }` to match `jwk()`. See [pattern B on the auth overview](/docs/auth#pattern-bearer).
 
 `bearerAuth()` and `jwk()` pass any token value through verbatim, with no length, charset or prefix check, so new token formats keep working. The one exception is a token containing whitespace or a comma. Duplicate `Authorization` headers are comma-joined into one value (`Bearer a, Bearer b`), so such a token is a `401` and never reaches `validate()` or the JWT verifier.
 

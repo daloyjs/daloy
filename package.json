@@ -80,6 +80,10 @@
       "types": "./dist/adapters/lambda.d.ts",
       "import": "./dist/adapters/lambda.js"
     },
+    "./azure": {
+      "types": "./dist/adapters/azure.d.ts",
+      "import": "./dist/adapters/azure.js"
+    },
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"
@@ -269,6 +273,9 @@
     "bench:ablation": "pnpm build && node --import tsx bench/ablation.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts tests/red-team-attacks-11.test.ts tests/red-team-attacks-12.test.ts tests/red-team-attacks-13.test.ts tests/red-team-attacks-14.test.ts tests/red-team-attacks-15.test.ts tests/red-team-attacks-16.test.ts tests/red-team-attacks-17.test.ts tests/red-team-attacks-18.test.ts tests/red-team-attacks-19.test.ts",
+    "smoke:deno": "deno run --allow-net=127.0.0.1 --allow-read=. --allow-env scripts/runtime-smoke/deno.mjs",
+    "smoke:bun": "bun scripts/runtime-smoke/bun.mjs",
+    "smoke:workerd": "node scripts/runtime-smoke/workerd.mjs",
     "red-team:live": "node --import tsx red-team-live/run.ts",
     "red-team:live:mcp": "node --import tsx red-team-live/mcp-attacks.ts",
     "red-team:live:wave2": "node --import tsx red-team-live/skill-wave2-attacks.ts",

@@ -61,10 +61,15 @@ installFastlyListener(app);
 That helper is equivalent to:
 
 ```ts
+import { toFastlyHandler } from "@daloyjs/core/fastly";
+
+const handler = toFastlyHandler(app);
 addEventListener("fetch", (event) =>
-  event.respondWith(app.fetch(event.request))
+  event.respondWith(handler(event.request, event.waitUntil.bind(event)))
 );
 ```
+
+Passing `event.waitUntil` keeps the instance alive until [OTLP telemetry](/docs/otlp) is exported after the response. `installFastlyListener` does that for you. Without it the flush still starts, but Fastly may stop the instance before it finishes.
 
 ## fastly.toml [#fastly-toml]
 

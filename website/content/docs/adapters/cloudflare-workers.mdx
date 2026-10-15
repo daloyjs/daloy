@@ -121,6 +121,37 @@ pnpm wrangler deploy
 
 `wrangler publish` was renamed to `wrangler deploy` in 2024. Do not use the old name. Some CI templates still reference it.
 
+## Self-host on workerd [#self-host-on-workerd]
+
+[workerd](https://github.com/cloudflare/workerd) is the open-source runtime behind Cloudflare Workers, and Cloudflare is making self-hosted workerd a first-class way to run Workers-style apps. The same `toFetchHandler(app)` module runs on it unchanged, on your own servers, in a container, or on a laptop. DaloyJS CI runs its smoke suite on a real workerd binary on every change.
+
+workerd reads a Cap'n Proto config instead of `wrangler.jsonc`. Bundle your Worker to one file first (for example with `wrangler deploy --dry-run --outdir dist`), then point the config at it:
+
+```capnp title="config.capnp"
+using Workerd = import "/workerd/workerd.capnp";
+
+const config :Workerd.Config = (
+  services = [ (name = "api", worker = .api) ],
+  sockets = [ (name = "http", address = "*:8080", http = (), service = "api") ],
+);
+
+const api :Workerd.Worker = (
+  modules = [ (name = "index.js", esModule = embed "dist/index.js") ],
+  compatibilityDate = "2026-05-01",
+  bindings = [ (name = "SESSION_SECRET", fromEnvironment = "SESSION_SECRET") ],
+);
+```
+
+```bash
+workerd serve config.capnp
+```
+
+Things to know before you self-host:
+
+- **No Cloudflare network features.** KV, R2, D1, and Durable Objects are platform services. workerd gives you the runtime, not the network. Use disk-backed Durable Objects, or reach your own Postgres or Redis over HTTP or TCP sockets.
+- **Put a reverse proxy in front.** workerd does not terminate public TLS or rate limit connections for you. Run it behind nginx, Caddy, or a load balancer, and declare `behindProxy: { hops: 1 }` on the App so client IPs resolve from `X-Forwarded-For`.
+- **Treat it as a production server.** The workerd README describes it as a runtime, not a hardened sandbox: do not run untrusted code in it.
+
 ## Bindings (env)
 
 `toFetchHandler(app)` only forwards the `Request`. To expose Worker bindings (KV, R2, D1, Durable Objects, Queues, Hyperdrive, secrets) to your handlers, import `env` from `cloudflare:workers` and pass it to `app.decorate(...)` **before** you register routes. That's how DaloyJS makes runtime values available on `ctx.state` inside every handler.
@@ -179,5 +210,6 @@ app.get(
 ## See also
 
 - [Adapters overview](/docs/adapters)
+- [Moving off Deno Deploy](/docs/adapters/deno#moving-off-deno-deploy): the Workers entry is the usual destination.
 - [Neon on Workers](/docs/databases/neon) · [PlanetScale](/docs/databases/planetscale) · [Turso](/docs/databases/turso) · [Cloudflare D1](/docs/databases/cloudflare-d1)
 - [Sessions](/docs/security/session) · [Distributed rate-limit store](/docs/security/rate-limit-redis)

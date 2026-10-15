@@ -306,6 +306,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Microsoft Entra ID", href: "/docs/auth/entra-id" as Route },
       { title: "Auth0", href: "/docs/auth/auth0" as Route },
       { title: "Okta", href: "/docs/auth/okta" as Route },
+      { title: "Keycloak", href: "/docs/auth/keycloak" as Route, badge: "new" },
       { title: "Clerk", href: "/docs/auth/clerk" as Route },
       { title: "LoginRadius", href: "/docs/auth/loginradius" as Route },
       { title: "Better Auth", href: "/docs/auth/better-auth" as Route },
@@ -337,6 +338,11 @@ export const docsNav: DocsNavSection[] = [
       { title: "Netlify", href: "/docs/adapters/netlify" as Route },
       { title: "Fastly Compute", href: "/docs/adapters/fastly" as Route },
       { title: "AWS Lambda", href: "/docs/adapters/aws-lambda" as Route },
+      {
+        title: "Azure Functions",
+        href: "/docs/adapters/azure-functions" as Route,
+        badge: "new",
+      },
     ],
   },
   {

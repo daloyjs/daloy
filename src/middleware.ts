@@ -8,7 +8,13 @@
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
-import { parseBearerToken, randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
+import {
+  isForbiddenObjectKey,
+  parseBearerToken,
+  randomId,
+  sanitizeHeaderName,
+  timingSafeEqual,
+} from "./security.js";
 import {
   getConnInfo,
   resolveClientIp,
@@ -1798,8 +1804,17 @@ export type BearerAuthVerifyHook<TCredentials = string> = (
 
 /** Options for {@link bearerAuth}. */
 export interface BearerAuthOptions {
-  /** Cheap, stateless token check (signature / format). */
-  validate: (token: string) => boolean | Promise<boolean>;
+  /**
+   * Token check (signature, format, or a provider SDK's verify call). Return
+   * a falsy value to reject the request with `403`, or `true` to accept it.
+   *
+   * Since 1.12.0 it may instead resolve to a user-shaped object, which is
+   * stamped on `ctx.state.user`, so `requireScopes()` (reading `scopes`) and
+   * `requireRoles()` (reading `claims`, or the object itself) work with any
+   * verifier, not only `jwk()`. Return `{ sub, scopes, claims }` to match
+   * the shape `jwk()` produces.
+   */
+  validate: (token: string) => boolean | object | Promise<boolean | object>;
   /** WWW-Authenticate realm. Default: `"api"`. */
   realm?: string;
   /**
@@ -1823,7 +1838,9 @@ export interface BearerAuthOptions {
  * token shape is passed through verbatim.
  *
  * The `validate` callback is the integration point with whatever JWT
- * verifier, opaque-token introspector, or in-memory test stub you use. The
+ * verifier, opaque-token introspector, or in-memory test stub you use. When
+ * it resolves to an object, that object becomes `ctx.state.user`, which is
+ * what `requireScopes()` and `requireRoles()` authorize against. The
  * optional `verify` hook is the integration point for revocation
  * lists, token-version counters, and other per-request invalidation checks
  * that `validate` cannot answer statelessly.
@@ -1879,6 +1896,7 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
       }
       const ok = await options.validate(token);
       if (!ok) throw new ForbiddenError("Invalid token");
+      if (typeof ok === "object") (ctx.state as Record<string, unknown>).user = ok;
       if (options.verify) {
         const verified = await options.verify(token, ctx);
         if (verified === false) throw new ForbiddenError("Token revoked");
@@ -2498,6 +2516,188 @@ export function requireScopes(
   const hooks: Hooks = phase === "preBody" ? { preBody: check } : { beforeHandle: check };
   if (!anyOf) (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = required;
   return hooks;
+}
+
+// ---------- requireRoles ----------
+
+/**
+ * Reads the roles (or groups, permissions, or any other list-valued claim)
+ * granted to the authenticated caller from its verified claims.
+ *
+ * Receives the verified claims object (`ctx.state.user.claims` from `jwk()`,
+ * or `ctx.state.user` itself when an auth helper stamped a plain object).
+ * Return the granted values, or `undefined` when the caller has none.
+ *
+ * @since 1.12.0
+ */
+export type RoleClaimReader = (claims: Readonly<Record<string, unknown>>) => unknown;
+
+/**
+ * Options for {@link requireRoles}.
+ *
+ * @since 1.12.0
+ */
+export interface RequireRolesOptions {
+  /**
+   * Where the granted roles live. A string names one top-level claim, read
+   * verbatim (so namespaced names such as `"https://example.com/roles"` or
+   * `"cognito:groups"` work); its value may be an array of strings or a
+   * space-delimited string. Pass a {@link RoleClaimReader} for nested or
+   * object-shaped claims, e.g. Keycloak's `realm_access.roles`.
+   *
+   * @defaultValue "roles"
+   */
+  claim?: string | RoleClaimReader;
+  /**
+   * `"all"` requires every listed role; `"any"` accepts the caller when it
+   * holds at least one of them.
+   *
+   * @defaultValue "all"
+   */
+  match?: "all" | "any";
+}
+
+function validateRoleList(roles: unknown): readonly string[] {
+  if (!Array.isArray(roles) || roles.length === 0) {
+    throw new Error("requireRoles(): roles must be a non-empty array of strings.");
+  }
+  const out: string[] = [];
+  for (const role of roles) {
+    if (typeof role !== "string" || role.length === 0) {
+      throw new Error("requireRoles(): every role must be a non-empty string.");
+    }
+    if (/[\x00-\x1F\x7F]/.test(role)) {
+      throw new Error("requireRoles(): roles must not contain control characters.");
+    }
+    if (!out.includes(role)) out.push(role);
+  }
+  return out;
+}
+
+function claimsOf(user: object): Readonly<Record<string, unknown>> {
+  const claims = (user as { claims?: unknown }).claims;
+  return (claims !== null && typeof claims === "object" ? claims : user) as Readonly<
+    Record<string, unknown>
+  >;
+}
+
+function toRoleSet(value: unknown): ReadonlySet<string> {
+  const set = new Set<string>();
+  if (typeof value === "string") {
+    for (const piece of value.split(/\s+/)) if (piece.length > 0) set.add(piece);
+  } else if (Array.isArray(value)) {
+    for (const item of value) if (typeof item === "string" && item.length > 0) set.add(item);
+  }
+  return set;
+}
+
+/**
+ * Role-, group-, or permission-based authorization for verified callers.
+ *
+ * Reads a list-valued claim from the caller that an upstream auth helper
+ * (`jwk()`, `bearerAuth()` with a `verify` hook that sets `ctx.state.user`,
+ * `basicAuth()`) has already authenticated, and refuses the request with
+ * `401` when no caller is authenticated or `403` when the caller lacks the
+ * required roles. Use it for IdPs that authorize by role rather than OAuth
+ * scope: Entra ID app roles (`roles`), Cognito groups (`cognito:groups`),
+ * Okta groups (`groups`), Auth0 RBAC (`permissions`) or namespaced claims,
+ * and Keycloak realm roles (`realm_access.roles`, via a reader function).
+ *
+ * The check always runs in `preBody`, so an unauthorized caller is refused
+ * before the body is read and before `idempotency()` / `responseCache()`
+ * can replay a stored response to it. Register the auth hook first.
+ *
+ * Fails closed: a missing claim, a non-list value, or a reader that throws
+ * all count as holding no roles. The `403` does not name the missing roles.
+ *
+ * @example
+ * ```ts
+ * import { jwk, requireRoles } from "@daloyjs/core";
+ *
+ * app.use(jwk({ jwks, algorithms: ["RS256"], issuer, audience }));
+ *
+ * app.route({
+ *   method: "DELETE",
+ *   path: "/books/:id",
+ *   hooks: requireRoles(["Books.Admin"]),
+ *   // ...
+ * });
+ *
+ * // Keycloak realm roles, any one is enough:
+ * requireRoles(["editor", "admin"], {
+ *   claim: (c) => (c.realm_access as { roles?: unknown } | undefined)?.roles,
+ *   match: "any",
+ * });
+ * ```
+ *
+ * @param roles - Required role names; must be non-empty strings without control characters.
+ * @param options - Claim location and match mode; see {@link RequireRolesOptions}.
+ * @returns A {@link Hooks} bundle with a `preBody` check, for `app.use(...)` or per-route `hooks`.
+ * @throws {Error} When `roles` is empty or holds a non-string, empty, or control-character
+ *   value, when `claim` is an empty string, a forbidden object key (`__proto__`,
+ *   `constructor`, `prototype`), or neither a string nor a function, or when `match` is unknown.
+ * @since 1.12.0
+ */
+export function requireRoles(
+  roles: readonly string[],
+  options: RequireRolesOptions = {}
+): Hooks {
+  const required = validateRoleList(roles);
+  if (options === null || typeof options !== "object") {
+    throw new Error("requireRoles(): options must be an object.");
+  }
+  const claim = options.claim ?? "roles";
+  let read: RoleClaimReader;
+  if (typeof claim === "string") {
+    if (claim.length === 0 || isForbiddenObjectKey(claim)) {
+      throw new Error("requireRoles(): claim must be a non-empty, non-reserved claim name.");
+    }
+    read = (claims) => (Object.prototype.hasOwnProperty.call(claims, claim) ? claims[claim] : undefined);
+  } else if (typeof claim === "function") {
+    read = claim;
+  } else {
+    throw new Error("requireRoles(): claim must be a claim name or a reader function.");
+  }
+  const match = options.match ?? "all";
+  if (match !== "all" && match !== "any") {
+    throw new Error('requireRoles(): match must be "all" or "any".');
+  }
+
+  return {
+    preBody(ctx) {
+      const user = (ctx.state as Record<string, unknown>).user;
+      if (user === undefined || user === null || typeof user !== "object") {
+        return new Response(
+          JSON.stringify({
+            type: "https://daloyjs.dev/errors/unauthorized",
+            title: "Unauthorized",
+            status: 401,
+            detail: "Missing credentials.",
+          }),
+          {
+            status: 401,
+            headers: {
+              "content-type": "application/problem+json",
+              "www-authenticate": "Bearer",
+              "cache-control": "no-store",
+            },
+          }
+        );
+      }
+      let granted: ReadonlySet<string>;
+      try {
+        granted = toRoleSet(read(claimsOf(user)));
+      } catch {
+        granted = new Set();
+      }
+      const ok =
+        match === "any"
+          ? required.some((role) => granted.has(role))
+          : required.every((role) => granted.has(role));
+      if (!ok) throw new ForbiddenError("Missing a required role.");
+      return undefined;
+    },
+  };
 }
 
 export { timingSafeEqual };
