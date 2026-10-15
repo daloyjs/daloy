@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-15
+
 ### Added
 
 - `requireRoles(roles, { claim, match })`: role-, group-, and permission-based
