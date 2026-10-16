@@ -7,6 +7,21 @@
       "description": "Return the response body as a `ReadableStream` instead of buffering it. Enable this only together with `app.setup({ enableHttpStream: true })` from `@azure/functions`; without that host setting Azure buffers the stream anyway. Default: `false`."
     }
   ],
+  "src/app.ts#ReadinessCheckOptions": [
+    {
+      "name": "checks",
+      "type": "Readonly<Record<string, ReadinessCheck>>",
+      "required": false,
+      "description": "Named dependency checks, run concurrently on every probe after the draining and plugin checks pass. Any failing check makes the probe answer `503`. Names must match `[A-Za-z0-9_.-]{1,64}`. Which check failed, and why, is logged server-side (`readiness.check_failed`) and never included in the response."
+    },
+    {
+      "name": "checkTimeoutMs",
+      "type": "number",
+      "required": false,
+      "description": "Per-check time limit in milliseconds, between 1 and 60000. A check still running at the limit is aborted and counts as failed.",
+      "default": "2000"
+    }
+  ],
   "src/etag.ts#ETagOptions": [
     {
       "name": "weak",

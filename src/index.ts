@@ -11,6 +11,8 @@ export type {
   DocsRouteOptions,
   AsyncAPIRouteOptions,
   HealthRouteOptions,
+  ReadinessCheck,
+  ReadinessCheckOptions,
   CspReportRouteOptions,
   MetricsRouteOptions,
   IntrospectedRoute,

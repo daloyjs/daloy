@@ -1,0 +1,527 @@
+---
+title: Use Kysely with DaloyJS
+description: Pair DaloyJS with Kysely, the type-safe SQL query builder. A typed Database interface, Postgres and edge dialects, migrations, and safe raw SQL.
+keywords:
+  - Kysely DaloyJS
+  - Kysely TypeScript
+  - Kysely query builder
+  - Kysely Postgres
+  - Kysely Cloudflare D1
+  - Kysely migrations
+---
+
+# Use Kysely with DaloyJS
+
+[Kysely](https://kysely.dev) is a type-safe SQL query builder, not an ORM. You describe your tables once as a TypeScript `Database` interface, and every `selectFrom()`, `where()`, and `returning()` call is checked against it. There are no models, no identity map, and no hidden queries: what you write is the SQL that runs. That makes it a good fit for DaloyJS's [contract-first routes](/docs/routing), where Zod owns the wire shape and Kysely owns the SQL.
+
+<FlowDiagram numbered title="One request through Kysely" caption="Zod validates the request before your handler runs, Kysely compiles a typed query against your Database interface and sends it with bound parameters, then the response schema checks the body on the way out." steps={[
+          {
+            eyebrow: "client",
+            label: "HTTP request",
+            detail: "GET /users/:id",
+          },
+          {
+            eyebrow: "zod",
+            label: "Validated input",
+            detail: "params.id is a uuid",
+            tone: "accent",
+          },
+          {
+            eyebrow: "kysely",
+            label: "Typed SQL",
+            detail: "selectFrom('users').where('id', '=', ...)",
+          },
+          {
+            eyebrow: "response",
+            label: "Typed body",
+            detail: "200 UserSchema | 404",
+            tone: "success",
+          },
+        ]} />
+
+## 1. Install
+
+This guide targets **Kysely 0.29** (`kysely@latest` is 0.29.x as of October 2026) with the [node-postgres](https://node-postgres.com) driver. Kysely is still pre-1.0, so pin the minor: a caret range on `0.29` never jumps to `0.30`.
+
+```package-install
+kysely@^0.29 pg
+```
+
+```package-install dev
+@types/pg
+```
+
+<Callout type="note">Kysely 0.29 is ESM-only and declares `node >= 22`, which the DaloyJS scaffold (Node.js 24) already satisfies. The migration API moved to its own entry point: import `Migrator` and `FileMigrationProvider` from `kysely/migration`, not from `kysely`. The old root exports are deprecated type errors.</Callout>
+
+## 2. Describe your tables
+
+The `Database` interface maps table names to row types. `Generated<T>` marks a column the database fills in (optional on insert), and `Selectable`, `Insertable`, and `Updateable` derive the read and write shapes from one definition. The scaffolded `tsconfig.json` sets `verbatimModuleSyntax`, and Node's type stripping needs type-only imports marked as such, so import these with `import type`.
+
+```ts title="src/db/types.ts"
+import type { Generated, Insertable, Selectable } from "kysely";
+
+export interface UserTable {
+  id: Generated<string>; // uuid, DEFAULT gen_random_uuid()
+  email: string;
+  name: string | null;
+  created_at: Generated<Date>; // timestamptz, DEFAULT now()
+}
+
+export interface Database {
+  users: UserTable;
+}
+
+export type UserRow = Selectable<UserTable>;
+export type NewUser = Insertable<UserTable>;
+```
+
+The interface is a promise you make to the compiler, not something Kysely checks at runtime. Keep it in sync with your migrations, or generate it from the live schema with a community tool such as [kysely-codegen](https://github.com/RobinBlomberg/kysely-codegen) after each migration.
+
+## 3. Create a Kysely plugin
+
+```ts title="src/db/kysely.ts"
+import { Kysely, PostgresDialect } from "kysely";
+import { Pool } from "pg";
+import type { App } from "@daloyjs/core";
+import type { Database } from "./types.ts";
+
+// One pool per process. Size `max` so (max x instances) stays under the
+// database's connection limit.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL!, max: 10 });
+export const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function kyselyPlugin(app: App) {
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await db.destroy(); // ends the pg pool
+  });
+}
+```
+
+`onClose()` runs on the Node.js, Bun, and Deno adapters only. On Lambda, Vercel, or Azure Functions keep the pool at `max: 1` or close to it, and on Workers use an HTTP or binding dialect (see [Edge dialects](#edge-dialects)); the full picture is in [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle).
+
+## 4. Augment app state types
+
+Add the `declare module` block to the same module that exports `db`, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts title="src/db/kysely.ts"
+// same module as the plugin above
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: typeof db;
+  }
+}
+```
+
+## 5. Use it in routes
+
+```ts title="src/server.ts"
+import { z } from "zod";
+import { DatabaseError } from "pg";
+import { App, ConflictError, NotFoundError } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { kyselyPlugin } from "./db/kysely.ts";
+import type { UserRow } from "./db/types.ts";
+
+const app = new App();
+kyselyPlugin(app);
+
+// Dates go over the wire as ISO strings: z.coerce.date() has no
+// representation in the generated OpenAPI document.
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  name: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
+const toUser = (row: UserRow) => ({
+  id: row.id,
+  email: row.email,
+  name: row.name,
+  createdAt: row.created_at.toISOString(),
+});
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const user = await state.db
+      .selectFrom("users")
+      .selectAll()
+      .where("id", "=", params.id)
+      .executeTakeFirst();
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: toUser(user) };
+  },
+);
+
+app.post(
+  "/users",
+  {
+    operationId: "createUser",
+    request: { body: z.object({ email: z.email(), name: z.string().max(200).optional() }) },
+    responses: {
+      201: { description: "Created", body: UserSchema },
+      409: { description: "Email already in use" },
+    },
+  },
+  async ({ body, state }) => {
+    try {
+      // Pick columns explicitly: never spread a request body into values().
+      const created = await state.db
+        .insertInto("users")
+        .values({ email: body.email, name: body.name ?? null })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return { status: 201, body: toUser(created) };
+    } catch (err) {
+      if (err instanceof DatabaseError && err.code === "23505") {
+        throw new ConflictError("Email already in use");
+      }
+      throw err;
+    }
+  },
+);
+
+app.delete(
+  "/users/:id",
+  {
+    operationId: "deleteUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      204: { description: "Deleted" },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const result = await state.db
+      .deleteFrom("users")
+      .where("id", "=", params.id)
+      .executeTakeFirst();
+    if (result.numDeletedRows === 0n) throw new NotFoundError("User not found");
+    return { status: 204, body: undefined };
+  },
+);
+
+await app.ready();
+serve(app, { port: 3000 });
+```
+
+Postgres reports a unique violation as SQLSTATE `23505`, which node-postgres exposes as `err.code` on its `DatabaseError`. For the other constraint codes (foreign key, not-null, serialization failures), reuse the shared `mapDbError()` helper from the [error mapping table](/docs/orm#error-mapping): it reads `code` off the error the same way.
+
+<Callout type="warning">**Mass assignment.** `values(body)` would type-check whenever the body happens to match `Insertable<UserTable>`, and it is only safe while the write schema is a plain `z.object()` (which strips unknown keys). Map columns one at a time as above, keep write schemas off `z.looseObject()` and `.passthrough()`, and never accept server-owned columns such as `role`, `tenant_id`, or `owner_id` from the client.</Callout>
+
+## Transactions
+
+`db.transaction().execute(callback)` opens a transaction on one pooled connection, commits when the callback resolves, and rolls back when it throws. Use the `trx` argument for every query inside it; a query sent through `db` instead runs on a different connection, outside the transaction. This example assumes `orders` and `inventory` tables in your `Database` interface and a route that declares `201`.
+
+```ts
+import { sql } from "kysely";
+
+handler: async ({ body, state }) => {
+  const order = await state.db.transaction().execute(async (trx) => {
+    const created = await trx
+      .insertInto("orders")
+      .values({ sku: body.sku, qty: body.qty })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    await trx
+      .updateTable("inventory")
+      .set({ stock: sql<number>`stock - ${body.qty}` })
+      .where("sku", "=", body.sku)
+      .execute();
+    return created;
+  });
+  return { status: 201, body: { id: order.id, sku: order.sku, qty: order.qty } };
+}
+```
+
+Need a stricter isolation level? Chain it before `execute()`: `state.db.transaction().setIsolationLevel("serializable").execute(...)`, and map SQLSTATE `40001` to a `503` or retry the callback (see [error mapping](/docs/orm#error-mapping)). Interactive transactions need a dialect that holds a session open: the Neon HTTP and D1 dialects below do not.
+
+## Raw SQL and parameterization [#parameterization]
+
+Everything the builder produces is parameterized: values passed to `where()`, `values()`, and `set()` travel as bound parameters, never as SQL text. The `sql` template tag keeps that guarantee for hand-written fragments, because every `${...}` interpolation becomes a placeholder.
+
+```ts
+import { sql } from "kysely";
+
+// SAFE: ${params.email} is sent as a bound parameter ($1).
+const rows = await sql<{ id: string }>`
+  SELECT id FROM users WHERE lower(email) = lower(${params.email})
+`.execute(state.db);
+
+// SAFE: identifiers from an allowlist you own, values still bound.
+const SORTABLE = { created: "created_at", email: "email" } as const;
+const column = SORTABLE[query.sort]; // query.sort: z.enum(["created", "email"])
+await state.db.selectFrom("users").selectAll().orderBy(sql.ref(column), "desc").execute();
+
+// DANGEROUS: sql.raw() and sql.lit() splice text into the query.
+await sql.raw(`SELECT * FROM users WHERE email = '${params.email}'`).execute(state.db);
+```
+
+<Callout type="security">**Never pass request data to `sql.raw()` or `sql.lit()`.** They exist for trusted constants and DDL, and they skip parameter binding entirely. The same goes for `sql.ref()`, `sql.table()`, and `sql.id()` with a client-supplied string: map the input through a `z.enum()` or an allowlist object first, as above. See [SQL injection](/docs/security/sql-injection#kysely) for the review checklist.</Callout>
+
+## Migrations
+
+Kysely ships a `Migrator` with a `FileMigrationProvider` that loads every `.ts` or `.js` file in a folder, in alphabetical order, and records what ran in a `kysely_migration` table. Prefix file names with a timestamp so the order is stable.
+
+```ts title="migrations/2026_10_16_001_create_users.ts"
+import { sql } from "kysely";
+import type { Kysely } from "kysely";
+
+// Migrations are frozen in time: type them against Kysely<any>, not against
+// today's Database interface.
+export async function up(db: Kysely<any>): Promise<void> {
+  await db.schema
+    .createTable("users")
+    .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn("email", "text", (col) => col.notNull().unique())
+    .addColumn("name", "text")
+    .addColumn("created_at", "timestamptz", (col) => col.notNull().defaultTo(sql`now()`))
+    .execute();
+
+  // Backs the keyset pagination below.
+  await db.schema
+    .createIndex("users_created_at_id_idx")
+    .on("users")
+    .columns(["created_at", "id"])
+    .execute();
+}
+
+export async function down(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable("users").execute();
+}
+```
+
+```ts title="scripts/migrate.ts"
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { Kysely, PostgresDialect } from "kysely";
+import { FileMigrationProvider, Migrator } from "kysely/migration";
+import { Pool } from "pg";
+
+// A dedicated role with DDL rights; the app's runtime role should not have them.
+const db = new Kysely<any>({
+  dialect: new PostgresDialect({
+    pool: new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL!, max: 1 }),
+  }),
+});
+
+const migrator = new Migrator({
+  db,
+  provider: new FileMigrationProvider({
+    fs,
+    path,
+    migrationFolder: path.join(import.meta.dirname, "../migrations"),
+    // import() needs a file:// URL for absolute paths on Windows.
+    import: (file) => import(pathToFileURL(file).href),
+  }),
+});
+
+const { error, results } = await migrator.migrateToLatest();
+for (const result of results ?? []) {
+  console.log(`${result.status}: ${result.migrationName}`);
+}
+await db.destroy();
+
+if (error) {
+  console.error("migration failed", error);
+  process.exit(1);
+}
+```
+
+```bash
+node scripts/migrate.ts
+```
+
+Run this from CI or a one-off release job, never at app boot: many instances booting at once race each other, and the runtime role should not need DDL privileges (see [migrations are a deploy step](/docs/orm#migrations)). If you prefer a CLI, the Kysely org maintains [kysely-ctl](https://github.com/kysely-org/kysely-ctl), which wraps the same `Migrator`.
+
+## Keyset pagination
+
+Pair [`paginationQuery()`](/docs/pagination) with a keyset cursor on `(created_at, id)`. `decodeCursor()` caps the length and parses safely, but the decoded value is still client input: validate it with a Zod object of primitives before it reaches `where()`.
+
+```ts
+import { z } from "zod";
+import { BadRequestError, decodeCursor, encodeCursor, paginationQuery } from "@daloyjs/core";
+
+const CursorSchema = z.strictObject({ createdAt: z.iso.datetime(), id: z.uuid() });
+
+function readCursor(cursor: string | undefined) {
+  if (!cursor) return undefined;
+  const parsed = CursorSchema.safeParse(decodeCursor(cursor));
+  if (!parsed.success) throw new BadRequestError("Invalid pagination cursor.");
+  return parsed.data;
+}
+
+app.get(
+  "/users",
+  {
+    operationId: "listUsers",
+    request: { query: paginationQuery({ maxLimit: 100 }) },
+    responses: {
+      200: {
+        description: "One page of users",
+        body: z.object({ items: z.array(UserSchema), nextCursor: z.string().nullable() }),
+      },
+      400: { description: "Invalid cursor" },
+    },
+  },
+  async ({ query, state }) => {
+    const after = readCursor(query.cursor);
+    let q = state.db
+      .selectFrom("users")
+      .selectAll()
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .limit(query.limit + 1);
+    if (after) {
+      // Row-value comparison: (created_at, id) < ($1, $2), served by the index.
+      q = q.where((eb) =>
+        eb(eb.refTuple("created_at", "id"), "<", eb.tuple(new Date(after.createdAt), after.id)),
+      );
+    }
+    const rows = await q.execute();
+    const page = rows.slice(0, query.limit);
+    const last = rows.length > query.limit ? page[page.length - 1] : undefined;
+    return {
+      status: 200,
+      body: {
+        items: page.map(toUser),
+        nextCursor: last
+          ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })
+          : null,
+      },
+    };
+  },
+);
+```
+
+If your database lacks row-value comparison, spell it out with `eb.or([eb("created_at", "<", d), eb.and([eb("created_at", "=", d), eb("id", "<", id)])])`.
+
+## Edge dialects [#edge-dialects]
+
+Kysely itself runs anywhere JavaScript does (its README lists Node.js, Deno, Bun, Cloudflare Workers, and browsers); what decides the runtime is the dialect. The core `PostgresDialect` needs a TCP pool. For Workers and other fetch-only platforms, use a dialect that speaks HTTP or a platform binding:
+
+| Dialect package | Database | Transport | Interactive transactions |
+| --- | --- | --- | --- |
+| `kysely-neon` | Neon Postgres | HTTP (`neon()` from `@neondatabase/serverless`) | No, the dialect throws on `transaction()` |
+| core `PostgresDialect` + Neon `Pool` | Neon Postgres | WebSocket | Yes |
+| `kysely-d1` | Cloudflare D1 | Worker binding | No, the dialect throws on `transaction()` |
+| `@libsql/kysely-libsql` | Turso / libSQL | HTTP or WebSocket | Supported by the dialect; not verified with DaloyJS |
+| `kysely-planetscale` | PlanetScale (MySQL) | HTTP (`@planetscale/database`) | Supported by the dialect; not verified with DaloyJS |
+
+`kysely-neon` is maintained in the kysely-org; `kysely-d1`, `kysely-planetscale`, and `@libsql/kysely-libsql` are community or vendor packages with their own release cadence (`kysely-d1` and `kysely-planetscale` were last published in 2025), so pin them and test upgrades.
+
+### Neon over HTTP
+
+```package-install
+kysely-neon @neondatabase/serverless
+```
+
+```ts title="src/db/kysely.ts"
+import { neon } from "@neondatabase/serverless";
+import { Kysely } from "kysely";
+import { NeonDialect } from "kysely-neon";
+import type { Database } from "./types.ts";
+
+// Each query is one HTTP request: nothing to pool, nothing to close.
+export const db = new Kysely<Database>({
+  dialect: new NeonDialect({ neon: neon(process.env.DATABASE_URL!) }),
+});
+```
+
+When you need interactive transactions on Neon, the `kysely-neon` README points you at the core `PostgresDialect` with Neon's WebSocket `Pool` instead. See the [Neon guide](/docs/databases/neon) for connection strings and branching.
+
+### Cloudflare D1
+
+```package-install
+kysely-d1
+```
+
+```ts title="src/worker.ts"
+import { env } from "cloudflare:workers";
+import { Kysely } from "kysely";
+import { D1Dialect } from "kysely-d1";
+import { App } from "@daloyjs/core";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+import type { Database } from "./db/types.ts";
+
+// `wrangler types` generates the global Env interface, which types env.DB.
+const app = new App();
+
+// A D1 binding is not a socket, so one Kysely instance can serve every
+// request. Decorate once, before the routes: calling decorate() inside the
+// Worker fetch handler throws on the second request.
+app.decorate("db", new Kysely<Database>({ dialect: new D1Dialect({ database: env.DB }) }));
+
+// ...register routes that read state.db
+
+export default toFetchHandler(app);
+```
+
+D1 is SQLite: use `text` ids generated in code (`crypto.randomUUID()`), ISO strings for timestamps, and `db.batch()` through the raw binding when you need several statements to commit together. See the [D1 guide](/docs/databases/cloudflare-d1).
+
+### Turso and PlanetScale
+
+```ts
+import { Kysely } from "kysely";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+import { PlanetScaleDialect } from "kysely-planetscale";
+import type { Database } from "./types.ts";
+
+// Turso / libSQL (the dialect does not support file: URLs).
+new Kysely<Database>({
+  dialect: new LibsqlDialect({ url: process.env.TURSO_URL!, authToken: process.env.TURSO_TOKEN! }),
+});
+
+// PlanetScale over HTTP; accepts the same options as connect() from @planetscale/database.
+new Kysely<Database>({ dialect: new PlanetScaleDialect({ url: process.env.DATABASE_URL! }) });
+```
+
+See [Turso](/docs/databases/turso) and [PlanetScale](/docs/databases/planetscale) for credentials and limits. For Postgres or MySQL behind Cloudflare [Hyperdrive](/docs/databases/hyperdrive), build a `PostgresDialect` client per request in a hook, as the [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) example does for Drizzle; we have not verified that exact Kysely combination end to end.
+
+## Runtime notes
+
+| Runtime | Status with DaloyJS |
+| --- | --- |
+| Node.js | Yes (`PostgresDialect` + `pg`) |
+| Bun, Deno | Not verified; Kysely lists both as supported, and the dialect's driver decides |
+| Vercel (Node), AWS Lambda, Azure Functions | Not verified; Node.js runtimes, so expected to work with a tiny pool and a pooler in front |
+| Cloudflare Workers | Not verified; use `kysely-d1`, `kysely-neon`, or another HTTP dialect, never a module-scope TCP pool |
+
+## Production notes
+
+- **Readiness that pings the database.** Register the check with `app.readinesscheck()`. Each check gets an `AbortSignal`, and Kysely 0.29 accepts it on `execute()`, so a hung ping is abandoned once `checkTimeoutMs` elapses. A failing check returns `503` with the same `{ status: "not-ready" }` body; the reason is logged server-side, never returned. See [lifecycle and health](/docs/security/lifecycle-health).
+
+  ```ts
+  import { sql } from "kysely";
+  import { db } from "./db/kysely.ts";
+
+  app.readinesscheck({
+    token: process.env.HEALTH_TOKEN!,
+    checks: {
+      db: async (signal) => {
+        await sql`select 1`.execute(db, { signal });
+      },
+    },
+    checkTimeoutMs: 2000,
+  });
+  ```
+
+- **Pool sizing.** One `pg.Pool` per process on long-running servers; `max: 1` to a few on serverless, with [RDS Proxy](https://aws.amazon.com/rds/proxy/), PgBouncer, or your provider's pooler in front. Behind a transaction-mode pooler, avoid session state (`SET`, advisory locks) outside a transaction; see [connection pooling per adapter](/docs/orm#pooling).
+- **Tenancy.** Set the tenant with `set_config('app.tenant_id', ..., true)` through the `sql` tag inside the same `transaction()` as the tenant's queries, so it cannot leak to the next request on a pooled connection. See [multi-tenancy](/docs/orm#tenancy).
+- **Logging.** Kysely's `log` option can print every query. Keep it to errors in production, and log the error server-side with the request id rather than returning raw database messages, which reveal table and constraint names.
+- **Migrations** run as a deploy step with the expand / contract pattern, as described [above](#migrations).
+
+Compare with [Drizzle](/docs/orm/drizzle) (a query builder with a schema-in-code ORM layer), [Prisma](/docs/orm/prisma), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.

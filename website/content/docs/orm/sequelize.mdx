@@ -202,4 +202,4 @@ pnpm sequelize-cli db:migrate
 
 Sequelize depends on Node-oriented drivers, so it is best on the Node.js adapter. `onClose()` runs on the Node.js, Bun, and Deno adapters only; on Lambda, Vercel, or Azure Functions keep the pool small (`pool: { max: 1 }`) and see [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle). For edge runtimes, prefer [Drizzle](/docs/orm/drizzle), [Prisma with driver adapters](/docs/orm/prisma), or [Supabase](/docs/orm/supabase).
 
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Kysely](/docs/orm/kysely), [Supabase](/docs/orm/supabase), or the [ODM overview](/docs/odm) for document databases.

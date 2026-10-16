@@ -1,0 +1,472 @@
+---
+title: Use the MongoDB Node.js driver with DaloyJS
+description: Use the official MongoDB Node.js driver with DaloyJS without an ODM. Zod schemas, typed collections, operator-injection defenses, and transactions.
+keywords:
+  - MongoDB DaloyJS
+  - MongoDB Node.js driver
+  - MongoDB TypeScript
+  - MongoDB operator injection
+  - MongoDB transactions
+  - MongoClient connection pool
+---
+
+# Use the MongoDB Node.js driver with DaloyJS
+
+The official [MongoDB Node.js driver](https://www.mongodb.com/docs/drivers/node/current/) (`mongodb` on npm) is what Mongoose itself is built on. Using it directly gives you typed collections, the full query and aggregation language, sessions, and transactions, with no model layer in between. In a DaloyJS app the missing ODM pieces are already covered: Zod validates every request and response, so one Zod schema can be the single source of truth for the wire shape and the document shape.
+
+<FlowDiagram title="MongoDB driver setup" numbered steps={[
+          { label: "Install", detail: "pnpm add mongodb" },
+          { label: "Zod schemas", detail: "UserFields · UserDoc type" },
+          {
+            label: "Client & plugin",
+            detail: "new MongoClient · connect · decorate('db') · onClose",
+            tone: "accent",
+          },
+          { label: "Augment state", detail: "interface AppState { db }" },
+          {
+            label: "Use in routes",
+            detail: "state.db.users.findOne({ _id })",
+            tone: "success",
+          },
+        ]} caption="One MongoClient per process owns the connection pool. The plugin connects it once at startup, decorates typed collections onto state.db, and closes the pool on graceful shutdown." />
+
+## 1. Install
+
+This guide targets **driver 7** (`mongodb@latest` is 7.x as of October 2026). Driver 7 requires Node.js 20.19 or newer, which the DaloyJS scaffold (Node.js 24) already satisfies.
+
+```package-install
+mongodb@^7
+```
+
+<Callout type="note">**Coming from Prisma?** Prisma ORM 7 does not support MongoDB; Prisma's upgrade guide tells MongoDB users to stay on Prisma 6 for now. The driver (or [Mongoose](/docs/odm/mongoose)) is the supported path for a new DaloyJS service on MongoDB today.</Callout>
+
+## 2. One schema source with Zod
+
+Define the user-editable fields once in Zod, derive the TypeScript document type from it, and extend it for the wire format. Server-owned fields (`_id`, `createdAt`) are added in code, never accepted from the client.
+
+```ts title="src/db/schemas.ts"
+import { z } from "zod";
+
+// 24 hex characters. Validate in the params schema so a malformed id never
+// reaches new ObjectId(), which throws a BSONError (a 500) on bad input.
+export const ObjectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
+
+// Fields a client may write. Primitives only: see "Operator injection" below.
+export const UserFields = z.object({
+  email: z.email().max(254),
+  name: z.string().max(200).nullable(),
+});
+export type UserFields = z.infer<typeof UserFields>;
+
+// What is stored. The driver adds `_id: ObjectId` to read results (WithId<T>).
+export interface UserDoc extends UserFields {
+  createdAt: Date;
+}
+
+// What goes over the wire. Dates are ISO strings: z.coerce.date() has no
+// representation in the generated OpenAPI document.
+export const UserSchema = UserFields.extend({
+  id: ObjectIdSchema,
+  createdAt: z.iso.datetime(),
+});
+```
+
+The scaffolded `tsconfig.json` sets `verbatimModuleSyntax`, and Node's type stripping (what `daloy dev` runs) needs type-only imports marked as such, so import `UserDoc` and the driver's `WithId` with `import type`.
+
+## 3. Create the client and plugin
+
+Create the `MongoClient` at module scope. It owns a connection pool, so one client per process is the rule; never create one per request.
+
+```ts title="src/db/mongo.ts"
+import { MongoClient } from "mongodb";
+import type { App } from "@daloyjs/core";
+import type { UserDoc } from "./schemas.ts";
+
+export const client = new MongoClient(process.env.MONGODB_URI!, {
+  appName: "users-api", // shows up in server logs and Atlas metrics
+  maxPoolSize: 10, // per process; size against the cluster's connection limit
+  serverSelectionTimeoutMS: 5_000, // fail fast instead of hanging requests
+});
+
+const database = client.db(process.env.MONGODB_DB ?? "app");
+export const db = {
+  client,
+  users: database.collection<UserDoc>("users"),
+};
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export async function mongoPlugin(app: App) {
+  await client.connect(); // surface bad credentials at boot, not on the first request
+  app.decorate("db", db);
+  app.onClose(async () => {
+    await client.close();
+  });
+}
+```
+
+`onClose()` runs on the Node.js, Bun, and Deno adapters only. On Lambda, Vercel, or Azure Functions see [Serverless](#serverless) below and [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle).
+
+## 4. Augment app state types
+
+Add the `declare module` block to the same module that exports `db`, not to a separate `.d.ts` file. Declaration files are exempt from type-checking when `skipLibCheck` is on (the scaffolded default), so a broken import inside a `.d.ts` fails silently and `state.db` degrades to `any`.
+
+```ts title="src/db/mongo.ts"
+// same module as the plugin above
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: typeof db;
+  }
+}
+```
+
+## 5. Use it in routes
+
+```ts title="src/server.ts"
+import { z } from "zod";
+import { MongoServerError, ObjectId } from "mongodb";
+import type { WithId } from "mongodb";
+import { App, ConflictError, NotFoundError } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { mongoPlugin } from "./db/mongo.ts";
+import { ObjectIdSchema, UserFields, UserSchema } from "./db/schemas.ts";
+import type { UserDoc } from "./db/schemas.ts";
+
+const app = new App();
+await mongoPlugin(app);
+
+const toUser = (doc: WithId<UserDoc>) => ({
+  id: doc._id.toHexString(),
+  email: doc.email,
+  name: doc.name,
+  createdAt: doc.createdAt.toISOString(),
+});
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: ObjectIdSchema }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const user = await state.db.users.findOne({ _id: new ObjectId(params.id) });
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: toUser(user) };
+  },
+);
+
+app.post(
+  "/users",
+  {
+    operationId: "createUser",
+    request: { body: UserFields.extend({ name: UserFields.shape.name.optional() }) },
+    responses: {
+      201: { description: "Created", body: UserSchema },
+      409: { description: "Email already in use" },
+    },
+  },
+  async ({ body, state }) => {
+    // Build the document field by field: never insert the request body itself.
+    const doc: UserDoc = { email: body.email, name: body.name ?? null, createdAt: new Date() };
+    try {
+      const { insertedId } = await state.db.users.insertOne(doc);
+      return { status: 201, body: toUser({ _id: insertedId, ...doc }) };
+    } catch (err) {
+      // 11000 is a duplicate key on a unique index (see "Indexes" below).
+      if (err instanceof MongoServerError && err.code === 11000) {
+        throw new ConflictError("Email already in use");
+      }
+      throw err;
+    }
+  },
+);
+
+app.patch(
+  "/users/:id",
+  {
+    operationId: "updateUser",
+    request: {
+      params: z.object({ id: ObjectIdSchema }),
+      body: z.strictObject({ name: UserFields.shape.name }),
+    },
+    responses: {
+      200: { description: "Updated", body: UserSchema },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, body, state }) => {
+    // The update document is built in code: $set names exactly one field.
+    const user = await state.db.users.findOneAndUpdate(
+      { _id: new ObjectId(params.id) },
+      { $set: { name: body.name } },
+      { returnDocument: "after" },
+    );
+    if (!user) throw new NotFoundError("User not found");
+    return { status: 200, body: toUser(user) };
+  },
+);
+
+app.delete(
+  "/users/:id",
+  {
+    operationId: "deleteUser",
+    request: { params: z.object({ id: ObjectIdSchema }) },
+    responses: {
+      204: { description: "Deleted" },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params, state }) => {
+    const { deletedCount } = await state.db.users.deleteOne({ _id: new ObjectId(params.id) });
+    if (deletedCount === 0) throw new NotFoundError("User not found");
+    return { status: 204, body: undefined };
+  },
+);
+
+await app.ready();
+serve(app, { port: 3000 });
+```
+
+<Callout type="warning">**Mass assignment.** `insertOne(body)` or `$set: body` would let a client write any field that survives validation. Keep write schemas on `z.object()` or `z.strictObject()` (never `z.looseObject()` or `.passthrough()`), build documents and `$set` objects field by field, and never accept server-owned fields such as `role`, `tenantId`, or `ownerId` from the client.</Callout>
+
+## Operator injection [#operator-injection]
+
+A MongoDB filter mixes values and operators in the same object, so `{ email: body.email }` becomes `{ email: { $ne: null } }` (match anyone) if `body.email` is an object instead of a string. The driver has no equivalent of Mongoose's `sanitizeFilter`: it sends whatever you build. The defense is to make sure only your code ever decides the shape of a filter or update.
+
+<LayerStack title="Who decides the shape of a MongoDB filter" flow="down" layers={[
+          {
+            title: "Request validation",
+            detail: "Zod primitives reject objects where a string is expected (422)",
+            items: ["z.string()", "z.email()", "z.enum()"],
+            tone: "accent",
+          },
+          {
+            title: "Core parser",
+            detail: "safeJsonParse strips __proto__, constructor, prototype",
+            items: ["isForbiddenObjectKey"],
+          },
+          {
+            title: "Your filter builder",
+            detail: "Operators chosen in code, values from validated primitives",
+            items: ["{ email: body.email }", "{ $set: { name } }"],
+          },
+          {
+            title: "MongoDB",
+            detail: "Server-side JavaScript disabled where you control it",
+            items: ["no $where", "no $function"],
+            tone: "muted",
+          },
+        ]} caption="Each layer narrows what a request can do. The filter and update objects are always assembled by your code, so a client can supply values but never operators." />
+
+Rules that keep filters safe:
+
+- **Never pass a request object into a filter, update, or pipeline.** No `find(body)`, `find(query)`, `updateOne(filter, body)`, or `aggregate(body.pipeline)`. Pick each field out of the validated input and place it yourself.
+- **Validate with primitives.** `z.string()`, `z.email()`, `z.number()`, `z.boolean()`, and `z.enum()` reject `{ "$ne": null }` with a `422` before the handler runs. Never use `z.any()`, `z.unknown()`, or a `z.record()` with unconstrained keys for anything that reaches a filter.
+- **Choose operators in code.** A search endpoint maps `query.minAge` to `{ age: { $gte: query.minAge } }`; the client never names the operator. Sort fields come from a `z.enum()`, not a free string.
+- **No server-side JavaScript or expressions from user input.** Never build `$where`, `$function`, `$accumulator`, or `$expr` from request data: the first three run JavaScript on the server (MongoDB 8.0 deprecates them), and `$expr` evaluates arbitrary aggregation expressions. An array passed as the update argument is an aggregation pipeline, so never pass a request array there either.
+- **Strip `$` keys from free-form documents.** If a field genuinely holds client-defined keys (a `metadata` map, say), reject keys that start with `$` or contain `.` before storing or querying them.
+
+```ts title="src/db/safe-keys.ts"
+import { z } from "zod";
+import { isForbiddenObjectKey } from "@daloyjs/core";
+
+// Keys a client may use in a free-form map: no "$" prefix (operators), no "."
+// (dotted paths into nested fields), and none of the prototype-pollution names.
+const SafeKey = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[^$.][^.]*$/, "Keys may not start with $ or contain .")
+  .refine((key) => !isForbiddenObjectKey(key), "Reserved key");
+
+// Flat string values only: nested objects could smuggle operators back in.
+export const MetadataSchema = z.record(SafeKey, z.string().max(500));
+```
+
+The core already strips `__proto__`, `constructor`, and `prototype` keys while parsing JSON bodies (see [runtime protections](/docs/security/runtime-protections)), and `decodeCursor()` does the same for pagination cursors. That stops prototype pollution, not operator injection: `$ne` is an ordinary key to a JSON parser. See [operator injection](/docs/security/sql-injection#operator-injection-the-and-ldquo-nosql-injection-in-prisma-and-rdquo-trap) for the same bug class in SQL ORMs.
+
+## Transactions
+
+Multi-document transactions need a replica set or sharded cluster (every Atlas cluster is one; locally, run a single-node replica set). Start a session in the handler that owns the unit of work, pass `{ session }` to every operation inside `withTransaction()`, and end the session in `finally`.
+
+<SequenceDiagram title="withTransaction on one session" participants={["Handler", "Session", "Collections"]} steps={[
+          {
+            from: "Handler",
+            to: "Session",
+            label: "Start a session",
+            detail: "client.startSession()",
+            kind: "request",
+          },
+          {
+            from: "Handler",
+            to: "Collections",
+            label: "Every operation carries { session }",
+            detail: "orders.insertOne(doc, { session })",
+            kind: "request",
+          },
+          {
+            from: "Session",
+            to: "Handler",
+            label: "Commit and return the callback's value, or roll back on throw",
+            kind: "response",
+          },
+          {
+            from: "Handler",
+            to: "Session",
+            label: "Always end the session in finally",
+            detail: "endSession()",
+            kind: "note",
+          },
+        ]} caption="withTransaction commits when the callback resolves, retries on transient errors, and rethrows otherwise. An operation without { session } runs outside the transaction." />
+
+This example assumes `orders` and `inventory` collections on `db` and a route that declares `201` and `409`.
+
+```ts
+import { ConflictError } from "@daloyjs/core";
+
+handler: async ({ body, state }) => {
+  const session = state.db.client.startSession();
+  try {
+    const orderId = await session.withTransaction(async () => {
+      const stock = await state.db.inventory.updateOne(
+        { sku: body.sku, stock: { $gte: body.qty } },
+        { $inc: { stock: -body.qty } },
+        { session },
+      );
+      if (stock.modifiedCount === 0) throw new ConflictError("Not enough stock");
+
+      const { insertedId } = await state.db.orders.insertOne(
+        { sku: body.sku, qty: body.qty, createdAt: new Date() },
+        { session },
+      );
+      return insertedId;
+    });
+    return { status: 201, body: { id: orderId.toHexString(), sku: body.sku, qty: body.qty } };
+  } finally {
+    await session.endSession();
+  }
+}
+```
+
+The driver may call the callback more than once when it retries a transient error, so keep side effects (emails, webhooks) out of it: write an outbox document in the same transaction and deliver it from a [background job](/docs/jobs). Run the operations sequentially; the driver documents `Promise.all` inside a transaction as unsupported.
+
+## Indexes are a deploy step
+
+The unique index on `email` is what turns a duplicate signup into error `11000` (and a `409`). Create indexes from a release job, not at app boot: a build on a large collection is slow, and every instance booting at once repeats the work.
+
+```ts title="scripts/ensure-indexes.ts"
+import { MongoClient } from "mongodb";
+
+const client = new MongoClient(process.env.MONGODB_ADMIN_URI!);
+try {
+  const users = client.db(process.env.MONGODB_DB ?? "app").collection("users");
+  await users.createIndex({ email: 1 }, { unique: true, name: "users_email_unique" });
+  await users.createIndex({ createdAt: -1, _id: -1 }, { name: "users_created_at_id" });
+} finally {
+  await client.close();
+}
+```
+
+```bash
+node scripts/ensure-indexes.ts
+```
+
+`createIndex()` is a no-op when an identical index already exists, so the script is safe to run on every deploy. Use a separate database user with index privileges for it; the app's runtime user only needs `readWrite` on its own database.
+
+## Keyset pagination
+
+ObjectIds sort roughly by creation time, so `_id` alone makes a stable keyset cursor. Validate the decoded cursor before it reaches the filter: `decodeCursor()` parses safely, but the value is still client input.
+
+```ts
+import { ObjectId } from "mongodb";
+import { BadRequestError, decodeCursor, encodeCursor, paginationQuery } from "@daloyjs/core";
+
+const CursorSchema = z.strictObject({ id: ObjectIdSchema });
+
+// inside a route with request: { query: paginationQuery({ maxLimit: 100 }) }
+let filter = {};
+if (query.cursor) {
+  const parsed = CursorSchema.safeParse(decodeCursor(query.cursor));
+  if (!parsed.success) throw new BadRequestError("Invalid pagination cursor.");
+  filter = { _id: { $lt: new ObjectId(parsed.data.id) } }; // operator chosen in code
+}
+const docs = await state.db.users
+  .find(filter)
+  .sort({ _id: -1 })
+  .limit(query.limit + 1)
+  .toArray();
+const page = docs.slice(0, query.limit);
+const last = docs.length > query.limit ? page[page.length - 1] : undefined;
+const nextCursor = last ? encodeCursor({ id: last._id.toHexString() }) : null;
+```
+
+Declare `400` in the route's `responses`. See [pagination](/docs/pagination) for the `Link` header helpers.
+
+## Atlas or self-hosted
+
+- **Atlas.** Use the `mongodb+srv://` connection string, which enables TLS. Restrict network access with the IP access list or a private endpoint rather than `0.0.0.0/0`, and give the app a database user scoped to `readWrite` on its own database. The Atlas Data API and custom HTTPS endpoints reached end of life on September 30, 2025, so there is no first-party HTTP path from fetch-only runtimes; plan on the driver.
+- **Self-hosted.** Turn on authentication (`security.authorization: enabled`) and TLS, bind `mongod` to a private interface, and run a replica set if you need transactions. Set `security.javascriptEnabled: false` unless something you trust needs server-side JavaScript; it removes `$where`, `$function`, and `$accumulator` as an injection target entirely.
+- **Both.** Keep the connection string in a secret store, never in the repo, and rotate the runtime user's password independently of the admin user that builds indexes.
+
+## Serverless [#serverless]
+
+On AWS Lambda, Vercel Functions, and Azure Functions, create the client at module scope so warm invocations reuse its pool, connect once, and decorate once before the routes. Keep `maxPoolSize` small: every function instance holds its own pool, and a traffic spike multiplies instances.
+
+```ts title="src/lambda.ts"
+import { MongoClient } from "mongodb";
+import { App } from "@daloyjs/core";
+import type { UserDoc } from "./db/schemas.ts";
+
+// Module scope: created on cold start, reused by every warm invocation.
+const client = new MongoClient(process.env.MONGODB_URI!, {
+  maxPoolSize: 2,
+  maxIdleTimeMS: 60_000,
+  serverSelectionTimeoutMS: 5_000,
+});
+await client.connect();
+
+const app = new App();
+app.decorate("db", { client, users: client.db("app").collection<UserDoc>("users") });
+
+// ...register routes, then export the adapter handler for your platform
+```
+
+`onClose()` never runs on these platforms, so do not rely on it to close the pool; idle connections are dropped when the instance is frozen or recycled. For Cloudflare Workers, we have not verified the driver with DaloyJS: it needs raw TCP sockets, community reports on `nodejs_compat` are mixed, and module-scope pooling across requests is not something we can promise there. Use a SQL database with an HTTP or binding driver from the [ORM section](/docs/orm) for Workers instead.
+
+## Runtime notes
+
+| Runtime | Status with DaloyJS |
+| --- | --- |
+| Node.js | Yes |
+| Bun, Deno | Not verified |
+| Vercel (Node), AWS Lambda, Azure Functions | Not verified; Node.js runtimes, so expected to work with a module-scope client and a small pool |
+| Cloudflare Workers | Not verified (see [Serverless](#serverless)) |
+
+## Production notes
+
+- **Readiness that pings the database.** Register a `ping` check with `app.readinesscheck()`. The check receives an `AbortSignal`, which `db.command()` accepts (the driver marks `signal` as experimental), and the probe fails with `503` if the ping throws or exceeds `checkTimeoutMs`. The body stays `{ status: "not-ready" }`; details are logged server-side, not returned. See [lifecycle and health](/docs/security/lifecycle-health).
+
+  ```ts
+  import { client } from "./db/mongo.ts";
+
+  app.readinesscheck({
+    token: process.env.HEALTH_TOKEN!,
+    checks: {
+      db: async (signal) => {
+        await client.db("admin").command({ ping: 1 }, { signal });
+      },
+    },
+    checkTimeoutMs: 2000,
+  });
+  ```
+
+- **Pool sizing.** `maxPoolSize` times the number of instances must stay under the cluster's connection limit (Atlas tiers publish theirs). The driver default is 100 per client, which is far too many for serverless.
+- **Timeouts.** Keep `serverSelectionTimeoutMS` short so an unreachable cluster fails requests quickly instead of queueing them until the DaloyJS `requestTimeoutMs` fires.
+- **Projections.** Fetch only what the response needs (`findOne(filter, { projection: { email: 1, name: 1, createdAt: 1 } })`); the response schema still strips anything extra on the way out.
+- **Errors.** Map `11000` to `409` and let everything else fall through to the framework's redacted `500`; raw driver messages can reveal collection and index names. Log them server-side with the request id.
+
+Compare with [Mongoose](/docs/odm/mongoose) for schemas, middleware, and `sanitizeFilter` on top of this same driver, [Ottoman](/docs/odm/ottoman) for Couchbase, the [SQL ORM overview](/docs/orm), or return to the [ODM overview](/docs/odm).

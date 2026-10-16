@@ -973,6 +973,74 @@ export interface HealthRouteOptions {
 }
 
 /**
+ * One dependency check run by {@link App.readinesscheck}, such as a
+ * database ping. It receives an `AbortSignal` that aborts when the check
+ * exceeds {@link ReadinessCheckOptions.checkTimeoutMs}; forward it to the
+ * driver call so a hung dependency stops consuming a connection.
+ *
+ * The check passes when it returns (or resolves to) anything other than
+ * `false`. It fails when it returns `false`, throws, rejects, or times out.
+ *
+ * @since 1.13.0
+ */
+export type ReadinessCheck = (signal: AbortSignal) => unknown;
+
+/**
+ * Configuration accepted by {@link App.readinesscheck}: the shared probe
+ * options plus optional dependency checks.
+ *
+ * @since 1.13.0
+ */
+export interface ReadinessCheckOptions extends HealthRouteOptions {
+  /**
+   * Named dependency checks, run concurrently on every probe after the
+   * draining and plugin checks pass. Any failing check makes the probe
+   * answer `503`. Names must match `[A-Za-z0-9_.-]{1,64}`. Which check
+   * failed, and why, is logged server-side (`readiness.check_failed`) and
+   * never included in the response.
+   */
+  checks?: Readonly<Record<string, ReadinessCheck>>;
+  /**
+   * Per-check time limit in milliseconds, between 1 and 60000. A check
+   * still running at the limit is aborted and counts as failed.
+   *
+   * @defaultValue 2000
+   */
+  checkTimeoutMs?: number;
+}
+
+const READINESS_CHECK_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+type HealthRouteResult =
+  | { status: 200; body: { status: string }; headers?: Record<string, string> }
+  | { status: 503; body: { status: string }; headers?: Record<string, string> };
+
+/** Validate and freeze `readinesscheck({ checks })` at registration time. */
+function validateReadinessChecks(
+  checks: ReadinessCheckOptions["checks"],
+): ReadonlyArray<readonly [string, ReadinessCheck]> {
+  if (checks === undefined) return [];
+  if (checks === null || typeof checks !== "object" || Array.isArray(checks)) {
+    throw new Error("readinesscheck(): checks must be an object of named check functions.");
+  }
+  const out: Array<readonly [string, ReadinessCheck]> = [];
+  for (const name of Object.keys(checks)) {
+    if (!READINESS_CHECK_NAME_RE.test(name) || isForbiddenObjectKey(name)) {
+      throw new Error(
+        `readinesscheck(): check name "${name.slice(0, 64)}" must match [A-Za-z0-9_.-]{1,64}.`,
+      );
+    }
+    const check = checks[name];
+    if (typeof check !== "function") {
+      throw new Error(`readinesscheck(): check "${name}" must be a function.`);
+    }
+    out.push([name, check] as const);
+  }
+  return out;
+}
+const READINESS_CHECK_TIMED_OUT: unique symbol = Symbol("daloyjs.readiness.timeout");
+
+/**
  * Configuration accepted by {@link App.metrics}. Every field is optional.
  *
  * The `/metrics` route inherits the same hardened posture as
@@ -3997,30 +4065,55 @@ export class App<
 
   /**
    * Register a readiness probe route. Returns `200 {"status":"ready"}`
-   * once every async plugin has resolved AND the app is not draining.
+   * once every async plugin has resolved, the app is not draining, and
+   * every dependency check in {@link ReadinessCheckOptions.checks} passes.
    * Returns `503` otherwise. Use this for container orchestrator
    * `readinessProbe` configuration — a failing readiness probe removes
    * the pod from load-balancer rotation without restarting it.
    *
+   * Dependency checks (since 1.13.0) run concurrently, each with its own
+   * timeout and `AbortSignal`. The `503` body is the same whichever check
+   * failed, so an unauthenticated probe never reveals which dependency is
+   * down; the failing check's name and error are logged instead.
+   *
    * Defaults match {@link App.healthcheck} (path defaults to `/readyz`).
    *
-  * @param opts - Probe path, token, and rate-limit policy.
-  * @returns This app for chaining.
-  * @throws {Error} If production authentication is missing without acknowledgment.
+   * @example
+   * ```ts
+   * app.readinesscheck({
+   *   token: process.env.HEALTH_TOKEN!,
+   *   checks: { db: (signal) => pool.query({ text: "select 1", signal }) },
+   *   checkTimeoutMs: 1500,
+   * });
+   * ```
+   *
+   * @param opts - Probe path, token, rate-limit policy, and dependency checks.
+   * @returns This app for chaining.
+   * @throws {Error} If production authentication is missing without acknowledgment,
+   *   or if `checks` / `checkTimeoutMs` are malformed.
    * @since 0.18.0
    */
-  readinesscheck(opts: HealthRouteOptions = {}): this {
-    this.registerHealthRoute("readinesscheck", opts, () => {
+  readinesscheck(opts: ReadinessCheckOptions = {}): this {
+    const checks = validateReadinessChecks(opts.checks);
+    const timeoutMs = opts.checkTimeoutMs ?? 2000;
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+      throw new Error("readinesscheck(): checkTimeoutMs must be an integer between 1 and 60000.");
+    }
+    const notReady = {
+      status: 503 as const,
+      body: { status: "not-ready" as const },
+      headers: { "retry-after": "5" },
+    };
+    this.registerHealthRoute("readinesscheck", opts, async () => {
       if (
         this.draining ||
         this.pendingPlugins.size > 0 ||
         this.pluginBootError.failed
       ) {
-        return {
-          status: 503 as const,
-          body: { status: "not-ready" as const },
-          headers: { "retry-after": "5" },
-        };
+        return notReady;
+      }
+      if (checks.length > 0 && !(await this.runReadinessChecks(checks, timeoutMs))) {
+        return notReady;
       }
       return {
         status: 200 as const,
@@ -4028,6 +4121,59 @@ export class App<
       };
     });
     return this;
+  }
+
+  /**
+   * Run every readiness check concurrently; `true` only if all pass.
+   * Never throws: a throwing, rejecting, `false`-returning, or timed-out
+   * check is logged and counted as a failure.
+   */
+  private async runReadinessChecks(
+    checks: ReadonlyArray<readonly [string, ReadinessCheck]>,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    const outcomes = await Promise.all(
+      checks.map(async ([name, check]) => {
+        const controller = new AbortController();
+        // Start the check, and observe its rejection right away: if the
+        // timeout wins the race, a later rejection must not surface as an
+        // unhandledRejection (which crashes production apps).
+        const run = Promise.resolve().then(() => check(controller.signal));
+        run.catch(() => undefined);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timedOut = new Promise<typeof READINESS_CHECK_TIMED_OUT>((resolve) => {
+          timer = setTimeout(() => resolve(READINESS_CHECK_TIMED_OUT), timeoutMs);
+        });
+        try {
+          const result = await Promise.race([run, timedOut]);
+          if (result === READINESS_CHECK_TIMED_OUT) {
+            controller.abort(new DOMException("Readiness check timed out", "TimeoutError"));
+            this.log.warn(
+              { event: "readiness.check_failed", check: name, reason: "timeout", timeoutMs },
+              `readiness check "${name}" timed out after ${timeoutMs}ms`,
+            );
+            return false;
+          }
+          if (result === false) {
+            this.log.warn(
+              { event: "readiness.check_failed", check: name, reason: "returned_false" },
+              `readiness check "${name}" returned false`,
+            );
+            return false;
+          }
+          return true;
+        } catch (err) {
+          this.log.warn(
+            { event: "readiness.check_failed", check: name, reason: "threw", err },
+            `readiness check "${name}" failed`,
+          );
+          return false;
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      }),
+    );
+    return outcomes.every(Boolean);
   }
 
   /**
@@ -4451,17 +4597,7 @@ export class App<
   private registerHealthRoute(
     kind: "healthcheck" | "readinesscheck",
     opts: HealthRouteOptions,
-    handler: () =>
-      | {
-          status: 200;
-          body: { status: string };
-          headers?: Record<string, string>;
-        }
-      | {
-          status: 503;
-          body: { status: string };
-          headers?: Record<string, string>;
-        },
+    handler: () => HealthRouteResult | Promise<HealthRouteResult>,
   ): void {
     const isHealth = kind === "healthcheck";
     const defaultPath = (isHealth ? "/healthz" : "/readyz") as PathString;

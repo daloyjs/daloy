@@ -99,6 +99,30 @@ app.readinesscheck({
 
 Pass `rateLimit: false` to disable the per-IP cap entirely (sidecar-only probes that arrive directly from the orchestrator). The limiter deliberately does **not** honour `X-Forwarded-For`: probes typically arrive from a sidecar so spoofing the header should not bypass the cap.
 
+### Dependency checks (database, cache, queue) [#readiness-dependency-checks]
+
+By itself, `/readyz` only knows whether the app is draining and whether plugins finished booting. It does not know that your database is down. Since 1.13.0, pass named `checks` and the probe also answers `503` when one of them fails:
+
+```ts
+app.readinesscheck({
+  token: process.env.HEALTH_TOKEN!,
+  checkTimeoutMs: 1500, // default 2000, max 60000
+  checks: {
+    db: (signal) => pool.query({ text: "select 1", signal }), // pg
+    cache: async () => (await redis.ping()) === "PONG",       // false fails the probe
+  },
+});
+```
+
+- Every check runs on every probe, concurrently, after the draining and plugin checks pass. A check fails when it returns `false`, throws, rejects, or runs past `checkTimeoutMs`.
+- Each check gets an `AbortSignal` that aborts (with a `TimeoutError`) at the limit. Forward it to the driver so a hung connection is released. A check that ignores the signal and rejects later is still handled: it never becomes an unhandled rejection.
+- The `503` body is always `{ "status": "not-ready" }` with `retry-after: 5`, whichever check failed. The check name and the error are logged server-side as `readiness.check_failed` (with `reason`: `timeout`, `returned_false`, or `threw`), so an unauthenticated probe never reveals which dependency is down or what its connection error says.
+- Keep checks cheap (`select 1`, `PING`). The probe's rate limit and token still apply before any check runs.
+- Liveness (`/healthz`) has no checks on purpose: a database outage should take the pod out of rotation, not restart it.
+- Check names must match `[A-Za-z0-9_.-]{1,64}`. Malformed `checks` or `checkTimeoutMs` throw at registration.
+
+<AutoTypeTable path="src/app.ts" name="ReadinessCheckOptions" />
+
 ## Opt-out
 
 Disable the whole slice with `new App({ secureDefaults: false })`, or only the crash handlers with `new App({ crashOnUnhandledRejection: false })`. Health and readiness routes are opt-in, no auto-registration happens, the framework only flips behaviour when you call `app.healthcheck()` / `app.readinesscheck()` explicitly.

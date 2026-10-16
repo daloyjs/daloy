@@ -745,7 +745,7 @@ The framework refuses to start (or to construct) on the unsafe configurations li
 - Lifecycle events: `onPluginInstalled`, `onShutdown`, `onClose`.
 - Connection-draining graceful shutdown with `Connection: close` on `503` and in-flight responses; the Node, Bun, and Deno adapters all wire it to `SIGTERM`/`SIGINT` by default.
 - `crashOnUnhandledRejection` default-on in production.
-- `app.healthcheck()` / `app.readinesscheck()` primitives with bearer-token auth and per-IP rate limit.
+- `app.healthcheck()` / `app.readinesscheck()` primitives with bearer-token auth and per-IP rate limit. From 1.13.0, `readinesscheck({ checks, checkTimeoutMs })` adds named dependency checks (database, cache, queue) that run concurrently with an `AbortSignal` and a per-check timeout; any failure answers `503` with the same opaque body, and the failing check and error are logged server-side, never returned. A late rejection after a timeout is handled, so a slow dependency can never crash the process through `unhandledRejection`.
 - `disconnectStatusCode: 499` default for client-aborted requests.
 - Cooperative cancellation through `ctx.request.signal`: it aborts with a `TimeoutError` when `requestTimeoutMs` fires and, on the Node adapter (as on Bun and Deno), with an `AbortError` when the client disconnects before the response finished, on GET, pre-buffered, and streamed request bodies alike. Forward it to `fetch`, database drivers, or LLM SDK calls so abandoned requests stop spending.
 - `defineConfig({ schema, source })` boot-time typed configuration validation.

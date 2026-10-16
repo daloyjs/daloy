@@ -32,6 +32,9 @@ DaloyJS treats payment providers the same way it treats [email senders](/docs/em
           { label: "Tap / PayTabs", detail: "REST / paytabs_pt2" },
           { label: "Razorpay", detail: "razorpay" },
           { label: "Square", detail: "square" },
+          { label: "PayPal", detail: "Orders v2 REST" },
+          { label: "Paddle", detail: "@paddle/paddle-node-sdk" },
+          { label: "Checkout.com", detail: "checkout-sdk-node" },
         ]} caption="Each provider SDK lives behind a small plugin function that decorates the root app, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes." />
 
 - [Stripe](/docs/payments/stripe): hosted Checkout Sessions built from server-side Price IDs, a plain redirect to `session.url`, and `constructEventAsync` webhook verification that also runs on Workers.
@@ -44,8 +47,11 @@ DaloyJS treats payment providers the same way it treats [email senders](/docs/em
 - [PayTabs](/docs/payments/paytabs): MENA acquiring via the official `paytabs_pt2` package, wrapped as a Promise-friendly plugin with HMAC-SHA256 IPN verification.
 - [Razorpay](/docs/payments/razorpay): UPI, cards, netbanking, and wallets via the Orders flow, with both the checkout callback signature and `X-Razorpay-Signature` webhooks verified by core helpers.
 - [Square](/docs/payments/square): the `square` TypeScript SDK, `bigint` money amounts, Web Payments SDK tokens, and the async `WebhooksHelper.verifySignature`.
+- [PayPal Checkout](/docs/payments/paypal): Orders v2 over REST with cached OAuth tokens, `PayPal-Request-Id` idempotency, server-side capture, and `verify-webhook-signature` postback (or certificate self-verification on Node).
+- [Paddle Billing](/docs/payments/paddle): a merchant of record that handles tax, with server-created transactions opened in Paddle.js and `Paddle-Signature` verified by core `verifyWebhookSignature()`.
+- [Checkout.com](/docs/payments/checkout-com): Flow payment sessions through `checkout-sdk-node`, account-prefixed base URLs, `Cko-Idempotency-Key` on payment actions, and `Cko-Signature` webhooks.
 
-There is no dedicated PayPal Checkout (Orders v2) guide yet. Braintree covers PayPal wallets through the Braintree gateway. Each provider follows the same plugin shape so you can drop a new one into an existing application without rewriting routes.
+PayPal wallets are available either directly through [PayPal Checkout](/docs/payments/paypal) or through the [Braintree](/docs/payments/braintree) gateway. Each provider follows the same plugin shape so you can drop a new one into an existing application without rewriting routes.
 
 ## What every payment integration needs
 
@@ -345,6 +351,9 @@ Built from each provider's documentation as of October 2026. Confirm against the
 | PayTabs | `Signature` | HMAC-SHA256, hex | profile Server Key | raw body | none signed | `tran_ref` + status |
 | Razorpay | `X-Razorpay-Signature` | HMAC-SHA256, hex | webhook secret | raw body | none signed | `x-razorpay-event-id` |
 | Square | `x-square-hmacsha256-signature` | HMAC-SHA256, base64 | subscription signature key | notification URL + raw body | none signed | `event_id` |
+| PayPal | `PAYPAL-TRANSMISSION-SIG` (+ `-ID`, `-TIME`, `CERT-URL`, `AUTH-ALGO`) | SHA256withRSA, base64; or postback to `verify-webhook-signature` | PayPal certificate + your webhook id | transmission id, time, webhook id, CRC32 of the raw body | transmission time signed, no documented window | event `id` |
+| Paddle | `Paddle-Signature` (`ts=`, `h1=`) | HMAC-SHA256, hex | notification destination secret | `ts`, a colon, then the raw body | `ts`, default tolerance 5 s | `event_id` (`evt_...`) |
+| Checkout.com | `Cko-Signature` (optional `Authorization` key) | HMAC-SHA256, hex | webhook signature key | raw body | none signed | event `id` (`evt_...`) |
 
 Where nothing signs a timestamp, a captured delivery can be replayed. The atomic dedupe on the event id, plus refetching state from the provider in the worker, is what makes a replay harmless.
 
@@ -361,7 +370,7 @@ Where nothing signs a timestamp, a captured delivery can be replayed. The atomic
 
 ## Testing [#testing]
 
-- Use each provider's sandbox: Stripe test mode and sandboxes, Braintree sandbox, Authorize.Net `apitest`, Adyen test accounts, Mollie `test_` keys, Square sandbox, Razorpay test keys, and the Tap and PayTabs test profiles.
+- Use each provider's sandbox: Stripe test mode and sandboxes, Braintree sandbox, Authorize.Net `apitest`, Adyen test accounts, Mollie `test_` keys, Square sandbox, Razorpay test keys, the Tap and PayTabs test profiles, PayPal sandbox apps, Paddle sandbox accounts, and Checkout.com sandbox keys (`sk_sbox_`).
 - Stripe CLI: `stripe listen --forward-to localhost:3000/webhooks/stripe` forwards events with a local `whsec_` secret, and `stripe trigger checkout.session.completed` fires a real test event.
 - Contract tests: sign fake webhooks with the core `signWebhookPayload()` and drive them through [`app.request()`](/docs/testing). Always include the unhappy paths: a wrong secret, a tampered body, and a duplicate delivery.
 
@@ -411,7 +420,11 @@ test("rejects a tampered body", async () => {
 | `razorpay` 2.x | Yes | Not verified | Not verified: call the REST API with `fetch` | Not verified |
 | `paytabs_pt2` 2.x | Yes | Not verified | Not verified: call the PT2 REST API with `fetch` | Not verified |
 | `shopify-api-node` 3.x | Yes | Not verified | No (`got`, Node HTTP): call GraphQL with `fetch` | No |
+| `@paddle/paddle-node-sdk` 3.x | Yes (Node 20+) | Not verified (ships an edge build for the `deno` export condition) | Not verified (edge build for `worker` / `workerd`) | Not verified |
+| `checkout-sdk-node` 5.x | Yes (Node 18+) | Not verified | Not verified (imports `axios` and Node `stream`): call the REST API with `fetch` | Not verified |
+| `@paypal/paypal-server-sdk` 2.x | Yes (Node 14.17+) | Not verified | Not verified (axios-based adapter): use the REST guide | Not verified |
 | Tap (no SDK, `fetch`) | Yes | Yes | Yes | Yes |
+| PayPal REST (no SDK, `fetch`) | Yes | Yes | Yes (postback verification; self-verification needs `node:crypto`) | Yes (postback verification) |
 
 DaloyJS itself requires Node `^24 || >=26`, so the SDKs' own Node floors are already met on Node hosts.
 
@@ -419,7 +432,7 @@ DaloyJS itself requires Node `^24 || >=26`, so the SDKs' own Node floors are alr
 
 - Subscriptions and dunning. Let the provider own the billing schedule and retry logic ([Stripe Billing](https://docs.stripe.com/billing), [Braintree Recurring Billing](https://developer.paypal.com/braintree/docs/guides/recurring-billing/overview), [Mollie subscriptions](https://docs.mollie.com/reference/subscriptions-api), [Adyen tokenization](https://docs.adyen.com/online-payments/tokenization/)). Drive entitlements from webhooks and handle the failed-payment events, not from your own cron.
 - Reconciliation and disputes. Run a nightly job (see [`cronEnqueue`](/docs/jobs#cron-vs-jobs)) that compares provider settlement reports with your ledger, and subscribe to dispute or chargeback events so evidence deadlines are not missed.
-- Tax and merchant of record. Sales tax, VAT, and GST depend on where the buyer is. Use a tax engine ([Stripe Tax](https://docs.stripe.com/tax) and similar), or a merchant-of-record service that takes on the tax liability for you, rather than hard-coding rates.
+- Tax and merchant of record. Sales tax, VAT, and GST depend on where the buyer is. Use a tax engine ([Stripe Tax](https://docs.stripe.com/tax) and similar), or a merchant-of-record service such as [Paddle](/docs/payments/paddle) that takes on the tax liability for you, rather than hard-coding rates.
 
 ## Common plugin shape
 

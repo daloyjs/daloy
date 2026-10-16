@@ -1,12 +1,13 @@
 ---
 title: Using SQL ORMs with DaloyJS
-description: Connect DaloyJS to SQL with Prisma, Drizzle, TypeORM, MikroORM, or Sequelize, plus serverless pooling, migrations, tenancy, and error mapping.
+description: Connect DaloyJS to SQL with Prisma, Drizzle, Kysely, TypeORM, MikroORM, or Sequelize, plus serverless pooling, migrations, tenancy, and error mapping.
 keywords:
   - DaloyJS ORM
   - DaloyJS SQL ORM
   - TypeScript ORM
   - Prisma DaloyJS
   - Drizzle ORM DaloyJS
+  - Kysely DaloyJS
   - TypeORM DaloyJS
   - MikroORM DaloyJS
   - Sequelize DaloyJS
@@ -32,6 +33,11 @@ DaloyJS is database-agnostic. Any SQL client that runs on your target runtime wo
             detail: "generated PrismaClient",
           },
           { eyebrow: "ts-first", label: "Drizzle ORM", detail: "drizzle-orm" },
+          {
+            eyebrow: "query builder",
+            label: "Kysely",
+            detail: "Kysely<Database>",
+          },
           { eyebrow: "decorators", label: "TypeORM", detail: "DataSource" },
           {
             eyebrow: "unit of work",
@@ -71,7 +77,7 @@ Wrap the database client in a setup function and call it once with the root app 
             title: "ORM / query client",
             detail: "one shared instance per process",
             tone: "muted",
-            items: ["Prisma", "Drizzle", "TypeORM", "..."],
+            items: ["Prisma", "Drizzle", "Kysely", "TypeORM", "..."],
           },
           {
             title: "Database",
@@ -154,6 +160,7 @@ Throwing `NotFoundError` (or any `HttpError`) renders an RFC 9457 [problem+json]
 
 - [Prisma](/docs/orm/prisma): schema-first, mature migrations, great DX.
 - [Drizzle ORM](/docs/orm/drizzle): TypeScript-first, edge-friendly, SQL-like API.
+- [Kysely](/docs/orm/kysely): type-safe SQL query builder with no model layer, plus HTTP and binding dialects for the edge.
 - [TypeORM](/docs/orm/typeorm): decorator-based entities for object-oriented teams.
 - [MikroORM](/docs/orm/mikro-orm): Data Mapper, Unit of Work, and Identity Map with first-class TypeScript.
 - [Sequelize](/docs/orm/sequelize): mature Active Record style models with broad SQL dialect support.
@@ -166,7 +173,7 @@ Supabase is not an ORM. It is a hosted Postgres platform with a fetch-based Java
 
 ## Keep ORM and ODM separate
 
-This section is intentionally SQL-focused. If you are using MongoDB or Couchbase, jump to the [ODM overview](/docs/odm) and use [Mongoose](/docs/odm/mongoose) or [Ottoman](/docs/odm/ottoman) instead of forcing document models into an ORM-shaped abstraction.
+This section is intentionally SQL-focused. If you are using MongoDB or Couchbase, jump to the [ODM overview](/docs/odm) and use [Mongoose](/docs/odm/mongoose), the [MongoDB driver](/docs/odm/mongodb), or [Ottoman](/docs/odm/ottoman) instead of forcing document models into an ORM-shaped abstraction.
 
 ## Runtime compatibility cheat sheet
 
@@ -176,6 +183,7 @@ Vercel Functions (Node.js runtime), AWS Lambda, and Azure Functions all run your
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Prisma ORM 7 | Yes | Yes | Yes | Yes | Yes | Not verified | Yes, with a driver adapter and `runtime = "workerd"` |
 | Drizzle ORM | Yes | Yes | Yes | Yes | Yes | Not verified | Yes (D1, Hyperdrive, HTTP drivers) |
+| Kysely 0.29 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified (HTTP or binding dialects such as `kysely-d1`, `kysely-neon`) |
 | TypeORM | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified |
 | MikroORM v7 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified |
 | Sequelize | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | No |
@@ -274,43 +282,26 @@ export default toFetchHandler(app);
 
 ### Readiness that checks the database [#readiness]
 
-`app.readinesscheck()` reports plugin boot and drain state. It does **not** ping your database. When you want the orchestrator to pull an instance whose database is unreachable, add your own route with a short timeout, and keep it off the public internet (or behind a token) like the built-in probes.
+By default `app.readinesscheck()` reports plugin boot and drain state only. Pass `checks` to make it ping your database too, so the orchestrator pulls an instance whose database is unreachable. Each check receives an `AbortSignal` and runs concurrently with the others; the probe answers `503` if any check throws, rejects, returns `false`, or runs past `checkTimeoutMs` (default `2000`). Keep the probe behind a token (or off the public internet) like the other built-in probes.
 
 ```ts
-import { z } from "zod";
-import { HttpError } from "@daloyjs/core";
+const db = createDb();
+databasePlugin(app, db);
 
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    work,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("database ping timed out")), ms),
-    ),
-  ]);
-}
-
-app.get(
-  "/readyz/db",
-  {
-    operationId: "readyDatabase",
-    responses: {
-      200: { description: "Database reachable", body: z.object({ status: z.literal("ready") }) },
-      503: { description: "Database unreachable" },
+app.readinesscheck({
+  token: process.env.HEALTH_TOKEN!,
+  checks: {
+    // Prisma takes no AbortSignal; checkTimeoutMs still bounds the probe.
+    // Drivers that do (Kysely, the MongoDB driver) should forward `signal`.
+    db: async () => {
+      await db.$queryRaw`SELECT 1`;
     },
   },
-  async ({ state }) => {
-    try {
-      await withTimeout(state.db.$queryRaw`SELECT 1`, 1_000);
-    } catch (err) {
-      console.error("readiness: database ping failed", err);
-      throw new HttpError(503, { title: "Service Unavailable" }, { "retry-after": "5" });
-    }
-    return { status: 200, body: { status: "ready" } };
-  },
-);
+  checkTimeoutMs: 2000,
+});
 ```
 
-Point liveness at `app.healthcheck()` and never at the database probe: a database blip should drain traffic, not restart every container. See [lifecycle and health](/docs/security/lifecycle-health).
+A failing probe still returns only `{ status: "not-ready" }`: which check failed, and why, is logged server-side and never sent to the caller. Point liveness at `app.healthcheck()` and never at the database check: a database blip should drain traffic, not restart every container. See [lifecycle and health](/docs/security/lifecycle-health).
 
 ### Connection pooling per adapter [#pooling]
 
@@ -324,7 +315,7 @@ Transaction-mode poolers (PgBouncer in transaction mode, Supabase's transaction 
 
 ### Migrations are a deploy step [#migrations]
 
-- Run migrations from CI or a one-off release job (`prisma migrate deploy`, `drizzle-kit migrate`, `typeorm migration:run`, `mikro-orm migration:up`), never at app boot. Many instances booting at once race each other, and the runtime role should not need DDL privileges.
+- Run migrations from CI or a one-off release job (`prisma migrate deploy`, `drizzle-kit migrate`, Kysely's `Migrator`, `typeorm migration:run`, `mikro-orm migration:up`), never at app boot. Many instances booting at once race each other, and the runtime role should not need DDL privileges.
 - Use expand / contract for breaking changes: add the new column or table, deploy code that writes both, backfill, switch reads, then drop the old shape in a later release. Old and new instances run side by side during every deploy.
 
 ### Multi-tenancy [#tenancy]
@@ -454,6 +445,7 @@ Use it as `catch (err) { mapDbError(err); }` and declare `409`, `422`, and `503`
 - [Resource authorization for user-owned and tenant-owned records](/docs/security/resource-authorization)
 - [Prisma guide](/docs/orm/prisma)
 - [Drizzle guide](/docs/orm/drizzle)
+- [Kysely guide](/docs/orm/kysely)
 - [TypeORM guide](/docs/orm/typeorm)
 - [MikroORM guide](/docs/orm/mikro-orm)
 - [Sequelize guide](/docs/orm/sequelize)

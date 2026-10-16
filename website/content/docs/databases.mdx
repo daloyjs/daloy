@@ -32,7 +32,7 @@ Cloudflare Workers can open outbound TCP too, through the `connect()` API from `
           {
             title: "DaloyJS app on a runtime",
             detail: "Same route code on any adapter",
-            items: ["Node", "Bun / Deno", "Workers", "Lambda", "Vercel"],
+            items: ["Node", "Bun / Deno", "Workers", "Lambda", "Vercel", "Azure Functions"],
             tone: "accent",
           },
           {
@@ -49,7 +49,7 @@ Cloudflare Workers can open outbound TCP too, through the `connect()` API from `
           {
             title: "Database host or engine",
             detail: "Where your data actually lives",
-            items: ["Neon", "PlanetScale", "Supabase", "Turso", "DuckDB", "D1", "Aurora DSQL"],
+            items: ["Neon", "PlanetScale", "Supabase", "Turso", "DuckDB", "D1", "Aurora DSQL", "Azure"],
             tone: "muted",
           },
         ]} caption="The driver style decides where a host can run. On Workers, use TCP through Hyperdrive, an HTTP driver, or a binding; elsewhere, plain TCP drivers work." />
@@ -63,6 +63,7 @@ Cloudflare Workers can open outbound TCP too, through the `connect()` API from `
 - [DuckDB](/docs/databases/duckdb): embedded OLAP SQL engine for analytics, local files, Parquet, and ad hoc reporting inside Node.js services.
 - [Cloudflare D1](/docs/databases/cloudflare-d1): SQLite-compatible database built into Workers, accessed through a runtime binding.
 - [AWS Aurora DSQL](/docs/databases/aurora-dsql): distributed PostgreSQL on AWS with IAM token auth, a natural fit for the [Lambda adapter](/docs/adapters/aws-lambda).
+- [Azure databases](/docs/databases/azure): Azure Database for PostgreSQL (`pg`), Azure SQL Database (`mssql`), and Cosmos DB (`@azure/cosmos`) with managed identity and Microsoft Entra tokens instead of passwords, for the [Azure Functions adapter](/docs/adapters/azure-functions) or Container Apps.
 - [Cloudflare Hyperdrive](/docs/databases/hyperdrive): not a database but a pooling and caching layer that lets a Worker use `pg` or `mysql2` against any of the Postgres or MySQL hosts above (and RDS, Aurora, or your own server).
 
 ## Runtime compatibility
@@ -79,6 +80,9 @@ Cloudflare Workers can open outbound TCP too, through the `connect()` API from `
 | DuckDB | embedded native library | Yes | Limited | No | Yes | Not verified | Not verified | Not verified | No |
 | Cloudflare D1 | Workers binding | REST API, or local dev via Wrangler | REST API only | Yes (binding) | REST API only | REST API only | REST API only | REST API only | REST API only |
 | Aurora DSQL | TCP (`pg`) + IAM token | Yes | Not verified | Not covered by this guide | Yes | Not verified | Not verified | Not verified | No |
+| Azure Database for PostgreSQL | TCP (`pg`) + Entra token | Yes | Not verified | Not verified (Hyperdrive needs a password role) | Not verified | Not verified | Not verified | Yes | No |
+| Azure SQL Database | TCP (`mssql`, tedious) + Entra token | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Yes | No |
+| Azure Cosmos DB for NoSQL | HTTPS (`@azure/cosmos`) + Entra token | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Yes | Not verified |
 | Any Postgres / MySQL | TCP (`pg`, `mysql2`) | Yes | Yes | Yes (TCP via Hyperdrive) | Yes | Not verified | Not verified | Not verified | No |
 
 The D1 REST API is meant for administration and tooling, not for serving application traffic from outside Workers.
@@ -89,6 +93,7 @@ The D1 REST API is meant for administration and tooling, not for serving applica
 - You want MySQL with database branching: PlanetScale.
 - You want auth + storage + realtime in one package: Supabase.
 - You're all-in on AWS with the Lambda adapter: Aurora DSQL or RDS Postgres via standard `pg`.
+- You're on Azure Functions or Container Apps: [Azure Database for PostgreSQL, Azure SQL, or Cosmos DB](/docs/databases/azure) with a managed identity.
 - You need SQLite-style data close to users: Turso or D1.
 - You need embedded analytics over files or local data: DuckDB on Node.js or Lambda.
 
@@ -126,51 +131,26 @@ How you open and close connections depends on whether the process outlives the r
 
 ## Readiness checks for the database
 
-`app.readinesscheck()` reports `503` while the app is draining or a plugin is still registering. It does **not** query your database. If your orchestrator should stop routing to an instance that cannot reach the database, add a separate, token-protected route that runs a cheap query with a timeout:
+`app.readinesscheck()` reports `503` while the app is draining or a plugin is still registering. Pass `checks` to also gate it on the database: each check gets an `AbortSignal`, the checks run concurrently, and a check that throws, rejects, returns `false`, or runs past `checkTimeoutMs` (default 2000 ms) fails the probe with `503`. The body stays `{ status: "not-ready" }`; the failure details are logged server-side only.
 
-```ts title="src/ready-db.ts"
-import { z } from "zod";
-import { bearerAuth, timingSafeEqual, type App } from "@daloyjs/core";
+```ts title="src/ready.ts"
+import type { App } from "@daloyjs/core";
 import { pool } from "./db/pool.ts";
 
-const READY_TOKEN = process.env.READY_TOKEN!;
-
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("db readiness timeout")), ms);
-    work.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (err) => { clearTimeout(timer); reject(err); },
-    );
-  });
-}
-
-export function dbReadiness(app: App) {
-  app.get(
-    "/readyz/db",
-    {
-      operationId: "dbReadiness",
-      hooks: bearerAuth({ validate: (token) => timingSafeEqual(token, READY_TOKEN) }),
-      responses: {
-        200: { description: "Database reachable", body: z.object({ status: z.literal("ok") }) },
-        503: { description: "Database unreachable", body: z.object({ status: z.literal("unavailable") }) },
+export function readiness(app: App) {
+  app.readinesscheck({
+    token: process.env.READY_TOKEN,
+    checks: {
+      db: async (signal) => {
+        await pool.query("select 1");
       },
     },
-    async () => {
-      try {
-        await withTimeout(pool.query("select 1"), 2_000);
-        return { status: 200, body: { status: "ok" as const } };
-      } catch (err) {
-        // Log the driver error server-side; never return it to the caller.
-        app.log.warn({ event: "readyz.db.failed", err }, "database readiness check failed");
-        return { status: 503, body: { status: "unavailable" as const } };
-      }
-    },
-  );
+    checkTimeoutMs: 2000,
+  });
 }
 ```
 
-Keep the probe cheap and rate limited (put `rateLimit()` in front of it if the app does not already have one), and point only the readiness probe at it, not the liveness probe: a database outage should take an instance out of rotation, not restart every replica at once.
+Keep the checks cheap, and point only the readiness probe at `/readyz`, not the liveness probe: a database outage should take an instance out of rotation, not restart every replica at once. See [Lifecycle & health](/docs/security/lifecycle-health).
 
 ## Credentials
 

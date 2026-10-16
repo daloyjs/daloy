@@ -1,0 +1,452 @@
+---
+title: Send email from DaloyJS with Cloudflare Email Service
+description: "Send email from a DaloyJS Worker with Cloudflare Email Service: send_email bindings, recipient locks, Queues, delivery events, and inbound Email Workers."
+keywords:
+  - DaloyJS Cloudflare email
+  - Cloudflare Email Service
+  - send_email binding
+  - env.EMAIL.send
+  - Cloudflare Email Routing Worker
+  - Cloudflare Queues email
+  - email() handler Workers
+---
+
+# Send email from DaloyJS with Cloudflare Email Service
+
+[Cloudflare Email Service](https://developers.cloudflare.com/email-service/) sends transactional mail straight from a Worker through a `send_email` binding (no API key in your code) and receives mail through Email Routing and the Worker `email()` handler. It is the natural fit when your DaloyJS app already runs on the [Workers adapter](/docs/adapters/cloudflare-workers). Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, and `escapeHtml()` used below.
+
+<Callout type="warning">Email Sending is in **public beta** (Email Routing, the inbound half, is not labelled beta). Sending to arbitrary recipients requires the Workers Paid plan: 3,000 emails a month are included, then $0.35 per 1,000. On the Free plan you can only send to verified destination addresses in your own account. Check the [Email Service docs](https://developers.cloudflare.com/email-service/) for the current status before you depend on it.</Callout>
+
+<SequenceDiagram title="Send from a Worker, learn about bounces from a Queue" participants={["Route handler", "Cloudflare Queue", "send_email binding", "Event subscription"]} steps={[
+          {
+            from: "Route handler",
+            to: "Cloudflare Queue",
+            label: "env.EMAIL_QUEUE.send({ key, msg })",
+            detail: "server-built message, 202 to the client",
+            kind: "request",
+          },
+          {
+            from: "Cloudflare Queue",
+            to: "send_email binding",
+            label: "queue() consumer: env.EMAIL.send({ from, to, subject })",
+            detail: "no API key; the binding is the credential",
+            kind: "request",
+          },
+          {
+            from: "send_email binding",
+            to: "Cloudflare Queue",
+            label: "{ messageId } or an Error with .code",
+            detail: "ack, retry with backoff, or drop on E_* validation codes",
+            kind: "response",
+          },
+          {
+            from: "Event subscription",
+            to: "Cloudflare Queue",
+            label: "cf.email.sending.message.bounced / .complained",
+            detail: "published to a queue, not POSTed to a public webhook",
+            kind: "async",
+          },
+        ]} caption="A route enqueues a message the server built, a queue() consumer in the same Worker sends it through the send_email binding, and delivery events come back through a Queues event subscription. There is no public webhook endpoint to sign or protect." />
+
+## 1. Provision
+
+1. In the Cloudflare dashboard go to **Compute > Email Service > Email Sending** and select **Onboard Domain**. The domain must be a zone in your Cloudflare account. A subdomain such as `mail.acme.example.com` keeps transactional reputation separate.
+2. Cloudflare adds the DNS records for you: MX and an SPF TXT record on a `cf-bounce` subdomain, a DKIM key at `cf-bounce._domainkey`, and a DMARC TXT record on `_dmarc`. Both SPF and DKIM sit under your own domain, so they can align with your `From:` domain for DMARC. If you already publish a DMARC record, review the proposed one before you accept it, then follow the overview's [DMARC rollout](/docs/email#deliverability).
+3. New accounts start with a conservative daily quota that grows with good sending behaviour. Email Sending is for transactional mail (receipts, sign-in links, alerts).
+
+## 2. Bindings
+
+The binding is the credential, so there is no key to leak. It is also a guard: each `send_email` entry can carry one restriction, and a binding that can only reach one inbox cannot become an [open relay](/docs/email#open-relay) whatever your route code does.
+
+```jsonc title="wrangler.jsonc"
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "acme-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "send_email": [
+    // Mail to users: may only send From the one no-reply address.
+    { "name": "EMAIL", "allowed_sender_addresses": ["no-reply@mail.acme.example.com"] },
+    // Contact form: can only ever reach the support inbox.
+    { "name": "CONTACT_EMAIL", "destination_address": "support@acme.example.com" },
+  ],
+  "queues": {
+    "producers": [{ "binding": "EMAIL_QUEUE", "queue": "email-send" }],
+    "consumers": [
+      { "queue": "email-send", "max_retries": 5, "dead_letter_queue": "email-send-dlq" },
+      { "queue": "email-events", "max_retries": 5 },
+    ],
+  },
+  "vars": {
+    "EMAIL_FROM": "no-reply@mail.acme.example.com",
+    "EMAIL_FROM_NAME": "Acme",
+    "CONTACT_INBOX": "support@acme.example.com",
+    "SUPPORT_FORWARD_TO": "team@acme.example.com",
+  },
+}
+```
+
+The restriction attributes, from Cloudflare's [send bindings reference](https://developers.cloudflare.com/email-service/configuration/send-bindings/):
+
+| Attribute | Effect |
+| --- | --- |
+| none | The binding can send to any recipient your account is allowed to reach. |
+| `destination_address` | Only this one address. A `send()` with `to` unset uses it. |
+| `allowed_destination_addresses` | Only addresses on this list; anything else throws `E_RECIPIENT_NOT_ALLOWED`. |
+| `allowed_sender_addresses` | Only these `from` addresses. |
+
+Use one binding per purpose. A locked contact binding plus a sender-pinned user binding means a bug in one route cannot send arbitrary mail as anyone. If the support inbox is a verified Email Routing destination address, those sends are free and do not count toward your quota.
+
+Run `pnpm wrangler types` after editing the file: it generates the `Env` interface (with `SendEmail`, `MessageBatch`, and `ForwardableEmailMessage` types) that the code below uses. Create the queues once with `pnpm wrangler queues create email-send`, `email-send-dlq`, and `email-events`.
+
+## 3. Sender
+
+```ts title="src/email/cloudflare.ts"
+import { env } from "cloudflare:workers";
+import type { EmailSender } from "../plugins/email.ts";
+
+export const sender: EmailSender = {
+  async send(msg) {
+    // The binding takes no AbortSignal; Worker CPU and wall-time limits bound the call.
+    const { messageId } = await env.EMAIL.send({
+      from: { email: env.EMAIL_FROM, name: env.EMAIL_FROM_NAME },
+      to: msg.to,
+      replyTo: msg.replyTo,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+      headers: msg.headers, // only allowlisted headers; List-Unsubscribe is one
+    });
+    return { id: messageId };
+  },
+};
+```
+
+`env.EMAIL.send()` accepts a structured message (`to`, `from`, `subject`, `html`, `text`, `cc`, `bcc`, `replyTo`, `attachments`, `headers`; at most 50 recipients across `to`, `cc`, and `bcc`) and resolves to `{ messageId }`. Failures throw an `Error` with a string `code` such as `E_RECIPIENT_SUPPRESSED`. The older `new EmailMessage(from, to, raw)` from `cloudflare:email` with a hand-built MIME body (for example via `mimetext`) is still supported for backward compatibility, but Cloudflare recommends the structured form for new code.
+
+```ts title="src/server.ts"
+import { App, secureHeaders } from "@daloyjs/core";
+import { emailPlugin } from "./plugins/email.ts";
+import { sender } from "./email/cloudflare.ts";
+import { contactRoutes } from "./routes/contact.ts";
+import { receiptRoutes } from "./routes/receipts.ts";
+
+export const app = new App();
+app.use(secureHeaders());
+emailPlugin(app, sender);
+contactRoutes(app);
+receiptRoutes(app);
+```
+
+Do not call the overview's `emailJobs()` here. Its `startWorker: true` poll loop belongs on a long-lived process, and Workers isolates are the wrong place for one ([where jobs run](/docs/jobs#topology-d)). Cloudflare Queues does that job below.
+
+## 4. Use it in a route
+
+The contact form sends through the destination-locked binding. The recipient is fixed twice: in code, and in `wrangler.jsonc`, where the platform rejects any other address:
+
+```ts title="src/routes/contact.ts"
+import { env } from "cloudflare:workers";
+import { z } from "zod";
+import { App, HttpError, rateLimit } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { headerSafe } from "../schemas/email.ts";
+
+export function contactRoutes(app: App) {
+  app.post(
+    "/contact",
+    {
+      operationId: "submitContact",
+      // Per isolate; back it with a shared store for a global limit (see the overview).
+      hooks: rateLimit({ windowMs: 10 * 60_000, max: 5 }),
+      request: {
+        body: z
+          .object({ name: headerSafe.max(80), email: z.email(), message: z.string().min(1).max(5000) })
+          .strict(),
+      },
+      responses: {
+        202: { description: "Accepted", body: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async ({ body, state }) => {
+      try {
+        await env.CONTACT_EMAIL.send({
+          to: env.CONTACT_INBOX, // the binding refuses any other recipient anyway
+          from: { email: env.EMAIL_FROM, name: "Acme contact form" },
+          replyTo: body.email, // the visitor, only as Reply-To
+          subject: `Contact form: ${body.name}`,
+          text: `From ${body.name} <${body.email}>\n\n${body.message}`,
+          html: `<p>From ${escapeHtml(body.name)} &lt;${escapeHtml(body.email)}&gt;</p><p>${escapeHtml(body.message)}</p>`,
+        });
+      } catch (err) {
+        state.log.error({ err }, "contact email failed"); // never echo provider errors
+        throw new HttpError(502, { title: "Email could not be sent" });
+      }
+      return { status: 202, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+## Queued sending with Cloudflare Queues [#queued-sending]
+
+Routes that mail users (receipts, invites) should not wait on the send. Put a server-built message on a queue and return `202`. The key is built with `jobIdempotencyKey()` from the business event, so the consumer can skip a send it already made:
+
+```ts title="src/email/queue.ts"
+import { env } from "cloudflare:workers";
+import { jobIdempotencyKey } from "@daloyjs/core";
+import type { EmailMessage } from "../plugins/email.ts";
+
+export type QueuedEmail = Omit<EmailMessage, "signal" | "idempotencyKey">;
+export interface QueuedSend {
+  key: string;
+  msg: QueuedEmail;
+}
+
+/** Producer: call from a route after the server has looked up the recipient and built the body. */
+export async function enqueueEmail(businessKey: string, msg: QueuedEmail): Promise<string> {
+  const key = jobIdempotencyKey({ name: "email.send", key: businessKey });
+  await env.EMAIL_QUEUE.send({ key, msg } satisfies QueuedSend); // body limit: 128 KB
+  return key;
+}
+```
+
+A receipt route then looks exactly like the [Postmark receipt route](/docs/email/postmark#5-use-it-in-a-route) (auth, ownership check, server-side recipient, escaped HTML), with ``await enqueueEmail(`receipt-${order.id}`, { to: order.customerEmail, subject, text, html })`` in place of `app.jobs!.enqueue(...)`.
+
+The consumer runs in the same Worker's `queue()` handler. Queues delivers at least once, so check before sending and record after:
+
+```ts title="src/email/consumer.ts"
+import { sender } from "./cloudflare.ts";
+import type { QueuedSend } from "./queue.ts";
+
+// Codes that mean "fix the request": retrying will never succeed.
+const PERMANENT = new Set([
+  "E_VALIDATION_ERROR",
+  "E_FIELD_MISSING",
+  "E_TOO_MANY_RECIPIENTS",
+  "E_TOO_MANY_ATTACHMENTS",
+  "E_SENDER_NOT_VERIFIED",
+  "E_SENDER_DOMAIN_NOT_AVAILABLE",
+  "E_RECIPIENT_NOT_ALLOWED",
+  "E_CONTENT_TOO_LARGE",
+  "E_HEADER_NOT_ALLOWED",
+  "E_HEADER_USE_API_FIELD",
+  "E_HEADER_VALUE_INVALID",
+]);
+
+export async function handleSendBatch(batch: MessageBatch<QueuedSend>): Promise<void> {
+  for (const message of batch.messages) {
+    const { key, msg } = message.body;
+    try {
+      if ((await alreadySent(key)) || (await isUndeliverable(msg.to))) {
+        message.ack();
+        continue;
+      }
+      const { id } = await sender.send(msg);
+      await recordSent(key, id);
+      message.ack();
+    } catch (err) {
+      const code = (err as { code?: unknown }).code;
+      if (code === "E_RECIPIENT_SUPPRESSED") {
+        await markUndeliverable(msg.to.toLowerCase(), "suppressed");
+        message.ack();
+      } else if (typeof code === "string" && PERMANENT.has(code)) {
+        console.error(JSON.stringify({ event: "email.rejected", code, key })); // no recipient, no provider text
+        message.ack();
+      } else {
+        // Rate limit, daily quota, internal error: back off; after max_retries it lands in email-send-dlq.
+        message.retry({ delaySeconds: Math.min(60 * 2 ** message.attempts, 3600) });
+      }
+    }
+  }
+}
+
+// Your data layer, for example a D1 table with a unique key column.
+declare function alreadySent(key: string): Promise<boolean>;
+declare function recordSent(key: string, messageId: string): Promise<void>;
+declare function isUndeliverable(email: string): Promise<boolean>;
+declare function markUndeliverable(email: string, reason: string): Promise<void>;
+```
+
+There is still a small duplicate window: if the isolate dies after `send()` succeeds but before `recordSent()` commits, the redelivered message sends again. Cloudflare does not document an idempotency key on `send()`, so that window cannot be closed on the provider side.
+
+## Delivery events: bounces and complaints [#webhooks-bounces-and-complaints]
+
+Cloudflare does not POST delivery events to a webhook. It publishes them through a [Queues event subscription](https://developers.cloudflare.com/email-service/reference/event-subscriptions/) scoped to one sending domain, so there is no public endpoint, no signature to verify, and no secret to rotate. Subscribe the `email-events` queue to the events you act on:
+
+```sh
+pnpm wrangler queues subscription create email-events \
+  --source email.sending \
+  --events message.bounced,message.complained \
+  --zone-id <ZONE_ID> \
+  --domain mail.acme.example.com
+```
+
+The available events are `message.delivered`, `message.deferred`, `message.bounced` (a permanent bounce, or temporary retries ran out), `message.failed`, `message.rejected` (blocked before delivery, for example by suppression), and `message.complained` (a spam report through a feedback loop). Each message body carries `type` (such as `cf.email.sending.message.bounced`) and a `payload` with `eventId`, `messageId` (the same id `send()` returned), `recipient`, and event-specific objects like `bounce: { type: "hard" | "soft", classification, reason }`:
+
+```ts title="src/email/events.ts"
+import { jobIdempotencyKey } from "@daloyjs/core";
+
+export interface EmailSendingEvent {
+  type: string;
+  payload: { eventId: string; messageId: string; recipient: string; bounce?: { type: string } };
+}
+
+export async function handleEventBatch(batch: MessageBatch<EmailSendingEvent>): Promise<void> {
+  for (const message of batch.messages) {
+    const { type, payload } = message.body;
+    const hard =
+      (type === "cf.email.sending.message.bounced" && payload.bounce?.type === "hard") ||
+      type === "cf.email.sending.message.complained";
+    if (hard) {
+      // A redelivered event has the same eventId, so the insert is a no-op the second time.
+      const key = jobIdempotencyKey({ name: "email.suppress", key: `cf-${payload.eventId}` });
+      await recordSuppression(key, payload.recipient.toLowerCase(), type);
+    }
+    message.ack();
+  }
+}
+
+// Insert into your suppression table, ignoring a duplicate key.
+declare function recordSuppression(key: string, email: string, reason: string): Promise<void>;
+```
+
+## Suppression
+
+Cloudflare keeps its own [suppression list](https://developers.cloudflare.com/email-service/concepts/suppressions/), scoped per sending domain or account-wide:
+
+- A validated spam complaint suppresses the address with no expiry.
+- A hard bounce for a mailbox or domain that does not exist suppresses with no expiry; other eligible hard bounces last 7 days.
+- An eligible soft bounce (full mailbox, recipient rate limiting) suppresses for 24 hours by default.
+
+With the domain's **Drop suppressed recipients** setting off (the default), a `send()` that includes a suppressed address throws `E_RECIPIENT_SUPPRESSED` and sends nothing; turned on, Cloudflare drops just the suppressed recipients. Suppressed sends do not count toward your quota. Add your own unsubscribes as manual suppressions through the dashboard or REST API, and keep your own undeliverable flag as well, as the [overview](/docs/email#webhooks) explains.
+
+## Inbound mail with Email Routing and Email Workers [#inbound]
+
+Email Routing delivers mail sent to your domain to a Worker's `email(message, env, ctx)` handler. Onboard the domain under **Email Service > Email Routing**, then add a routing rule that sends an address (say `support@acme.example.com`) to this Worker. Inbound messages can be up to 25 MiB, and `forward()` only reaches verified destination addresses.
+
+```package-install
+postal-mime
+```
+
+```ts title="src/email/inbound.ts"
+import PostalMime from "postal-mime";
+
+export async function handleInbound(
+  message: ForwardableEmailMessage,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<void> {
+  if (message.rawSize > 5 * 1024 * 1024) {
+    message.setReject("Message too large"); // permanent SMTP rejection
+    return;
+  }
+  const parsed = await PostalMime.parse(message.raw); // raw is a one-shot stream
+  // Sender addresses and every header are untrusted input: never grant access based on them,
+  // and escape the text before you render it anywhere.
+  ctx.waitUntil(
+    createTicket({ from: message.from, subject: parsed.subject ?? "(no subject)", text: parsed.text ?? "" }),
+  );
+  await message.forward(env.SUPPORT_FORWARD_TO); // must be a verified destination address
+}
+
+declare function createTicket(t: { from: string; subject: string; text: string }): Promise<void>;
+```
+
+`message.reply()` exists too, with strict rules: the incoming mail must pass DMARC, you can reply once, the reply must go to the original sender from the receiving domain, and Cloudflare refuses replies to mail with more than 100 `References` entries. Sending an auto-reply with `env.EMAIL.send()` is an easy way to build a reply loop, so only auto-reply when you also skip auto-generated mail.
+
+### One module, three handlers [#entry]
+
+Inbound mail and queue batches are not HTTP requests, so they do not pass through `app.fetch`. Export them next to DaloyJS's fetch handler from the same module. Spread the adapter's object instead of nesting it: `toFetchHandler()` already returns `{ fetch }`.
+
+```ts title="src/index.ts"
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
+import { app } from "./server.ts";
+import { handleSendBatch } from "./email/consumer.ts";
+import { handleEventBatch, type EmailSendingEvent } from "./email/events.ts";
+import { handleInbound } from "./email/inbound.ts";
+import type { QueuedSend } from "./email/queue.ts";
+
+export default {
+  ...toFetchHandler<Env>(app),
+  async queue(batch) {
+    if (batch.queue === "email-send") await handleSendBatch(batch as MessageBatch<QueuedSend>);
+    else if (batch.queue === "email-events") await handleEventBatch(batch as MessageBatch<EmailSendingEvent>);
+  },
+  async email(message, env, ctx) {
+    await handleInbound(message, env, ctx);
+  },
+} satisfies ExportedHandler<Env>;
+```
+
+## Attachments
+
+Attachments go through the binding directly (the shared `EmailMessage` has no attachment field). Each entry is `{ content, filename, type, disposition: "attachment" | "inline", contentId? }`, where `content` is a base64 string, an `ArrayBuffer`, or an `ArrayBufferView`. The whole message may be at most 5 MiB (25 MiB to verified destinations) with up to 32 attachments, so do not put files on the queue (messages max out at 128 KB): enqueue an R2 object key and read the bytes in the consumer.
+
+```ts
+const pdf = await env.INVOICES.get(`invoices/${invoice.id}.pdf`); // an R2 binding
+if (pdf) {
+  await env.EMAIL.send({
+    from: { email: env.EMAIL_FROM, name: env.EMAIL_FROM_NAME },
+    to: invoice.customerEmail, // looked up server-side
+    subject: `Invoice ${invoice.number}`,
+    text: "Your invoice is attached.",
+    attachments: [
+      { content: await pdf.arrayBuffer(), filename: `invoice-${invoice.number}.pdf`, type: "application/pdf", disposition: "attachment" },
+    ],
+  });
+}
+```
+
+Under plain `wrangler dev` the email binding is simulated and binary attachment content cannot be serialized; set `"remote": true` on the binding to send real mail from local development.
+
+## REST API from other runtimes [#rest-api]
+
+Outside Workers (Node, Lambda, another cloud), call `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send` with a Cloudflare API token that has email sending permission. Field names differ from the binding: `from` and `reply_to` objects use `address` (not `email`), keys are snake_case, and attachment `content` is always base64. The response groups recipients into `delivered`, `permanent_bounces`, and `queued` instead of returning a message id.
+
+```ts title="src/email/cloudflare-rest.ts"
+import type { EmailSender } from "../plugins/email.ts";
+import { providerFetch } from "./fetch.ts"; // allowHosts: ["api.cloudflare.com"]
+import { config } from "../config.ts";
+
+export const sender: EmailSender = {
+  async send(msg) {
+    const res = await providerFetch(
+      `https://api.cloudflare.com/client/v4/accounts/${config.CF_ACCOUNT_ID}/email/sending/send`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${config.CF_EMAIL_TOKEN}`, "content-type": "application/json" },
+        signal: msg.signal,
+        body: JSON.stringify({
+          from: { address: config.EMAIL_FROM_ADDRESS, name: "Acme" },
+          to: msg.to,
+          reply_to: msg.replyTo,
+          subject: msg.subject,
+          text: msg.text,
+          html: msg.html,
+          headers: msg.headers,
+        }),
+      },
+    );
+    const out = (await res.json()) as { success: boolean; errors?: { code: number }[]; result?: { permanent_bounces: string[] } };
+    if (!res.ok || !out.success) throw new Error(`Cloudflare email error ${out.errors?.[0]?.code ?? res.status}`);
+    for (const email of out.result?.permanent_bounces ?? []) await markUndeliverable(email.toLowerCase(), "hard_bounce");
+    return { id: "" }; // the REST API returns per-recipient status, not a message id
+  },
+};
+
+declare function markUndeliverable(email: string, reason: string): Promise<void>;
+```
+
+Add `CF_ACCOUNT_ID`, `CF_EMAIL_TOKEN`, and `EMAIL_FROM_ADDRESS` (`z.email()`) to the overview's [`defineConfig()` schema](/docs/email#common-pattern), and scope the token to email sending only. `providerFetch` is the overview's [guarded `resilientFetch`](/docs/email#calling-a-rest-api-with-fetch), which never retries the `POST`. Only 429 and 5xx answers are worth retrying, from the job queue. Cloudflare also ships official Node, Python, and Go SDKs for its REST API. An authenticated SMTP submission endpoint exists too, currently in beta.
+
+## Limits at a glance
+
+- 50 recipients per message (`to` + `cc` + `bcc`), subject up to 998 characters, 16 KB of custom headers.
+- 5 MiB per message including attachments (25 MiB to verified destinations), 32 attachments.
+- A daily quota that starts low and rises; request more through Cloudflare's limit increase form.
+- Inbound: 25 MiB per message, 200 routing rules per domain.
+
+See [Cloudflare's limits page](https://developers.cloudflare.com/email-service/platform/limits/) for the current numbers.
+
+See also [Resend](/docs/email/resend) (also fetch-based), the [Workers adapter](/docs/adapters/cloudflare-workers), and the [email integrations overview](/docs/email).

@@ -1,9 +1,10 @@
 ---
 title: Using ODMs with DaloyJS
-description: Connect DaloyJS to document databases with Mongoose for MongoDB or Ottoman for Couchbase. Inject connections and models, and handle serverless lifecycle.
+description: Connect DaloyJS to document databases with Mongoose or the MongoDB driver, or Ottoman for Couchbase. Inject clients, guard filters, handle serverless.
 keywords:
   - DaloyJS ODM
   - Mongoose DaloyJS
+  - MongoDB driver DaloyJS
   - Ottoman DaloyJS
   - MongoDB TypeScript framework
   - Couchbase TypeScript framework
@@ -39,9 +40,9 @@ Like SQL clients, ODM connections belong in a setup function you call once with 
             items: ["databasePlugin(app)", "onClose"],
           },
           {
-            title: "ODM connection & models",
+            title: "ODM or driver client",
             detail: "Schemas, validation, query helpers",
-            items: ["Mongoose", "Ottoman"],
+            items: ["Mongoose", "MongoDB driver", "Ottoman"],
             tone: "muted",
           },
           {
@@ -81,6 +82,7 @@ await databasePlugin(app);
 ## Pick your ODM
 
 - [Mongoose](/docs/odm/mongoose): mature schemas, middleware, validation, and session support for MongoDB.
+- [MongoDB Node.js driver](/docs/odm/mongodb): the official driver with no model layer; Zod schemas, typed collections, and transactions.
 - [Ottoman](/docs/odm/ottoman): schema and model layer for Couchbase buckets, scopes, and collections.
 
 ## Runtime compatibility cheat sheet
@@ -88,9 +90,10 @@ await databasePlugin(app);
 | ODM | Node.js | Bun | Deno | Vercel (Node) | AWS Lambda | Azure Functions | Cloudflare Workers |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Mongoose 9 | Yes | Not verified | Alpha (per the Mongoose README) | Not verified | Not verified | Not verified | No |
+| MongoDB driver 7 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | Not verified |
 | Ottoman 2 | Yes | Not verified | Not verified | Not verified | Not verified | Not verified | No |
 
-Vercel Functions (Node.js runtime), AWS Lambda, and Azure Functions run on Node.js, so both ODMs are expected to load there, but we have not verified them end to end and connection reuse is your job (see the [lifecycle notes](/docs/orm#serverless-lifecycle)). Mongoose and Ottoman both depend on Node.js database drivers that open long-lived TCP connections, so they are primarily Node.js choices. If you need a portable edge-friendly database layer, stay in the SQL-oriented [ORM section](/docs/orm) and choose a compatible client there.
+Vercel Functions (Node.js runtime), AWS Lambda, and Azure Functions run on Node.js, so these libraries are expected to load there, but we have not verified them end to end and connection reuse is your job (see the [lifecycle notes](/docs/orm#serverless-lifecycle)). Mongoose, the MongoDB driver, and Ottoman all depend on Node.js database drivers that open long-lived TCP connections, so they are primarily Node.js choices. If you need a portable edge-friendly database layer, stay in the SQL-oriented [ORM section](/docs/orm) and choose a compatible client there.
 
 ## Typing the decorated client
 
@@ -133,8 +136,30 @@ handler: async ({ body, state }) => {
 
 Pick fields explicitly when you write. Spreading `{ ...body }` into `create()` is safe only because `z.object()` strips unknown keys before the handler runs; a `z.looseObject()` or `.passthrough()` write schema would let a client set any field on the document (mass assignment).
 
+## Readiness that pings the database [#readiness]
+
+Pass `checks` to `app.readinesscheck()` so the orchestrator pulls an instance that cannot reach MongoDB. Each check receives an `AbortSignal`, runs concurrently with the others, and fails the probe (`503`) if it throws, rejects, returns `false`, or exceeds `checkTimeoutMs` (default `2000`).
+
+```ts
+import mongoose from "mongoose";
+
+app.readinesscheck({
+  token: process.env.HEALTH_TOKEN!,
+  checks: {
+    db: async (signal) => {
+      // connection.db is the underlying driver Db; signal support is experimental there.
+      await mongoose.connection.db!.command({ ping: 1 }, { signal });
+    },
+  },
+  checkTimeoutMs: 2000,
+});
+```
+
+The probe body stays `{ status: "not-ready" }`; the failing check and its error are logged server-side, not returned. Keep liveness on `app.healthcheck()`, which never touches the database. See [lifecycle and health](/docs/security/lifecycle-health).
+
 ## Next steps
 
 - [Mongoose guide](/docs/odm/mongoose)
+- [MongoDB driver guide](/docs/odm/mongodb)
 - [Ottoman guide](/docs/odm/ottoman)
 - [SQL ORM overview](/docs/orm)

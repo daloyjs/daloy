@@ -17,6 +17,24 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `app.readinesscheck({ checks, checkTimeoutMs })`: named dependency checks
+  for the readiness probe. Each check receives an `AbortSignal`, all run
+  concurrently after the draining and plugin checks, and the probe answers
+  `503` when any returns `false`, throws, rejects, or exceeds
+  `checkTimeoutMs` (default 2000, max 60000). The `503` body stays
+  `{ "status": "not-ready" }` whichever check failed; the check name and
+  error are logged as `readiness.check_failed` and never returned. A check
+  that rejects after its timeout is observed, so it cannot surface as an
+  `unhandledRejection` (which crashes production apps). Check names must
+  match `[A-Za-z0-9_.-]{1,64}`; malformed options throw at registration.
+  New exported types: `ReadinessCheck`, `ReadinessCheckOptions`.
+- Docs: Kysely, MongoDB native driver, Azure databases, Cloudflare Email
+  Service, Azure Communication Services Email, PayPal, Paddle, and
+  Checkout.com guides; ORM and database readiness examples use the new
+  `checks` option.
+
 ## [1.12.0] - 2026-10-15
 
 ### Added

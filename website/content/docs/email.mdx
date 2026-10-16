@@ -1,6 +1,6 @@
 ---
 title: Email integrations for DaloyJS
-description: Send email from DaloyJS with SES, SendGrid, Resend, Postmark, Mailgun, or Mailtrap. Shared sender, open-relay rules, queueing, webhooks, and deliverability.
+description: Send email from DaloyJS with SES, SendGrid, Resend, Postmark, Mailgun, Mailtrap, Cloudflare, or Azure. Shared sender, open-relay rules, queues, and webhooks.
 keywords:
   - DaloyJS email
   - transactional email Node.js
@@ -10,6 +10,8 @@ keywords:
   - Postmark DaloyJS
   - Mailgun DaloyJS
   - Mailtrap DaloyJS
+  - Cloudflare Email Service DaloyJS
+  - Azure Communication Services email
   - email webhooks bounces
   - email deliverability DMARC
 sitemap:
@@ -18,9 +20,9 @@ sitemap:
 
 # Email integrations
 
-DaloyJS doesn't ship its own email transport. You write one small `EmailSender` per provider, decorate the root app with it (handlers read it as `ctx.state.email`), and call it from route handlers or, better, from a background job. This page holds everything the six provider guides share: the sender contract, the rules that stop your send route from becoming an open relay, HTML escaping, queueing, webhooks for bounces and complaints, deliverability, and testing. The provider pages only cover what is different.
+DaloyJS doesn't ship its own email transport. You write one small `EmailSender` per provider, decorate the root app with it (handlers read it as `ctx.state.email`), and call it from route handlers or, better, from a background job. This page holds everything the eight provider guides share: the sender contract, the rules that stop your send route from becoming an open relay, HTML escaping, queueing, webhooks for bounces and complaints, deliverability, and testing. The provider pages only cover what is different.
 
-<BranchDiagram title="One EmailSender, six providers" source={{
+<BranchDiagram title="One EmailSender, eight providers" source={{
           eyebrow: "your app",
           label: "EmailSender interface",
           detail: "send(msg): Promise<{ id }>",
@@ -35,6 +37,16 @@ DaloyJS doesn't ship its own email transport. You write one small `EmailSender` 
           { eyebrow: "inbox-first", label: "Postmark", detail: "postmark" },
           { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
           { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
+          {
+            eyebrow: "Workers",
+            label: "Cloudflare Email Service",
+            detail: "send_email binding",
+          },
+          {
+            eyebrow: "Azure",
+            label: "Azure Communication Services",
+            detail: "@azure/communication-email",
+          },
         ]} caption="A plugin function decorates the root app with a provider sender behind a shared EmailSender contract. Route handlers and job handlers call it without depending on which provider is wired in." />
 
 ## Supported providers
@@ -45,10 +57,12 @@ DaloyJS doesn't ship its own email transport. You write one small `EmailSender` 
 - [Postmark](/docs/email/postmark): transactional-first delivery via the `postmark` SDK, with separate message streams for transactional and broadcast mail.
 - [Mailgun](/docs/email/mailgun): Sinch-backed sender via `mailgun.js`. Validation, routing, and US/EU regions.
 - [Mailtrap](/docs/email/mailtrap): sandbox plus production sending via the `mailtrap` SDK. Captures mail in a test inbox until you explicitly switch to production.
+- [Cloudflare Email Service](/docs/email/cloudflare): send from a Worker through the `send_email` binding (no API key), with recipient-locked bindings, delivery events on Cloudflare Queues, and inbound mail through Email Routing. Email Sending is in public beta.
+- [Azure Communication Services](/docs/email/azure-communication-services): ACS Email via `@azure/communication-email` with managed identity and Event Grid delivery reports, on the Azure Functions adapter. Microsoft is retiring ACS Email on September 30, 2028, so prefer another provider for new projects.
 
 ## Runtime and feature matrix [#runtime-compatibility-at-a-glance]
 
-Every provider here speaks HTTPS+JSON. Some SDKs depend on Node-only pieces (axios with Node `http`/`https` agents, the AWS default credential chain), so on Cloudflare Workers you either use a fetch-based SDK or call the REST API through [`resilientFetch`](#calling-a-rest-api-with-fetch).
+Every provider here sends over an HTTPS API (Cloudflare also offers a Workers binding). Some SDKs depend on Node-only pieces (axios with Node `http`/`https` agents, the AWS default credential chain), so on Cloudflare Workers you either use a fetch-based SDK or call the REST API through [`resilientFetch`](#calling-a-rest-api-with-fetch).
 
 | Provider | Node / Bun / Deno | Cloudflare Workers | AWS Lambda | Webhook signing | Native idempotency key |
 | --- | --- | --- | --- | --- | --- |
@@ -58,6 +72,8 @@ Every provider here speaks HTTPS+JSON. Some SDKs depend on Node-only pieces (axi
 | Postmark | Yes | SDK v5 is fetch-based and takes a custom `fetch`; REST via `resilientFetch` is the conservative path | Yes | None: Basic Auth in the webhook URL, optional IP allowlist | Not documented |
 | Mailgun | Yes | Yes with `useFetch: true` (v12.1+) | Yes | HMAC-SHA256 of `timestamp + token` | Not documented |
 | Mailtrap | Yes | REST via `resilientFetch` (SDK uses axios with Node agents) | Yes | HMAC-SHA256 of the raw body (`Mailtrap-Signature`) | Not documented |
+| Cloudflare Email Service | REST API with a scoped API token | Yes (native `send_email` binding, no key) | REST API with a scoped API token | No webhook: delivery events arrive on a Cloudflare Queue through an event subscription, so there is no public endpoint | Not documented |
+| Azure Communication Services | Node: yes; Bun and Deno not verified | Not verified | Yes (service principal or connection string) | Unsigned Event Grid events: validation handshake plus a Microsoft Entra bearer token (or a secret header), or the Functions Event Grid trigger with no route of yours | Not documented (`operationId` only names the operation) |
 
 "Not documented" means the provider's public send API has no idempotency key we could find. Rely on the [job queue's idempotency key](#send-off-the-request-path) instead and never blindly retry a send that may have reached the provider.
 
@@ -287,7 +303,7 @@ await app.jobs!.enqueue({
 });
 ```
 
-- The worker loop belongs on a long-lived process. On AWS Lambda, enqueue into SQS and let a Lambda consumer send. On Cloudflare Workers, use Cloudflare Queues with a consumer Worker. See [where jobs run](/docs/jobs#topology-d).
+- The worker loop belongs on a long-lived process. On AWS Lambda, enqueue into SQS and let a Lambda consumer send. On Cloudflare Workers, use Cloudflare Queues with a consumer Worker ([example](/docs/email/cloudflare#queued-sending)). On Azure Functions, use a Storage queue and a queue trigger ([example](/docs/email/azure-communication-services#queued-sending)). See [where jobs run](/docs/jobs#topology-d).
 - Delivery is at least once. The job's idempotency key stops duplicate enqueues; the provider's own key (Resend) or your `isUndeliverable` / "already sent" check stops a duplicate run.
 - For client-facing retries on the HTTP route itself, add the [`idempotency()` middleware](/docs/idempotency).
 
@@ -316,7 +332,7 @@ export const providerFetch = resilientFetch({
 
 ## Bounces, complaints, and suppression [#webhooks]
 
-Every provider reports delivery events (bounces, spam complaints, unsubscribes) to a webhook you host. Process them, or you keep mailing dead and hostile addresses until the provider throttles you. Each provider page has a "Webhooks: bounces and complaints" section with a real route; they all follow the same shape:
+Every provider reports delivery events (bounces, spam complaints, unsubscribes) to a webhook you host (Cloudflare publishes them to a Queue instead, and ACS through Event Grid). Process them, or you keep mailing dead and hostile addresses until the provider throttles you. Each provider page has a "Webhooks: bounces and complaints" section with a real route; they all follow the same shape:
 
 <FlowDiagram title="Provider webhook, the safe way" numbered steps={[
           {
@@ -349,7 +365,7 @@ Every provider reports delivery events (bounces, spam complaints, unsubscribes) 
         ]} caption="Verify on the raw bytes before parsing, dedupe on the provider's event id through the job queue, acknowledge quickly so the provider does not retry or disable the endpoint, and update your own suppression data in the worker." />
 
 1. Declare the route **without** a body schema and read the bytes with `readBodyLimited(request, 1_048_576)`. Signatures cover the exact bytes; parsing and re-serializing JSON breaks them.
-2. Verify before you trust anything. `verifyWebhookSignature()` from core covers the HMAC schemes (Mailgun, Mailtrap, and a manual Resend check). SendGrid signs with ECDSA and SES with RSA certificates, so those pages use `node:crypto`. Postmark has no signatures at all and relies on Basic Auth.
+2. Verify before you trust anything. `verifyWebhookSignature()` from core covers the HMAC schemes (Mailgun, Mailtrap, and a manual Resend check). SendGrid signs with ECDSA and SES with RSA certificates, so those pages use `node:crypto`. Postmark has no signatures at all and relies on Basic Auth. Event Grid (ACS) sends a Microsoft Entra bearer token that `jwk()` verifies.
 3. Parse with `safeJsonParse()` (prototype-pollution safe) only after verification.
 4. Enqueue one `email.suppress` job per hard bounce or complaint, keyed by the provider's event id, and return 2xx. Duplicate deliveries of the same event collapse into the existing job.
 5. Keep your own "undeliverable" flag even though every provider also keeps a suppression list. Your flag lets you stop at enqueue time, show the user "we can't reach this address", and switch providers without losing history.
@@ -464,7 +480,7 @@ Inside a job handler, just rethrow: the worker logs it and retries with backoff.
 - **Don't build an open relay.** Contact forms send to a fixed internal address with the visitor only in `replyTo`. User-triggered mail requires authentication, and the server looks up the recipient and content ([details](#open-relay)).
 - **Escape every interpolated value in HTML bodies** with `escapeHtml()` or an auto-escaping template engine ([details](#escape-html)).
 - Validate inputs and reject CRLF in header fields. Treat `to`, `subject`, display names, `replyTo`, and any custom header value as untrusted. Use [DaloyJS validation](/docs/validation) with `z.email()` for addresses and the `headerSafe` schema for every other header-bound string. This is the classic SMTP / email header injection vector (Snyk's write-up [Avoiding SMTP Injection](https://snyk.io/blog/avoiding-smtp-injection/) documents library-level CVEs that were fixed upstream, but the application-level rule still applies whenever you forward user input into mail headers).
-- Prefer HTTPS provider APIs over raw SMTP libraries. The six providers documented here all speak HTTPS+JSON, so the CRLF-in-SMTP-command class of bug (`smtp-client`, `smtp-channel`, `aiosmtplib` `source_address`) doesn't reach the wire. If you must use a raw SMTP client, validate every field, including hostname and source address.
+- Prefer HTTPS provider APIs over raw SMTP libraries. Every provider documented here sends over an HTTPS API or a platform binding, so the CRLF-in-SMTP-command class of bug (`smtp-client`, `smtp-channel`, `aiosmtplib` `source_address`) doesn't reach the wire. If you must use a raw SMTP client, validate every field, including hostname and source address.
 - Rate-limit each send route through its own `hooks`, add a per-user or per-recipient limiter, and put bot friction on public forms ([details](#rate-limiting)).
 - Verify every provider webhook on the raw body before trusting it, dedupe on the event id, and suppress hard bounces and complaints ([details](#webhooks)).
 - Never echo provider errors to clients ([details](#errors)).

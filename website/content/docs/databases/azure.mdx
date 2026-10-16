@@ -1,0 +1,398 @@
+---
+title: Azure databases
+description: Connect a DaloyJS API on Azure Functions or Container Apps to Azure PostgreSQL, Azure SQL, or Cosmos DB with managed identity, Entra tokens, and small pools.
+keywords:
+  - Azure Database for PostgreSQL DaloyJS
+  - Azure SQL Database Node.js
+  - Azure Cosmos DB DaloyJS
+  - managed identity Postgres
+  - Microsoft Entra ID database auth
+  - DefaultAzureCredential pg
+  - mssql token-credential
+  - Azure Functions database pool
+---
+
+# Azure databases
+
+This page connects a DaloyJS API on Azure to the three Azure databases you are most likely to meet: **Azure Database for PostgreSQL Flexible Server** with `pg`, **Azure SQL Database** with `mssql`, and **Azure Cosmos DB** with `@azure/cosmos`. All three accept Microsoft Entra ID tokens, so the app can authenticate with its **managed identity** and keep no database password at all. Pair it with the [Azure Functions adapter](/docs/adapters/azure-functions), or with the [Node adapter](/docs/adapters/node) on Azure Container Apps or App Service.
+
+<SequenceDiagram title="Passwordless connection with a managed identity" participants={["DaloyJS app", "Microsoft Entra ID", "Database"]} steps={[
+          {
+            from: "DaloyJS app",
+            to: "Microsoft Entra ID",
+            label: "credential.getToken(scope)",
+            detail: "managed identity · one credential per process",
+            kind: "request",
+          },
+          {
+            from: "Microsoft Entra ID",
+            to: "DaloyJS app",
+            label: "Short-lived access token",
+            detail: "never logged, never stored",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS app",
+            to: "Database",
+            label: "Open a pooled connection",
+            detail: "token as the password (Postgres) or federated auth (SQL)",
+            kind: "request",
+          },
+          {
+            from: "Database",
+            to: "DaloyJS app",
+            label: "Session for a least-privilege role",
+            detail: "reused by later requests until the pool retires it",
+            kind: "response",
+          },
+        ]} caption="The pool asks for a token only when it opens a connection. The identity maps to a database role that can read and write data, nothing more." />
+
+## Pick the database
+
+| Database | Driver | Entra auth | Pooling |
+| --- | --- | --- | --- |
+| Azure Database for PostgreSQL Flexible Server | `pg` | Token as the password, scope `https://ossrdbms-aad.database.windows.net/.default` | `pg.Pool`, plus the built-in PgBouncer on port 6432 |
+| Azure SQL Database | `mssql` (tedious) | `token-credential` with an `@azure/identity` credential | `mssql` `ConnectionPool` |
+| Azure Cosmos DB for NoSQL | `@azure/cosmos` | `aadCredentials` on `CosmosClient` | HTTP, one client per process |
+| Azure Cosmos DB for MongoDB | `mongodb` / Mongoose | Check your tier | Driver pool; see [MongoDB](/docs/odm/mongodb) |
+
+## Managed identity first
+
+Turn on a **system-assigned** or **user-assigned** managed identity for the Function App, Container App, or App Service app, then let `@azure/identity` fetch tokens for it. `DefaultAzureCredential` tries a chain of sources: in Azure it lands on the managed identity, and on your laptop it uses your `az login` session, so the same code runs in both places.
+
+```package-install
+@azure/identity
+```
+
+```ts title="src/db/credential.ts"
+import { DefaultAzureCredential } from "@azure/identity";
+
+// One credential per process: it caches tokens and refreshes them before expiry.
+// For a user-assigned identity, pass its client ID.
+export const credential = new DefaultAzureCredential(
+  process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : undefined,
+);
+```
+
+If you want production to fail loudly instead of falling through the chain, use `ManagedIdentityCredential` there and keep `DefaultAzureCredential` for local development.
+
+## Azure Database for PostgreSQL
+
+### 1. Turn on Entra auth and create a least-privilege role
+
+In the portal, under **Security > Authentication**, choose **PostgreSQL and Microsoft Entra authentication** (or Entra only) and add a Microsoft Entra admin. Use that admin for setup and migrations, not for application traffic: it is a member of `azure_pg_admin` with `CREATEROLE` and `CREATEDB`.
+
+Connect as the Entra admin (for example with `psql` and `PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)`), connected to the `postgres` database, and create a role mapped to the app's managed identity. The role name must match the identity's display name (for a system-assigned identity, that is the app's name):
+
+```sql
+SELECT * FROM pgaadauth_create_principal('my-api-identity', false, false);
+```
+
+The two `false` arguments mean "not an admin" and "no MFA claim required". Then, connected to your application database, grant only data access:
+
+```sql
+GRANT CONNECT ON DATABASE app TO "my-api-identity";
+GRANT USAGE ON SCHEMA app TO "my-api-identity";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO "my-api-identity";
+ALTER DEFAULT PRIVILEGES IN SCHEMA app
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "my-api-identity";
+```
+
+`ALTER DEFAULT PRIVILEGES` covers tables created later by the role that runs it, so run it as the role your migrations use. `pgaadauth_list_principals(false)` lists the Entra roles; `DROP ROLE` removes one. If you would rather name the role yourself, `pgaadauth_create_principal_with_oid(roleName, objectId, 'service', false, false)` maps it to the identity's object ID.
+
+### 2. Install
+
+```package-install
+pg @azure/identity
+```
+
+```package-install dev
+@types/pg
+```
+
+### 3. A module-scope pool with a token callback
+
+`pg` accepts `password` as a function and calls it for every **new** connection, so each connection gets a current token without you managing expiry. Microsoft documents these tokens as valid for 5 to 60 minutes, and reusing one credential lets it serve a cached token while it is still fresh.
+
+```ts title="src/db/postgres.ts"
+import { Pool } from "pg";
+import { credential } from "./credential.ts";
+
+const PG_SCOPE = "https://ossrdbms-aad.database.windows.net/.default";
+
+const host = process.env.AZURE_POSTGRESQL_HOST; // myserver.postgres.database.azure.com
+const user = process.env.AZURE_POSTGRESQL_USER; // the role created above
+if (!host || !user) throw new Error("AZURE_POSTGRESQL_HOST and AZURE_POSTGRESQL_USER must be set");
+
+export const pool = new Pool({
+  host,
+  port: Number(process.env.AZURE_POSTGRESQL_PORT ?? 5432), // 6432 for the built-in PgBouncer
+  user,
+  database: process.env.AZURE_POSTGRESQL_DATABASE ?? "app",
+  // Called for every new connection. Never log the returned token.
+  password: async () => {
+    const accessToken = await credential.getToken(PG_SCOPE);
+    if (!accessToken) throw new Error("No Entra token for Azure Database for PostgreSQL");
+    return accessToken.token;
+  },
+  // The server requires TLS by default (require_secure_transport = ON). Keep verification on.
+  ssl: { rejectUnauthorized: true },
+  max: 5,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+  // Retire connections periodically so none outlives a revoked grant or a failover by long.
+  maxLifetimeSeconds: 30 * 60,
+});
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    db: Pool;
+  }
+}
+```
+
+Keep the `declare module` block in the module that creates the pool, not in a `.d.ts` file, so a broken import cannot silently turn `state.db` into `any` under `skipLibCheck`.
+
+<Callout type="security" title="Keep TLS verification on">Do not set `rejectUnauthorized: false` to get past a certificate error. Node's bundled CA store covers the public roots Azure uses; if verification still fails (for example after a root rotation), load the root certificates Microsoft lists for Azure Database for PostgreSQL with `ssl: { ca }` instead of turning checks off.</Callout>
+
+### Connection limits and the built-in PgBouncer
+
+Postgres uses a process per connection, and `max_connections` depends on the compute size you pick, so check the server parameter before you scale out. Every running instance holds its own pool: 20 Function instances with `max: 5` can open 100 connections.
+
+Flexible Server ships PgBouncer as a built-in pooler on **port 6432** of the same host. Turn it on with the `pgbouncer.enabled` server parameter (no restart), then point `AZURE_POSTGRESQL_PORT` at `6432`. It supports Entra authentication, defaults to **transaction** pooling, and is not available on the Burstable tier. In transaction mode, avoid session state across statements (`SET`, advisory locks, `LISTEN`, temporary tables); protocol-level prepared statements work only when `pgbouncer.max_prepared_statements` is above `0`.
+
+### 4. Wire it into the app
+
+On **Container Apps or App Service** (the [Node adapter](/docs/adapters/node)), the process is long-lived: decorate the pool and drain it on shutdown.
+
+```ts title="src/db/plugin.ts"
+import type { App } from "@daloyjs/core";
+import { pool } from "./postgres.ts";
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function postgresPlugin(app: App) {
+  app.decorate("db", pool);
+  // Runs on the Node, Bun, and Deno adapters after in-flight requests drain.
+  app.onClose(async () => {
+    await pool.end();
+  });
+}
+```
+
+On **Azure Functions**, shutdown hooks (`app.onClose`, `app.onShutdown`) are not wired: the platform owns the process and can scale an instance in without notice. Create the pool at module scope so warm invocations reuse it, keep `max` small, and let the idle timeout drop connections from a frozen instance.
+
+```ts title="src/functions/api.ts"
+import { app as azure } from "@azure/functions";
+import { App } from "@daloyjs/core";
+import { toAzureHandler } from "@daloyjs/core/azure";
+import { pool } from "../db/postgres.js";
+
+const app = new App({ behindProxy: { hops: 1 } });
+app.decorate("db", pool);
+
+// ...register routes that read state.db
+
+azure.http("api", {
+  route: "{*path}",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: toAzureHandler(app),
+});
+```
+
+Read client IPs through `behindProxy` (add a hop for Front Door or API Management); see [Client IP on Azure Functions](/docs/adapters/azure-functions#client-ip).
+
+### With Drizzle or Prisma
+
+The token-refreshing pool drops straight into a query layer: `drizzle({ client: pool })` from `drizzle-orm/node-postgres` (see [Drizzle](/docs/orm/drizzle)), or `new PrismaPg(pool)` from `@prisma/adapter-pg` passed to `new PrismaClient({ adapter })` (see [Prisma](/docs/orm/prisma)). Run migrations from CI as the Entra admin or a dedicated migration role, never as the app role.
+
+## Azure SQL Database
+
+### 1. Create a contained user for the identity
+
+Set a Microsoft Entra admin on the logical server, connect to the **application database** as that admin, and create a user for the managed identity with only the data roles it needs:
+
+```sql
+CREATE USER [my-api-identity] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [my-api-identity];
+ALTER ROLE db_datawriter ADD MEMBER [my-api-identity];
+```
+
+Do not add the app to `db_owner` or `db_ddladmin`; keep schema changes in the migration pipeline. For tighter control, `GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::app TO [my-api-identity];` instead of the fixed roles.
+
+### 2. Install
+
+```package-install
+mssql @azure/identity
+```
+
+```package-install dev
+@types/mssql
+```
+
+### 3. A pool that authenticates with the credential
+
+`mssql` uses the tedious driver, which supports several Entra authentication types. Prefer `token-credential` with the shared credential from above: tedious asks it for a token on every new connection, and the server tells the driver which scope to request. The `azure-active-directory-default` type (`options: { clientId }`) also works, but tedious 20 builds a new `DefaultAzureCredential` for each connection, so the token cache is not shared. `azure-active-directory-access-token` takes a fixed token string and fails once that token expires, so avoid it for pools.
+
+```ts title="src/db/sql.ts"
+import sql from "mssql";
+import { credential } from "./credential.ts";
+
+const server = process.env.AZURE_SQL_SERVER; // myserver.database.windows.net
+if (!server) throw new Error("AZURE_SQL_SERVER is not set");
+
+const pool = new sql.ConnectionPool({
+  server,
+  database: process.env.AZURE_SQL_DATABASE ?? "app",
+  authentication: { type: "token-credential", options: { credential } },
+  options: { encrypt: true, trustServerCertificate: false },
+  pool: { max: 5, min: 0, idleTimeoutMillis: 30_000 },
+  connectionTimeout: 15_000,
+  requestTimeout: 15_000,
+});
+
+let connecting: Promise<sql.ConnectionPool> | undefined;
+
+/** Connects once per process; a failed connect is retried on the next call. */
+export function getSqlPool(): Promise<sql.ConnectionPool> {
+  connecting ??= pool.connect().catch((err) => {
+    connecting = undefined;
+    throw err;
+  });
+  return connecting;
+}
+
+export async function closeSqlPool(): Promise<void> {
+  if (connecting) await pool.close();
+}
+```
+
+Always bind values with `request.input()`. Never build SQL by concatenating request data:
+
+```ts title="src/routes/users.ts"
+import sql from "mssql";
+import { getSqlPool } from "../db/sql.ts";
+
+export async function findUser(id: number) {
+  const pool = await getSqlPool();
+  const result = await pool
+    .request()
+    .input("id", sql.Int, id)
+    .query<{ id: number; email: string }>("SELECT id, email FROM app.users WHERE id = @id");
+  return result.recordset[0];
+}
+```
+
+The lifecycle rules match Postgres: on Container Apps or App Service, call `closeSqlPool()` from `app.onClose()`; on Azure Functions, keep the module-scope pool and a small `max`. On the serverless compute tier, a paused database can take a while to resume, so the first connection after idle may be slow or fail once; keep `connectionTimeout` generous and let the client retry.
+
+## Azure Cosmos DB
+
+### Cosmos DB for NoSQL
+
+Use `@azure/cosmos` with `aadCredentials`. Cosmos DB has its own **data-plane** role-based access control: Azure control-plane roles such as Contributor do not grant access to items. Assign the built-in `Cosmos DB Built-in Data Reader` or `Cosmos DB Built-in Data Contributor` role to the identity with `az cosmosdb sql role assignment create`, scoped to the narrowest path you can (`/dbs/app/colls/orders` rather than `/`), and set `disableLocalAuth` on the account so account keys stop working.
+
+```package-install
+@azure/cosmos @azure/identity
+```
+
+```ts title="src/db/cosmos.ts"
+import { CosmosClient } from "@azure/cosmos";
+import { credential } from "./credential.ts";
+
+const endpoint = process.env.COSMOS_ENDPOINT; // https://myaccount.documents.azure.com:443/
+if (!endpoint) throw new Error("COSMOS_ENDPOINT is not set");
+
+// One client per process: it keeps connections and routing metadata warm.
+export const cosmos = new CosmosClient({ endpoint, aadCredentials: credential });
+export const orders = cosmos.database("app").container("orders");
+```
+
+```ts title="src/routes/orders.ts"
+import { orders } from "../db/cosmos.ts";
+
+export async function getOrder(tenantId: string, id: string) {
+  // A point read with id + partition key is the cheapest operation Cosmos DB has.
+  const { resource } = await orders.item(id, tenantId).read();
+  return resource;
+}
+
+export async function listOrders(tenantId: string) {
+  const { resources, requestCharge } = await orders.items
+    .query(
+      { query: "SELECT * FROM c WHERE c.tenantId = @tenantId", parameters: [{ name: "@tenantId", value: tenantId }] },
+      { partitionKey: tenantId, maxItemCount: 50 },
+    )
+    .fetchNext();
+  return { resources, requestCharge };
+}
+```
+
+- **Partition keys.** Pick one with many distinct values that most queries filter on (a tenant or user ID is typical). A query without the partition key fans out across partitions and costs more.
+- **Request units.** Every response reports `requestCharge`. Log it for hot routes, page with `maxItemCount`, and treat `429` (throttled) as a capacity signal: the SDK retries throttled requests, but sustained `429`s mean the provisioned or serverless budget is too small.
+- **Parameters, always.** Pass values through `parameters` as above, never by building the query string from request data.
+- On Container Apps or App Service, call `cosmos.dispose()` from `app.onClose()`; on Azure Functions, keep the module-scope client.
+
+### Cosmos DB for MongoDB
+
+For the MongoDB-compatible offerings (vCore or RU), use the MongoDB driver or Mongoose: see [MongoDB](/docs/odm/mongodb) and [Mongoose](/docs/odm/mongoose). Check whether your tier supports Microsoft Entra authentication before you plan around it; if it only accepts a connection string, keep that string in Key Vault as described below.
+
+## Secrets and identity
+
+- **Prefer managed identity over connection strings.** With the patterns above there is no database password to leak, rotate, or commit. Grant each app its own identity and its own database role, so revoking one app does not touch the others.
+- **Use Key Vault references for what is left.** App Service and Azure Functions resolve app settings written as `@Microsoft.KeyVault(SecretUri=https://myvault.vault.azure.net/secrets/mysecret)` (or `@Microsoft.KeyVault(VaultName=myvault;SecretName=mysecret)`) at startup, so the code reads a normal environment variable. Give the app's identity the **Key Vault Secrets User** role. Without a version in the URI, a rotated secret is picked up within 24 hours, or immediately after any configuration change to the app. On Container Apps, use its secrets feature (which can also point at Key Vault; check the Container Apps docs for your setup).
+- **Never log tokens or connection strings.** Do not log the value returned by `getToken()`, a `password` callback, or a full connection string, and do not put them in error messages. Never echo driver errors to clients either: they can contain hostnames, role names, and SQL. DaloyJS redacts 5xx `detail` in production, so let unexpected errors throw and log them server-side.
+- **Keep the admin out of the app.** The Entra admin of each server belongs to people and the migration pipeline, never to the runtime identity.
+
+## Readiness checks
+
+`app.readinesscheck()` can run your database checks for you. Each check gets an `AbortSignal`, the checks run concurrently, and the probe answers `503` with the body `{ status: "not-ready" }` when a check throws, rejects, returns `false`, or exceeds `checkTimeoutMs` (default 2000 ms). Failure details are logged server-side, not returned.
+
+```ts title="src/ready.ts"
+import type { App } from "@daloyjs/core";
+import { pool } from "./db/postgres.ts";
+import { getSqlPool } from "./db/sql.ts";
+import { cosmos } from "./db/cosmos.ts";
+
+export function readiness(app: App) {
+  app.readinesscheck({
+    token: process.env.READY_TOKEN,
+    checks: {
+      postgres: async () => {
+        await pool.query("select 1");
+      },
+      sql: async (signal) => {
+        const request = (await getSqlPool()).request();
+        signal.addEventListener("abort", () => request.cancel(), { once: true });
+        await request.query("SELECT 1");
+      },
+      cosmos: async (signal) => {
+        await cosmos.database("app").container("orders").read({ abortSignal: signal });
+      },
+    },
+    checkTimeoutMs: 2000,
+  });
+}
+```
+
+Keep only the checks for databases the app actually uses. On Container Apps, point the **readiness** probe at `/readyz`, not the liveness probe: a database outage should take a replica out of rotation, not restart every replica at once. The probe needs to send the bearer token, so use a probe type that supports headers, or keep the route on an internal-only path. See [Lifecycle & health](/docs/security/lifecycle-health).
+
+## Region placement
+
+Put the Function App or Container App in the **same region** as the database, and in the same virtual network when you use private access. Cross-region round trips usually cost more than the query. For far-away readers, add PostgreSQL read replicas, Azure SQL geo-replicas, or extra Cosmos DB regions, and connect each regional deployment to its nearest copy.
+
+## Local development
+
+- **Tokens.** Run `az login`; `DefaultAzureCredential` then uses your Azure CLI session, so the pool code above works against a real Azure database from your laptop. Your own Entra user needs a database role, created the same way as the app's.
+- **Postgres in Docker.** For offline work, run `postgres` in Docker and give the pool a plain password from a local-only variable (for example `LOCAL_PGPASSWORD`) instead of the token callback, with `ssl` off only for `localhost`. Keep the same schema and migrations as production.
+- **SQL Server in Docker.** The `mcr.microsoft.com/mssql/server` image accepts SQL authentication locally (`user` and `password` instead of `authentication`, plus `trustServerCertificate: true` for its self-signed certificate, local only).
+- **Cosmos DB.** Microsoft ships an Azure Cosmos DB emulator for local development; check its current feature list against the API you use.
+
+## Things to remember
+
+- One credential, one pool or client per process; tokens are fetched per new connection, never per request.
+- Azure Functions has no shutdown hook, so `onClose()` never runs there; small `max`, idle timeouts, and module scope do the work.
+- The app identity gets data access only. Migrations run with the admin or a migration role from CI.
+- Cloudflare Workers are not covered here. To reach Azure Postgres from a Worker, use [Hyperdrive](/docs/databases/hyperdrive) with a password-based role, since Hyperdrive stores static credentials.
+
+See also the [database hosting overview](/docs/databases), the [Azure Functions adapter](/docs/adapters/azure-functions), and [AWS Aurora DSQL](/docs/databases/aurora-dsql) for the same token-auth pattern on AWS.

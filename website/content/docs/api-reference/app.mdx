@@ -104,7 +104,7 @@ app.onClose           (cleanup:  () => void | Promise<void>): App
 
 // Built-in routes
 app.healthcheck    (opts?: HealthRouteOptions): App     // GET /healthz by default (opts.path to override)
-app.readinesscheck (opts?: HealthRouteOptions): App     // GET /readyz   by default (opts.path to override)
+app.readinesscheck (opts?: ReadinessCheckOptions): App  // GET /readyz   by default; opts.checks adds dependency checks (1.13.0)
 app.cspReportRoute (opts?: CspReportRouteOptions): App
 
 // Dispatch + introspection

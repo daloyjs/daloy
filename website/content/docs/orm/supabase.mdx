@@ -266,6 +266,6 @@ The same client exposes `storage`, `functions`, and `realtime`. Use them inside 
 
 The client is fetch-based and holds no connection pool, so there is nothing to close on Lambda, Vercel, Azure Functions, or Workers. If you also connect to the Supabase Postgres directly (Drizzle, Prisma), read [Serverless and edge lifecycle](/docs/orm#serverless-lifecycle) and use Supabase's pooler.
 
-Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) for document databases.
+Compare with [Prisma](/docs/orm/prisma), [Drizzle](/docs/orm/drizzle), [Kysely](/docs/orm/kysely), [TypeORM](/docs/orm/typeorm), [MikroORM](/docs/orm/mikro-orm), [Sequelize](/docs/orm/sequelize), or the [ODM overview](/docs/odm) for document databases.
 
 For other managed Postgres / MySQL hosts, [Neon](/docs/databases/neon), [PlanetScale](/docs/databases/planetscale), [Turso](/docs/databases/turso), [Cloudflare D1](/docs/databases/cloudflare-d1), and [Aurora DSQL](/docs/databases/aurora-dsql): see the [database hosting overview](/docs/databases).

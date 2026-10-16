@@ -1,0 +1,581 @@
+---
+title: Accept payments with PayPal Checkout in DaloyJS
+description: "PayPal Checkout (Orders v2) from a DaloyJS API: cached OAuth tokens, server-side amounts, PayPal-Request-Id, capture on approval, verified webhooks, refunds."
+keywords:
+  - DaloyJS PayPal
+  - PayPal Orders v2
+  - PayPal Checkout Node
+  - PayPal webhook verification
+  - verify-webhook-signature
+  - PayPal-Request-Id
+  - "@paypal/paypal-server-sdk"
+---
+
+# Accept payments with PayPal Checkout in DaloyJS
+
+[PayPal Checkout](https://developer.paypal.com/checkout) lets shoppers pay with their PayPal balance, cards, Pay Later, and Venmo (US) through PayPal-hosted buttons. This guide talks to the [Orders v2 REST API](https://developer.paypal.com/docs/api/orders/v2/) with `fetch` (through core `resilientFetch`), so the same plugin runs on every DaloyJS runtime, and verifies webhooks with PayPal's `verify-webhook-signature` API. The official [`@paypal/paypal-server-sdk`](https://www.npmjs.com/package/@paypal/paypal-server-sdk) is covered as a Node alternative [further down](#server-sdk).
+
+If you already run a Braintree merchant account, PayPal wallets are also available through the [Braintree guide](/docs/payments/braintree). This page is for the direct PayPal REST integration.
+
+## What you should know up front
+
+- Your server creates and captures the order. The browser asks your API to create a PayPal order for one of your order ids, the PayPal JS SDK shows the approval flow, and your API captures the approved order. The amount and currency come from your stored order. See [never trust client amounts](/docs/payments#never-trust-client-amounts).
+- Authentication is OAuth 2.0 client credentials. Exchange the client id and secret at `/v1/oauth2/token` for a bearer token, cache it until shortly before `expires_in`, and request a new one when it expires.
+- Idempotency is a header. Send `PayPal-Request-Id` on `POST` calls (create order, capture, refund). PayPal stores the id for a period of time and returns the original result for a retry with the same id. Derive it from your order id and cart version, not a fresh UUID per call.
+- Amounts are decimal strings. `amount.value` is `"10.50"` for EUR, `"1000"` for JPY. Convert with the overview's `formatMinor()` and `toMinor()`, and check [PayPal's currency codes](https://developer.paypal.com/api/codes/currency) before you add a market, because PayPal does not support decimals for some currencies.
+- Webhooks are signed asymmetrically. PayPal signs with a certificate, not a shared HMAC secret, so core `verifyWebhookSignature()` does not apply. Either post the delivery back to `/v1/notifications/verify-webhook-signature` (works on every runtime) or [self-verify](#self-verification) with the certificate on Node.
+- Sandbox and live are separate. Different base URLs, different app credentials, and different webhook ids.
+
+| Environment | REST base URL | JS SDK v6 script |
+| --- | --- | --- |
+| Sandbox | `https://api-m.sandbox.paypal.com` | `https://www.sandbox.paypal.com/web-sdk/v6/core` |
+| Live | `https://api-m.paypal.com` | `https://www.paypal.com/web-sdk/v6/core` |
+
+## 1. Provision
+
+1. Sign in to the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/) and create a REST app under Apps and Credentials. Sandbox and live each have their own app.
+2. Copy the **Client ID** (public, ships to the browser) and the **Secret** (server only).
+3. In the app's webhook settings, add your endpoint (for example `https://your-app.example.com/webhooks/paypal`) and subscribe to `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.PENDING`, `PAYMENT.CAPTURE.DECLINED`, and `PAYMENT.CAPTURE.REFUNDED`.
+4. Copy the **Webhook ID** PayPal shows for that subscription. It is not in the webhook headers or body; verification needs it.
+5. Create sandbox buyer and seller accounts under Testing Tools so you can approve test payments.
+
+## 2. Install
+
+Nothing on the server: the plugin below is plain `fetch` plus core helpers. The browser loads the PayPal JS SDK from PayPal's CDN (step 6). Install the server SDK only if you choose the [SDK variant](#server-sdk) on Node:
+
+```package-install
+@paypal/paypal-server-sdk
+```
+
+Neither option is a runtime dependency of `@daloyjs/core`.
+
+## 3. Environment variables
+
+```dotenv title=".env"
+PAYPAL_ENVIRONMENT=sandbox                  # or live
+PAYPAL_CLIENT_ID=replace_me                 # public, also used by the JS SDK
+PAYPAL_CLIENT_SECRET=replace_me             # server only
+PAYPAL_WEBHOOK_ID=replace_me                # from the webhook subscription
+```
+
+Treat the client secret as a production credential. Keep sandbox and live values in separate environments so a sandbox webhook id can never verify against live.
+
+## 4. Plugin
+
+```ts title="src/plugins/paypal.ts"
+import { resilientFetch, safeJsonParse } from "@daloyjs/core";
+import type { App } from "@daloyjs/core";
+import { formatMinor } from "../money.ts";
+
+const BASE = process.env.PAYPAL_ENVIRONMENT === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+
+// GETs are retried by default. POSTs are retried only when they carry a
+// PayPal-Request-Id, which makes the retry return the original result.
+const getFetch = resilientFetch({ timeoutMs: 15_000, retries: 2 });
+const idempotentPostFetch = resilientFetch({ timeoutMs: 15_000, retries: 2, retryableMethods: ["GET", "POST"] });
+
+export class PayPalApiError extends Error {
+  constructor(readonly status: number, readonly debugId: string | null, readonly issue?: string) {
+    super(`paypal ${status}`);
+  }
+}
+
+// One cached token per process or isolate, refreshed a minute before expiry.
+let cachedToken: { value: string; expiresAt: number } | undefined;
+let inflightToken: Promise<string> | undefined;
+
+function accessToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expiresAt) return Promise.resolve(cachedToken.value);
+  // Concurrent requests share one refresh instead of each asking for a token.
+  inflightToken ??= (async () => {
+    const basic = btoa(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`);
+    const res = await getFetch(`${BASE}/v1/oauth2/token`, {
+      method: "POST", // not retried: a token request has no side effects worth repeating
+      headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=client_credentials",
+    });
+    if (!res.ok) throw new PayPalApiError(res.status, res.headers.get("paypal-debug-id"), "oauth");
+    const body = safeJsonParse(await res.text()) as { access_token: string; expires_in: number };
+    cachedToken = { value: body.access_token, expiresAt: Date.now() + Math.max(0, body.expires_in - 60) * 1000 };
+    return body.access_token;
+  })().finally(() => {
+    inflightToken = undefined;
+  });
+  return inflightToken;
+}
+
+async function call<T>(path: string, init: { method?: "GET" | "POST"; body?: string; requestId?: string } = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${await accessToken()}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+  };
+  if (init.requestId) headers["PayPal-Request-Id"] = init.requestId;
+  const doFetch = init.method === "POST" && init.requestId ? idempotentPostFetch : getFetch;
+  const res = await doFetch(`${BASE}${path}`, { method: init.method ?? "GET", headers, body: init.body });
+  const text = await res.text();
+  if (res.status === 401) cachedToken = undefined; // revoked or expired early: refresh next call
+  if (!res.ok) {
+    const err = (text ? safeJsonParse(text) : {}) as { debug_id?: string; details?: Array<{ issue?: string }> };
+    // Keep PayPal's debug id and issue code for your logs; never forward them to the client.
+    throw new PayPalApiError(res.status, err.debug_id ?? res.headers.get("paypal-debug-id"), err.details?.[0]?.issue);
+  }
+  return (text ? safeJsonParse(text) : undefined) as T;
+}
+
+type Money = { currency_code: string; value: string };
+export interface PayPalCapture { id: string; status: string; amount: Money; custom_id?: string }
+export interface PayPalOrder {
+  id: string;
+  status: string;
+  purchase_units?: Array<{ custom_id?: string; payments?: { captures?: PayPalCapture[] } }>;
+}
+
+export interface PayPalClient {
+  createOrder(input: { orderId: string; amountMinor: number; currency: string; requestId: string }): Promise<PayPalOrder>;
+  captureOrder(paypalOrderId: string, requestId: string): Promise<PayPalOrder>;
+  getCapture(captureId: string): Promise<PayPalCapture>;
+  refundCapture(input: { captureId: string; amountMinor: number; currency: string; requestId: string }): Promise<{ id: string; status: string }>;
+  verifyWebhook(headers: Headers, rawText: string): Promise<boolean>;
+}
+
+// Exported so job handlers (which run outside a request) can use it too.
+export const paypalClient: PayPalClient = {
+  createOrder({ orderId, amountMinor, currency, requestId }) {
+    return call<PayPalOrder>("/v2/checkout/orders", {
+      method: "POST",
+      requestId,
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            reference_id: orderId,
+            custom_id: orderId, // returned on the capture, so the worker can find the order
+            amount: { currency_code: currency, value: formatMinor(amountMinor, currency) },
+          },
+        ],
+      }),
+    });
+  },
+
+  captureOrder(paypalOrderId, requestId) {
+    return call<PayPalOrder>(`/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`, {
+      method: "POST",
+      requestId,
+      body: "{}",
+    });
+  },
+
+  getCapture(captureId) {
+    return call<PayPalCapture>(`/v2/payments/captures/${encodeURIComponent(captureId)}`);
+  },
+
+  refundCapture({ captureId, amountMinor, currency, requestId }) {
+    return call(`/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {
+      method: "POST",
+      requestId,
+      body: JSON.stringify({ amount: { currency_code: currency, value: formatMinor(amountMinor, currency) } }),
+    });
+  },
+
+  async verifyWebhook(headers, rawText) {
+    const field = (name: string) => headers.get(name) ?? "";
+    // PayPal requires webhook_event exactly as received, so the raw text is
+    // embedded, not re-serialized. The caller has already proven rawText is a
+    // single valid JSON value (safeJsonParse), so it cannot inject sibling keys.
+    const body =
+      `{"auth_algo":${JSON.stringify(field("paypal-auth-algo"))}` +
+      `,"cert_url":${JSON.stringify(field("paypal-cert-url"))}` +
+      `,"transmission_id":${JSON.stringify(field("paypal-transmission-id"))}` +
+      `,"transmission_sig":${JSON.stringify(field("paypal-transmission-sig"))}` +
+      `,"transmission_time":${JSON.stringify(field("paypal-transmission-time"))}` +
+      `,"webhook_id":${JSON.stringify(process.env.PAYPAL_WEBHOOK_ID!)}` +
+      `,"webhook_event":${rawText}}`;
+    const result = await call<{ verification_status: "SUCCESS" | "FAILURE" }>(
+      "/v1/notifications/verify-webhook-signature",
+      { method: "POST", body },
+    );
+    return result.verification_status === "SUCCESS";
+  },
+};
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function paypalPlugin(app: App) {
+  app.decorate("paypal", paypalClient);
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    paypal: PayPalClient;
+  }
+}
+```
+
+The token cache lives in module scope, so each Node process or Workers isolate keeps one token and refreshes it a minute before `expires_in`. `PayPal-Request-Id` on the capture and refund calls is what makes those `POST`s safe for `resilientFetch` to retry; PayPal's docs allow retrying a timed-out or 500 response with the same id.
+
+## 5. Create the PayPal order
+
+<SequenceDiagram title="Create, approve, capture" participants={["Browser", "DaloyJS route", "PayPal"]} steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/paypal/orders",
+            detail: "{ orderId } only",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayPal",
+            label: "POST /v2/checkout/orders",
+            detail: "amount from the stored order + PayPal-Request-Id",
+            kind: "request",
+          },
+          {
+            from: "Browser",
+            to: "PayPal",
+            label: "Buyer approves in the PayPal popup",
+            detail: "JS SDK onApprove({ orderId })",
+            kind: "async",
+          },
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/paypal/capture",
+            detail: "{ orderId }: the server looks up its own PayPal order id",
+            kind: "request",
+          },
+        ]} caption="The server prices the order, creates the PayPal order with an order-derived PayPal-Request-Id, and captures only the PayPal order id it stored itself. A capture response or webhook still has to pass the amount check before the order is paid." />
+
+The routes rely on the [shared app wiring](/docs/payments#app-wiring) (session, scoped `csrf()` and `rateLimit()`) and the overview's `orders` and `money` modules. The server stores the PayPal order id on its own order, so the capture route never trusts an id from the browser:
+
+```ts title="src/routes/checkout-paypal.ts"
+import { z } from "zod";
+import { ConflictError, HttpError, idempotency } from "@daloyjs/core";
+import { paypalPlugin, PayPalApiError } from "../plugins/paypal.ts";
+import { orders } from "../orders.ts";
+import { db } from "../db.ts";
+
+paypalPlugin(app);
+
+const providerError = () =>
+  new HttpError(502, {
+    type: "https://your-app.example.com/problems/payment-provider",
+    title: "Payment provider error",
+    detail: "The payment could not be completed. Please try again.",
+  });
+
+app.post(
+  "/checkout/paypal/orders",
+  {
+    operationId: "createPayPalOrder",
+    hooks: idempotency({ scope: (ctx) => ctx.state.session.get<string>("userId") }),
+    request: { body: z.object({ orderId: z.string().min(1).max(80) }).strict() },
+    responses: {
+      201: { description: "PayPal order created", body: z.object({ paypalOrderId: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const order = await orders.forCheckout(body.orderId, state.session.get<string>("userId"));
+    try {
+      const paypalOrder = await state.paypal.createOrder({
+        orderId: order.id,
+        amountMinor: order.amountMinor, // server-side total
+        currency: order.currency,
+        // Same order + same cart version = same PayPal order on a retry.
+        requestId: `create:${order.id}:v${order.version}`,
+      });
+      await db.orders.setProviderRef(order.id, paypalOrder.id);
+      return { status: 201, body: { paypalOrderId: paypalOrder.id } };
+    } catch (e) {
+      if (e instanceof PayPalApiError) {
+        app.log.warn({ event: "paypal.create_failed", status: e.status, debugId: e.debugId, issue: e.issue }, "PayPal rejected the order");
+        throw providerError();
+      }
+      throw e;
+    }
+  },
+);
+
+app.post(
+  "/checkout/paypal/capture",
+  {
+    operationId: "capturePayPalOrder",
+    request: { body: z.object({ orderId: z.string().min(1).max(80) }).strict() },
+    responses: {
+      200: { description: "capture submitted", body: z.object({ status: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const order = await orders.forCheckout(body.orderId, state.session.get<string>("userId"));
+    if (!order.providerRef) throw new ConflictError("Start PayPal checkout first.");
+    try {
+      const captured = await state.paypal.captureOrder(order.providerRef, `capture:${order.id}:v${order.version}`);
+      // A UX answer only. The webhook worker marks the order paid after the amount check.
+      return { status: 200, body: { status: captured.status } };
+    } catch (e) {
+      if (e instanceof PayPalApiError) {
+        // INSTRUMENT_DECLINED means the buyer can pick another funding source; map it to your own message.
+        app.log.warn({ event: "paypal.capture_failed", status: e.status, debugId: e.debugId, issue: e.issue }, "PayPal capture failed");
+        throw providerError();
+      }
+      throw e;
+    }
+  },
+);
+```
+
+`db.orders.setProviderRef()` is a placeholder for your persistence layer; store the PayPal order id next to the order. If you prefer to fulfil straight from the capture response, enqueue the same job the webhook enqueues (below): the conditional `pending -> paid` update in `orders.markPaid()` makes the second arrival a no-op.
+
+## 6. Render the PayPal button (JS SDK v6)
+
+PayPal's [JavaScript SDK v6](https://developer.paypal.com/sdk) moves `createOrder` and `onApprove` out of the old `paypal.Buttons()` config into a payment session. `createOrder()` must resolve to `{ orderId }`, and `onApprove` receives `{ orderId }` (lowercase `d`):
+
+```ts title="app/cart/paypal-button.ts"
+// Loaded by <script async src="https://www.sandbox.paypal.com/web-sdk/v6/core"></script>
+// (https://www.paypal.com/web-sdk/v6/core in live).
+export async function mountPayPal(orderId: string, csrfToken: string, clientId: string) {
+  const post = (path: string) =>
+    fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({ orderId }),
+    }).then((res) => {
+      if (!res.ok) throw new Error("PayPal checkout failed");
+      return res.json();
+    });
+
+  const sdk = await window.paypal.createInstance({ clientId, components: ["paypal-payments"], pageType: "checkout" });
+  const session = sdk.createPayPalOneTimePaymentSession({
+    onApprove: async () => {
+      await post("/checkout/paypal/capture"); // the server captures its own stored PayPal order
+      window.location.assign(`/checkout/thanks?order=${encodeURIComponent(orderId)}`);
+    },
+  });
+
+  document.querySelector("#paypal-button")!.addEventListener("click", async () => {
+    const createOrder = () => post("/checkout/paypal/orders").then((data) => ({ orderId: data.paypalOrderId }));
+    // Pass the promise, not the function reference.
+    await session.start({ presentationMode: "auto" }, createOrder());
+  });
+}
+```
+
+The v6 SDK's eligibility checks, button web components, and TypeScript types are described in [PayPal's v6 docs](https://developer.paypal.com/sdk); this snippet only shows where your DaloyJS routes plug in. If you are still on v5 (`paypal.Buttons({ createOrder, onApprove })`), the server routes do not change.
+
+<Callout type="note" title="CSP note">
+<p>The JS SDK loads scripts and frames from PayPal domains. Add the hosts PayPal's documentation lists for your SDK version to <code>script-src</code>, <code>frame-src</code>, and <code>connect-src</code> in your content security policy.</p>
+</Callout>
+
+## 7. Receive and verify webhooks
+
+<SequenceDiagram title="Postback verification" participants={["PayPal", "DaloyJS route", "Job worker"]} steps={[
+          {
+            from: "PayPal",
+            to: "DaloyJS route",
+            label: "POST /webhooks/paypal",
+            detail: "PAYPAL-TRANSMISSION-ID / TIME / SIG, CERT-URL, AUTH-ALGO",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayPal",
+            label: "POST /v1/notifications/verify-webhook-signature",
+            detail: "headers + webhook_id + the event exactly as received",
+            kind: "request",
+          },
+          {
+            from: "PayPal",
+            to: "DaloyJS route",
+            label: "verification_status",
+            detail: "SUCCESS or FAILURE",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Job worker",
+            label: "enqueue keyed by event id, then 200",
+            detail: "worker refetches the capture and calls orders.markPaid()",
+            kind: "async",
+          },
+        ]} caption="The route proves the delivery came from PayPal for your webhook id, collapses retries of the same event through the job idempotency key, and leaves the money check to the worker." />
+
+The route follows the [shared webhook pattern](/docs/payments#webhook-pattern). Parsing comes first here only to prove the body is one valid JSON value before it is embedded in the postback; nothing in it is trusted until PayPal answers `SUCCESS`:
+
+```ts title="src/webhooks/paypal.ts"
+import { z } from "zod";
+import { readBodyLimited, safeJsonParse, jobIdempotencyKey } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/paypal",
+  {
+    operationId: "paypalWebhook",
+    // No request.body schema: the raw bytes stay readable for verification.
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    const rawText = new TextDecoder().decode(await readBodyLimited(request, 1_048_576));
+    // Throws BadRequestError (400) on anything that is not valid JSON.
+    const event = safeJsonParse(rawText) as { id?: string; event_type?: string; resource?: { id?: string } };
+
+    if (!(await state.paypal.verifyWebhook(request.headers, rawText))) {
+      return { status: 401, body: { error: "invalid signature" } };
+    }
+    if (!event.id) return { status: 401, body: { error: "missing event id" } };
+
+    if (event.event_type?.startsWith("PAYMENT.CAPTURE.") && event.resource?.id) {
+      await app.jobs!.enqueue({
+        name: "paypal.capture",
+        payload: { eventId: event.id, captureId: event.resource.id },
+        idempotencyKey: jobIdempotencyKey({ name: "paypal.capture", key: event.id }),
+      });
+    }
+    // Ack every verified event, including types you do not handle.
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+If the postback itself fails (PayPal down, timeout), the handler throws, DaloyJS answers with a generic 500 problem+json, and PayPal retries the delivery later. The worker refetches the capture, so a delayed, replayed, or out-of-order event cannot flip an order:
+
+```ts title="src/jobs/paypal.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { paypalClient } from "../plugins/paypal.ts";
+import { orders } from "../orders.ts";
+import { toMinor } from "../money.ts";
+
+export const handlePayPalCapture: JobHandler<{ eventId: string; captureId: string }> = async ({ job }) => {
+  const capture = await paypalClient.getCapture(job.payload.captureId); // authoritative state
+  if (capture.status !== "COMPLETED" || !capture.custom_id) return; // PENDING: wait for the next event
+  await orders.markPaid(capture.custom_id, {
+    amountMinor: toMinor(capture.amount.value, capture.amount.currency_code),
+    currency: capture.amount.currency_code,
+    providerRef: capture.id,
+  });
+};
+// Register it in your single app.useJobs() call (see the payments overview).
+```
+
+Postback verification does not work for the Webhooks simulator's mock events; use real sandbox payments, or self-verification (for mock events PayPal documents the webhook id as the literal string `WEBHOOK_ID`), to test end to end.
+
+## Self-verification on Node [#self-verification]
+
+PayPal also documents verifying the signature yourself, which saves one API call per delivery. The signed message is `transmissionId|transmissionTime|webhookId|crc32`, where `crc32` is the decimal CRC32 of the raw body, and the `PAYPAL-TRANSMISSION-SIG` header is a base64 SHA256withRSA signature checked with the public key from the certificate at `PAYPAL-CERT-URL`. This needs X.509 parsing, so it is Node-only (`node:crypto`, `node:zlib`):
+
+```ts title="src/plugins/paypal-self-verify.ts"
+import { X509Certificate, verify } from "node:crypto";
+import { crc32 } from "node:zlib";
+import { fetchGuard } from "@daloyjs/core";
+
+// The cert URL arrives in an attacker-controllable header. Only fetch it from
+// PayPal's API hosts over HTTPS, through fetchGuard, with redirects refused.
+const CERT_HOSTS = new Set(["api.paypal.com", "api.sandbox.paypal.com", "api-m.paypal.com", "api-m.sandbox.paypal.com"]);
+const certFetch = fetchGuard({ maxRedirects: 0 });
+const certCache = new Map<string, X509Certificate>();
+
+async function loadCert(certUrl: string): Promise<X509Certificate | null> {
+  let url: URL;
+  try {
+    url = new URL(certUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !CERT_HOSTS.has(url.hostname) || !url.pathname.startsWith("/v1/notifications/certs/")) return null;
+  const cached = certCache.get(url.href);
+  if (cached) return cached;
+  const res = await certFetch(url.href);
+  if (!res.ok) return null;
+  const cert = new X509Certificate(await res.text());
+  const now = Date.now();
+  if (now < Date.parse(cert.validFrom) || now > Date.parse(cert.validTo)) return null;
+  if (certCache.size > 16) certCache.clear(); // bounded: PayPal rotates certificates rarely
+  certCache.set(url.href, cert);
+  return cert;
+}
+
+export async function selfVerifyPayPalWebhook(headers: Headers, raw: Uint8Array): Promise<boolean> {
+  const id = headers.get("paypal-transmission-id");
+  const time = headers.get("paypal-transmission-time");
+  const sig = headers.get("paypal-transmission-sig");
+  const certUrl = headers.get("paypal-cert-url");
+  if (!id || !time || !sig || !certUrl || headers.get("paypal-auth-algo") !== "SHA256withRSA") return false;
+  const cert = await loadCert(certUrl);
+  if (!cert) return false;
+  const message = `${id}|${time}|${process.env.PAYPAL_WEBHOOK_ID}|${crc32(raw)}`;
+  return verify("sha256", Buffer.from(message), cert.publicKey, Buffer.from(sig, "base64"));
+}
+```
+
+PayPal does not publish an allowlist of certificate hosts; the set above is this guide's recommendation for the hosts PayPal's REST APIs use. Keep it narrow rather than accepting any `*.paypal.com` name, and watch PayPal's changelog in case the certificate location moves. Use the raw bytes from `readBodyLimited()`; a re-serialized body changes the CRC32 and fails.
+
+## 8. Refunds
+
+Expose refunds only through a [protected refund route](/docs/payments#protected-refunds) (auth, role, ownership, amount cap, audit log). The plugin call refunds a capture, with a request id per logical refund:
+
+```ts
+await state.paypal.refundCapture({
+  captureId: order.providerRef!, // the capture id saved by orders.markPaid()
+  amountMinor: 250,
+  currency: order.currency,
+  requestId: `refund:${order.id}:${order.refundedMinor}:250`,
+});
+```
+
+The outcome also arrives as a `PAYMENT.CAPTURE.REFUNDED` webhook; update your ledger from the verified event.
+
+## Using the server SDK instead [#server-sdk]
+
+On Node hosts you can replace the `call()` helper with [`@paypal/paypal-server-sdk`](https://github.com/paypal/PayPal-TypeScript-Server-SDK) (2.x). It handles the OAuth token itself and exposes `OrdersController` (`createOrder`, `getOrder`, `captureOrder`, each taking a `paypalRequestId`) and `PaymentsController` for captures and refunds. It does not cover the webhooks API, so keep the postback or self-verification above.
+
+```ts title="src/plugins/paypal-sdk.ts"
+import { CheckoutPaymentIntent, Client, Environment, OrdersController } from "@paypal/paypal-server-sdk";
+import { formatMinor } from "../money.ts";
+
+const client = new Client({
+  clientCredentialsAuthCredentials: {
+    oAuthClientId: process.env.PAYPAL_CLIENT_ID!,
+    oAuthClientSecret: process.env.PAYPAL_CLIENT_SECRET!,
+  },
+  environment: process.env.PAYPAL_ENVIRONMENT === "live" ? Environment.Production : Environment.Sandbox,
+});
+const ordersApi = new OrdersController(client);
+
+export async function createOrder(order: { id: string; amountMinor: number; currency: string; version: number }) {
+  const { result } = await ordersApi.createOrder({
+    body: {
+      intent: CheckoutPaymentIntent.Capture,
+      purchaseUnits: [
+        {
+          referenceId: order.id,
+          customId: order.id,
+          amount: { currencyCode: order.currency, value: formatMinor(order.amountMinor, order.currency) },
+        },
+      ],
+    },
+    paypalRequestId: `create:${order.id}:v${order.version}`,
+  });
+  return result;
+}
+```
+
+Leave the SDK's request and response body logging off in production; order bodies carry payer names and addresses.
+
+## Runtimes
+
+The REST plugin is `fetch` (through `resilientFetch`) plus `btoa` and the core JSON helpers, so it runs on Node hosts, Deno, Bun, Cloudflare Workers, and Vercel Edge, with postback verification. [Self-verification](#self-verification) needs `node:crypto` and `node:zlib` (`zlib.crc32` is available on DaloyJS's supported Node versions). `@paypal/paypal-server-sdk` 2.x declares Node `>=14.17` and sends requests through an axios-based adapter; it is not verified on Deno, Workers, or Vercel Edge here. See the [runtime table](/docs/payments#runtime-compatibility).
+
+## Errors
+
+PayPal errors carry an HTTP status, a `name`, a `debug_id`, and a `details[]` array with `issue` codes (for example `INSTRUMENT_DECLINED` or `ORDER_NOT_APPROVED`). The plugin keeps the status, issue, and debug id for your logs (the debug id is what PayPal support asks for) and the routes map every failure to a generic [problem+json](/docs/errors) 502. Surface a decline only as your own message, such as "Choose another payment method".
+
+## Modernisation notes
+
+- Use Orders v2 and the v6 JS SDK. The v4 `checkout.js` is deprecated, and v1 Payments API integrations should move to Orders v2.
+- Capture on the server, never from the browser. The JS SDK can call the REST API from the page in older samples; with DaloyJS the server owns create and capture so the amount and the PayPal order id never come from the client.
+- Cache the token, not the credentials. One token per process with an early refresh avoids a token call per request and the rate limits that come with it.
+- Prefer postback until you need the latency. Self-verification is faster but adds certificate fetching, caching, and a host allowlist you have to maintain.
+
+See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), [Stripe guide](/docs/payments/stripe), and [problem+json errors](/docs/errors).

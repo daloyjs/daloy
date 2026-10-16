@@ -1,0 +1,425 @@
+---
+title: Accept payments with Checkout.com in DaloyJS
+description: "Checkout.com from a DaloyJS API with checkout-sdk-node: Flow payment sessions in minor units, Cko-Signature webhooks, dedupe, and idempotent refunds."
+keywords:
+  - DaloyJS Checkout.com
+  - checkout-sdk-node
+  - Checkout.com Flow
+  - Checkout.com payment sessions
+  - Cko-Signature webhook
+  - Cko-Idempotency-Key
+---
+
+# Accept payments with Checkout.com in DaloyJS
+
+[Checkout.com](https://www.checkout.com/) is an enterprise acquirer and gateway for cards, wallets, and local payment methods. This guide uses the official [`checkout-sdk-node`](https://github.com/checkout/checkout-sdk-node) (5.x) on the server, **Flow** (Checkout.com's embedded Web Components) in the browser on top of a payment session created by your API, and core `verifyWebhookSignature()` for the `Cko-Signature` header. The [Hosted Payments Page](#hosted-payments-page) is covered as the redirect alternative.
+
+## What you should know up front
+
+- Payment sessions are server-side. Your API calls `POST /payment-sessions` with the amount, currency, and reference from the stored order, and returns the session to the browser. Flow renders the payment methods and runs the payment, including 3-D Secure and other required actions. See [never trust client amounts](/docs/payments#never-trust-client-amounts).
+- Amounts are minor units. GBP 10.00 is `amount: 1000`. Checkout.com has its own rules for a few currencies, so check its currency and amount guidance before you add a market.
+- Every account has its own base URL. Requests go to a merchant-specific subdomain: `https://{prefix}.api.sandbox.checkout.com` in sandbox and `https://{prefix}.api.checkout.com` in production, where the prefix is the first 8 characters of your client id (without `cli_`), shown under Dashboard -\> Developers -\> Overview. The SDK's `subdomain` option is required.
+- Idempotency is a header, on some endpoints. `Cko-Idempotency-Key` is documented for `/payments` and the payment actions (captures, refunds, voids, authorizations, cancellations), with keys kept for 72 hours by default. `/payment-sessions` is not on that list.
+- Webhooks are HMAC-SHA256 hex over the raw body. The `Cko-Signature` header is keyed with the signature key you generate on the webhook configuration. You can additionally have Checkout.com send a fixed key in the `Authorization` header.
+- Acknowledge within 10 seconds. Checkout.com delivers at least once and does not guarantee ordering.
+
+## 1. Provision
+
+1. Create a [sandbox account](https://www.checkout.com/get-test-account) and note the account prefix under Developers -\> Overview.
+2. Create API keys: a secret key (`sk_sbox_...`) for the server and a public key (`pk_sbox_...`) for Flow. Copy the processing channel id (`pc_...`) your payments should use.
+3. Under the webhook configuration (Developers -\> Webhooks or Workflows), add a webhook to `https://your-app.example.com/webhooks/checkout-com`, select the payment events you need (`payment_approved`, `payment_captured`, `payment_declined`, `payment_capture_declined`, `payment_refunded`), choose **Generate key** for the signature key, and optionally set an authorization header key.
+4. Repeat in production with production keys; sandbox and production keys and signature keys are separate.
+
+## 2. Install
+
+```package-install
+checkout-sdk-node
+```
+
+For the browser, Flow loads from `https://checkout-web-components.checkout.com/index.js` or the `@checkout.com/checkout-web-components` package. Neither is a runtime dependency of `@daloyjs/core`.
+
+## 3. Environment variables
+
+```dotenv title=".env"
+CKO_SECRET_KEY=sk_sbox_replace_me              # server only
+CKO_PUBLIC_KEY=pk_sbox_replace_me              # public, used by Flow
+CKO_SUBDOMAIN=replace_me                       # 8-character account prefix
+CKO_PROCESSING_CHANNEL_ID=pc_replace_me
+CKO_WEBHOOK_SIGNATURE_KEY=replace_me           # Cko-Signature HMAC key
+CKO_WEBHOOK_AUTH_KEY=replace_me                # optional Authorization header value
+APP_URL=https://your-app.example.com
+```
+
+## 4. Plugin
+
+```ts title="src/plugins/checkout-com.ts"
+import { Checkout } from "checkout-sdk-node";
+import { timingSafeEqual, verifyWebhookSignature } from "@daloyjs/core";
+import type { App } from "@daloyjs/core";
+
+// sk_sbox_ keys select sandbox automatically; sk_ keys select production.
+const cko = new Checkout(process.env.CKO_SECRET_KEY!, {
+  pk: process.env.CKO_PUBLIC_KEY!,
+  subdomain: process.env.CKO_SUBDOMAIN!, // required: the SDK throws without it
+});
+
+export interface CkoPaymentSession {
+  id: string;
+  payment_session_secret: string;
+  payment_session_token: string;
+}
+
+export interface CkoPayment {
+  id: string;
+  status: string; // for example "Captured"
+  amount: number;
+  balances?: { total_captured?: number; total_refunded?: number };
+  currency: string;
+  reference?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface CheckoutComClient {
+  createPaymentSession(input: {
+    orderId: string;
+    amountMinor: number;
+    currency: string;
+    billingCountry: string;
+    email?: string;
+  }): Promise<CkoPaymentSession>;
+  getPayment(paymentId: string): Promise<CkoPayment>;
+  refund(input: { paymentId: string; amountMinor: number; reference: string; idempotencyKey: string }): Promise<{ action_id: string }>;
+  verifyWebhook(raw: Uint8Array, headers: Headers): Promise<boolean>;
+}
+
+// Exported so job handlers (which run outside a request) can use it too.
+export const checkoutComClient: CheckoutComClient = {
+  async createPaymentSession({ orderId, amountMinor, currency, billingCountry, email }) {
+    const base = process.env.APP_URL!;
+    return (await cko.paymentSessions.request({
+      amount: amountMinor, // minor units, from the stored order
+      currency,
+      reference: orderId,
+      processing_channel_id: process.env.CKO_PROCESSING_CHANNEL_ID!,
+      billing: { address: { country: billingCountry } },
+      customer: email ? { email } : undefined,
+      metadata: { orderId },
+      success_url: `${base}/checkout/return?order=${encodeURIComponent(orderId)}`,
+      failure_url: `${base}/checkout/failed?order=${encodeURIComponent(orderId)}`,
+    })) as CkoPaymentSession;
+  },
+
+  async getPayment(paymentId) {
+    return (await cko.payments.get(paymentId)) as CkoPayment;
+  },
+
+  async refund({ paymentId, amountMinor, reference, idempotencyKey }) {
+    return (await cko.payments.refund(paymentId, { amount: amountMinor, reference }, idempotencyKey)) as { action_id: string };
+  },
+
+  async verifyWebhook(raw, headers) {
+    // Optional second factor: the fixed key set on the webhook configuration.
+    const expectedAuth = process.env.CKO_WEBHOOK_AUTH_KEY;
+    const authOk = expectedAuth ? timingSafeEqual(headers.get("authorization") ?? "", expectedAuth) : true;
+    const sigOk = await verifyWebhookSignature({
+      payload: raw,
+      signature: headers.get("cko-signature") ?? "", // hex
+      secret: process.env.CKO_WEBHOOK_SIGNATURE_KEY!,
+      algorithm: "sha256",
+    });
+    return authOk && sigOk;
+  },
+};
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function checkoutComPlugin(app: App) {
+  app.decorate("checkoutCom", checkoutComClient);
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    checkoutCom: CheckoutComClient;
+  }
+}
+```
+
+Both webhook checks run before either result is used, so the timing does not reveal which one failed. The SDK's `cko.payments.*` action methods accept an idempotency key as their last argument and send it as `Cko-Idempotency-Key`; `cko.paymentSessions.request()` does not take one, which matches the API's idempotency list.
+
+## 5. Create a payment session for Flow
+
+<SequenceDiagram title="Flow on a server-created payment session" participants={["Browser", "DaloyJS route", "Checkout.com"]} steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/checkout-com/session",
+            detail: "{ orderId } only",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Checkout.com",
+            label: "POST /payment-sessions",
+            detail: "amount in minor units + currency + reference from the order",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Browser",
+            label: "201 payment session",
+            detail: "id, payment_session_secret, payment_session_token",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "Checkout.com",
+            label: "Flow pays, runs 3DS if required",
+            detail: "redirect or onPaymentCompleted is a UX hint",
+            kind: "async",
+          },
+        ]} caption="The server prices the session from the stored order and sets the order id as the payment reference. Flow handles payment-method selection and authentication; only a verified webhook plus a refetch marks the order paid." />
+
+The route relies on the [shared app wiring](/docs/payments#app-wiring) (session, scoped `csrf()` and `rateLimit()`) and the overview's `orders` module:
+
+```ts title="src/routes/checkout-checkout-com.ts"
+import { z } from "zod";
+import { HttpError, idempotency } from "@daloyjs/core";
+import { checkoutComPlugin } from "../plugins/checkout-com.ts";
+import { orders } from "../orders.ts";
+import { db } from "../db.ts";
+
+checkoutComPlugin(app);
+
+app.post(
+  "/checkout/checkout-com/session",
+  {
+    operationId: "createCheckoutComPaymentSession",
+    // Safe client retries of this POST (scoped per signed-in user).
+    hooks: idempotency({ scope: (ctx) => ctx.state.session.get<string>("userId") }),
+    request: { body: z.object({ orderId: z.string().min(1).max(80) }).strict() },
+    responses: {
+      201: {
+        description: "payment session",
+        body: z.object({ id: z.string(), payment_session_secret: z.string(), payment_session_token: z.string() }),
+      },
+    },
+  },
+  async ({ body, state }) => {
+    const userId = state.session.get<string>("userId");
+    const order = await orders.forCheckout(body.orderId, userId);
+    const customer = await db.users.billingProfile(userId!); // country (and email) from your records
+    try {
+      const session = await state.checkoutCom.createPaymentSession({
+        orderId: order.id,
+        amountMinor: order.amountMinor,
+        currency: order.currency,
+        billingCountry: customer.country,
+        email: customer.email,
+      });
+      return {
+        status: 201,
+        body: { id: session.id, payment_session_secret: session.payment_session_secret, payment_session_token: session.payment_session_token },
+      };
+    } catch (e) {
+      const err = e as { name?: string; http_code?: number; body?: { request_id?: string; error_codes?: string[] } };
+      // Keep Checkout.com's request id and error codes in your logs, not in the response.
+      app.log.warn(
+        { event: "cko.session_failed", name: err.name, status: err.http_code, requestId: err.body?.request_id, codes: err.body?.error_codes },
+        "Checkout.com rejected the payment session",
+      );
+      throw new HttpError(502, {
+        type: "https://your-app.example.com/problems/payment-provider",
+        title: "Payment provider error",
+        detail: "Checkout could not be started. Please try again.",
+      });
+    }
+  },
+);
+```
+
+Because `/payment-sessions` has no documented idempotency key, a retry that slips past the `idempotency()` hook can create a second session. An unpaid session charges nothing, and `orders.markPaid()` only transitions `pending -> paid` once; still, reconcile captured payments against orders so a shopper who pays two sessions in two tabs gets the duplicate refunded.
+
+Mount Flow with the session object and your public key:
+
+```ts title="app/cart/checkout-com-flow.ts"
+// <script src="https://checkout-web-components.checkout.com/index.js"></script>
+export async function mountFlow(orderId: string, csrfToken: string) {
+  const res = await fetch("/checkout/checkout-com/session", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken, "idempotency-key": `cko-${orderId}` },
+    body: JSON.stringify({ orderId }),
+  });
+  if (!res.ok) throw new Error("Could not start checkout");
+  const paymentSession = await res.json();
+
+  const checkout = await window.CheckoutWebComponents({
+    paymentSession,
+    publicKey: process.env.NEXT_PUBLIC_CKO_PUBLIC_KEY!,
+    environment: "sandbox", // "production" in live
+    onPaymentCompleted: () => window.location.assign(`/checkout/thanks?order=${encodeURIComponent(orderId)}`),
+    onError: (_component, error) => console.error("Flow error", error),
+  });
+  checkout.create("flow").mount("#flow-container");
+}
+```
+
+Flow handles 3-D Secure and other additional actions when the shopper selects Pay. The `cko-payment-id` on the success redirect and the `onPaymentCompleted` callback are UX signals only.
+
+<Callout type="note" title="CSP and PCI scope">
+<p>Flow renders inside your page, so your page can influence the payment form: treat it like other embedded provider fields when you assess PCI DSS scope (see the <a href="/docs/payments#secure-checkout-checklist">secure checkout checklist</a>) and add the script, frame, and connect sources Checkout.com documents for Flow to your content security policy. The Hosted Payments Page below is a full redirect.</p>
+</Callout>
+
+## 6. Receive and verify webhooks
+
+<SequenceDiagram title="Webhook verification" participants={["Checkout.com", "DaloyJS route", "Job worker"]} steps={[
+          {
+            from: "Checkout.com",
+            to: "DaloyJS route",
+            label: "POST /webhooks/checkout-com",
+            detail: "Cko-Signature (+ optional Authorization)",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "verifyWebhookSignature over the raw body",
+            detail: "HMAC-SHA256 hex, signature key",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Checkout.com",
+            label: "401 when verification fails",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Job worker",
+            label: "enqueue keyed by event id, then 200",
+            detail: "worker refetches the payment and calls orders.markPaid()",
+            kind: "async",
+          },
+        ]} caption="Verify the exact bytes, collapse at-least-once redeliveries through the job idempotency key on the event id, and let the worker read the payment's current state so out-of-order events are harmless." />
+
+```ts title="src/webhooks/checkout-com.ts"
+import { z } from "zod";
+import { readBodyLimited, safeJsonParse, jobIdempotencyKey } from "@daloyjs/core";
+
+app.post(
+  "/webhooks/checkout-com",
+  {
+    operationId: "checkoutComWebhook",
+    // No request.body schema: the raw bytes stay readable for the HMAC check.
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    const raw = await readBodyLimited(request, 1_048_576);
+    if (!(await state.checkoutCom.verifyWebhook(raw, request.headers))) {
+      return { status: 401, body: { error: "invalid signature" } };
+    }
+    const event = safeJsonParse(new TextDecoder().decode(raw)) as { id?: string; type?: string; data?: { id?: string } };
+    if (!event.id) return { status: 401, body: { error: "missing event id" } };
+
+    if (event.type?.startsWith("payment_") && event.data?.id) {
+      await app.jobs!.enqueue({
+        name: "checkout_com.payment",
+        payload: { eventId: event.id, type: event.type, paymentId: event.data.id },
+        idempotencyKey: jobIdempotencyKey({ name: "checkout_com.payment", key: event.id }),
+      });
+    }
+    // Ack every verified event, including types you do not handle.
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+The worker refetches the payment with `GET /payments/{id}` and compares the amount and currency with the stored order:
+
+```ts title="src/jobs/checkout-com.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { checkoutComClient } from "../plugins/checkout-com.ts";
+import { orders } from "../orders.ts";
+
+export const handleCheckoutComPayment: JobHandler<{ eventId: string; paymentId: string }> = async ({ job }) => {
+  const payment = await checkoutComClient.getPayment(job.payload.paymentId); // authoritative state
+  const orderId = payment.metadata?.orderId ?? payment.reference;
+  // balances survive later state changes (a partial refund moves status past "Captured").
+  const captured = payment.balances?.total_captured ?? 0;
+  if (captured === 0 || !orderId) return;
+  await orders.markPaid(orderId, {
+    amountMinor: captured,
+    currency: payment.currency,
+    providerRef: payment.id,
+  });
+};
+// Register it in your single app.useJobs() call (see the payments overview).
+```
+
+The worker keys off `balances.total_captured` rather than `status`, so a refund that lands before the job runs does not hide the capture. If your processing channel authorizes without capturing, nothing is marked paid until your own capture call settles.
+
+## 7. Refunds
+
+Expose refunds only through a [protected refund route](/docs/payments#protected-refunds) (auth, role, ownership, amount cap, audit log). Checkout.com strongly recommends V4 UUIDs as idempotency keys, so create one per logical refund, store it with the refund record, and reuse it on every retry of that refund:
+
+```ts
+const refundKey = await db.refunds.idempotencyKeyFor(order.id, order.refundedMinor, 250); // a stored crypto.randomUUID()
+await state.checkoutCom.refund({
+  paymentId: order.providerRef!,
+  amountMinor: 250,
+  reference: `refund-${order.id}`,
+  idempotencyKey: refundKey,
+});
+```
+
+Refunds are asynchronous: the API answers with an `action_id`, and the outcome arrives as a `payment_refunded` (or `payment_refund_declined`) webhook. Update your ledger from the verified event.
+
+## Hosted Payments Page [#hosted-payments-page]
+
+If you would rather redirect than embed, create a Hosted Payments Page session with the same server-side amount and send the browser to the returned `_links.redirect.href`. Add a method like this to the plugin (where `cko` is in scope); the webhook route and worker above do not change:
+
+```ts title="src/plugins/checkout-com.ts"
+const hpp = (await cko.hostedPayments.create({
+  amount: order.amountMinor,
+  currency: order.currency,
+  reference: order.id,
+  processing_channel_id: process.env.CKO_PROCESSING_CHANNEL_ID!,
+  billing: { address: { country: customer.country } },
+  metadata: { orderId: order.id },
+  success_url: `${process.env.APP_URL}/checkout/return?order=${encodeURIComponent(order.id)}`,
+  failure_url: `${process.env.APP_URL}/checkout/failed?order=${encodeURIComponent(order.id)}`,
+  cancel_url: `${process.env.APP_URL}/cart`,
+})) as { id: string; _links: { redirect: { href: string } } };
+// return { status: 201, body: { redirectUrl: hpp._links.redirect.href } }
+```
+
+## Sandbox and production
+
+| | Sandbox | Production |
+| --- | --- | --- |
+| API base URL | `https://{prefix}.api.sandbox.checkout.com` | `https://{prefix}.api.checkout.com` |
+| OAuth token URL (access credentials) | `https://{prefix}.access.sandbox.checkout.com/connect/token` | `https://{prefix}.access.checkout.com/connect/token` |
+| Secret / public keys | `sk_sbox_...` / `pk_sbox_...` | `sk_...` / `pk_...` |
+| Flow `environment` | `"sandbox"` | `"production"` |
+
+Private Link merchants use a `pl-` prefixed subdomain, which the SDK also accepts. A few services (balances, files, forward, transfers) use fixed hostnames instead of your prefix. This guide does not cover choosing a processing region; the prefix and processing channel configured on your account determine where requests go, so confirm data-residency questions with Checkout.com.
+
+## Runtimes
+
+`checkout-sdk-node` 5.x declares Node `>=18` and runs on Node hosts (long-lived Node, Vercel Node.js functions, AWS Lambda, Azure Functions). It imports `axios` and Node's `stream` module, so Deno, Cloudflare Workers, and Vercel Edge are not verified here; on those runtimes call the REST API directly with `resilientFetch` (`Authorization: Bearer sk_...` against your prefixed base URL, `Cko-Idempotency-Key` on payment actions). The webhook verification uses only core WebCrypto helpers and runs on every [DaloyJS adapter](/docs/adapters). See the [runtime table](/docs/payments#runtime-compatibility).
+
+## Errors
+
+The SDK throws errors whose `name` identifies the failure (`AuthenticationError` 401, `ActionNotAllowed` 403, `NotFoundError` 404, `ValidationError` 422 with `error_codes`, `TooManyRequestsError` 429, `BadGateway` 502). Log the name, status, `request_id`, and error codes, and return a generic [problem+json](/docs/errors) 502. A concurrent request with the same idempotency key gets `409`; wait before retrying rather than generating a new key.
+
+## Modernisation notes
+
+- Flow over Frames for new builds. Flow wraps payment-method selection, wallets, and authentication in one component on top of a server-created payment session.
+- Always pass `subdomain`. Initializing without it now throws; the legacy shared domain is deprecated.
+- Use the order id as `reference`. It appears in the Dashboard and reports, and gives the worker a second way to find the order.
+- Never fulfil from the redirect. The `cko-payment-id` on the success URL tells you which payment to look up, not that it succeeded.
+
+See also the [payments overview](/docs/payments), [Adyen guide](/docs/payments/adyen), [Stripe guide](/docs/payments/stripe), and [problem+json errors](/docs/errors).

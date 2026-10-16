@@ -1,0 +1,450 @@
+---
+title: Accept payments with Paddle Billing in DaloyJS
+description: "Paddle Billing from a DaloyJS API: server-chosen price ids, Paddle.js checkout for server-made transactions, Paddle-Signature checks, and MoR tax handling."
+keywords:
+  - DaloyJS Paddle
+  - Paddle Billing Node
+  - "@paddle/paddle-node-sdk"
+  - Paddle-Signature webhook
+  - Paddle merchant of record
+  - Paddle.js checkout transactionId
+---
+
+# Accept payments with Paddle Billing in DaloyJS
+
+[Paddle Billing](https://developer.paddle.com/) is a merchant of record (MoR): Paddle is the seller on the customer's receipt, calculates and remits sales tax and VAT, and handles payments, subscriptions, and invoices. This guide uses the official [`@paddle/paddle-node-sdk`](https://github.com/PaddleHQ/paddle-node-sdk) (3.x) on the server, transactions created server-side and opened with [Paddle.js](https://developer.paddle.com/paddle-js) in the browser, and core `verifyWebhookSignature()` for the `Paddle-Signature` header.
+
+## What you should know up front
+
+- Products and prices live in Paddle. Create them in the Paddle dashboard or API and store each price id (`pri_...`) next to the SKU or plan in your catalogue. The server picks the price ids from the stored order; the browser sends only an order id. See [never trust client amounts](/docs/payments#never-trust-client-amounts).
+- Create the transaction on the server, open it in the browser. `paddle.transactions.create()` returns a `txn_...` id, and `Paddle.Checkout.open({ transactionId })` opens the overlay for it. Paddle's docs allow passing a `draft` or `ready` transaction to checkout, which then collects the customer and address.
+- Paddle adds tax. As the MoR, Paddle calculates tax from the customer's location. The grand total the customer pays can differ from your catalogue total, so the worker compares the pre-tax subtotal, not the grand total. See [checking the amount](#checking-the-amount).
+- No documented idempotency header. Paddle's API reference does not document an idempotency key for creating transactions (as of October 2026), so the route reuses the transaction it already created for the same order and cart version.
+- Webhooks are HMAC-SHA256 with a timestamp. `Paddle-Signature: ts=...;h1=...` is the hex HMAC of `ts`, a colon, and the raw body, keyed with the notification destination's secret. Paddle's default tolerance is five seconds, and more than one `h1` can appear during a secret rotation.
+- Respond fast. Paddle expects a `200` within five seconds and retries failures (3 times within 15 minutes in sandbox, 60 times within 3 days in live). Delivery order is not guaranteed.
+
+| Environment | API base URL | Paddle.js environment | Client-side token prefix |
+| --- | --- | --- | --- |
+| Sandbox | `https://sandbox-api.paddle.com` | `Paddle.Environment.set("sandbox")` | `test_` |
+| Live | `https://api.paddle.com` | default | `live_` |
+
+## 1. Provision
+
+1. Create a [sandbox account](https://sandbox-login.paddle.com/signup) for development; live is a separate account with separate keys.
+2. Create an API key under Paddle -\> Developer tools -\> Authentication. Keep it server-side.
+3. Create a **client-side token** in the same place. It authenticates Paddle.js and is safe to ship to the browser.
+4. Create products and prices. Use tax-exclusive prices (the account default, or `tax_mode: "external"`) if you want the [subtotal check](#checking-the-amount) below to work unchanged.
+5. Set a default payment link in the dashboard's checkout settings. Paddle requires one (approved, in live) before it opens checkouts for transactions.
+6. Create a notification destination under Developer tools -\> Notifications, point it at `https://your-app.example.com/webhooks/paddle`, subscribe to `transaction.paid`, `transaction.completed`, and the `subscription.*` events you need, and copy its **secret key**.
+
+## 2. Install
+
+```package-install
+@paddle/paddle-node-sdk
+```
+
+The SDK has no dependencies. For the browser, load Paddle.js from `https://cdn.paddle.com/paddle/v2/paddle.js` or install `@paddle/paddle-js`. Neither is a runtime dependency of `@daloyjs/core`.
+
+## 3. Environment variables
+
+```dotenv title=".env"
+PADDLE_ENVIRONMENT=sandbox                   # or production
+PADDLE_API_KEY=replace_me                    # server only
+PADDLE_WEBHOOK_SECRET=pdl_ntfset_replace_me  # notification destination secret
+PADDLE_CLIENT_TOKEN=test_replace_me          # public, ships to Paddle.js
+```
+
+## 4. Plugin
+
+```ts title="src/plugins/paddle.ts"
+import { ApiError, Environment, Paddle, type CurrencyCode, type Subscription, type Transaction } from "@paddle/paddle-node-sdk";
+import { verifyWebhookSignature } from "@daloyjs/core";
+import type { App } from "@daloyjs/core";
+
+const paddle = new Paddle(process.env.PADDLE_API_KEY!, {
+  environment: process.env.PADDLE_ENVIRONMENT === "production" ? Environment.production : Environment.sandbox,
+});
+
+/** Paddle's documented default tolerance between `ts` and now. */
+const PADDLE_TOLERANCE_SECONDS = 5;
+
+/**
+ * Verify `Paddle-Signature: ts=<unix>;h1=<hex>[;h1=<hex>]`. Paddle signs
+ * `${ts}:${rawBody}` (a colon). Core's `timestamp` option builds
+ * `${ts}.${payload}` (a dot, the Stripe convention), so this function joins
+ * the bytes itself, checks the window itself, and lets core do the
+ * constant-time HMAC comparison.
+ */
+async function verifyPaddleSignature(raw: Uint8Array, header: string | null, now = Date.now()): Promise<boolean> {
+  if (!header) return false;
+  let ts: string | undefined;
+  const signatures: string[] = [];
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 1) continue;
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (key === "ts") ts = value;
+    else if (key === "h1") signatures.push(value);
+  }
+  if (!ts || !/^\d{1,12}$/.test(ts) || signatures.length === 0 || signatures.length > 4) return false;
+  if (Math.abs(Math.floor(now / 1000) - Number(ts)) > PADDLE_TOLERANCE_SECONDS) return false;
+
+  const prefix = new TextEncoder().encode(`${ts}:`);
+  const signed = new Uint8Array(prefix.length + raw.length);
+  signed.set(prefix, 0);
+  signed.set(raw, prefix.length);
+
+  // More than one h1 appears while a secret is being rotated; any match passes.
+  for (const signature of signatures) {
+    if (await verifyWebhookSignature({ payload: signed, signature, secret: process.env.PADDLE_WEBHOOK_SECRET!, algorithm: "sha256" })) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export interface PaddleClient {
+  createTransaction(input: {
+    orderId: string;
+    userId: string;
+    currency: string;
+    items: Array<{ priceId: string; quantity: number }>;
+  }): Promise<{ id: string }>;
+  getTransaction(id: string): Promise<Transaction>;
+  getSubscription(id: string): Promise<Subscription>;
+  refundFull(input: { transactionId: string; reason: string }): Promise<{ id: string; status: string }>;
+  verifyWebhook(raw: Uint8Array, signatureHeader: string | null): Promise<boolean>;
+}
+
+// Exported so job handlers (which run outside a request) can use it too.
+export const paddleClient: PaddleClient = {
+  async createTransaction({ orderId, userId, currency, items }) {
+    const txn = await paddle.transactions.create({
+      items, // price ids chosen by the server
+      currencyCode: currency as CurrencyCode,
+      customData: { orderId, userId },
+    });
+    return { id: txn.id };
+  },
+
+  getTransaction(id) {
+    return paddle.transactions.get(id);
+  },
+
+  getSubscription(id) {
+    return paddle.subscriptions.get(id);
+  },
+
+  async refundFull({ transactionId, reason }) {
+    const adjustment = await paddle.adjustments.create({ action: "refund", type: "full", transactionId, reason });
+    return { id: adjustment.id, status: adjustment.status };
+  },
+
+  verifyWebhook: (raw, header) => verifyPaddleSignature(raw, header),
+};
+
+export { ApiError as PaddleApiError };
+
+// Call with the root app, not through app.register(): a decoration made
+// inside a registered plugin is visible only to that plugin's own routes.
+export function paddlePlugin(app: App) {
+  app.decorate("paddle", paddleClient);
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    paddle: PaddleClient;
+  }
+}
+```
+
+The SDK's own `paddle.webhooks.unmarshal(rawBody, secret, signature)` validates the same header and returns a typed, camelCased event entity. It is fine to use, but as of 3.10 it reads a single `h1` and compares digests with a plain string comparison, so this guide verifies with the core helper (constant-time, rotation-aware) and keeps `unmarshal()` out of the hot path. If you prefer the SDK:
+
+```ts
+// rawText must be the exact body string; unmarshal throws on a bad signature.
+const event = await paddle.webhooks.unmarshal(rawText, process.env.PADDLE_WEBHOOK_SECRET!, request.headers.get("paddle-signature") ?? "");
+```
+
+## 5. Create a transaction and open checkout
+
+<SequenceDiagram title="Server-created transaction, Paddle.js overlay" participants={["Browser", "DaloyJS route", "Paddle"]} steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/paddle",
+            detail: "{ orderId } only",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Paddle",
+            label: "transactions.create",
+            detail: "price ids from your catalogue + customData.orderId",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Browser",
+            label: "201 { transactionId }",
+            detail: "reused for the same order + cart version",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "Paddle",
+            label: "Paddle.Checkout.open({ transactionId })",
+            detail: "Paddle collects address, tax, and payment",
+            kind: "async",
+          },
+        ]} caption="The server owns the price ids, the currency, and the order id in customData. Paddle.js only opens the transaction the server created, and the webhook plus a refetch decides whether the order is paid." />
+
+The route relies on the [shared app wiring](/docs/payments#app-wiring) (session, scoped `csrf()` and `rateLimit()`) and the overview's `orders` module. `paddlePriceFor()` stands in for your catalogue lookup from SKU to Paddle price id:
+
+```ts title="src/routes/checkout-paddle.ts"
+import { z } from "zod";
+import { HttpError, idempotency } from "@daloyjs/core";
+import { paddlePlugin, PaddleApiError } from "../plugins/paddle.ts";
+import { orders } from "../orders.ts";
+import { paddlePriceFor } from "../catalogue.ts";
+import { db } from "../db.ts";
+
+paddlePlugin(app);
+
+app.post(
+  "/checkout/paddle",
+  {
+    operationId: "createPaddleTransaction",
+    // Safe client retries of this POST (scoped per signed-in user).
+    hooks: idempotency({ scope: (ctx) => ctx.state.session.get<string>("userId") }),
+    request: { body: z.object({ orderId: z.string().min(1).max(80) }).strict() },
+    responses: {
+      201: { description: "transaction ready for Paddle.js", body: z.object({ transactionId: z.string() }) },
+    },
+  },
+  async ({ body, state }) => {
+    const userId = state.session.get<string>("userId");
+    const order = await orders.forCheckout(body.orderId, userId);
+
+    // No idempotency header on POST /transactions: reuse the transaction
+    // created for this exact cart version instead of creating a second one.
+    const existing = await db.checkoutRefs.get("paddle", order.id, order.version);
+    if (existing) return { status: 201, body: { transactionId: existing } };
+
+    try {
+      const txn = await state.paddle.createTransaction({
+        orderId: order.id,
+        userId: userId!,
+        currency: order.currency,
+        items: order.lines.map((line) => ({ priceId: paddlePriceFor(line.sku), quantity: line.quantity })),
+      });
+      await db.checkoutRefs.put("paddle", order.id, order.version, txn.id);
+      return { status: 201, body: { transactionId: txn.id } };
+    } catch (e) {
+      if (e instanceof PaddleApiError) {
+        // Keep Paddle's code and detail in your logs, not in the client response.
+        app.log.warn({ event: "paddle.create_failed", code: e.code }, "Paddle rejected the transaction");
+        throw new HttpError(502, {
+          type: "https://your-app.example.com/problems/payment-provider",
+          title: "Payment provider error",
+          detail: "Checkout could not be started. Please try again.",
+        });
+      }
+      throw e;
+    }
+  },
+);
+```
+
+`db.checkoutRefs` is a placeholder for a small table keyed by provider, order id, and cart version. Back the `put` with a unique constraint so two concurrent first requests cannot both store a transaction; the `idempotency()` hook already collapses client retries that share an `Idempotency-Key`.
+
+In the browser, initialise Paddle.js with the client-side token and open the overlay:
+
+```ts title="app/cart/paddle-checkout.ts"
+// <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+export async function openPaddleCheckout(orderId: string, csrfToken: string) {
+  if (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "sandbox") window.Paddle.Environment.set("sandbox");
+  window.Paddle.Initialize({ token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN! });
+
+  const res = await fetch("/checkout/paddle", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken, "idempotency-key": `paddle-${orderId}` },
+    body: JSON.stringify({ orderId }),
+  });
+  if (!res.ok) throw new Error("Could not start checkout");
+  const { transactionId } = (await res.json()) as { transactionId: string };
+  window.Paddle.Checkout.open({ transactionId });
+}
+```
+
+<Callout type="note" title="CSP note">
+<p>Paddle.js loads from <code>cdn.paddle.com</code> and renders checkout in a Paddle-hosted frame. Add the script, frame, and connect sources Paddle documents for Paddle.js to your content security policy.</p>
+</Callout>
+
+## 6. Receive and verify webhooks
+
+<SequenceDiagram title="Webhook verification" participants={["Paddle", "DaloyJS route", "Job worker"]} steps={[
+          {
+            from: "Paddle",
+            to: "DaloyJS route",
+            label: "POST /webhooks/paddle",
+            detail: "Paddle-Signature: ts=...;h1=...",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "HMAC-SHA256 over ts + ':' + raw body",
+            detail: "5 s window, any h1 may match",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Paddle",
+            label: "401 when verification fails",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Job worker",
+            label: "enqueue keyed by event_id, then 200",
+            detail: "worker refetches the transaction or subscription",
+            kind: "async",
+          },
+        ]} caption="Verify over the exact bytes Paddle signed, dedupe on event_id (not notification_id, which changes per delivery), and let the worker read current state from the API so out-of-order events cannot regress an order or a subscription." />
+
+The route follows the [shared webhook pattern](/docs/payments#webhook-pattern): verify, dedupe atomically on `event_id`, enqueue, and acknowledge well inside Paddle's five-second limit.
+
+```ts title="src/webhooks/paddle.ts"
+import { z } from "zod";
+import { readBodyLimited, safeJsonParse, jobIdempotencyKey } from "@daloyjs/core";
+
+type PaddleEnvelope = { event_id: string; event_type: string; occurred_at: string; data: { id: string } };
+
+app.post(
+  "/webhooks/paddle",
+  {
+    operationId: "paddleWebhook",
+    // No request.body schema: the raw bytes stay readable for the HMAC check.
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
+  },
+  async ({ request, state }) => {
+    const raw = await readBodyLimited(request, 1_048_576);
+    if (!(await state.paddle.verifyWebhook(raw, request.headers.get("paddle-signature")))) {
+      return { status: 401, body: { error: "invalid signature" } };
+    }
+    const event = safeJsonParse(new TextDecoder().decode(raw)) as PaddleEnvelope;
+
+    const job = event.event_type.startsWith("transaction.")
+      ? "paddle.transaction"
+      : event.event_type.startsWith("subscription.")
+        ? "paddle.subscription"
+        : undefined;
+    if (job) {
+      await app.jobs!.enqueue({
+        name: job,
+        payload: { eventId: event.event_id, type: event.event_type, entityId: event.data.id, occurredAt: event.occurred_at },
+        idempotencyKey: jobIdempotencyKey({ name: job, key: event.event_id }),
+      });
+    }
+    // Ack every verified event, including types you do not handle.
+    return { status: 200, body: { ok: true as const } };
+  },
+);
+```
+
+Paddle also publishes its webhook source IPs per environment. An IP allowlist at your edge is a useful second layer, never a replacement for the signature check.
+
+### Checking the amount [#checking-the-amount]
+
+`transaction.paid` is the earliest point at which payment is captured, and `transaction.completed` follows once Paddle finishes its processing. The worker refetches the transaction and compares it with the stored order:
+
+```ts title="src/jobs/paddle.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { paddleClient } from "../plugins/paddle.ts";
+import { orders } from "../orders.ts";
+
+type PaddleJob = { eventId: string; type: string; entityId: string; occurredAt: string };
+
+export const handlePaddleTransaction: JobHandler<PaddleJob> = async ({ job }) => {
+  const txn = await paddleClient.getTransaction(job.payload.entityId); // authoritative state
+  if (txn.status !== "paid" && txn.status !== "completed") return;
+  const orderId = (txn.customData as { orderId?: string } | null)?.orderId;
+  const totals = txn.details?.totals;
+  if (!orderId || !totals) return;
+  await orders.markPaid(orderId, {
+    // Pre-tax, pre-discount subtotal in minor units: equals your catalogue total
+    // when prices are tax-exclusive and no checkout discount applies.
+    amountMinor: Number(totals.subtotal),
+    currency: txn.currencyCode,
+    providerRef: txn.id,
+  });
+};
+// Register it in your single app.useJobs() call (see the payments overview).
+```
+
+<Callout type="warning" title="Compare what you control">
+<p>Paddle amounts are integer strings in the currency's lowest denomination. The <code>grand_total</code> includes the tax Paddle calculated for the buyer's location, so it will not match a catalogue total. With tax-exclusive prices and no discounts, <code>subtotal</code> does. If you sell with tax-inclusive (<code>internal</code>) or location-based prices, or allow discounts at checkout, compare the transaction's items (price id and quantity) and currency with the order instead, and record Paddle's totals for your ledger.</p>
+</Callout>
+
+## 7. Subscription lifecycle
+
+Paddle owns the billing schedule, renewals, dunning, and tax for subscriptions. Your app mirrors the state and grants entitlements from it. The relevant events are `subscription.created`, `subscription.activated`, `subscription.trialing`, `subscription.updated`, `subscription.past_due`, `subscription.paused`, `subscription.resumed`, and `subscription.canceled`. Because deliveries can arrive out of order, the worker refetches the subscription rather than applying the event body:
+
+```ts title="src/jobs/paddle-subscriptions.ts"
+import type { JobHandler } from "@daloyjs/core";
+import { paddleClient } from "../plugins/paddle.ts";
+import { db } from "../db.ts";
+
+export const handlePaddleSubscription: JobHandler<{ entityId: string; occurredAt: string }> = async ({ job }) => {
+  const sub = await paddleClient.getSubscription(job.payload.entityId);
+  const userId = (sub.customData as { userId?: string } | null)?.userId;
+  if (!userId) return;
+  // Upsert keyed by subscription id; current status drives access.
+  await db.entitlements.sync({
+    userId,
+    subscriptionId: sub.id,
+    status: sub.status, // active | trialing | past_due | paused | canceled
+    priceIds: sub.items.map((item) => item.price.id),
+    currentPeriodEndsAt: sub.currentBillingPeriod?.endsAt ?? null,
+  });
+};
+// Register both Paddle handlers in your single app.useJobs() call.
+```
+
+A subscription created from a checkout inherits the transaction's `custom_data`, which is how `userId` reaches it here; confirm this in your sandbox for your setup, or map Paddle customer ids to users instead. Decide deliberately what `past_due` means for access (a grace period is common) instead of revoking on the first failed renewal.
+
+## 8. Refunds
+
+Paddle refunds are adjustments. Expose them only through a [protected refund route](/docs/payments#protected-refunds). The plugin call issues a full refund:
+
+```ts
+await state.paddle.refundFull({ transactionId: order.providerRef!, reason: "requested_by_customer" });
+```
+
+Most live refunds are created as `pending_approval` and reviewed by Paddle before they complete (sandbox approves automatically), so update your ledger from the `adjustment.updated` webhook, not from the API response. Partial refunds take `type: "partial"` and an `items[]` array of transaction item ids and amounts.
+
+## Merchant of record: tax and VAT
+
+Because Paddle is the merchant of record, it calculates, collects, and remits sales tax, VAT, and GST, issues compliant invoices, and appears as the seller to your customers. You do not need a separate tax engine for Paddle sales, and you should not add tax to your own order total. Your contract and payouts are with Paddle, and Paddle verifies your account and website before live checkouts work. See the overview's [tax and merchant of record](/docs/payments#beyond-one-off-payments) notes.
+
+## Runtimes
+
+`@paddle/paddle-node-sdk` 3.x declares Node `>=20` (met by DaloyJS's Node `^24 || >=26`), has no dependencies, and calls the API with `fetch`. Its package `exports` map ships a separate edge build for the `deno`, `bun`, `worker`, and `workerd` conditions, so Deno, Bun, and Cloudflare Workers are plausible targets, but they are not verified here. Vercel Edge is not verified. The webhook verification above uses only core WebCrypto helpers and runs on every [DaloyJS adapter](/docs/adapters). See the [runtime table](/docs/payments#runtime-compatibility).
+
+## Errors
+
+The SDK throws `ApiError` with Paddle's `type`, `code`, `detail`, and `documentationUrl`. Log the code, return a generic [problem+json](/docs/errors) 502 to the client, and keep Paddle's `detail` out of responses.
+
+## Modernisation notes
+
+- Paddle Billing, not Paddle Classic. The Node SDK and this guide target Billing; Classic is a different API with different webhooks.
+- Price ids are the contract. Change a price in Paddle by creating a new price and switching your catalogue to it; never let the browser choose one.
+- Dedupe on `event_id`, order by `occurred_at`. `notification_id` is per delivery attempt, so it does not dedupe a retry.
+- Expect several signatures during rotation. The verifier accepts a delivery when any `h1` matches the secret you hold, so a rotation does not cause a burst of 401s.
+
+See also the [payments overview](/docs/payments), [Stripe guide](/docs/payments/stripe), [Mollie guide](/docs/payments/mollie), and [problem+json errors](/docs/errors).

@@ -1,0 +1,405 @@
+---
+title: Send email from DaloyJS with Azure Communication Services
+description: "Send email from DaloyJS on Azure Functions with ACS Email: managed identity, queued beginSend, Event Grid delivery reports, and the 2028 retirement plan."
+keywords:
+  - DaloyJS Azure email
+  - Azure Communication Services Email
+  - "@azure/communication-email"
+  - EmailClient beginSend
+  - DefaultAzureCredential email
+  - EmailDeliveryReportReceived
+  - Event Grid webhook validation
+  - Azure Functions email queue
+---
+
+# Send email from DaloyJS with Azure Communication Services
+
+[Azure Communication Services Email](https://learn.microsoft.com/en-us/azure/communication-services/concepts/email/email-overview) (ACS Email) sends transactional mail from an Azure resource, with Microsoft Entra ID authentication through managed identity and delivery reports published to Event Grid. This guide uses [`@azure/communication-email`](https://www.npmjs.com/package/@azure/communication-email) and runs the app on the [Azure Functions adapter](/docs/adapters/azure-functions). Read the [email overview](/docs/email) first: it defines the shared `EmailSender`, `emailPlugin()`, `headerSafe`, and `escapeHtml()` used below.
+
+<Callout type="warning">**ACS Email is retiring on September 30, 2028.** Microsoft's [retirement guide](https://learn.microsoft.com/en-us/azure/communication-services/acs-retirement-and-breaking-changes-guide) puts the service in maintenance mode (security and critical fixes only) and recommends migrating existing workloads rather than onboarding new ones; new onboarding is still possible but "subject to change at any time". Microsoft has also been reported to stop accepting new ACS customers from October 23, 2026 ([Message Center AZ557117](https://mc.merill.net/message/AZ557117)), so check the retirement guide before you start. For a new project, prefer another provider in this section. This page is for teams already on ACS who want a safe integration until they migrate.</Callout>
+
+<SequenceDiagram title="Queue the send, learn the outcome from Event Grid" participants={["Route handler", "Storage queue", "Queue function", "ACS Email", "Event Grid"]} steps={[
+          {
+            from: "Route handler",
+            to: "Storage queue",
+            label: "sendMessage(base64(JSON))",
+            detail: "server-built message + UUID operationId, 202 to the client",
+            kind: "request",
+          },
+          {
+            from: "Queue function",
+            to: "ACS Email",
+            label: "client.beginSend(message, { operationId })",
+            detail: "managed identity via DefaultAzureCredential",
+            kind: "request",
+          },
+          {
+            from: "ACS Email",
+            to: "Queue function",
+            label: "202 accepted, poller returned",
+            detail: "do not await pollUntilDone(); record the operation id",
+            kind: "response",
+          },
+          {
+            from: "Event Grid",
+            to: "Queue function",
+            label: "Microsoft.Communication.EmailDeliveryReportReceived",
+            detail: "status Delivered | Bounced | Suppressed | FilteredSpam | ...",
+            kind: "async",
+          },
+        ]} caption="beginSend() returns a long-running-operation poller as soon as ACS accepts the request. Do not hold an HTTP request open on it: enqueue the send, let a queue-triggered function call beginSend(), and read the final outcome from Event Grid delivery reports." />
+
+## 1. Provision
+
+1. Create an **Email Communication Services** resource and add a domain to it. Two kinds exist:
+   - **Azure managed domain**: one click, sends as `donotreply@<guid>.azurecomm.net`, already authenticated. Limited to 5 emails a minute and 10 an hour per subscription, with no increase available. Use it for development only.
+   - **Custom domain**: a domain you own. Add the ownership TXT record, then the SPF and DKIM records the portal lists. Default limits are 30 emails a minute and 100 an hour per subscription, raisable through a quota increase request once your failure rate stays under 1%. Publish DMARC yourself and check alignment in the `Authentication-Results` of a received message.
+2. Add a **sender username** (MailFrom address, for example `no-reply`) on the domain; up to 100 per domain. The display name readers see is configured with it, not per send.
+3. Create a **Communication Services** resource and connect the verified domain to it. Copy its endpoint (`https://<resource-name>.communication.azure.com`).
+4. Give the Function App a **managed identity** and grant it an Azure RBAC role on the Communication Services resource that allows sending. Microsoft does not document a minimal send-only role on the pages we checked, so test the role you pick against a real send before you rely on it.
+
+Ramp volume up over two to four weeks, as Microsoft recommends, so mailbox providers can learn your new sending IPs.
+
+## 2. Install
+
+```package-install
+@azure/communication-email @azure/identity @azure/storage-queue @azure/functions
+```
+
+## 3. Environment variables
+
+```dotenv title=".env"
+ACS_ENDPOINT=https://acme-comms.communication.azure.com
+ACS_SENDER=no-reply@mail.acme.example.com
+EMAIL_QUEUE_URL=https://acmestorage.queue.core.windows.net
+CONTACT_INBOX=support@acme.example.com
+# Identity-based connection for the queue triggers (no storage key):
+EmailQueue__queueServiceUri=https://acmestorage.queue.core.windows.net
+# Only for a user-assigned managed identity:
+AZURE_CLIENT_ID=00000000-0000-0000-0000-000000000000
+```
+
+Add `ACS_ENDPOINT: z.url()`, `ACS_SENDER: z.email()`, and `EMAIL_QUEUE_URL: z.url()` to the overview's [`defineConfig()` schema](/docs/email#common-pattern). There is no secret here: `DefaultAzureCredential` picks up the Function App's managed identity in Azure and your `az login` session locally. `EmailClient` also accepts a connection string (`endpoint=...;accesskey=...`), but an access key is a long-lived shared secret that can do everything on the resource; keep it out of production.
+
+## 4. Sender
+
+```ts title="src/email/acs.ts"
+import { EmailClient } from "@azure/communication-email";
+import { DefaultAzureCredential } from "@azure/identity";
+import type { EmailSender } from "../plugins/email.ts";
+import { config } from "../config.ts";
+
+// Managed identity in Azure, developer credentials locally. Pin ManagedIdentityCredential
+// in production if you want no fallback chain.
+export const acs = new EmailClient(config.ACS_ENDPOINT, new DefaultAzureCredential());
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const sender: EmailSender = {
+  async send(msg) {
+    // ACS identifies the operation by a caller-supplied UUID. The queue message carries one,
+    // so a retried message reuses it and the id in your logs stays stable.
+    const operationId =
+      msg.idempotencyKey !== undefined && UUID.test(msg.idempotencyKey) ? msg.idempotencyKey : crypto.randomUUID();
+    const content =
+      msg.html !== undefined
+        ? { subject: msg.subject, html: msg.html, plainText: msg.text }
+        : { subject: msg.subject, plainText: msg.text ?? "" };
+    await acs.beginSend(
+      {
+        senderAddress: config.ACS_SENDER,
+        content,
+        recipients: { to: [{ address: msg.to }] },
+        replyTo: msg.replyTo !== undefined ? [{ address: msg.replyTo }] : undefined,
+        headers: msg.headers,
+      },
+      { operationId, abortSignal: msg.signal },
+    );
+    // beginSend() resolved: ACS accepted the request. Do not pollUntilDone() here;
+    // the delivery outcome arrives as an Event Grid delivery report.
+    return { id: operationId };
+  },
+};
+```
+
+`beginSend()` sends the request, performs one status poll, and returns a poller. `pollUntilDone()` would keep the caller waiting until the operation reaches `Succeeded`, `Failed`, or `Canceled`, which is exactly what an HTTP handler should not do. `operationId` is how the SDK names that long-running operation; Microsoft does not document it as a deduplication key, so treat it as a correlation id and dedupe in your own data ([below](#queued-sending)).
+
+```ts title="src/app.ts"
+import { App, secureHeaders } from "@daloyjs/core";
+import { emailPlugin } from "./plugins/email.ts";
+import { sender } from "./email/acs.ts";
+import { verifyEmailRoutes } from "./routes/verify-email.ts";
+
+export const app = new App({ behindProxy: { hops: 1 } }); // see the Azure adapter's client-IP notes
+app.use(secureHeaders());
+emailPlugin(app, sender);
+verifyEmailRoutes(app);
+```
+
+```ts title="src/functions/api.ts"
+import { app as azure } from "@azure/functions";
+import { toAzureHandler } from "@daloyjs/core/azure";
+import { app } from "../app.ts";
+
+azure.http("api", {
+  route: "{*path}",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+  authLevel: "anonymous", // DaloyJS does the auth
+  handler: toAzureHandler(app),
+});
+```
+
+Do not call the overview's `emailJobs()` on Functions: there is no long-lived process for its worker loop, and `app.onShutdown()` hooks are not wired on Azure. A Storage queue plus a queue-triggered function does that job.
+
+## Queued sending with a Storage queue [#queued-sending]
+
+The route builds the message server-side and puts it on a Storage queue. The Functions queue trigger expects base64 text by default, and a queue message is limited to 64 KB, so keep attachments out of it:
+
+```ts title="src/email/queue.ts"
+import { QueueClient } from "@azure/storage-queue";
+import { DefaultAzureCredential } from "@azure/identity";
+import { jobIdempotencyKey } from "@daloyjs/core";
+import type { EmailMessage } from "../plugins/email.ts";
+import { config } from "../config.ts";
+
+export type QueuedEmail = Omit<EmailMessage, "signal" | "idempotencyKey">;
+export interface QueuedSend {
+  key: string; // your dedupe key, from the business event
+  operationId: string; // the ACS operation id, stable across retries of this message
+  msg: QueuedEmail;
+}
+
+// The identity needs a data-plane send role on the queue (for example Storage Queue Data Message Sender).
+const sendQueue = new QueueClient(`${config.EMAIL_QUEUE_URL}/email-send`, new DefaultAzureCredential());
+
+export async function enqueueEmail(businessKey: string, msg: QueuedEmail): Promise<string> {
+  const job: QueuedSend = {
+    key: jobIdempotencyKey({ name: "email.send", key: businessKey }),
+    operationId: crypto.randomUUID(),
+    msg,
+  };
+  await sendQueue.sendMessage(Buffer.from(JSON.stringify(job)).toString("base64"));
+  return job.key;
+}
+```
+
+A route that mails the signed-in user their own verification link. The client sends nothing but its credentials; the server reads the address from the account:
+
+```ts title="src/routes/verify-email.ts"
+import { z } from "zod";
+import { App, UnauthorizedError } from "@daloyjs/core";
+import { escapeHtml } from "../plugins/email.ts";
+import { sendGuards } from "../email/guards.ts";
+import { enqueueEmail } from "../email/queue.ts";
+
+export function verifyEmailRoutes(app: App) {
+  app.post(
+    "/me/verify-email",
+    {
+      operationId: "resendVerification",
+      hooks: sendGuards, // auth + per-IP + per-user limits, see the overview
+      responses: { 202: { description: "Queued", body: z.object({ ok: z.literal(true) }) } },
+    },
+    async ({ state }) => {
+      const sub = state.user?.sub;
+      if (!sub) throw new UnauthorizedError();
+      const { email, link } = await issueVerificationLink(sub); // your auth provider
+      // One send per user per minute, however often the button is clicked.
+      await enqueueEmail(`verify-${sub}-${Math.floor(Date.now() / 60_000)}`, {
+        to: email, // from the account, never from the request
+        subject: "Confirm your email address",
+        text: `Confirm your address: ${link}`,
+        html: `<p><a href="${escapeHtml(link)}">Confirm your email address</a></p>`,
+      });
+      return { status: 202, body: { ok: true as const } };
+    },
+  );
+}
+
+declare function issueVerificationLink(userId: string): Promise<{ email: string; link: string }>;
+```
+
+The consumer is a separate function in the same Function App. It checks before sending and records after, because the queue delivers at least once:
+
+```ts title="src/functions/email-send.ts"
+import { app as azure } from "@azure/functions";
+import { sender } from "../email/acs.ts";
+import type { QueuedSend } from "../email/queue.ts";
+
+azure.storageQueue<QueuedSend>("emailSend", {
+  queueName: "email-send",
+  connection: "EmailQueue", // reads EmailQueue__queueServiceUri, authenticates with the managed identity
+  handler: async (job, context) => {
+    if ((await alreadySent(job.key)) || (await isUndeliverable(job.msg.to))) return;
+    try {
+      await sender.send({ ...job.msg, idempotencyKey: job.operationId });
+    } catch (err) {
+      if ((err as { statusCode?: number }).statusCode === 400) {
+        context.error(`ACS rejected ${job.key}`); // a bad request will not get better; no provider text
+        return;
+      }
+      throw err; // 429, 5xx, network: the host retries, then moves the message to email-send-poison
+    }
+    await recordSent(job.key, job.operationId);
+  },
+});
+
+// Your data layer: a table with a unique key column, plus the overview's undeliverable flag.
+declare function alreadySent(key: string): Promise<boolean>;
+declare function recordSent(key: string, operationId: string): Promise<void>;
+declare function isUndeliverable(email: string): Promise<boolean>;
+```
+
+- A failed run is retried up to five times in total, then the message moves to `email-send-poison`. Failed messages reappear immediately unless you set `visibilityTimeout` in `host.json`; set it, since ACS asks you not to retry throttled requests straight away and returns a `Retry-After` on 429.
+- If `beginSend()` throws after ACS already accepted the request, a retry can send twice. ACS has no documented dedupe for that case, so this window stays open; the `alreadySent` check only covers retries after `recordSent` committed.
+- The queue trigger's managed identity needs the Storage queue roles Microsoft lists for identity-based trigger connections.
+
+## Attachments
+
+Attachments go through the client directly. Each is `{ name, contentType, contentInBase64 }`, plus `contentId` to make it inline (reference it as `cid:<contentId>`). The whole request, including base64 attachments, is capped at 10 MB, which leaves roughly 7.5 MB of raw file after encoding. A support request can raise that to 30 MB; beyond that, store the file in Blob Storage and mail a short-lived SAS link. An invalid attachment fails the request with Bad Request unless you set the `x-ms-acsemail-suppress-invalid-attachment` header.
+
+```ts
+const pdf = await readInvoicePdf(invoice.id); // Uint8Array, from Blob Storage
+await acs.beginSend({
+  senderAddress: config.ACS_SENDER,
+  content: { subject: `Invoice ${invoice.number}`, plainText: "Your invoice is attached." },
+  recipients: { to: [{ address: invoice.customerEmail }] }, // looked up server-side
+  attachments: [
+    { name: `invoice-${invoice.number}.pdf`, contentType: "application/pdf", contentInBase64: Buffer.from(pdf).toString("base64") },
+  ],
+});
+```
+
+## Delivery reports: bounces and suppressed sends [#webhooks-bounces-and-complaints]
+
+ACS publishes `Microsoft.Communication.EmailDeliveryReportReceived` (and, with engagement tracking on, `EmailEngagementTrackingReportReceived`) to Event Grid. The report's `data.status` is one of:
+
+| Status | Meaning | Action |
+| --- | --- | --- |
+| `Delivered` | Handed to the recipient's mail server | none |
+| `Bounced` | Hard bounce: the address or domain does not exist | mark undeliverable |
+| `Suppressed` | Dropped because the address recently hard-bounced | mark undeliverable |
+| `FilteredSpam`, `Quarantined` | Rejected or quarantined as spam, bulk, or phishing | fix content and reputation, not the address |
+| `Expanded`, `Failed` | Distribution list expanded / not delivered | log and investigate |
+
+The documented schema has no spam-complaint event, so you will not learn about complaints this way. Track unsubscribes yourself.
+
+### Option A: an Event Grid trigger function (recommended on Functions)
+
+Create an Event Grid subscription on the Communication Services resource with the Azure Function as the endpoint. Azure handles the subscription validation handshake for this trigger type, so there is no public route of yours to secure:
+
+```ts title="src/functions/acs-events.ts"
+import { app as azure, type EventGridEvent } from "@azure/functions";
+import { jobIdempotencyKey } from "@daloyjs/core";
+
+azure.eventGrid("acsEmailEvents", {
+  handler: async (event: EventGridEvent, context) => {
+    if (event.eventType !== "Microsoft.Communication.EmailDeliveryReportReceived") return;
+    const status = event.data?.status;
+    const recipient = event.data?.recipient;
+    if ((status === "Bounced" || status === "Suppressed") && typeof recipient === "string") {
+      // Event Grid delivers at least once; a redelivered event keeps its id, so the insert is a no-op.
+      const key = jobIdempotencyKey({ name: "email.suppress", key: `acs-${event.id}` });
+      await recordSuppression(key, recipient.toLowerCase(), status);
+    } else if (status === "FilteredSpam" || status === "Quarantined") {
+      context.warn(`ACS ${String(status)} for message ${String(event.data?.messageId)}`); // no address in logs
+    }
+  },
+});
+
+// Insert into your suppression table, ignoring a duplicate key.
+declare function recordSuppression(key: string, email: string, reason: string): Promise<void>;
+```
+
+Another route with no public endpoint: make a Storage queue the subscription's destination (Event Grid can deliver with its own managed identity) and drain it with a queue trigger. Check the encoding of what arrives against the trigger's base64 default before you parse it.
+
+### Option B: a DaloyJS webhook route
+
+When the receiver is your DaloyJS app (on Functions or a long-lived host such as Container Apps), the route has three jobs: authenticate Event Grid, answer the validation handshake, and acknowledge events fast.
+
+1. **Authenticate.** The handshake only proves you expected the subscription; anyone who learns the URL can still POST look-alike events. Microsoft's answer is a [Microsoft Entra protected webhook](https://learn.microsoft.com/en-us/azure/event-grid/secure-webhook-delivery): create an app registration for the webhook, run Microsoft's script that assigns Event Grid the `AzureEventGridSecureWebhookSubscriber` app role, and enable **Use Microsoft Entra authentication** on the subscription. Event Grid then sends an Entra bearer token with every request, which `jwk()` verifies. Accept the issuer your registration actually emits (v1 tokens, the default when `accessTokenAcceptedVersion` is unset, use `https://sts.windows.net/<tenant-id>/`; v2 tokens use `https://login.microsoftonline.com/<tenant-id>/v2.0`): decode one delivered token and pin exactly that value.
+2. **Handshake.** On creation Event Grid POSTs a `Microsoft.EventGrid.SubscriptionValidationEvent` with the header `aeg-event-type: SubscriptionValidation`. Echo `data.validationCode` as `{ "validationResponse": "..." }` with **200** (202 is not accepted) within 30 seconds. Check `aeg-subscription-name` first and fail the handshake for a subscription you did not create.
+3. **Ack fast.** Enqueue suppressions and return 200.
+
+```ts title="src/routes/acs-webhook.ts"
+import { z } from "zod";
+import { App, BadRequestError, ForbiddenError, every, jobIdempotencyKey, jwk, readBodyLimited, requireRoles, safeJsonParse } from "@daloyjs/core";
+import { enqueueSuppression } from "../email/queue.ts"; // same pattern as enqueueEmail, queue "email-suppress"
+import { config } from "../config.ts";
+
+interface EventGridEnvelope {
+  id: string;
+  eventType: string;
+  data?: { validationCode?: unknown; status?: unknown; recipient?: unknown };
+}
+
+export function acsWebhookRoutes(app: App) {
+  app.post(
+    "/webhooks/acs-email",
+    {
+      operationId: "acsEmailEvents",
+      hooks: every(
+        jwk({
+          jwks: `https://login.microsoftonline.com/${config.ENTRA_TENANT_ID}/discovery/v2.0/keys`,
+          algorithms: ["RS256"],
+          issuer: config.EVENTGRID_TOKEN_ISSUER,
+          audience: config.EVENTGRID_WEBHOOK_AUDIENCE, // the webhook app's client id or App ID URI
+          maxLifetimeSeconds: 86_400,
+        }),
+        requireRoles(["AzureEventGridSecureWebhookSubscriber"]),
+      ),
+      responses: {
+        200: {
+          description: "Accepted or validated",
+          body: z.union([z.object({ ok: z.literal(true) }), z.object({ validationResponse: z.string() })]),
+        },
+        400: { description: "Malformed" },
+        403: { description: "Unknown subscription" },
+      },
+    },
+    async ({ request }) => {
+      const subscription = (request.headers.get("aeg-subscription-name") ?? "").toLowerCase();
+      if (subscription !== config.EVENTGRID_SUBSCRIPTION.toLowerCase()) throw new ForbiddenError();
+
+      // No body schema: read bounded bytes, parse prototype-pollution safe.
+      const raw = new TextDecoder().decode(await readBodyLimited(request, 1_048_576));
+      const events = safeJsonParse(raw);
+      if (!Array.isArray(events)) throw new BadRequestError();
+
+      if (request.headers.get("aeg-event-type") === "SubscriptionValidation") {
+        const first = events[0] as EventGridEnvelope | undefined;
+        const code = first?.eventType === "Microsoft.EventGrid.SubscriptionValidationEvent" ? first.data?.validationCode : undefined;
+        if (typeof code !== "string") throw new BadRequestError();
+        return { status: 200, body: { validationResponse: code } };
+      }
+
+      for (const event of events as EventGridEnvelope[]) {
+        if (event.eventType !== "Microsoft.Communication.EmailDeliveryReportReceived") continue;
+        const { status, recipient } = event.data ?? {};
+        if ((status === "Bounced" || status === "Suppressed") && typeof recipient === "string") {
+          const key = jobIdempotencyKey({ name: "email.suppress", key: `acs-${event.id}` });
+          await enqueueSuppression(key, recipient.toLowerCase(), status);
+        }
+      }
+      return { status: 200, body: { ok: true as const } };
+    },
+  );
+}
+```
+
+Add `ENTRA_TENANT_ID`, `EVENTGRID_TOKEN_ISSUER`, `EVENTGRID_WEBHOOK_AUDIENCE`, and `EVENTGRID_SUBSCRIPTION` to your config schema. If you cannot use Entra protection, the fallback Microsoft documents is a static `Authorization` header set as a secret [delivery property](https://learn.microsoft.com/en-us/azure/event-grid/delivery-properties) on the subscription. Verify it in constant time with `hooks: bearerAuth({ validate: (token) => timingSafeEqual(token, config.EVENTGRID_WEBHOOK_TOKEN) })` (a 32+ character random value from Key Vault), and rotate it like any shared secret. On a long-lived host with a durable job store, replace `enqueueSuppression()` with `app.jobs!.enqueue({ name: "email.suppress", ... })` as on the other provider pages.
+
+## Suppression
+
+ACS keeps a platform-wide **managed suppression list**. The first hard bounce suppresses the address for 24 hours; repeats within the lease extend it to 48 hours, 96 hours, 7 days, and at most 14 days. The address drops off once the lease passes with no new sends to it. While suppressed, sends to it are dropped and reported with status `Suppressed`. Because the lease expires, do not treat ACS as your source of truth: mirror `Bounced` and `Suppressed` into your own undeliverable flag through the handlers above.
+
+Customer-managed, domain-level **suppression lists** for opt-outs exist too, managed through the portal, management SDKs, or REST APIs. Microsoft marks that feature as preview, not recommended for production workloads, and the docs point at beta management SDK versions.
+
+## Runtimes
+
+- **Azure Functions (Node v4 model):** the setup on this page. Run on a Node version both Functions and DaloyJS support (Node 24 LTS or newer).
+- **Container Apps, App Service, AKS, VMs:** the same sender works with a managed identity; there you can run the overview's `emailJobs()` worker on a durable store instead of the Storage queue.
+- **Outside Azure:** `DefaultAzureCredential` also reads a service principal from `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Prefer workload identity federation over a client secret where your platform supports it.
+- **Cloudflare Workers, Bun, Deno:** we have not verified `@azure/communication-email` or `@azure/identity` there.
+
+See also [AWS SES](/docs/email/aws-ses), [Cloudflare Email Service](/docs/email/cloudflare), the [Azure Functions adapter](/docs/adapters/azure-functions), [Entra ID](/docs/auth/entra-id), and the [email integrations overview](/docs/email).
