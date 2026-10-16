@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-16
+
 ### Added
 
 - `app.readinesscheck({ checks, checkTimeoutMs })`: named dependency checks
