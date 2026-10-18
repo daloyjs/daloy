@@ -1,6 +1,6 @@
 ---
 title: "IBM Cost of a Data Breach 2026: $5M Average, AI on Both Sides, and What Your Backend Still Controls"
-description: Ponemon interviewed 3,500 people across 602 breached organizations. The global average hit $4.99M, AI-driven attacks are up 56%, and 92% of AI-related breaches lacked basic access controls. Here is the data, the IBM Technology walkthrough, and the backend guardrails that still move the numbers.
+description: Ponemon interviewed about 3,500 people across 602 breached organizations. The global average hit $4.99M, AI-driven attacks are up 56%, and 92% of AI-related breaches lacked basic access controls. Here is the data, the IBM Technology walkthrough, and the backend guardrails that still move the numbers.
 date: 2026-07-31
 readingTime: 13 min read
 author: Devlin Duldulao
@@ -63,8 +63,10 @@ function roughOpenCost(days = DAYS_OPEN): number {
   return days * 24 * HOURLY_COST_USD;
 }
 
-// ~$6.5M if you stay at the mean for the full lifecycle.
-// Shorter detection is the lever that actually bends this curve.
+// ~$6.5M for the full 247 days, which is MORE than the $4.99M average
+// breach. So the hourly figure is a way to feel the cost of an open
+// window, not a formula that adds up to the bill: costs do not accrue
+// evenly hour by hour. Shorter detection is still the lever that bends it.
 ```
 
 ## What still did not improve

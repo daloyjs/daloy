@@ -53,7 +53,7 @@ Start with adoption. AI coding tools now write **24% of production code** on ave
               },
             ]} />
 
-Nearly 70% of organizations say they have uncovered flaws tied to AI-generated code. For one in five, it escalated into a serious breach. Here is the full breakdown of how teams answered "have you ever identified a vulnerability introduced by AI-generated code?"
+Nearly 70% of organizations say they have uncovered flaws tied to AI-generated code. One in five respondents (20% of everyone surveyed, not 20% of that 70%) said it escalated into a serious incident. Here is the full breakdown of how teams answered "have you ever identified a vulnerability introduced by AI-generated code?"
 
 <BarChart title="Vulnerabilities introduced by AI-generated code" unit="%" bars={[
               { label: "Yes, a minor issue", value: 49, tone: "accent" },
@@ -97,7 +97,7 @@ Three bugs, zero of them visible in a quick scroll. No input validation, so the 
               { label: "6-10 years", value: 24 },
               { label: "More than 10 years", value: 8 },
               { label: "Never", value: 4, tone: "danger" },
-            ]} caption="Most teams expect a 3-5 year horizon, but only 21% believe it will ever happen without human oversight." />
+            ]} caption="The largest group (44%) expects a 3-5 year horizon, but only 21% believe it will ever happen without human oversight." />
 
 Only **21%** think AI will get there without a human in the loop. The other 79%, as one of the report's quoted CISOs puts it, are "the smart ones." Almost a third expect AI to reduce bugs but still need people for secure design, architecture, and the business logic that no model understands because it lives in your head and a Slack thread from 2024.
 
@@ -157,17 +157,21 @@ const FALSE_POSITIVE_SHARE = 0.72;
 const WORKING_WEEKS = 46;
 const BLENDED_HOURLY_USD = 75; // illustrative
 
-function noiseCostPerEngineer(): number {
-  const wastedHours = HOURS_PER_WEEK * FALSE_POSITIVE_SHARE * WORKING_WEEKS;
-  return Math.round(wastedHours * BLENDED_HOURLY_USD);
+function triageCostPerEngineer(): number {
+  return Math.round(HOURS_PER_WEEK * WORKING_WEEKS * BLENDED_HOURLY_USD);
 }
 
-// ~$15,000 per engineer per year, spent reading alerts that were
-// never real. At 1,000 engineers that is the report's ~$20M figure,
-// and not one line of it shipped a feature.
+function noiseCostPerEngineer(): number {
+  return Math.round(triageCostPerEngineer() * FALSE_POSITIVE_SHARE);
+}
+
+// triageCostPerEngineer(): ~$21,000 a year. At 1,000 engineers that is
+// the report's ~$20M figure.
+// noiseCostPerEngineer(): ~$15,000 of that, spent reading alerts that
+// were never real. Not one line of it shipped a feature.
 ```
 
-For a 50-person engineering org that is about $1M a year. For 250, about $5M. Those are rough estimates, but the cost is recurring and scales with headcount. Much of it pays for engineers to read alerts that were never real.
+For a 50-person engineering org, total triage time costs about $1M a year (roughly $750K of it on false positives). For 250, about $5M (roughly $3.8M on false positives). Those are rough estimates, but the cost is recurring and scales with headcount. Much of it pays for engineers to read alerts that were never real.
 
 ## False positives make good engineers do dumb things
 
