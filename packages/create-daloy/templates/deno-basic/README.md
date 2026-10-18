@@ -63,7 +63,7 @@ deno task hooks:install   # points core.hooksPath at .githooks
 
 ## What's included
 
-- `@daloyjs/core` (loaded via `jsr:` specifiers in `deno.json`).
+- `@daloyjs/core` (loaded via `npm:` specifiers in `deno.json`, the same package the Node, Bun, Workers, and Vercel templates use).
 - Starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.
 
 <!-- daloy-minimal:strip-start books -->

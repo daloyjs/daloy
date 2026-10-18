@@ -54,28 +54,28 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch
 
 ## Install
 
-The same source ships to two registries: [JSR as `@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) and npm as `@daloyjs/core`. The `deno-basic` template uses JSR and maps it to the `@daloyjs/core` names, so your imports look the same as on Node:
+The same source ships to two registries: npm as `@daloyjs/core` and [JSR as `@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy). The `deno-basic` template loads the npm package through Deno's `npm:` specifier, the same package the Node, Bun, Workers, and Vercel templates install, so it does not depend on JSR's hosting:
 
 ```jsonc
 // deno.json (what deno-basic ships)
 {
   "imports": {
-    "@daloyjs/core":      "jsr:@daloyjs/daloy@^1",
-    "@daloyjs/core/deno": "jsr:@daloyjs/daloy@^1/deno",
+    "@daloyjs/core":      "npm:@daloyjs/core@^1",
+    "@daloyjs/core/deno": "npm:@daloyjs/core@^1/deno",
     "zod":                "npm:zod@^4.4.3"
   }
 }
 ```
 
-Prefer npm? Deno reads it through the `npm:` specifier with the same import names. Both routes stay supported. npm does not depend on JSR, so it is the fallback if JSR's hosting or governance ever changes.
+Prefer JSR? It is still published from every release, with the same import names:
 
 ```jsonc
-// deno.json (npm instead of JSR)
+// deno.json (JSR instead of npm)
 {
   "imports": {
-    "@daloyjs/core":  "npm:@daloyjs/core@^1",
-    "@daloyjs/core/": "npm:@daloyjs/core@^1/",
-    "zod":            "npm:zod@^4.4.3"
+    "@daloyjs/core":      "jsr:@daloyjs/daloy@^1",
+    "@daloyjs/core/deno": "jsr:@daloyjs/daloy@^1/deno",
+    "zod":                "npm:zod@^4.4.3"
   }
 }
 ```

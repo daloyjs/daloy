@@ -1950,12 +1950,14 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   // kept the drift in sync instead of catching it. Deriving the expectation
   // means a missed release bump fails here instead of shipping.
   //
-  // One exception, by design: deno.lock can only lock a version that JSR
-  // already serves, and JSR, npm, and create-daloy publish in the same tag run.
+  // One exception, by design: deno.lock can only lock a version the registry
+  // already serves, and npm, JSR, and create-daloy publish in the same tag run.
   // So the template may trail by exactly ONE release (it moves up in a
-  // follow-up commit after JSR publishes). Anything older still fails.
+  // follow-up commit after npm publishes). Anything older still fails.
   const allowed = await denoTemplateAllowedVersions();
-  const pinned = /^jsr:@daloyjs\/daloy@\^([^/]+)$/.exec(denoJson.imports["@daloyjs/core"] ?? "")?.[1];
+  // deno-basic loads core from npm (the package every other template uses),
+  // so it keeps working whatever happens to JSR hosting.
+  const pinned = /^npm:@daloyjs\/core@\^([^/]+)$/.exec(denoJson.imports["@daloyjs/core"] ?? "")?.[1];
   assert.ok(
     pinned && allowed.includes(pinned),
     `deno-basic must pin the current core version or the one before it (${allowed.join(" or ")}); got ${pinned}`
@@ -1964,7 +1966,7 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
     const specifier = `@daloyjs/core${suffix}`;
     assert.equal(
       denoJson.imports[specifier],
-      `jsr:@daloyjs/daloy@^${pinned}${suffix}`,
+      `npm:@daloyjs/core@^${pinned}${suffix}`,
       `deno-basic deno.json must pin every @daloyjs/core subpath to the same version (${pinned})`
     );
   }
@@ -3136,16 +3138,20 @@ async function scaffold(template, extraArgs = []) {
   return { tmpDir, dir: path.join(tmpDir, "app") };
 }
 
-test("deno-basic deno.lock pins the same @daloyjs/daloy version deno.json requires", async () => {
+test("deno-basic deno.lock pins the same @daloyjs/core version deno.json requires", async () => {
   const denoJson = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.json"), "utf8"));
   const lock = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.lock"), "utf8"));
   const spec = denoJson.imports["@daloyjs/core"];
-  const pinned = /^jsr:@daloyjs\/daloy@\^(.+)$/.exec(spec ?? "")?.[1];
+  const pinned = /^npm:@daloyjs\/core@\^(.+)$/.exec(spec ?? "")?.[1];
   assert.ok(pinned && (await denoTemplateAllowedVersions()).includes(pinned), `unexpected pin ${spec}`);
   // `deno install --frozen=true` (generated CI) fails unless the lock carries
   // exactly this specifier. Refresh deno.lock whenever deno.json is bumped.
   assert.equal(lock.specifiers[spec], pinned, "deno.lock is stale: refresh it with the deno.json bump");
-  assert.ok(`@daloyjs/daloy@${pinned}` in lock.jsr, "deno.lock is missing the locked core package");
+  assert.ok(`@daloyjs/core@${pinned}` in lock.npm, "deno.lock is missing the locked core package");
+  assert.ok(
+    !Object.keys(lock.jsr ?? {}).some((k) => k.startsWith("@daloyjs/")),
+    "deno.lock must not also lock a JSR copy of core"
+  );
 });
 
 test("deno-basic Docker build and deploy verify both enforce the frozen lockfile", async () => {

@@ -126,7 +126,7 @@ A [Bun](https://bun.sh) runtime starter using`@daloyjs/core/bun`. Ships `bun --h
 
 ### `deno-basic`
 
-A [Deno](https://deno.com) runtime starter using`@daloyjs/core/deno`. Ships a `deno.json` with `deno task dev`, `deno task start`, `deno task test`, `deno task contract`, and `deno task gen:openapi` tasks, maps `@daloyjs/core` to the JSR package `jsr:@daloyjs/daloy` and Zod to an `npm:` specifier in the import map, and runs the server with only `--allow-net` and an `--allow-env` scoped to `PORT`, `DENO_ENV`, `TRUST_PROXY_HOPS`, and `PUBLIC_URL`. The CLI skips Node-style installs for this template, there is no `package.json` to patch.
+A [Deno](https://deno.com) runtime starter using`@daloyjs/core/deno`. Ships a `deno.json` with `deno task dev`, `deno task start`, `deno task test`, `deno task contract`, and `deno task gen:openapi` tasks, maps `@daloyjs/core` and Zod to `npm:` specifiers in the import map (the same `@daloyjs/core` package the other templates install; before 1.14.0 it used the JSR package `jsr:@daloyjs/daloy`), and runs the server with only `--allow-net` and an `--allow-env` scoped to `PORT`, `DENO_ENV`, `TRUST_PROXY_HOPS`, and `PUBLIC_URL`. The CLI skips Node-style installs for this template, there is no `package.json` to patch.
 
 ## Minimal scaffolds
 

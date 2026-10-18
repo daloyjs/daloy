@@ -2,7 +2,7 @@
 
 A [DaloyJS](https://daloyjs.dev) REST API for the [Deno](https://deno.com) runtime. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. With `docs: "auto"` in `new App({...})`, three routes are auto-mounted outside production: `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
-- Runtime: Deno (no Node package manager). DaloyJS loads from `jsr:` and third-party packages such as Zod load from `npm:` in `deno.json`.
+- Runtime: Deno (no Node package manager). DaloyJS (`@daloyjs/core`) and third-party packages such as Zod load from `npm:` specifiers in `deno.json`.
 
 ## Agent guidance
 
@@ -27,7 +27,7 @@ The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint 
 - `src/build-app.ts` — `buildApp()` factory. Routes, schemas, and middleware live here. **Pure, no side effects.**
 - `src/main.ts` — calls `buildApp()` and starts the listener via `@daloyjs/core/deno`. The only file that opens a port.
 - `scripts/dump-openapi.ts` — imports `buildApp()` and writes `generated/openapi.json`. Codegen reads from `buildApp()` only — never import `src/main.ts` from scripts.
-- `deno.json` — tasks, import map, and JSR-first dependency specifiers. There is no `package.json` in this project.
+- `deno.json` — tasks, import map, and `npm:` / `jsr:` dependency specifiers. There is no `package.json` in this project.
 - `generated/` — machine-written. Do not edit by hand.
 - `tests/` — Deno test files.
 

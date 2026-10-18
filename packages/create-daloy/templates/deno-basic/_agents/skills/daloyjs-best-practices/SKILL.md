@@ -72,7 +72,7 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
   `@daloyjs/core/deno`. The only file allowed to open a port.
 - `scripts/dump-openapi.ts` — imports `buildApp()` and writes
   `generated/openapi.json`.
-- `deno.json` — tasks, import map, and JSR-first dependency specifiers. **There is no
+- `deno.json` — tasks, import map, and `npm:` / `jsr:` dependency specifiers. **There is no
   `package.json`** in this project — do not add one.
 - `tests/` — Deno test files (`*_test.ts`).
 - `generated/` — **machine-written**. Never edit by hand.
