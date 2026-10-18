@@ -37,7 +37,7 @@ DaloyJS errors are first-class. Every thrown `HttpError` serializes to [RFC 9457
             detail: "application/problem+json + x-request-id",
             tone: "success",
           },
-        ]} caption="A thrown HttpError becomes a problem+json document automatically. In production the detail field on 5xx responses is redacted so stack traces and SQL fragments never reach the client, while the full error still goes to your onError hook." />
+        ]} caption="A thrown HttpError becomes a problem+json document automatically. Unless the environment is explicitly development or test, the detail field on 5xx responses is redacted so stack traces and SQL fragments never reach the client, while the full error still goes to your onError hook." />
 
 ## Built-in error classes
 
@@ -55,7 +55,7 @@ import {
   ValidationError,                   // 422
   TooManyRequestsError,              // 429 + Retry-After
   RequestHeaderFieldsTooLargeError,  // 431
-  InternalError,                     // 500 (detail redacted in production)
+  InternalError,                     // 500 (detail redacted outside dev/test)
 } from "@daloyjs/core";
 ```
 
@@ -124,6 +124,18 @@ export class QuotaExceededError extends HttpError {
     });
   }
 }
+```
+
+The built-in classes above all set a `https://daloyjs.dev/errors/<slug>` `type`. A plain `HttpError` thrown without a `type` falls back to `https://httpstatuses.io/<status>`. First-party middleware that answers `503` (`loadShedding()`, `concurrencyLimit()`, `requestTimeoutStatus: 503`) sets its own `daloyjs.dev` type, so the fallback only applies to errors you construct yourself. Set `type` when clients key on it:
+
+```ts
+throw new HttpError(503, { title: "Service Unavailable" });
+// "type": "https://httpstatuses.io/503"
+
+throw new HttpError(503, {
+  title: "Service Unavailable",
+  type: "https://api.example.com/errors/service-unavailable",
+});
 ```
 
 ## Custom `onError`

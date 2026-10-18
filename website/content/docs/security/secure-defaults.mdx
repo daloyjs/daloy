@@ -13,7 +13,7 @@ keywords:
 
 <blockquote>Security defaults start enabled. Disabling them requires both{" "}<code>secureDefaults: false</code> and{" "}<code>acknowledgeInsecureDefaults: true</code>, and DaloyJS records the choice at startup.</blockquote>
 
-Daloy is the first release in the “secure-by-default” series. It flips secure headers and cross-origin write protection on by default, adds a per-route content type opt-in, and keeps a single master escape hatch (`secureDefaults: false`) plus per-feature opt-outs for the rare cases where you genuinely need the old behavior.
+DaloyJS turns secure headers and cross-origin write protection on by default, adds a per-route content type opt-in, and keeps a single master escape hatch (`secureDefaults: false`) plus per-feature opt-outs for the rare cases where you genuinely need one off.
 
 <BranchDiagram title="What new App() arms for you" source={{
           eyebrow: "construction",
@@ -196,4 +196,4 @@ export function myCustomHeaders() {
 
 ## Related secure defaults
 
-Daloy's wider secure-default posture also covers CSP nonces, per-content-type body caps, development response-schema validation, conditional `/openapi.json` exposure in production, clickjacking defenses, and trailing-slash canonicalization. Use the focused security pages for configuration details and scoped opt-outs.
+Daloy's wider secure-default posture also covers CSP nonces, per-content-type body caps, response-schema validation (on in every environment by default; `validateResponses: false` turns it off), conditional `/openapi.json` exposure in production, clickjacking defenses, and trailing-slash canonicalization. Use the focused security pages for configuration details and scoped opt-outs.

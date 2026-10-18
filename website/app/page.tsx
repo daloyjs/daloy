@@ -80,6 +80,8 @@ import { serve } from "@daloyjs/core/node";
 
 const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
 
+// requestId() and secureHeaders() are already auto-applied by new App();
+// these explicit calls only customize (and replace) the defaults.
 app.use(requestId());
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 120 })); // per client IP by default; behind a proxy, set behindProxy or keyGenerator
@@ -162,10 +164,10 @@ const FEATURES: readonly Feature[] = [
   {
     icon: ShieldCheckIcon,
     title: "Secure runtime defaults",
-    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: body limits, request timeouts, prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, and 5xx detail redaction in production. In production it refuses to boot on the misconfigurations it knows about, such as weak session secrets or session cookies without CSRF.",
+    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: body limits, request timeouts, prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, and 5xx detail redaction that fails closed (on everywhere except an explicit development or test environment). In production it refuses to boot on the misconfigurations it knows about, such as weak session secrets or session cookies without CSRF.",
     span: "md:col-span-2 lg:col-span-2",
     badges: [
-      "Body limits (1MB default)",
+      "Body limits (1 MiB default)",
       "Request timeouts",
       "Prototype pollution defense",
       "RFC 9457 problem+json",

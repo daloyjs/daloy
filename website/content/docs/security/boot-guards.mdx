@@ -22,7 +22,7 @@ keywords:
 
 <blockquote>Boot guards stop the app when they find unsafe configuration they know about, such as credentialed wildcard CORS or weak session secrets. They catch known misconfigurations; they do not prove an app is secure.</blockquote>
 
-Daloy ships the boot-guards slice of the secure-by-default initiative: refuse-to-boot / first-request guards that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers (that one is a per-request `500`, not a boot refusal).
+Boot guards are refuse-to-boot / first-request checks that turn the most common production misconfigurations into loud failures during startup instead of silent vulnerabilities under load. They cover weak session secrets, wildcard CORS, missing CSRF, `auth:` declarations with nothing enforcing them, unauthenticated `mcpRoutes()` endpoints, and spoofable forwarded / vendor client-IP headers (that one is a per-request `500`, not a boot refusal).
 
 The guards on this page are gated on the resolved environment being `production` (sources: `app({ env: "production" })`, then `app({ production: true })`, then `NODE_ENV === "production"` exactly) so dev and CI workflows keep working with sample secrets and ad-hoc headers. A few related checks throw in every environment; they are listed under [Checks that apply in every environment](#every-environment). The single master escape hatch `app({ secureDefaults: false })` disables every boot guard at once.
 

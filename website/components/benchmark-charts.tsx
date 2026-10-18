@@ -280,7 +280,7 @@ const TABS = [
     takeaway:
       "DaloyJS installs 0 transitive dependencies, tied with Hono for the smallest supply-chain surface, while a secure NestJS app drags in 86.",
     soWhat:
-      "Fewer packages to trust means fewer CVEs and no surprise postinstall scripts. Zero dependencies is zero supply-chain doors left open for an attacker.",
+      "Fewer packages to trust means fewer CVEs and no surprise postinstall scripts. Zero dependencies means the framework adds no supply-chain doors of its own; the rest of your dependency tree is still yours to vet.",
     render: () => (
       <FootprintBarChart
         data={DEPENDENCY_COUNT}
