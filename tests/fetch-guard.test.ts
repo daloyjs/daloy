@@ -709,16 +709,23 @@ test("fetchGuard({ pinDns }): a literal-IP host is not pin-rewritten but is stil
   }
 });
 
-test("fetchGuard({ pinDns }): https is intentionally NOT pinned — it uses the provided fetch", async () => {
-  const { fn, calls } = recordingFetch();
-  const guard = fetchGuard({ pinDns: true, fetch: fn, resolve: async () => ["93.184.216.34"] });
-  const res = await guard("https://example.com/");
-  assert.equal(res.status, 200);
-  assert.equal(
-    calls.length,
-    1,
-    "the https path falls through to options.fetch, not the node:http pin"
-  );
+test("fetchGuard({ pinDns }): https is pinned too — it bypasses the provided fetch", async () => {
+  // A plain-TCP listener: the pinned node:https dial reaches it (proving the
+  // socket went to the validated IP) and the TLS handshake then fails.
+  const { server, port } = await startEchoServer();
+  try {
+    const { fn, calls } = recordingFetch();
+    const guard = fetchGuard({
+      pinDns: true,
+      fetch: fn,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
+    await assert.rejects(() => guard(`https://pinned.invalid:${port}/`));
+    assert.equal(calls.length, 0, "the https path uses the node:https pin, not options.fetch");
+  } finally {
+    server.close();
+  }
 });
 
 test("fetchGuard({ pinDns }): a 204 yields a null body, and multi-valued response headers survive", async () => {

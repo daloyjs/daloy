@@ -62,36 +62,23 @@
  * a `127.0.0.1` / `169.254.169.254` at connect time, slipping past the
  * library-level check. To close the window:
  *
- *  0. **Built-in, `http:` only** (default on Node):
- *     {@link FetchGuardOptions.pinDns} defaults to `true` on Node-like
- *     runtimes (and `false` elsewhere). On Node, `http:` requests are
- *     then dispatched through `node:http` with the socket pinned to the
- *     validated IP (and the original `Host` header preserved), so there
- *     is no connect-time re-resolution to rebind. Set `pinDns: false` to
- *     opt out. `https:` is not pinned by this knob — see its docs — so
- *     the items below still matter for TLS upstreams.
- *  1. **Operator-side** (recommended): block egress to RFC1918 /
+ *  0. **Built-in** (default on Node): {@link FetchGuardOptions.pinDns}
+ *     defaults to `true` on Node-like runtimes (and `false` elsewhere).
+ *     On Node, `http:` and (since 1.14.0) `https:` requests are then
+ *     dispatched through `node:http` / `node:https` with the socket pinned
+ *     to the validated IP, the original `Host` header preserved, and TLS
+ *     SNI plus certificate verification still done against the hostname,
+ *     so there is no connect-time re-resolution to rebind. Set
+ *     `pinDns: false` to opt out.
+ *  1. **Operator-side** (recommended as well): block egress to RFC1918 /
  *     loopback / link-local at the VPC / firewall layer. This neutralises
- *     the rebinding even if the application is naïve.
- *  2. **Caller-side, Node only** (covers `https:` too): install `undici`
- *     and pass a custom `fetch` that wires a dispatcher with a pinned-IP
- *     `connect.lookup`, e.g.
- *     ```ts
- *     import { Agent, fetch as undiciFetch } from "undici";
- *     import * as dns from "node:dns/promises";
- *     const safeFetch = fetchGuard({
- *       fetch: async (input, init) => {
- *         const url = new URL(typeof input === "string" ? input : input.url);
- *         const { address, family } = await dns.lookup(url.hostname, { verbatim: true });
- *         const dispatcher = new Agent({
- *           connect: { lookup: (_h, _o, cb) => cb(null, address, family) },
- *         });
- *         return undiciFetch(input, { ...init, dispatcher });
- *       },
- *     });
- *     ```
- *     The pre-resolved IP is what the socket connects to; TLS SNI /
- *     cert validation still uses the original hostname.
+ *     the rebinding even if the application is naïve, and covers runtimes
+ *     without a pin path and custom `fetch` implementations.
+ *
+ * A custom {@link FetchGuardOptions.fetch} does its own DNS lookup, so it is
+ * not pinned to the validated address. Do not try to "pin" by resolving the
+ * hostname again inside it: that second lookup is exactly what a rebinding
+ * attacker controls.
  *
  * @since 0.34.0
  * @module
@@ -119,7 +106,9 @@ export type SsrfBlockReason =
   | "too-many-redirects"
   | "credentials-in-url"
   | "invalid-url"
-  | "redirect-body-not-replayable";
+  | "redirect-body-not-replayable"
+  | "port-not-allowed"
+  | "response-too-large";
 
 /**
  * Thrown by {@link fetchGuard} when an outbound request is refused. Never
@@ -173,8 +162,54 @@ export interface FetchGuardOptions {
    * caller already verified the target out of band (e.g. internal
    * services on a known DNS name). Compared case-insensitively against
    * the URL hostname.
+   *
+   * An entry may carry a port (`"billing.internal:8443"`, `"[fd00::5]:8080"`)
+   * to trust only that port; a bare hostname trusts **every** port on it.
+   * Prefer the port form. Never list a name whose DNS someone else can
+   * influence. The port policy ({@link FetchGuardOptions.allowPorts} and
+   * the fetch "bad port" list) still applies.
    */
   allowHosts?: readonly string[];
+  /**
+   * Restrict outbound requests to these destination ports. When omitted,
+   * any port is allowed except the Fetch Standard's "bad port" list
+   * (SMTP, IRC, X11, and other cross-protocol targets), which is always
+   * refused with `port-not-allowed`, including on the pinned path.
+   *
+   * @example `[443]` for an HTTPS-only image fetcher.
+   * @since 1.14.0
+   */
+  allowPorts?: readonly number[];
+  /**
+   * Total time budget in milliseconds for one guarded call: DNS checks,
+   * every redirect hop, the response head, **and** reading the body. On
+   * expiry the request (and any body still streaming) aborts with a
+   * `TimeoutError` `DOMException`. Combined with any `signal` you pass.
+   * Default `30000`; `0` disables it (only when you supply your own
+   * deadline).
+   *
+   * @since 1.14.0
+   */
+  timeoutMs?: number;
+  /**
+   * Largest response body in bytes that the returned `Response` will
+   * deliver. A larger `Content-Length` is refused before any body is
+   * read, and a body that exceeds the limit while streaming errors with
+   * `SsrfBlockedError("response-too-large")`. Default `10485760`
+   * (10 MiB); `Infinity` disables it.
+   *
+   * @since 1.14.0
+   */
+  maxResponseBytes?: number;
+  /**
+   * Extra request headers to remove when a redirect leaves the original
+   * origin, on top of `Authorization`, `Cookie`, `Proxy-Authorization`,
+   * and `Host`. List any custom credential header you send, such as
+   * `x-api-key`, so a cross-origin redirect cannot carry it to another host.
+   *
+   * @since 1.14.0
+   */
+  sensitiveHeaders?: readonly string[];
   /**
    * Extra IP / CIDR matchers to deny on top of the default floor.
    * Always wins against `allowAddresses`.
@@ -232,16 +267,17 @@ export interface FetchGuardOptions {
    */
   resolve?: (hostname: string) => Promise<readonly string[]>;
   /**
-   * Close the residual DNS-rebinding (TOCTOU) window for **`http:`** requests
-   * by connecting the socket to the exact IP that was validated, instead of
-   * letting the underlying client re-resolve the hostname at connect time.
+   * Close the residual DNS-rebinding (TOCTOU) window by connecting the socket
+   * to the exact IP that was validated, instead of letting the underlying
+   * client re-resolve the hostname at connect time.
    *
    * When `true`, a request to a hostname that resolves to a validated address
-   * is dispatched through Node's built-in `node:http` with the connection
-   * pinned to that address and the original `Host` header preserved — so
-   * virtual-host routing still works while an attacker's TTL=0 rebinding to
-   * `127.0.0.1` / `169.254.169.254` can no longer take effect between
-   * validation and connect.
+   * is dispatched through Node's built-in `node:http` (or, since 1.14.0,
+   * `node:https`) with the connection pinned to that address and the original
+   * `Host` header preserved. For `https:` the TLS `servername` (SNI) is the
+   * original hostname, and the certificate is verified against it, so pinning
+   * never weakens TLS. An attacker's TTL=0 rebinding to `127.0.0.1` /
+   * `169.254.169.254` can no longer take effect between validation and connect.
    *
    * **Default:** `true` on Node-like runtimes (`process.versions.node` is a
    * non-empty string), `false` elsewhere (Workers / edge sandboxes without
@@ -251,20 +287,15 @@ export interface FetchGuardOptions {
    *
    * **Scope and caveats** (read before changing the default):
    *
-   * - **`http:` only.** `https:` is intentionally NOT pinned here: pinning a
-   *   TLS connection to an IP while keeping hostname-based SNI / certificate
-   *   validation needs more machinery than this knob provides, so `https:`
-   *   requests fall through to the normal validated-then-fetch path and retain
-   *   the documented TOCTOU caveat. The prime rebinding target — cloud
-   *   metadata at `http://169.254.169.254` — is `http:`, so this still closes
-   *   the highest-value vector.
-   * - **Node only for the pin path.** It uses `node:http`; when `pinDns` is
-   *   explicitly `true` on a runtime without it, an `http:` pinned dispatch
-   *   throws a clear error so the misconfiguration is loud rather than a
-   *   silent no-op.
-   * - **Bypasses `options.fetch`** for the pinned `http:` path (it must own the
-   *   socket), and negotiates no response compression (`Accept-Encoding:
-   *   identity`) so body semantics match a plain `fetch`.
+   * - **`http:` and `https:`.** Before 1.14.0 only `http:` was pinned.
+   * - **Node only for the pin path.** It uses `node:http` / `node:https`; when
+   *   `pinDns` is explicitly `true` on a runtime without them, a pinned
+   *   dispatch throws a clear error so the misconfiguration is loud rather
+   *   than a silent no-op.
+   * - **Bypasses `options.fetch`** for the pinned path (it must own the
+   *   socket), does not use HTTP proxy environment variables, and negotiates
+   *   no response compression (`Accept-Encoding: identity`) so body semantics
+   *   match a plain `fetch`.
    *
    * Requests to a literal-IP host or an `allowHosts` entry are never pinned
    * (the former already connects to an exact IP; the latter is an explicit
@@ -310,6 +341,18 @@ const ALWAYS_DENY: readonly string[] = [
   "ff00::/8", // IPv6 multicast
   "fd00:ec2::254/128", // AWS IMDSv2 IPv6
 ];
+
+// Fetch Standard "bad ports" (https://fetch.spec.whatwg.org/#port-blocking).
+// The built-in fetch refuses these; the guard refuses them on every path,
+// including the pinned node:http / node:https one, so pinning never widens
+// cross-protocol reach (SMTP, IRC, X11, ...).
+const BAD_PORTS: ReadonlySet<number> = new Set([
+  0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101,
+  102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427,
+  465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
+  993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667,
+  6668, 6669, 6679, 6697, 10080,
+]);
 
 const LOOPBACK = ["127.0.0.0/8", "::1/128"];
 const LINK_LOCAL = ["169.254.0.0/16", "fe80::/10"];
@@ -400,7 +443,10 @@ function embeddedIPv4s(ip: ParsedIp): ParsedIp[] | undefined {
  *   (including any `Request` input's body) and larger bodies are sent
  *   unbuffered, and a 307/308 of one throws
  *   `SsrfBlockedError("redirect-body-not-replayable")`. The request's
- *   `AbortSignal` is honoured on every path, including the pinned `http:` one.
+ *   `AbortSignal` is honoured on every path, including the pinned one. By
+ *   default the whole call (body read included) is bounded by `timeoutMs`
+ *   (30 s) and the body by `maxResponseBytes` (10 MiB), and Fetch Standard
+ *   "bad ports" are refused.
  * @throws {Error} If no underlying fetch implementation is available.
  * @throws {SsrfBlockedError} The returned function throws when a destination
  *   or redirect chain violates policy, including malformed URLs and userinfo.
@@ -426,6 +472,16 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   const softDenyMatchers: IpMatcher[] = [];
   const allowMatchers: IpMatcher[] = [];
   const allowHosts = new Set((options.allowHosts ?? []).map((h) => h.toLowerCase()));
+  const allowPorts = options.allowPorts ? new Set(options.allowPorts) : undefined;
+  const sensitiveHeaders = (options.sensitiveHeaders ?? []).map((h) => h.toLowerCase());
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new RangeError("fetchGuard(): timeoutMs must be a non-negative finite number.");
+  }
+  const maxResponseBytes = options.maxResponseBytes ?? 10 * 1024 * 1024;
+  if (Number.isNaN(maxResponseBytes) || maxResponseBytes < 0) {
+    throw new RangeError("fetchGuard(): maxResponseBytes must be a non-negative number.");
+  }
   const maxRedirects = options.maxRedirects ?? 5;
   const maxReplayBodyBytes = options.maxReplayBodyBytes ?? 1024 * 1024;
   if (!Number.isFinite(maxReplayBodyBytes) || maxReplayBodyBytes < 0) {
@@ -504,7 +560,19 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     }
     const hostname =
       raw.charCodeAt(0) === 91 /* [ */ && raw.endsWith("]") ? raw.slice(1, -1) : raw;
-    if (allowHosts.has(raw.toLowerCase()) || allowHosts.has(hostname.toLowerCase())) return null;
+    const port = url.port ? Number(url.port) : proto === "https:" ? 443 : 80;
+    if (BAD_PORTS.has(port) || (allowPorts !== undefined && !allowPorts.has(port))) {
+      throw new SsrfBlockedError(url.toString(), "port-not-allowed");
+    }
+    const rawLower = raw.toLowerCase();
+    if (
+      allowHosts.size > 0 &&
+      (allowHosts.has(rawLower) ||
+        allowHosts.has(hostname.toLowerCase()) ||
+        allowHosts.has(`${rawLower}:${port}`))
+    ) {
+      return null;
+    }
     const literal = parseIp(hostname);
     if (literal) {
       if (!isAddressAllowed(literal)) {
@@ -556,7 +624,21 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
         throw new SsrfBlockedError(pre.toString(), "credentials-in-url");
       }
     }
-    let request = new Request(input as RequestInfo, init);
+    // One deadline for the whole call: every hop, the response head, and the
+    // body read (the signal stays attached to the returned body stream). It is
+    // combined with the CALLER's signal object directly: a Request's own
+    // signal only weakly follows its source, so chaining off a temporary
+    // Request could let the link be garbage-collected mid-flight.
+    let effectiveInit = init;
+    if (timeoutMs > 0) {
+      const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      const deadline = AbortSignal.timeout(timeoutMs);
+      effectiveInit = {
+        ...init,
+        signal: callerSignal ? AbortSignal.any([callerSignal, deadline]) : deadline,
+      };
+    }
+    let request = new Request(input as RequestInfo, effectiveInit);
     const userRedirect = (init?.redirect ?? request.redirect) as RequestRedirect;
     // A request body can be sent only once, but a 307/308 must replay it on
     // the next (re-validated) hop. Only bodies that are ALREADY in memory
@@ -601,19 +683,23 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
       // connect (DNS-rebinding TOCTOU). `https:` keeps the normal path — see
       // the `pinDns` option docs for why.
       const res =
-        pinDns && pinnedIp !== null && currentUrl.protocol === "http:"
+        pinDns &&
+        pinnedIp !== null &&
+        (currentUrl.protocol === "http:" || currentUrl.protocol === "https:")
           ? await pinnedHttpFetch(dispatchReq, pinnedIp, bodyBytes)
           : await baseFetch(dispatchReq);
-      if (!isRedirect(res.status)) return res;
+      if (!isRedirect(res.status)) return capResponse(res, maxResponseBytes, currentUrl);
       if (userRedirect === "error") {
         throw new TypeError("fetchGuard: redirect refused (redirect: error)");
       }
-      if (userRedirect === "manual" || maxRedirects === 0) return res;
+      if (userRedirect === "manual" || maxRedirects === 0) {
+        return capResponse(res, maxResponseBytes, currentUrl);
+      }
       if (hop >= maxRedirects) {
         throw new SsrfBlockedError(currentUrl.toString(), "too-many-redirects");
       }
       const loc = res.headers.get("location");
-      if (!loc) return res;
+      if (!loc) return capResponse(res, maxResponseBytes, currentUrl);
       let next: URL;
       try {
         next = new URL(loc, currentUrl);
@@ -660,6 +746,7 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
         request.headers.delete("cookie");
         request.headers.delete("proxy-authorization");
         request.headers.delete("host");
+        for (const h of sensitiveHeaders) request.headers.delete(h);
       }
       currentUrl = next;
     }
@@ -688,18 +775,58 @@ function inMemoryBodySize(body: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Enforce `maxResponseBytes` on a response: refuse an oversized declared
+ * `Content-Length` up front, and otherwise wrap the body in a counting
+ * stream that errors with `SsrfBlockedError("response-too-large")` once the
+ * limit is passed. Returns the response unchanged when the limit is
+ * `Infinity` or there is no body.
+ */
+function capResponse(res: Response, max: number, url: URL): Response {
+  if (max === Infinity || res.body === null) return res;
+  const declared = Number(res.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) {
+    void res.body.cancel().catch(() => undefined);
+    throw new SsrfBlockedError(url.toString(), "response-too-large");
+  }
+  let total = 0;
+  const counted = res.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > max) {
+          controller.error(new SsrfBlockedError(url.toString(), "response-too-large"));
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+  const out = new Response(counted, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  });
+  // Keep `response.url` meaningful after re-wrapping.
+  Object.defineProperty(out, "url", { value: res.url || url.toString() });
+  return out;
+}
+
 function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
 /**
- * Dispatch an `http:` request with the TCP connection **pinned** to a single,
- * already-validated IP address — closing the DNS-rebinding (TOCTOU) window that
- * exists when the underlying `fetch` re-resolves the hostname at connect time.
+ * Dispatch an `http:` or `https:` request with the TCP connection **pinned** to
+ * a single, already-validated IP address — closing the DNS-rebinding (TOCTOU)
+ * window that exists when the underlying `fetch` re-resolves the hostname at
+ * connect time.
  *
- * Uses Node's built-in `node:http` (no runtime dependency) so the `Host` header
- * can be set to the original authority — preserving virtual-host routing while
- * the socket targets `ip`, never a re-resolved address. The response body is
+ * Uses Node's built-in `node:http` / `node:https` (no runtime dependency) so
+ * the `Host` header can be set to the original authority — preserving
+ * virtual-host routing while the socket targets `ip`, never a re-resolved
+ * address. For `https:` the TLS `servername` is the original hostname, so SNI
+ * and certificate verification are unchanged. The response body is
  * streamed (not buffered) so large downloads keep the same memory profile as a
  * plain `fetch`. `Accept-Encoding: identity` is forced so the returned body is
  * not silently left compressed (Node's `http` does not auto-decode).
@@ -714,27 +841,31 @@ function isRedirect(status: number): boolean {
  * @param bufferedBody - The already-buffered body bytes (sent with an exact
  *   `Content-Length`), or `null` to stream `req.body` (chunked, unbuffered).
  * @returns A web {@link Response} mirroring the upstream reply.
- * @throws when `node:http` is unavailable (non-Node runtime), the socket
- *   errors, or `req.signal` aborts (rejects with `signal.reason`).
+ * @throws when `node:http` / `node:https` is unavailable (non-Node runtime),
+ *   the socket or TLS handshake errors, or `req.signal` aborts (rejects with
+ *   `signal.reason`).
  */
 async function pinnedHttpFetch(
   req: Request,
   ip: string,
   bufferedBody: Uint8Array | null
 ): Promise<Response> {
+  const url = new URL(req.url);
+  const secure = url.protocol === "https:";
   let httpRequest: typeof import("node:http").request;
   let toWeb: typeof import("node:stream").Readable.toWeb;
   let fromWeb: typeof import("node:stream").Readable.fromWeb;
   try {
-    ({ request: httpRequest } = await import("node:http"));
+    ({ request: httpRequest } = secure
+      ? ((await import("node:https")) as unknown as typeof import("node:http"))
+      : await import("node:http"));
     ({ toWeb, fromWeb } = (await import("node:stream")).Readable);
   } catch {
     throw new Error(
-      "fetchGuard({ pinDns: true }): node:http is unavailable on this runtime; " +
-      "DNS pinning for http: requires Node. Disable pinDns or run on Node."
+      "fetchGuard({ pinDns: true }): node:http / node:https is unavailable on this runtime; " +
+      "DNS pinning requires Node. Disable pinDns or run on Node."
     );
   }
-  const url = new URL(req.url);
   const headers: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     headers[key] = value;
@@ -771,11 +902,14 @@ async function pinnedHttpFetch(
     const clientReq = httpRequest(
       {
         host: ip,
-        port: url.port ? Number(url.port) : 80,
+        port: url.port ? Number(url.port) : secure ? 443 : 80,
         method,
         path: `${url.pathname}${url.search}`,
         headers,
-      },
+        // TLS: SNI and certificate verification use the original hostname,
+        // never the pinned IP (rejectUnauthorized keeps Node's default).
+        ...(secure ? { servername: url.hostname } : {}),
+      } as import("node:http").RequestOptions,
       (res) => {
         upstream = res;
         res.once("close", () => signal.removeEventListener("abort", onAbort));

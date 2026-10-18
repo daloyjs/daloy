@@ -53,7 +53,7 @@ Any handler that calls `fetch()` on a URL the user can influence (an avatar fetc
 
 `fetchGuard()` returns a guarded wrapper around `fetch` that refuses to dispatch a request whose target resolves to a dangerous internal address, including every documented cloud metadata IP (AWS / Azure / DigitalOcean `169.254.169.254`, Oracle Cloud `192.0.0.192`, Alibaba `100.100.100.200`).
 
-It is opt-in: only calls made through the returned function (or through helpers that use it by default, such as `createWebhookSender()` and `createA2aClient()`) are guarded. DaloyJS does not patch the global `fetch`, so a plain `fetch(url)` elsewhere in your code is not checked.
+It is opt-in: only calls made through the returned function (or through helpers that use it by default, such as `createWebhookSender()` and `createA2aClient()`) are guarded. DaloyJS does not patch the global `fetch`, so a plain `fetch(url)` elsewhere in your code is not checked. Neither are third-party SDKs, `node:http`, `undici`, or WebSocket clients that open their own connections. Route every request whose URL a user can influence through `safeFetch`, and back it with network egress rules (see [residual risk](#residual-risk-dns-rebinding-toctou)).
 
 ## Quick start
 
@@ -77,18 +77,24 @@ app.post(
   async ({ body }) => {
     const { url } = body;
     try {
+      // Bounded by default: 30 s for the whole call (body included), 10 MiB body.
       const upstream = await safeFetch(url);
-      const body = await upstream.text();
-      return { status: 200 as const, body };
+      const text = await upstream.text();
+      return { status: 200 as const, body: text };
     } catch (err) {
       if (err instanceof SsrfBlockedError) {
-        return { status: 422 as const, body: { reason: err.reason } };
+        // Log the details, but answer generically: returning err.reason or
+        // err.message tells the caller whether an internal hostname exists.
+        console.warn("ssrf blocked", { reason: err.reason, address: err.address });
+        return { status: 422 as const, body: { error: "URL not allowed" } };
       }
       throw err;
     }
   },
 );
 ```
+
+<blockquote><strong>Do not echo the block reason.</strong>{" "}<code>address-not-allowed</code> means "this name exists and points inside your network", while <code>dns-resolution-failed</code> means it does not exist, and <code>err.message</code> includes the resolved IP. Sent back to the caller, either one lets an attacker enumerate internal hostnames one request at a time. Log them; return one generic error.</blockquote>
 
 ## What gets blocked by default
 
@@ -98,6 +104,25 @@ app.post(
 - IPv6 unique-local: `fc00::/7`. Opt in with `allowUniqueLocal: true`.
 - Always-deny floor (no flag and no `allowAddresses` range lifts these): `0.0.0.0/8`, `100.64.0.0/10` (CGNAT, Alibaba metadata), `169.254.169.254/32` (AWS / Azure / DigitalOcean / GCP metadata), `169.254.170.2/32` and `169.254.170.23/32` (AWS ECS task metadata / EKS Pod Identity), `192.0.0.0/24` (Oracle Cloud metadata), all IANA-reserved `TEST-NET` / benchmarking / docs ranges, `224.0.0.0/4` multicast, `240.0.0.0/4` reserved, broadcast `255.255.255.255`, IPv6 `::/128`, `ff00::/8` and `fd00:ec2::254/128` (AWS IMDS over IPv6). Your own `denyAddresses` entries join this floor.
 - Protocols other than `http:` / `https:` (`file:`, `data:`, `gopher:`, `ftp:`, `dict:`, `ldap:`).
+- The Fetch Standard's "bad ports" (SMTP `25`, X11 `6000`, IRC `6667`, and the rest of the [list](https://fetch.spec.whatwg.org/#port-blocking)), refused with `port-not-allowed` on every path, including the DNS-pinned one (since 1.14.0). Narrow further with `allowPorts`.
+
+## Limits on every call [#limits]
+
+Since 1.14.0 every guarded call is bounded, so an attacker-chosen URL that answers slowly or never stops sending cannot tie up your handler or its memory:
+
+- `timeoutMs` (default `30000`): one deadline for the whole call, covering DNS checks, every redirect hop, the response head, **and** reading the body. On expiry the call, or the body you are still reading, rejects with a `TimeoutError`. It combines with any `signal` you pass. `0` turns it off; only do that when you apply your own deadline.
+- `maxResponseBytes` (default 10 MiB): a larger `Content-Length` is refused before the body is read, and a body that grows past the limit while streaming errors with `SsrfBlockedError("response-too-large")`. `Infinity` turns it off.
+- `allowPorts` (optional): only these destination ports are allowed, for example `[443]` for an HTTPS-only image fetcher.
+
+```ts
+const safeFetch = fetchGuard({
+  timeoutMs: 5_000,
+  maxResponseBytes: 2 * 1024 * 1024, // avatars and thumbnails
+  allowPorts: [443],
+});
+```
+
+`createWebhookSender()` and `createA2aClient()` keep their own `timeoutMs` (and the A2A client its own `maxResponseBytes`), so they turn the guard's deadline off rather than letting it cap theirs.
 
 ### IPv6 forms that embed IPv4
 
@@ -126,6 +151,14 @@ A common SSRF bypass is to return `302 Location: http://169.254.169.254/` from a
 
 An in-memory request body (string, `ArrayBuffer` or view, `Blob`, `URLSearchParams`, `FormData`) up to `maxReplayBodyBytes` (default 1 MiB; `0` never buffers) is copied once so a `307` or `308` can replay it on the re-validated next hop (since 1.3.7). Multipart filenames count toward the cap, and the serialized byte length is checked before a body is kept for replay. A `301`/`302`/`303` that downgrades to `GET` drops the body as usual. A body you pass as a `ReadableStream` or async iterable, the body of a `Request` you forward (for example `ctx.request` in a proxy), and an in-memory body over the cap are streamed through without buffering, so a `307`/`308` of one throws `SsrfBlockedError` with reason `redirect-body-not-replayable` instead of a raw `TypeError`. Buffer the body yourself, or use `redirect: "error"`, when a streamed upload must follow redirects.
 
+### Credential headers on cross-origin redirects [#redirect-headers]
+
+When a redirect leaves the original origin, `fetchGuard()` drops `Authorization`, `Cookie`, `Proxy-Authorization`, and `Host`. It does not know about your custom credential headers, so an `x-api-key` would otherwise follow the redirect to the new host. List them in `sensitiveHeaders` (since 1.14.0), or pass `redirect: "error"` when a credentialed call should never be redirected:
+
+```ts
+const partnerFetch = fetchGuard({ sensitiveHeaders: ["x-api-key", "x-partner-token"] });
+```
+
 ## Custom allowlists
 
 ```ts
@@ -133,8 +166,9 @@ const safeFetch = fetchGuard({
   // IP / CIDR allowlist (lifts the loopback / private / link-local / unique-local
   // defaults; never the always-deny floor or denyAddresses).
   allowAddresses: ["198.51.100.0/24", "2001:db8::/32"],
-  // Hostname allowlist (skips DNS check entirely; useful for known internal services).
-  allowHosts: ["api.example.com", "billing.internal"],
+  // Hostname allowlist (skips the DNS and address checks for that name).
+  // Add the port: a bare hostname trusts EVERY port on it.
+  allowHosts: ["billing.internal:8443"],
   // Extra deny matchers on top of the floor (always win over allowAddresses).
   denyAddresses: ["10.6.6.0/24"],
   // Permit loopback for local-dev fixtures only.
@@ -142,28 +176,42 @@ const safeFetch = fetchGuard({
 });
 ```
 
+`allowHosts` is a bypass, not an allowlist of safe destinations. An entry skips the DNS and address checks, so list only names whose DNS you control, never one a user, tenant, or third party can point somewhere else. Prefer the `host:port` form (since 1.14.0). The port rules above still apply to it.
+
 ## Custom DNS resolution (non-Node runtimes)
 
-The default resolver uses Node’s `node:dns/promises.lookup()`. On Cloudflare Workers, Deno without `--allow-net`, or any runtime without Node-style DNS, supply a resolver:
+The default resolver uses Node’s `node:dns/promises.lookup()`. On Cloudflare Workers, Deno without `--allow-net`, or any runtime without Node-style DNS, supply a resolver. It must return **every** address the runtime might connect to, so query both IPv4 (`A`) and IPv6 (`AAAA`) records. A resolver that only asks for `A` lets a host with a public IPv4 address and an internal IPv6 address (`::1`, `fd00:ec2::254`) pass validation.
 
 ```ts
+const DNS_TYPES = { A: 1, AAAA: 28 } as const;
+
+async function dohLookup(host: string, type: keyof typeof DNS_TYPES): Promise<string[]> {
+  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`;
+  const res = await fetch(url, { headers: { accept: "application/dns-json" } });
+  if (!res.ok) throw new Error(`DNS lookup failed: ${res.status}`);
+  const json = (await res.json()) as { Answer?: Array<{ type: number; data: string }> };
+  // Keep address records only; CNAME entries in the answer are hostnames.
+  return (json.Answer ?? []).filter((a) => a.type === DNS_TYPES[type]).map((a) => a.data);
+}
+
 const safeFetch = fetchGuard({
   resolve: async (host) => {
-    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${host}&type=A`, {
-      headers: { accept: "application/dns-json" },
-    });
-    const json = (await res.json()) as { Answer?: Array<{ data: string }> };
-    return (json.Answer ?? []).map((a) => a.data);
+    const [v4, v6] = await Promise.all([dohLookup(host, "A"), dohLookup(host, "AAAA")]);
+    return [...v4, ...v6];
   },
 });
 ```
 
+Pinning is off outside Node, so on these runtimes the [rebinding window](#residual-risk-dns-rebinding-toctou) stays open. Rely on the platform's egress rules as well.
+
 ## DNS pinning (`pinDns`) [#dns-pinning-pinDns]
 
-On Node-like runtimes, `fetchGuard()` defaults `pinDns: true` when you do not supply a custom `fetch`. For `http:` requests the socket is then opened through `node:http` against the exact IP that passed validation, while the original `Host` header is preserved. That closes the classic DNS-rebinding (TOCTOU) window for the highest value target: cloud metadata at `http://169.254.169.254`.
+On Node-like runtimes, `fetchGuard()` defaults `pinDns: true` when you do not supply a custom `fetch`. The socket is then opened through `node:http` (or `node:https`) against the exact IP that passed validation, while the original `Host` header is preserved. That closes the classic DNS-rebinding (TOCTOU) window, where a TTL=0 record answers with a public IP at validation time and `169.254.169.254` at connect time.
+
+Since 1.14.0 `https:` is pinned as well. The TLS `servername` (SNI) is the original hostname and the certificate is verified against it, so pinning never weakens TLS. The pinned path does not use HTTP proxy environment variables.
 
 ```ts
-// Default on Node: pinDns is on (http: only).
+// Default on Node: pinDns is on (http: and https:).
 const safeFetch = fetchGuard();
 
 // Opt out if you need the underlying fetch to own DNS (rare).
@@ -176,18 +224,17 @@ const custom = fetchGuard({
 });
 ```
 
-`https:` is intentionally not pinned by this knob (TLS SNI / certificate validation needs the hostname path). Pass `pinDns: false` on Workers and other edge runtimes only if you had forced it on. The default is already off when `process.versions.node` is absent.
+Pass `pinDns: false` on Workers and other edge runtimes only if you had forced it on. The default is already off when `process.versions.node` is absent.
 
-The request's `AbortSignal` is honoured on the pinned `http:` path too (since 1.3.7): an abort before dispatch, while waiting for the response head, or while the body streams tears down the socket and rejects with the signal's reason, the same contract as `fetch`. Timeouts such as `AbortSignal.timeout()` keep working with DNS pinning on.
+The request's `AbortSignal` is honoured on the pinned path too (since 1.3.7): an abort before dispatch, while waiting for the response head, or while the body streams tears down the socket and rejects with the signal's reason, the same contract as `fetch`. Timeouts such as `AbortSignal.timeout()` keep working with DNS pinning on.
 
 ## Residual risk: DNS rebinding (TOCTOU)
 
-After `pinDns`, the remaining residual is mainly `https:` rebinding and non-Node runtimes without a pin path. Close those with operator egress controls, and optionally a custom undici dispatcher for TLS upstreams:
+With the default `pinDns` on Node, rebinding is closed for `http:` and `https:`. The window stays open in three cases: a non-Node runtime (no pin path), `pinDns: false`, and a custom `fetch` option, which does its own DNS lookup when it connects.
 
-<ol>
-<li>Operator-side (recommended). Run behind a network policy that already blocks egress to RFC1918 / metadata IPs: Kubernetes{" "}<code>NetworkPolicy</code>{", "}<code>step-security/harden-runner</code> in CI,{" "}<code>iptables -A OUTPUT -d 169.254.169.254 -j DROP</code> on the host. This neutralises rebinding even if the app is naive.</li>
-<li>Caller-side, Node-only, for <code>https:</code>. Daloy ships zero runtime dependencies, so we do not bundle <code>undici</code>{". "}If you install it yourself, you can pin the TLS socket to the IP you validated by plumbing a custom dispatcher through the existing{" "}<code>fetch</code> option:<CodeBlock language="ts" code={"import { fetchGuard } from \"@daloyjs/core\";\nimport { Agent, fetch as undiciFetch } from \"undici\";\nimport * as dns from \"node:dns/promises\";\n\nconst safeFetch = fetchGuard({\n  // pinDns stays off when a custom fetch is supplied unless you force it.\n  fetch: async (input, init) => {\n    const url = new URL(typeof input === \"string\" ? input : input.url);\n    const { address, family } = await dns.lookup(url.hostname, { verbatim: true });\n    const dispatcher = new Agent({\n      connect: { lookup: (_h, _o, cb) => cb(null, address, family) },\n    });\n    return undiciFetch(input, { ...init, dispatcher });\n  },\n});"} />The socket connects to the pre-resolved IP. TLS SNI and certificate validation still use the original hostname.</li>
-</ol>
+<blockquote><strong>Do not "pin" inside a custom <code>fetch</code> by resolving the hostname again.</strong>{" "}A snippet that calls <code>dns.lookup()</code> in your custom <code>fetch</code> and connects to the result (for example through an <code>undici</code> dispatcher) pins the socket to a <em>second</em> lookup that <code>fetchGuard()</code> never validated. A rebinding attacker answers the first lookup with a public IP and the second with <code>127.0.0.1</code>; in our test the request reached the loopback service. Earlier versions of this page showed that pattern. Use the default pinned path instead, or add egress rules.</blockquote>
+
+Close the remaining cases at the network layer. Run behind a policy that blocks egress to RFC1918, loopback, link-local, and metadata addresses: a Kubernetes `NetworkPolicy`, a VPC security group or firewall, `step-security/harden-runner` in CI, or `iptables -A OUTPUT -d 169.254.169.254 -j DROP` on the host. That neutralises rebinding even for code paths that bypass `fetchGuard()` entirely.
 
 `fetchGuard()` remains defense-in-depth on top of these controls.
 
@@ -202,5 +249,7 @@ Blocked requests throw `SsrfBlockedError` with a structured `reason`:
 - `credentials-in-url`: the URL carried userinfo (`http://user@host/`), a classic SSRF obfuscation. The credentials are stripped from the URL recorded on the error.
 - `invalid-url`: URL or Location header could not be parsed.
 - `redirect-body-not-replayable`: a `307`/`308` redirect needed to resend a streamed request body that was already consumed (since 1.3.7).
+- `port-not-allowed`: the destination port is a Fetch Standard "bad port" or is not in `allowPorts` (since 1.14.0).
+- `response-too-large`: the response's `Content-Length` or streamed body exceeded `maxResponseBytes` (since 1.14.0). When the body is already streaming, the error surfaces from reading it (`res.text()`, `res.json()`, the reader).
 
-Network failures from the underlying `fetch` (DNS timeouts, TLS errors, connection refused) bubble through unchanged so your retry logic can distinguish “Daloy refused” from “the upstream is sad.”
+Network failures from the underlying `fetch` (DNS timeouts, TLS errors, connection refused) bubble through unchanged so your retry logic can distinguish “Daloy refused” from “the upstream is sad.” A `timeoutMs` expiry rejects with a `TimeoutError` `DOMException`.

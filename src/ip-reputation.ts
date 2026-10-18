@@ -252,7 +252,8 @@ export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFee
   // Secure-by-default: route the outbound feed fetch through fetchGuard() so
   // redirects are re-validated per hop and internal/metadata targets are
   // refused, matching createWebhookSender's posture. Callers can override.
-  const doFetch = opts.fetchImpl ?? fetchGuard();
+  // Reputation feeds can be large plain-text lists: allow up to 64 MiB.
+  const doFetch = opts.fetchImpl ?? fetchGuard({ maxResponseBytes: 64 * 1024 * 1024 });
   return {
     name,
     async fetch(signal) {

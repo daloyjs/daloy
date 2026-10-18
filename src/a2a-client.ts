@@ -318,7 +318,9 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
   for (const origin of options.allowedOrigins ?? []) {
     allowedOrigins.add(assertSafeUrl(origin, "allowedOrigins entry", allowInsecureHttp).origin);
   }
-  const transport = options.fetch ?? fetchGuard();
+  // The client applies its own timeoutMs and maxResponseBytes, so
+  // fetchGuard's default deadline is turned off here rather than capping it.
+  const transport = options.fetch ?? fetchGuard({ timeoutMs: 0 });
   const extensionsHeader =
     options.extensions && options.extensions.length > 0 ? options.extensions.join(",") : undefined;
 

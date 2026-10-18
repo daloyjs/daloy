@@ -348,7 +348,9 @@ export function createWebhookSender(
     throw new Error("createWebhookSender(): a non-empty signing secret is required");
   }
   const algorithm = options.algorithm ?? "sha256";
-  const transport = options.fetch ?? fetchGuard();
+  // The sender applies its own per-attempt timeoutMs, so fetchGuard's
+  // default deadline is turned off here rather than capping it.
+  const transport = options.fetch ?? fetchGuard({ timeoutMs: 0 });
   const maxAttempts = options.maxAttempts ?? 5;
   const retryDelayMs = options.retryDelayMs ?? 500;
   const maxRetryDelayMs = options.maxRetryDelayMs ?? 30_000;
