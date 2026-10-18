@@ -150,7 +150,7 @@ The generated workflows use top-level `permissions: {}`, pinned third-party acti
 
 ## Editor MCP integration
 
-Every scaffold ships a `.vscode/mcp.json` that wires VS Code (and other MCP-aware editors) to the DaloyJS documentation MCP server at `https://daloyjs.dev/mcp` over HTTP. With it, AI assistants in your editor can pull current DaloyJS docs while you work, with no manual setup. The file is authored as `_vscode/mcp.json` in the template and renamed to `.vscode/mcp.json` on copy so it survives npm packing.
+Every scaffold ships a `.vscode/mcp.json` that wires VS Code (and other MCP-aware editors) to the DaloyJS documentation MCP server at `https://daloyjs.dev/mcp` over HTTP. With it, AI assistants in your editor can pull current DaloyJS docs while you work, with no manual setup. The `get_doc` tool returns the same Markdown as each page's `.md` URL on daloyjs.dev, code samples included. The server's instructions also give the assistant a short DaloyJS primer (core route idiom, common mistakes, where to start reading), so models with no built-in DaloyJS knowledge still write idiomatic code. The file is authored as `_vscode/mcp.json` in the template and renamed to `.vscode/mcp.json` on copy so it survives npm packing.
 
 ```json
 {

@@ -17,6 +17,7 @@ import {
   SITE_API_VERSION,
 } from "@/lib/site-api";
 import { readBodyLimited } from "@/lib/read-body-limited";
+import { renderPathMarkdown } from "@/lib/render-page-markdown";
 import { consumeSiteApiQuota } from "@/lib/site-api-response";
 import {
   rateLimitHeaders,
@@ -35,7 +36,8 @@ import {
  * exposes is already public on https://daloyjs.dev/docs. It advertises a
  * single capability, `tools`, with three tools:
  * - `search_docs` - keyword search across every docs page.
- * - `get_doc` - read the full plain-text body of one page by route or slug.
+ * - `get_doc` - read one page by route or slug, as the same Markdown the
+ *   page's `.md` sibling serves.
  * - `list_docs` - enumerate every available docs page.
  *
  * @see https://modelcontextprotocol.io/specification/2026-07-28
@@ -76,6 +78,22 @@ const CORS_HEADERS: Record<string, string> = {
  */
 function absoluteUrl(href: string): string {
   return `${SITE_URL}${href}`;
+}
+
+/**
+ * Origin of the inbound request, or the canonical site origin when the
+ * transport did not expose the request or its URL does not parse.
+ *
+ * @param url - The inbound request URL, when available.
+ * @returns An origin string such as `https://daloyjs.dev`.
+ */
+function originOf(url: string | undefined): string {
+  if (!url) return SITE_URL;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return SITE_URL;
+  }
 }
 
 /** Shape of an MCP `tools/call` text result. */
@@ -131,11 +149,20 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
 /**
  * Execute `get_doc`.
  *
+ * The body is the same Markdown the page's `.md` sibling serves (rendered by
+ * {@link renderPathMarkdown}), so code samples, tables, and headings arrive
+ * intact. If that render fails, the tool falls back to the page's extracted
+ * plain text rather than erroring, and says so in the result.
+ *
  * @param path - Page route or slug (already schema-validated).
+ * @param origin - Origin of the inbound MCP request. Only used as the
+ *   self-fetch target outside production; {@link renderPathMarkdown} pins
+ *   every other origin to the canonical site, so a forged `Host` cannot steer
+ *   the fetch (SSRF).
  * @returns The MCP tool result: the page title, route, URL, and full (bounded)
- *   body text, or an `isError` result when no page matches.
+ *   Markdown body, or an `isError` result when no page matches.
  */
-async function runGetDoc(path: string): Promise<ToolResult> {
+async function runGetDoc(path: string, origin: string): Promise<ToolResult> {
   const trimmed = path.trim();
   if (trimmed.length === 0) {
     return toolErrorResult(
@@ -150,13 +177,20 @@ async function runGetDoc(path: string): Promise<ToolResult> {
     );
   }
 
+  const rendered = await renderPathMarkdown(origin, page.href).catch(() => null);
+  const content =
+    rendered && rendered.status === 200
+      ? // The Markdown opens with the page H1; the header below already has it.
+        rendered.markdown.replace(/^# [^\n]*\n+/, "").trim()
+      : `${page.body}\n\n[Markdown rendering unavailable; this is a plain-text fallback. Code samples may be incomplete, so read ${absoluteUrl(page.href)}.md for the exact source.]`;
+
   const body =
-    page.body.length > MAX_DOC_BODY_CHARS
-      ? `${page.body.slice(0, MAX_DOC_BODY_CHARS)}\n\n[truncated; read the full page at ${absoluteUrl(page.href)}]`
-      : page.body;
+    content.length > MAX_DOC_BODY_CHARS
+      ? `${content.slice(0, MAX_DOC_BODY_CHARS)}\n\n[truncated; read the full page at ${absoluteUrl(page.href)}.md]`
+      : content;
 
   return textResult(
-    `# ${page.title}\n\nRoute: ${page.href}\nURL: ${absoluteUrl(page.href)}\n\n${body}`
+    `# ${page.title}\n\nRoute: ${page.href}\nURL: ${absoluteUrl(page.href)}\nMarkdown: ${absoluteUrl(page.href)}.md\n\n${body}`
   );
 }
 
@@ -200,7 +234,8 @@ const handler = createMcpHandler(
     server.registerTool(
       "get_doc",
       { ...meta.get_doc, inputSchema: SITE_MCP_INPUT_SCHEMAS.get_doc },
-      async ({ path }) => runGetDoc(path)
+      async ({ path }, ctx) =>
+        runGetDoc(path, originOf(ctx.http?.req?.url))
     );
 
     server.registerTool(

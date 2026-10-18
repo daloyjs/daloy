@@ -137,6 +137,10 @@ Two more surfaces implement the v2 half. There is a second, narrower index at [/
 
 Agents that prefer structured tools over page fetches can use `https://daloyjs.dev/mcp` ([MCP docs](/docs/mcp)) with `search_docs`, `get_doc`, and `list_docs`. The `llms.txt` file points at that endpoint so the two surfaces stay discoverable together.
 
+Both surfaces serve the same content. `get_doc` returns the exact Markdown the page's `.md` sibling serves, so code samples, tables, and headings come through intact, and its result header names the `.md` URL. If the Markdown render ever fails, `get_doc` falls back to the page's plain text and says so, pointing the agent at the `.md` URL for the exact source.
+
+The server's MCP `instructions` also carry a short DaloyJS primer, because most MCP clients place that text in the model's system prompt before any tool runs. A model whose training data predates DaloyJS still learns, on the first turn, what the framework is, how to scaffold a project (`pnpm create daloy@latest my-api`), the core route idiom as a runnable example, the habits it should not carry over from Express or Hono (no `res.json()`, handlers return `{ status, body }`, `z.coerce` for query numbers, typed errors instead of hand-built responses, `serve` from an adapter subpath), and which pages to read first. The website test suite runs that example against the framework source and checks that every docs route the primer names exists, so the primer cannot quietly go stale.
+
 ## For your own API or docs site [#for-your-api]
 
 `@daloyjs/core` does not force every API process to serve `/llms.txt`. That file belongs on the host that publishes human documentation (marketing site, docs portal, or static docs deploy). For a DaloyJS API you still give agents a short list of canonical machine surfaces:

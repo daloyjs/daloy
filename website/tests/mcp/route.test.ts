@@ -259,6 +259,78 @@ test("legacy tools/call get_doc accepts a /docs/... route form", async () => {
   assert.match(toolText(json), /^# Routing\n/);
 });
 
+/** Replace global fetch for one test, recording every requested URL. */
+function stubFetch(
+  t: { after: (fn: () => void) => void },
+  respond: (url: string) => Response
+): string[] {
+  const calls: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input instanceof Request ? input.url : input);
+    calls.push(url);
+    return respond(url);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = original;
+  });
+  return calls;
+}
+
+test("[happy] get_doc returns the same Markdown as the .md route, code intact", async (t) => {
+  const code = 'app.get("/users/:id", { params: z.object({ id: z.string() }) }, (ctx) => ({ ok: true }));';
+  const html =
+    "<html><body><main><div data-docs-content><h1>Routing</h1><p>Intro.</p>" +
+    `<div class="code-editor" data-language="ts"><pre><code>${code.replace(/>/g, "&gt;")}\n</code></pre></div>` +
+    "</div></main></body></html>";
+  const calls = stubFetch(t, () =>
+    new Response(html, { status: 200, headers: { "content-type": "text/html" } })
+  );
+
+  const { json } = await legacyRpc(8, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "routing" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  const text = toolText(json);
+  assert.match(text, /^# Routing\n/);
+  assert.match(text, /Markdown: https:\/\/daloyjs\.dev\/docs\/routing\.md/);
+  assert.ok(text.includes("```ts"), "code fence is preserved");
+  assert.ok(text.includes(code), "code sample keeps braces and arrows");
+  assert.equal(text.match(/^# Routing$/gm)?.length, 1, "H1 is not duplicated");
+  // Self-fetch targets the request's loopback origin, never a forged host.
+  assert.deepEqual(calls, ["http://localhost/docs/routing"]);
+});
+
+test("[unhappy] get_doc falls back to plain text when Markdown rendering fails", async (t) => {
+  stubFetch(t, () => new Response("boom", { status: 500 }));
+
+  const { json } = await legacyRpc(9, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/docs/security" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  const text = toolText(json);
+  assert.match(text, /Route: \/docs\/security/);
+  assert.match(text, /plain-text fallback/);
+  assert.match(text, /https:\/\/daloyjs\.dev\/docs\/security\.md/);
+});
+
+test("[unhappy] get_doc never self-fetches for an unknown page", async (t) => {
+  const calls = stubFetch(t, () => new Response("", { status: 200 }));
+
+  const { json } = await legacyRpc(10, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "does-not-exist" },
+  });
+
+  assert.equal(json.result.isError, true);
+  assert.match(toolText(json), /No documentation page found/);
+  assert.deepEqual(calls, []);
+});
+
 test("legacy tools/call list_docs enumerates every page", async () => {
   const { json } = await legacyRpc(7, "tools/call", {
     name: "list_docs",
