@@ -63,10 +63,11 @@ function roughOpenCost(days = DAYS_OPEN): number {
   return days * 24 * HOURLY_COST_USD;
 }
 
-// ~$6.5M for the full 247 days, which is MORE than the $4.99M average
-// breach. So the hourly figure is a way to feel the cost of an open
-// window, not a formula that adds up to the bill: costs do not accrue
-// evenly hour by hour. Shorter detection is still the lever that bends it.
+// ~$6.5M for the full 247 days, which is MORE than the $4.99M average.
+// IBM's $1,100/hour is that $4.99M spread over roughly 189 days (close to
+// the 183-day MTTI), not over the whole 247-day lifecycle. Use it to feel
+// the cost of an open window, not as a formula that rebuilds the bill.
+// Shorter detection is still the lever that bends it.
 ```
 
 ## What still did not improve
