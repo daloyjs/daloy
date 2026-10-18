@@ -65,3 +65,5 @@ tmp/
 
 .agents/skills/automated-release/**
 .claude/skills/automated-release/**
+
+daloyjs_podcasts/
