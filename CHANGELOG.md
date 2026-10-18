@@ -17,6 +17,39 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-18
+
+### Added
+
+- `fetchGuard()` now pins `https:` requests to the validated IP on Node, as
+  it already did for `http:`. The TLS `servername` (SNI) is the original
+  hostname and the certificate is verified against it, so pinning never
+  weakens TLS. This closes the DNS-rebinding window for TLS upstreams.
+- `fetchGuard()` bounds every call by default: `timeoutMs` (30 s) covers
+  every redirect hop, the response head, and the body read, and
+  `maxResponseBytes` (10 MiB) refuses a larger `Content-Length` up front and
+  errors a streamed body that grows past it (`response-too-large`).
+  `createWebhookSender()` and `createA2aClient()` keep their own deadlines;
+  `urlFeed()` allows 64 MiB feeds.
+- `fetchGuard({ allowPorts })` restricts destination ports, and the Fetch
+  Standard "bad ports" (SMTP, X11, IRC, and the rest) are refused with
+  `port-not-allowed` on every path. The pinned path previously reached them.
+- `fetchGuard({ allowHosts })` entries accept a port (`"billing.internal:8443"`)
+  to trust only that port.
+- `fetchGuard({ sensitiveHeaders })` names custom credential headers (for
+  example `x-api-key`) to drop on a cross-origin redirect, alongside
+  `Authorization`, `Cookie`, and `Proxy-Authorization`.
+
+### Fixed
+
+- The SSRF guard docs recommended "pinning" `https:` inside a custom `fetch`
+  by resolving the hostname again; that second lookup is never validated, so
+  a rebinding attacker could still reach loopback. The snippet is removed in
+  favour of the built-in pinned path and egress rules. The quick start no
+  longer returns the block reason to the caller (it revealed whether an
+  internal hostname exists), and the edge-runtime resolver example now
+  queries `AAAA` records as well as `A`.
+
 ## [1.13.0] - 2026-10-16
 
 ### Added
