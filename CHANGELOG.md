@@ -17,9 +17,21 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-20
+
 ### Added
 
 - `ServiceUnavailableError` (`503 Service Unavailable`) for application code: a stable `https://daloyjs.dev/errors/service-unavailable` problem `type` instead of the `https://httpstatuses.io/503` fallback a bare `HttpError(503)` gets, an optional `Retry-After` (a non-integer or negative value throws `RangeError`), and `Cache-Control: no-store` so a shared cache never serves the outage after recovery. The `verify:runtime-parity-audits` gate now requires that header.
+
+### Changed
+
+- `create-daloy`: the `deno-basic` template loads core from `npm:@daloyjs/core`
+  instead of `jsr:@daloyjs/daloy`, so it no longer depends on JSR hosting. JSR
+  publishing continues from every release.
+- README and docs now say `secureHeaders()` and request ids are auto-applied by
+  `new App()`, that 5xx `detail` redaction fails closed outside an explicit
+  development or test environment, and that the Node adapter refuses a request
+  that reaches the 100-header cap.
 
 ## [1.14.0] - 2026-10-18
 
