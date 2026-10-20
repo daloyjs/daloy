@@ -708,3 +708,51 @@ export class InternalError extends HttpError {
     this.name = "InternalError";
   }
 }
+
+/**
+ * `503 Service Unavailable` — for application code that is temporarily
+ * unable to serve (maintenance mode, a dependency outage, a drained
+ * instance). Without it, `new HttpError(503, …)` falls back to the
+ * third-party `https://httpstatuses.io/503` `type`; this class pins a
+ * stable `https://daloyjs.dev/errors/service-unavailable` URI instead.
+ * First-party `loadShedding()`, `concurrencyLimit()` and
+ * `requestTimeoutStatus: 503` keep their own, more specific types.
+ *
+ * The response always carries `cache-control: no-store`, so a shared cache
+ * or CDN cannot keep serving the outage after the service recovers. Like
+ * every 5xx, `detail` is redacted unless the environment is explicitly
+ * development or test, so put anything the client needs in `Retry-After`.
+ *
+ * @param retryAfterSeconds - Seconds the client should wait before retrying;
+ *   sent as `Retry-After`. Omit to send no `Retry-After` header.
+ * @param detail - Optional explanation; suppressed outside development/test.
+ * @throws RangeError when `retryAfterSeconds` is not a non-negative safe
+ *   integer, so a `NaN` from a missing env var never reaches the header.
+ * @since 1.15.0
+ */
+export class ServiceUnavailableError extends HttpError {
+  constructor(retryAfterSeconds?: number, detail?: string) {
+    if (
+      retryAfterSeconds !== undefined &&
+      !(Number.isSafeInteger(retryAfterSeconds) && retryAfterSeconds >= 0)
+    ) {
+      throw new RangeError(
+        `ServiceUnavailableError: retryAfterSeconds must be a non-negative integer, got ${String(retryAfterSeconds)}.`
+      );
+    }
+    super(
+      503,
+      {
+        type: "https://daloyjs.dev/errors/service-unavailable",
+        title: "Service Unavailable",
+        ...(detail ? { detail } : {}),
+      },
+      // An outage response must never be cached, or a CDN keeps serving it
+      // after the service recovers.
+      retryAfterSeconds !== undefined
+        ? { "retry-after": String(retryAfterSeconds), "cache-control": "no-store" }
+        : { "cache-control": "no-store" }
+    );
+    this.name = "ServiceUnavailableError";
+  }
+}

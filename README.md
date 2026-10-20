@@ -655,6 +655,7 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 - 5xx problem+json `detail` is redacted unless the environment is explicitly development or test; an unset `NODE_ENV` redacts too.
 - Real **405** with `Allow` header instead of a misleading 404.
 - `Cache-Control: no-store` baked into `UnauthorizedError` / `ForbiddenError` / `TooManyRequestsError` so every first-party auth 401 / 403 / 429 response is uncacheable.
+- `ServiceUnavailableError` (503) for maintenance and outages: stable `daloyjs.dev` problem `type`, a validated `Retry-After`, and `Cache-Control: no-store` so a CDN never keeps serving the outage.
 
 ### Refuse-to-boot guardrails
 

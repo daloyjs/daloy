@@ -17,6 +17,10 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `ServiceUnavailableError` (`503 Service Unavailable`) for application code: a stable `https://daloyjs.dev/errors/service-unavailable` problem `type` instead of the `https://httpstatuses.io/503` fallback a bare `HttpError(503)` gets, an optional `Retry-After` (a non-integer or negative value throws `RangeError`), and `Cache-Control: no-store` so a shared cache never serves the outage after recovery. The `verify:runtime-parity-audits` gate now requires that header.
+
 ## [1.14.0] - 2026-10-18
 
 ### Added

@@ -84,6 +84,7 @@ export {
   TooManyRequestsError,
   RequestTimeoutError,
   InternalError,
+  ServiceUnavailableError,
   MessageLeakError,
   httpError,
   SAFE_CUSTOM_ERROR_RESPONSE_HEADERS,

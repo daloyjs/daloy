@@ -56,6 +56,7 @@ import {
   TooManyRequestsError,              // 429 + Retry-After
   RequestHeaderFieldsTooLargeError,  // 431
   InternalError,                     // 500 (detail redacted outside dev/test)
+  ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
 } from "@daloyjs/core";
 ```
 
@@ -126,7 +127,7 @@ export class QuotaExceededError extends HttpError {
 }
 ```
 
-The built-in classes above all set a `https://daloyjs.dev/errors/<slug>` `type`. A plain `HttpError` thrown without a `type` falls back to `https://httpstatuses.io/<status>`. First-party middleware that answers `503` (`loadShedding()`, `concurrencyLimit()`, `requestTimeoutStatus: 503`) sets its own `daloyjs.dev` type, so the fallback only applies to errors you construct yourself. Set `type` when clients key on it:
+The built-in classes above all set a `https://daloyjs.dev/errors/<slug>` `type`. A plain `HttpError` thrown without a `type` falls back to `https://httpstatuses.io/<status>`. First-party middleware that answers `503` (`loadShedding()`, `concurrencyLimit()`, `requestTimeoutStatus: 503`) sets its own `daloyjs.dev` type, so the fallback only applies to errors you construct yourself. Set `type` when clients key on it, or use a built-in class:
 
 ```ts
 throw new HttpError(503, { title: "Service Unavailable" });
@@ -137,6 +138,22 @@ throw new HttpError(503, {
   type: "https://api.example.com/errors/service-unavailable",
 });
 ```
+
+## Service unavailable
+
+For maintenance mode, a dependency outage, or a draining instance, throw `ServiceUnavailableError`. It answers `503` with a stable `https://daloyjs.dev/errors/service-unavailable` type, an optional `Retry-After`, and `cache-control: no-store`, so a CDN never keeps serving the outage after you recover.
+
+```ts
+import { ServiceUnavailableError } from "@daloyjs/core";
+
+if (await maintenance.isOn()) {
+  // Retry-After: 120. The detail is redacted outside development/test,
+  // so the header is what the client actually gets to act on.
+  throw new ServiceUnavailableError(120, "scheduled database maintenance");
+}
+```
+
+`retryAfterSeconds` must be a non-negative integer. Anything else (`NaN` from a missing environment variable, `-1`, `1.5`) throws a `RangeError` instead of sending a malformed `Retry-After` header.
 
 ## Custom `onError`
 

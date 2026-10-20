@@ -304,6 +304,7 @@ class ValidationError            extends HttpError {} // 422 - carries StandardS
 class TooManyRequestsError       extends HttpError {} // 429 - sets Retry-After
 class RequestHeaderFieldsTooLargeError extends HttpError {} // 431 - maxHeaderCount guard
 class InternalError              extends HttpError {} // 500 - detail redacted in production
+class ServiceUnavailableError    extends HttpError {} // 503 - sets Retry-After + cache-control: no-store
 
 // Defensive guard: throws MessageLeakError when a custom error response
 // would set a header outside the safe allowlist.
