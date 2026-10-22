@@ -49,6 +49,8 @@
  *
  * Redirects are followed **manually** with re-validation at each hop so
  * an attacker cannot bypass the check via a `302 → http://169.254...`.
+ * An `https:` → `http:` hop is refused (`protocol-downgrade`) unless
+ * {@link FetchGuardOptions.allowProtocolDowngrade} is set, and
  * `non-http(s)` protocols (`file:`, `ftp:`, `gopher:`, `data:`) are
  * rejected before any network call.
  *
@@ -108,7 +110,8 @@ export type SsrfBlockReason =
   | "invalid-url"
   | "redirect-body-not-replayable"
   | "port-not-allowed"
-  | "response-too-large";
+  | "response-too-large"
+  | "protocol-downgrade";
 
 /**
  * Thrown by {@link fetchGuard} when an outbound request is refused. Never
@@ -242,6 +245,18 @@ export interface FetchGuardOptions {
    * directly).
    */
   maxRedirects?: number;
+  /**
+   * Follow a redirect from an `https:` URL to an `http:` URL. Default
+   * `false`: such a hop is refused with `SsrfBlockedError("protocol-downgrade")`
+   * because a 307/308 would replay the request body — and any header not in
+   * the cross-origin strip list — in plaintext, and a 301/302/303 would still
+   * leak the path and query. Enable only for an upstream that is known to
+   * downgrade and carries nothing confidential. An `http:` → `https:` hop is
+   * always allowed.
+   *
+   * @since 1.16.0
+   */
+  allowProtocolDowngrade?: boolean;
   /**
    * Largest in-memory request body (string, `ArrayBuffer` / typed-array view,
    * `Blob`, `URLSearchParams`, `FormData`) that is buffered once so a
@@ -483,6 +498,7 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     throw new RangeError("fetchGuard(): maxResponseBytes must be a non-negative number.");
   }
   const maxRedirects = options.maxRedirects ?? 5;
+  const allowProtocolDowngrade = options.allowProtocolDowngrade === true;
   const maxReplayBodyBytes = options.maxReplayBodyBytes ?? 1024 * 1024;
   if (!Number.isFinite(maxReplayBodyBytes) || maxReplayBodyBytes < 0) {
     throw new RangeError("fetchGuard(): maxReplayBodyBytes must be a non-negative finite number.");
@@ -672,8 +688,12 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     } catch {
       throw new SsrfBlockedError(String(input), "invalid-url");
     }
+    let downgradeHop = false;
     for (let hop = 0; ; hop++) {
       const pinnedIp = await validateUrl(currentUrl);
+      if (downgradeHop && !allowProtocolDowngrade) {
+        throw new SsrfBlockedError(currentUrl.toString(), "protocol-downgrade");
+      }
       const dispatchInit: RequestInit =
         bodyBytes !== null ? { redirect: "manual", body: bodyBytes } : { redirect: "manual" };
       const dispatchReq = new Request(request, dispatchInit);
@@ -712,6 +732,11 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
         void res.body?.cancel().catch(() => undefined);
         throw new SsrfBlockedError(next.toString(), "credentials-in-url");
       }
+      // A TLS → plaintext hop would replay the body (307/308) or at least
+      // the path and query over the wire unencrypted. Flag it here; the
+      // refusal happens after the next hop's address check so a redirect to
+      // a denied address still reports the address block.
+      downgradeHop = currentUrl.protocol === "https:" && next.protocol === "http:";
       // Per fetch spec: 303 (and 301/302 for non-GET/HEAD in practice) downgrade to GET.
       const method = request.method.toUpperCase();
       const shouldDowngrade =

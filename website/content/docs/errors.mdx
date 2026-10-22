@@ -43,22 +43,25 @@ DaloyJS errors are first-class. Every thrown `HttpError` serializes to [RFC 9457
 
 ```ts
 import {
+  HttpError,                         // base class: any status, custom type/title/headers
   BadRequestError,                   // 400
-  UnauthorizedError,                 // 401
-  ForbiddenError,                    // 403
+  UnauthorizedError,                 // 401 + cache-control: no-store
+  ForbiddenError,                    // 403 + cache-control: no-store
   NotFoundError,                     // 404
   MethodNotAllowedError,             // 405 + Allow header
-  RequestTimeoutError,               // 408
+  RequestTimeoutError,               // 408 / 503 / 504 + cache-control: no-store
   ConflictError,                     // 409 + cache-control: no-store
   PayloadTooLargeError,              // 413
   UnsupportedMediaTypeError,         // 415
   ValidationError,                   // 422
-  TooManyRequestsError,              // 429 + Retry-After
+  TooManyRequestsError,              // 429 + Retry-After + cache-control: no-store
   RequestHeaderFieldsTooLargeError,  // 431
   InternalError,                     // 500 (detail redacted outside dev/test)
   ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
 } from "@daloyjs/core";
 ```
+
+`TooManyRequestsError` and `ServiceUnavailableError` validate `retryAfterSeconds` the same way: anything other than a non-negative safe integer throws a `RangeError` at construction, so a `NaN` from a missing env var never becomes an invalid `Retry-After` header. `RequestTimeoutError` (the `requestTimeoutMs` deadline, see [`requestTimeoutStatus`](/docs/api-reference/app)) is `no-store` for every status variant since 1.16.0, so a shared cache never keeps serving a `503`/`504` after the backend recovers. A bare `new HttpError(status, …)` gets a `https://httpstatuses.io/<status>` problem `type`; the built-in classes carry stable `https://daloyjs.dev/errors/<slug>` URIs.
 
 ## Throwing in a handler
 

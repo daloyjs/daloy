@@ -92,15 +92,25 @@ test("[jwk] comma-joined duplicate Authorization is a 401 before verification", 
 });
 
 test("[fileField] filename echo strips control, bidi and invisible characters", async () => {
-  const f = fileField({ filename: () => false });
   const name = "invoice‮fdp.exe​\u0000\n.pdf";
+  // The built-in unsafe-name check refuses the NUL / newline first, and its
+  // message is echo-sanitized the same way.
+  const strict = await validate(fileField(), new File(["x"], name, { type: "application/pdf" }));
+  assert.equal(
+    strict.issues![0]!.message,
+    'File name contains a path separator or control character: "invoicefdp.exe.pdf"'
+  );
+  // Opting out of that check hands the raw name to the matcher; its echo is sanitized too.
+  const f = fileField({ allowUnsafeFilenames: true, filename: () => false });
   const r = await validate(f, new File(["x"], name, { type: "application/pdf" }));
   const message = r.issues![0]!.message;
   assert.equal(message, 'File name "invoicefdp.exe.pdf" rejected by filename matcher');
 });
 
 test("[fileField] long filenames are truncated in the echo, ordinary names kept", async () => {
-  const f = fileField({ filename: () => false });
+  const strict = await validate(fileField(), new File(["x"], "a".repeat(500) + ".txt"));
+  assert.match(strict.issues![0]!.message, /^File name is longer than 255 characters: "a{128}\.\.\."$/);
+  const f = fileField({ allowUnsafeFilenames: true, filename: () => false });
   const long = await validate(f, new File(["x"], "a".repeat(500) + ".txt"));
   assert.match(long.issues![0]!.message, /^File name "a{128}\.\.\." rejected/);
   const plain = await validate(f, new File(["x"], "r\u00e9sum\u00e9 2026.pdf"));

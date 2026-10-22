@@ -8,7 +8,9 @@
  *
  * 1. **`fileField(options)`** — a Standard-Schema validator for a single
  *    uploaded file (a `File` or `Blob`). Enforces `maxBytes`, the `accept`
- *    MIME allowlist, and an optional filename matcher. Returns the file
+ *    MIME allowlist, a built-in unsafe-filename check (path separators,
+ *    control characters, `..`, over-long names), and an optional filename
+ *    matcher. Returns the file
  *    untouched on success — DaloyJS does not buffer it for you, so handlers
  *    can stream it directly to S3, disk, etc.
  * 2. **`multipartObject(shape, options)`** — a Standard-Schema validator
@@ -63,6 +65,28 @@ function echoSafe(value: string): string {
   return cleaned.length > 128 ? `${cleaned.slice(0, 128)}...` : cleaned;
 }
 
+/** Longest file name accepted by default; matches common filesystem limits. */
+const MAX_FILENAME_LENGTH = 255;
+// Path separators plus C0 controls and DEL. A NUL truncates the name in C
+// APIs, `/` and `\` escape the target directory on POSIX / Windows.
+// eslint-disable-next-line no-control-regex
+const UNSAFE_FILENAME_RE = /[\u0000-\u001f\u007f/\\]/;
+
+/**
+ * Why an upload's file name is unsafe to use as a path component, or
+ * `undefined` when it is acceptable. An empty name (a bare `Blob`) is fine.
+ */
+function unsafeFilenameReason(name: string): string | undefined {
+  if (name.length > MAX_FILENAME_LENGTH) {
+    return `File name is longer than ${MAX_FILENAME_LENGTH} characters`;
+  }
+  if (name === "." || name === "..") return "File name is a relative directory reference";
+  if (UNSAFE_FILENAME_RE.test(name)) {
+    return "File name contains a path separator or control character";
+  }
+  return undefined;
+}
+
 /** Marker key used by the OpenAPI generator to emit `multipart/form-data`. */
 export const MULTIPART_SCHEMA_MARKER = "~daloy.multipart" as const;
 /** Marker key for individual file fields. */
@@ -99,9 +123,24 @@ export interface FileFieldOptions {
   accept?: string[];
   /**
    * Optional filename matcher. Receives the file's `name` and must return
-   * truthy for the file to be accepted. Useful for forcing extensions.
+   * truthy for the file to be accepted. Useful for forcing extensions. Runs
+   * after the built-in unsafe-filename check (see
+   * {@link FileFieldOptions.allowUnsafeFilenames}).
    */
   filename?: (name: string) => boolean;
+  /**
+   * Accept file names that the built-in check refuses. By default a name
+   * containing a path separator (`/`, `\`), a NUL or other C0/DEL control
+   * character, equal to `.` or `..`, or longer than 255 characters is
+   * rejected, because a handler that joins `file.name` onto a directory
+   * would otherwise write outside it. Browsers and curl only ever send a
+   * basename, so legitimate clients are unaffected. Set `true` only when the
+   * name is never used as a path and you need the raw value.
+   *
+   * @defaultValue false
+   * @since 1.16.0
+   */
+  allowUnsafeFilenames?: boolean;
   /**
    * Verify file signatures before the handler receives the upload. `true`
    * derives known signatures from `accept` (PNG/JPEG/GIF/WebP/PDF/ZIP/GZIP).
@@ -437,9 +476,15 @@ export function fileField(
             };
           }
         }
-        if (opts.filename) {
+        if (opts.filename || opts.allowUnsafeFilenames !== true) {
           const name = typeof file.name === "string" ? file.name : "";
-          if (!opts.filename(name)) {
+          if (opts.allowUnsafeFilenames !== true) {
+            const unsafe = unsafeFilenameReason(name);
+            if (unsafe !== undefined) {
+              return { issues: [{ message: `${unsafe}: "${echoSafe(name)}"` }] };
+            }
+          }
+          if (opts.filename && !opts.filename(name)) {
             return {
               issues: [{ message: `File name "${echoSafe(name)}" rejected by filename matcher` }],
             };

@@ -61,6 +61,95 @@ test("fileField enforces maxBytes", async () => {
   assert.match(r.issues![0]!.message, /maxBytes/);
 });
 
+test("fileField rejects path-traversal and control-character file names by default", async () => {
+  const f = fileField();
+  const unsafe = [
+    "../../etc/passwd",
+    "..\\..\\windows\\win.ini",
+    "dir/inner.png",
+    "C:\\boot.ini",
+    "evil\u0000.png",
+    "line\nbreak.txt",
+    "bell\u0007.txt",
+    "del\u007f.txt",
+    ".",
+    "..",
+    "a".repeat(256),
+  ];
+  for (const name of unsafe) {
+    const r = await validate(f, new File(["x"], name, { type: "text/plain" }));
+    assert.ok(r.issues, `accepted unsafe file name ${JSON.stringify(name)}`);
+    assert.match(r.issues![0]!.message, /path separator|control character|directory reference|longer than/);
+  }
+});
+
+test("fileField keeps ordinary basenames, non-ASCII names, dotfiles, and nameless blobs", async () => {
+  const f = fileField();
+  for (const name of ["photo.png", "résumé (final) v2.pdf", "日本語.txt", ".env.example", "a".repeat(255), ""]) {
+    const r = await validate(f, new File(["x"], name, { type: "text/plain" }));
+    assert.equal(r.issues, undefined, `rejected safe file name ${JSON.stringify(name)}`);
+  }
+  // A bare Blob has no name at all and must still pass.
+  const blob = await validate(f, new Blob(["x"], { type: "text/plain" }));
+  assert.equal(blob.issues, undefined);
+});
+
+test("fileField({ allowUnsafeFilenames: true }) opts out of the built-in name check only", async () => {
+  const permissive = fileField({ allowUnsafeFilenames: true });
+  const r = await validate(permissive, new File(["x"], "../x.png", { type: "image/png" }));
+  assert.equal(r.issues, undefined);
+  // The user matcher still applies on top of the opt-out.
+  const matched = fileField({ allowUnsafeFilenames: true, filename: (n) => n.endsWith(".png") });
+  const bad = await validate(matched, new File(["x"], "../x.txt", { type: "text/plain" }));
+  assert.ok(bad.issues);
+  assert.match(bad.issues![0]!.message, /filename matcher/);
+});
+
+test("fileField: the built-in name check runs before the user filename matcher", async () => {
+  let calls = 0;
+  const f = fileField({
+    filename: () => {
+      calls++;
+      return true;
+    },
+  });
+  const r = await validate(f, new File(["x"], "../x.txt", { type: "text/plain" }));
+  assert.ok(r.issues);
+  assert.equal(calls, 0);
+});
+
+test("multipart upload with a traversal file name is a 422 on the wire", async () => {
+  const app = new App({ env: "test", logger: false });
+  app.route({
+    method: "POST",
+    path: "/upload",
+    operationId: "upload",
+    request: { body: multipartObject({ file: fileField() }) as any },
+    responses: { 200: { description: "ok", body: z.object({ name: z.string() }) as any } },
+    handler: async (ctx) => ({
+      status: 200 as const,
+      body: { name: (ctx.body as { file: File }).file.name },
+    }),
+  });
+  const bad = await app.fetch(
+    new Request("http://x/upload", {
+      method: "POST",
+      body: buildMultipart([
+        { name: "file", value: new Blob(["x"], { type: "text/plain" }), filename: "../../.ssh/authorized_keys" },
+      ]),
+    })
+  );
+  assert.equal(bad.status, 422);
+  const good = await app.fetch(
+    new Request("http://x/upload", {
+      method: "POST",
+      body: buildMultipart([{ name: "file", value: new Blob(["x"], { type: "text/plain" }), filename: "keys.txt" }]),
+    })
+  );
+  assert.equal(good.status, 200);
+  assert.deepEqual(await good.json(), { name: "keys.txt" });
+});
+
 test("fileField enforces accept allowlist with wildcards", async () => {
   const f = fileField({ accept: ["image/*"] });
   const png = new File(["x"], "x.png", { type: "image/png" });

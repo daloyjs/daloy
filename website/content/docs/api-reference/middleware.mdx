@@ -86,7 +86,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120, standardHeaders: "draft-8", lega
 
 ### `requireScopes()` options [#require-scopes-options]
 
-`requireScopes()` reads `ctx.state.user.scopes`, which `jwk()`, `bearerAuth()` and other auth helpers fill in. `jwk()` builds that list from the token's `scope` claim (space-delimited string), or, when `scope` is absent, from `scp` (a space-delimited string as Microsoft Entra ID issues it since 1.10.0, or an array) or `scopes` (array). A caller without credentials gets `401` with a `WWW-Authenticate: Bearer scope="..."` challenge; a caller with too few scopes gets `403`.
+`requireScopes()` reads `ctx.state.user.scopes`, which `jwk()`, `bearerAuth()` and other auth helpers fill in. `jwk()` builds that list from the token's `scope` claim (space-delimited string), or, when `scope` is absent, from `scp` (a space-delimited string as Microsoft Entra ID issues it since 1.10.0, or an array) or `scopes` (array). Only an **own** `scopes` property counts (since 1.16.0, matching `requireRoles()`): an inherited one, such as a polluted `Object.prototype` or a class getter, grants nothing, so return a plain object from a custom `bearerAuth({ validate })`. A caller without credentials gets `401` with a `WWW-Authenticate: Bearer scope="..."` challenge; a caller with too few scopes gets `403`.
 
 By default the check runs in `beforeHandle`, after the request body is read and validated. That means a valid token with too few scopes and a malformed body gets `400`, and the server parses a body from a caller it is about to refuse. Since 1.10.0 you can authorize in `preBody` instead, right after header-only authentication:
 
@@ -241,7 +241,12 @@ printStartupBanner(opts: StartupBannerOptions): void;
 ## Connection info & proxy posture [#connection-info-and-proxy-posture]
 
 ```ts
-type BehindProxyConfig = "none" | "loopback" | { hops: number } | { cidrs: readonly string[] };
+type ForwardedHeaderSource = "x-forwarded-for" | "forwarded" | "cf-connecting-ip"; // since 1.16.0
+type BehindProxyConfig =
+  | "none"
+  | "loopback"
+  | { hops: number; header?: ForwardedHeaderSource }
+  | { cidrs: readonly string[]; header?: ForwardedHeaderSource };
 interface ConnInfo { remoteAddress?: string; remotePort?: number; tls?: boolean }
 
 getConnInfo(req: Request): ConnInfo | undefined;
@@ -251,13 +256,34 @@ resolveClientIp(ctx, cfg?: BehindProxyConfig): string | undefined;
 readRemoteAddress(ctx): string | undefined;
 readRemotePort(ctx): number | undefined;
 pickForwardedForByHops(header: string, hops: number): string | undefined;
+parseForwardedHeader(header: string | null): string[];          // RFC 7239 for= values, in order
+readForwardedClientIp(req, source: ForwardedHeaderSource, hops: number): string | undefined;
 
 // Spoof-resistant client IP: reads `hops` entries from the RIGHT of
 // X-Forwarded-For (the slots your own proxy chain wrote). Falls back to
 // X-Real-IP only when hops === 1; past that a chain shorter than the
 // declaration yields undefined rather than a caller-settable header.
-resolveForwardedClientIp(req: Request, hops?: number): string | undefined;
+resolveForwardedClientIp(req: Request, hops?: number, trustedPeers?, source?: ForwardedHeaderSource): string | undefined;
 ```
+
+### Which header carries the client address [#forwarded-header-source]
+
+`X-Forwarded-For` is the default. Since 1.16.0 the object forms of `behindProxy` take a `header` so the same hop and peer rules read a different header:
+
+- `"forwarded"`: the RFC 7239 `Forwarded` header. Only `for=` parameters are read, one per comma-separated hop, right to left like `X-Forwarded-For`. Quoted values, bracketed IPv6, `:port` suffixes, and the RFC's `unknown` / `_obfuscated` identifiers are handled; the latter two still occupy their hop (so a proxy writing `for=unknown` can never let the attacker-controlled left entry slide into the trusted slot) but yield no address. There is no `X-Real-IP` fallback for this source.
+- `"cf-connecting-ip"`: Cloudflare's single-value header naming the visitor Cloudflare saw. It is one hop by definition, so it works with `{ hops: 1 }` or `{ cidrs: [<Cloudflare ranges>] }` and `{ hops: 2, header: "cf-connecting-ip" }` is refused at construction. Prefer it to `X-Forwarded-For` behind Cloudflare, where a client can pre-populate the latter.
+
+```ts
+// Behind Cloudflare, only when the socket peer is a Cloudflare edge:
+const app = new App({
+  behindProxy: { cidrs: CLOUDFLARE_IPV4_AND_IPV6_RANGES, header: "cf-connecting-ip" },
+});
+
+// Behind an RFC 7239 proxy (Traefik, Caddy with `forwarded`):
+const app = new App({ behindProxy: { hops: 1, header: "forwarded" } });
+```
+
+Every client-identity guard (`rateLimit()`, `autoBan()`, `ipRestriction()`, `geoBlock()`, …) that does not declare its own trust inherits the App posture, header included.
 
 ## Subdomains (Public-Suffix-aware)
 

@@ -12,6 +12,9 @@
  *   JSON-serializable payload (typically the sort key of the last row) into an
  *   opaque, URL-safe token, and decode it back with prototype-pollution-safe
  *   parsing and a hard size cap.
+ * - {@link createCursorCodec} — the same codec with an HMAC-SHA256 signature
+ *   (and optional expiry) appended, so a client cannot edit the decoded
+ *   payload (`{ tenantId }`, `{ offset }`) and have the server trust it.
  * - {@link buildLinkHeader} / {@link buildPageLinks} — assemble a Web-standard
  *   `Link` header, with CRLF / angle-bracket header-injection guards baked in.
  * - {@link paginationQuery} — a Standard Schema validator for the `cursor` +
@@ -29,7 +32,7 @@
  */
 
 import { BadRequestError } from "./errors.js";
-import { safeJsonParseLimited } from "./security.js";
+import { safeJsonParseLimited, timingSafeEqual } from "./security.js";
 import { isForbiddenObjectKey } from "./security.js";
 import type { StandardSchemaV1 } from "./schema.js";
 
@@ -104,6 +107,207 @@ export function decodeCursor<T = unknown>(cursor: string): T {
     throw new BadRequestError("Malformed pagination cursor.");
   }
   return stripForbiddenKeys(parsed) as T;
+}
+
+// ---------- Signed cursor codec ----------
+
+/** Options for {@link createCursorCodec}. */
+export interface CursorCodecOptions {
+  /**
+   * HMAC-SHA256 key(s). A string or a list for rotation: the **first** entry
+   * signs new cursors, every entry may verify an incoming one, so a rotated
+   * key keeps outstanding cursors valid until they expire. Each must be at
+   * least 16 characters. Load it from an env var or secret manager; a
+   * guessable key lets a client forge any payload.
+   */
+  secret: string | readonly string[];
+  /**
+   * Seconds a cursor stays valid after `encode()`. `undefined` (default)
+   * means no expiry. A bound keeps a leaked cursor from being replayed
+   * indefinitely and lets a key rotate out once every cursor signed with it
+   * has aged past this. Must be a positive integer when set.
+   */
+  ttlSeconds?: number;
+  /**
+   * Clock in milliseconds since the Unix epoch, for `ttlSeconds`. Defaults
+   * to `Date.now`; override in tests.
+   */
+  now?: () => number;
+}
+
+/**
+ * A cursor codec whose tokens carry an HMAC-SHA256 signature. Returned by
+ * {@link createCursorCodec}.
+ */
+export interface CursorCodec {
+  /**
+   * Encode `payload` into a signed, opaque, URL-safe cursor.
+   *
+   * @throws {TypeError} If `payload` is not JSON-serializable.
+   */
+  encode(payload: unknown): Promise<string>;
+  /**
+   * Verify a cursor's signature (and expiry, when `ttlSeconds` is set) and
+   * return its payload. Every failure — a tampered payload, a forged or
+   * truncated signature, an expired or malformed token — is one
+   * `BadRequestError("Invalid pagination cursor.")`, so the response never
+   * tells a client which check it failed.
+   *
+   * @throws {BadRequestError} On any verification failure.
+   */
+  decode<T = unknown>(cursor: string): Promise<T>;
+}
+
+const CURSOR_ENC = new TextEncoder();
+/** Base64url of a 32-byte SHA-256 MAC is always 43 characters. */
+const CURSOR_SIG_LENGTH = 43;
+
+function cursorSubtle(): SubtleCrypto {
+  const c: Crypto | undefined = (globalThis as { crypto?: Crypto }).crypto;
+  if (!c?.subtle) {
+    throw new Error(
+      "createCursorCodec(): Web Crypto (crypto.subtle) is required. Provide a polyfill in environments without it."
+    );
+  }
+  return c.subtle;
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Create a cursor codec that signs every token with HMAC-SHA256, so the
+ * decoded payload can be trusted as the server's own and not the client's.
+ *
+ * {@link encodeCursor} / {@link decodeCursor} produce **opaque but unsigned**
+ * tokens: anyone can base64url-decode one, change `{ offset: 20 }` to
+ * `{ offset: 0 }` or `{ tenantId: "a" }` to `{ tenantId: "b" }`, and re-encode
+ * it. That is fine as long as the handler re-scopes the query by the
+ * authenticated principal and treats the cursor as a hint. When the cursor
+ * carries anything the query *relies* on — a tenant, a filter, a stable sort
+ * boundary that must not be skipped — use this codec instead.
+ *
+ * Token format: `<base64url(json)>.<base64url(hmac)>`, with an optional
+ * expiry folded into the signed bytes when `ttlSeconds` is set. Decoding
+ * applies the same {@link MAX_CURSOR_LENGTH} cap, strict base64url, and
+ * prototype-pollution stripping as {@link decodeCursor}, verifies the MAC in
+ * constant time **before** parsing the JSON, and accepts every configured
+ * secret so keys can rotate without invalidating cursors in flight.
+ *
+ * @example
+ * ```ts
+ * const cursors = createCursorCodec({
+ *   secret: process.env.CURSOR_SECRET!,
+ *   ttlSeconds: 3600,
+ * });
+ *
+ * // In the handler:
+ * const after = query.cursor ? await cursors.decode<{ id: string }>(query.cursor) : undefined;
+ * const rows = await db.listAfter(after?.id, query.limit + 1);
+ * const next = rows.length > query.limit
+ *   ? await cursors.encode({ id: rows[query.limit - 1]!.id })
+ *   : undefined;
+ * ```
+ *
+ * @param options - Secret(s), optional TTL, and clock.
+ * @returns A {@link CursorCodec}.
+ * @throws {Error} At construction when a secret is missing or shorter than 16
+ *   characters, or `ttlSeconds` is not a positive integer.
+ * @since 1.16.0
+ */
+export function createCursorCodec(options: CursorCodecOptions): CursorCodec {
+  const secrets =
+    typeof options.secret === "string" ? [options.secret] : Array.from(options.secret ?? []);
+  if (secrets.length === 0) {
+    throw new Error("createCursorCodec(): at least one secret is required.");
+  }
+  for (const s of secrets) {
+    if (typeof s !== "string" || s.length < 16) {
+      throw new Error(
+        "createCursorCodec(): each secret must be a string of at least 16 characters — it is the " +
+          "HMAC key that signs every cursor, so a short or guessable value lets a client forge the " +
+          "payload. Generate one with `openssl rand -base64 32` and load it from an env var."
+      );
+    }
+  }
+  const ttl = options.ttlSeconds;
+  if (ttl !== undefined && !(Number.isSafeInteger(ttl) && ttl > 0)) {
+    throw new Error("createCursorCodec(): ttlSeconds must be a positive integer when set.");
+  }
+  const now = options.now ?? Date.now;
+
+  const keys: Array<Promise<CryptoKey> | null> = secrets.map(() => null);
+  const keyFor = (i: number): Promise<CryptoKey> => {
+    let k = keys[i];
+    if (!k) {
+      k = cursorSubtle().importKey(
+        "raw",
+        CURSOR_ENC.encode(secrets[i]!),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+      keys[i] = k;
+    }
+    return k;
+  };
+  const mac = async (i: number, data: string): Promise<string> => {
+    const sig = await cursorSubtle().sign("HMAC", await keyFor(i), CURSOR_ENC.encode(data));
+    return bytesToBase64Url(new Uint8Array(sig));
+  };
+  const fail = (): never => {
+    throw new BadRequestError("Invalid pagination cursor.");
+  };
+
+  return {
+    async encode(payload) {
+      const json = JSON.stringify(payload);
+      if (json === undefined) {
+        throw new TypeError("createCursorCodec(): payload is not JSON-serializable.");
+      }
+      // The expiry is part of the signed string, so it cannot be extended.
+      const body =
+        ttl === undefined
+          ? base64UrlEncode(json)
+          : `${base64UrlEncode(json)}.${Math.floor(now() / 1000) + ttl}`;
+      return `${body}.${await mac(0, body)}`;
+    },
+    async decode<T = unknown>(cursor: string): Promise<T> {
+      if (typeof cursor !== "string" || cursor.length === 0) return fail();
+      if (cursor.length > MAX_CURSOR_LENGTH) return fail();
+      const dot = cursor.lastIndexOf(".");
+      if (dot <= 0 || cursor.length - dot - 1 !== CURSOR_SIG_LENGTH) return fail();
+      const body = cursor.slice(0, dot);
+      const sig = cursor.slice(dot + 1);
+      if (!/^[A-Za-z0-9_-]+$/.test(sig)) return fail();
+      // Verify before parsing: an unauthenticated token never reaches JSON.parse.
+      let valid = false;
+      for (let i = 0; i < secrets.length; i++) {
+        if (timingSafeEqual(await mac(i, body), sig)) valid = true;
+      }
+      if (!valid) return fail();
+      let payloadB64 = body;
+      if (ttl !== undefined) {
+        const expDot = body.lastIndexOf(".");
+        if (expDot <= 0) return fail();
+        const exp = Number(body.slice(expDot + 1));
+        if (!Number.isSafeInteger(exp) || exp < Math.floor(now() / 1000)) return fail();
+        payloadB64 = body.slice(0, expDot);
+      } else if (body.includes(".")) {
+        return fail();
+      }
+      let parsed: unknown;
+      try {
+        parsed = safeJsonParseLimited(base64UrlDecode(payloadB64), 1000, 20);
+      } catch {
+        return fail();
+      }
+      return stripForbiddenKeys(parsed) as T;
+    },
+  };
 }
 
 // ---------- RFC 8288 Link header ----------

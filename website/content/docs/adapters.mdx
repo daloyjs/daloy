@@ -39,7 +39,7 @@ DaloyJS is a REST API backend framework. The core only ever sees `Request → Re
           {
             eyebrow: "serverless",
             label: "Vercel / Netlify",
-            detail: "@daloyjs/core/vercel",
+            detail: "@daloyjs/core/vercel · /netlify",
           },
           {
             eyebrow: "edge / serverless",
@@ -68,7 +68,7 @@ DaloyJS is a REST API backend framework. The core only ever sees `Request → Re
 <Cards>
 <Card title="Cloudflare Workers" href="/docs/adapters/cloudflare-workers">Modules-format Worker with bindings for KV, R2, D1, DO, Queues, Hyperdrive. Also runs self-hosted on workerd.</Card>
 <Card title="Vercel" href="/docs/adapters/vercel">Vercel Functions on Fluid compute, or mounted inside a Next.js App Router route handler.</Card>
-<Card title="Netlify" href="/docs/adapters/netlify">Edge Functions (Deno) and Functions v2 (Node, fetch-style). The v1 lambda shape is legacy.</Card>
+<Card title="Netlify" href="/docs/adapters/netlify">Edge Functions (Deno) and Functions v2 (Node) via toNetlifyHandler, which reads the client IP and waitUntil from Netlify's context. The v1 lambda shape is legacy.</Card>
 <Card title="Fastly Compute" href="/docs/adapters/fastly">JS Compute via @fastly/js-compute and the fetch-event listener model, wrapped by installFastlyListener.</Card>
 <Card title="AWS Lambda" href="/docs/adapters/aws-lambda">API Gateway HTTP API v2.0, REST API v1.0, Function URLs behind CloudFront, and streamifyResponse for streaming.</Card>
 <Card title="Azure Functions" href="/docs/adapters/azure-functions">Node.js v4 programming model. One catch-all HTTP trigger, cookies mapped for you, optional HTTP streams.</Card>
@@ -86,7 +86,8 @@ Every adapter runs the same routing, validation, security headers, and problem+j
 | Bun (`/bun`) | Yes, from the socket | Yes | Yes | `SIGTERM`/`SIGINT` | Interval + on shutdown |
 | Deno (`/deno`) | Yes, from the socket | Yes | No | `SIGTERM`/`SIGINT` | Interval + on shutdown |
 | Cloudflare Workers, workerd (`/cloudflare`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `ctx.waitUntil` |
-| Vercel, Netlify v2 / Edge (`/vercel`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `waitUntil` when present |
+| Vercel (`/vercel`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `waitUntil` when present |
+| Netlify v2 / Edge (`/netlify`) | Yes, from `context.ip` | Yes | No | Platform-managed | Per request via `context.waitUntil` |
 | Fastly Compute (`/fastly`) | No, use `behindProxy` | Yes | No | Platform-managed | Per request via `event.waitUntil` |
 | AWS Lambda (`/lambda`) | Yes, from the event | Buffered, or `toLambdaStreamHandler` | No | Platform-managed | Awaited before returning |
 | Azure Functions (`/azure`) | No, use `behindProxy` | Buffered, or `stream: true` | No | Platform-managed | Awaited before returning |

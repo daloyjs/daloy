@@ -11,7 +11,7 @@ keywords:
 
 # Netlify
 
-Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based, global) and **Functions v2** (Node, fetch-style). Both speak the web-standard `Request -> Response` contract, so the DaloyJS adapter is the same helper in both places. Only the file location and the optional config export change.
+Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based, global) and **Functions v2** (Node, fetch-style). Both call your default export as `(request, context) => Response`, so the DaloyJS adapter is the same helper in both places. Only the file location and the optional config export change.
 
 <BranchDiagram title="One app, two Netlify targets" source={{
           eyebrow: "identical app",
@@ -21,12 +21,12 @@ Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based
           {
             eyebrow: "deno · global",
             label: "Edge Functions",
-            detail: "netlify/edge-functions/ · toWebHandler(app)",
+            detail: "netlify/edge-functions/ · toNetlifyHandler(app)",
           },
           {
             eyebrow: "node · recommended",
             label: "Functions v2",
-            detail: "netlify/functions/*.mts · toWebHandler(app)",
+            detail: "netlify/functions/*.mts · toNetlifyHandler(app)",
           },
           {
             eyebrow: "legacy v1",
@@ -34,7 +34,7 @@ Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based
             detail: "toLambdaHandler(app)",
             tone: "muted",
           },
-        ]} caption="Edge and Functions v2 both speak Request -> Response, so they share toWebHandler. Only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2." />
+        ]} caption="Edge and Functions v2 both speak (request, context) -> Response, so they share toNetlifyHandler. Only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2." />
 
 ## When to choose Netlify
 
@@ -42,19 +42,30 @@ Netlify gives you two runtime options for an API: **Edge Functions** (Deno-based
 - You want preview deploys per branch with zero config.
 - You're fine with platform-managed cold starts.
 
+## What the adapter adds [#what-the-adapter-adds]
+
+`toNetlifyHandler(app)` from `@daloyjs/core/netlify` (since 1.16.0) is a thin wrapper over `app.fetch`, but it reads two things from Netlify's `context` that a generic fetch handler cannot see:
+
+- **`context.ip`** is the client address Netlify's edge observed on the TCP connection. The adapter attaches it as the request's connection info, so `behindProxy: "none"` (the right posture when Netlify is the only thing in front of you) resolves the real client for `rateLimit()`, `autoBan()`, `ipRestriction()`, and audit logs instead of putting every caller in one shared bucket. It is never read from a spoofable header, and a value that is not an IP literal is ignored, not trusted.
+- **`context.waitUntil`** keeps the invocation alive until the OTLP telemetry flush finishes, instead of the flush being dropped when the function returns.
+
+If you put a CDN in front of Netlify, declare it with `behindProxy: { cidrs: [<CDN egress ranges>] }`, not `{ hops: 1 }`. Only the `cidrs` form checks that the socket peer — `context.ip` here — is one of your proxies before trusting a forwarded header; `hops` reads the header whenever it is present. Because a Netlify site stays reachable on its `*.netlify.app` origin behind any CDN, a direct caller could otherwise spoof `X-Forwarded-For` and rotate their rate-limit or ban identity, which is exactly what `context.ip` was added to prevent.
+
+The adapter has no dependency on `@netlify/functions` or `@netlify/edge-functions`; the `NetlifyContext` type it accepts is structurally compatible with both.
+
 ## Netlify Edge Functions (Deno)
 
-Edge Functions run on a Deno-based runtime. Use `toWebHandler`, the same helper as the Vercel adapter, because the input/output shape is identical.
+Edge Functions run on a Deno-based runtime. Use `toNetlifyHandler`; the input/output shape is identical to Functions v2.
 
-<Callout type="note">In October 2026 the Deno team joined Cloudflare and the Deno runtime moved to maintenance mode. Netlify has not announced changes to Edge Functions. Your DaloyJS code does not depend on Deno-specific APIs here, so if Netlify ever changes the Edge runtime, the same `toWebHandler(app)` export moves to Functions v2 below unchanged. For an API with no hard need for the edge, Functions v2 is the lower-risk default today.</Callout>
+<Callout type="note">In October 2026 the Deno team joined Cloudflare and the Deno runtime moved to maintenance mode. Netlify has not announced changes to Edge Functions. Your DaloyJS code does not depend on Deno-specific APIs here, so if Netlify ever changes the Edge runtime, the same `toNetlifyHandler(app)` export moves to Functions v2 below unchanged. For an API with no hard need for the edge, Functions v2 is the lower-risk default today.</Callout>
 
 ```ts
 // netlify/edge-functions/api.ts
-import { toWebHandler } from "@daloyjs/core/vercel";
+import { toNetlifyHandler } from "@daloyjs/core/netlify";
 import type { Config } from "@netlify/edge-functions";
 import { app } from "../../src/server.ts";
 
-export default toWebHandler(app);
+export default toNetlifyHandler(app);
 
 export const config: Config = {
   path: "/api/*",
@@ -67,16 +78,18 @@ Functions v2 is GA and is the recommended way to write Node functions on Netlify
 
 ```ts
 // netlify/functions/api.mts
-import { toWebHandler } from "@daloyjs/core/vercel";
+import { toNetlifyHandler } from "@daloyjs/core/netlify";
 import type { Config } from "@netlify/functions";
 import { app } from "../../src/server.js";
 
-export default toWebHandler(app);
+export default toNetlifyHandler(app);
 
 export const config: Config = {
   path: "/api/*",
 };
 ```
+
+`toWebHandler(app)` from `@daloyjs/core/vercel` still works on Netlify if you only need `Request -> Response`, but it cannot see `context.ip`, so every client lands in one rate-limit bucket unless you declare a proxy posture.
 
 If you have an existing v1 codebase you can't migrate yet, the Lambda adapter still works against the v1 event shape:
 
@@ -117,7 +130,7 @@ pnpm netlify deploy --build --prod
 
 - Edge Functions don't expose `node:*`, the same caveat as Vercel and Cloudflare Workers.
 - Functions v2 returns a `Response` directly. Don't use the v1 `statusCode`/`body` object shape in v2 code.
-- `context.waitUntil` is available in v2 for fire-and-forget work.
+- `context.waitUntil` is available in v2 for fire-and-forget work; the adapter already uses it for the telemetry flush.
 
 ## See also
 

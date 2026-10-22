@@ -121,6 +121,39 @@ try {
 }
 ```
 
+The token is **opaque, not secret**: anyone can base64url-decode it, change `{ offset: 20 }` to `{ offset: 0 }`, and re-encode it. That is fine while the handler re-scopes the query by the authenticated principal and treats the cursor as a resume hint. When the cursor carries anything the query *relies* on, sign it.
+
+## Signed cursors [#signed-cursors]
+
+`createCursorCodec()` (since 1.16.0) returns an `encode`/`decode` pair whose tokens carry an HMAC-SHA256 signature, so a decoded payload is known to be the server's own. Use it when the cursor embeds a tenant id, a filter, or a sort boundary that must not be skipped.
+
+```ts
+import { createCursorCodec } from "@daloyjs/core";
+
+const cursors = createCursorCodec({
+  secret: process.env.CURSOR_SECRET!, // >= 16 chars; `openssl rand -base64 32`
+  ttlSeconds: 3600,                   // optional: a leaked cursor stops working
+});
+
+handler: async ({ query }) => {
+  const after = query.cursor
+    ? await cursors.decode<{ id: string }>(query.cursor)
+    : undefined;
+  const rows = await db.listAfter(after?.id, query.limit + 1);
+  const page = rows.slice(0, query.limit);
+  const next = rows.length > query.limit
+    ? await cursors.encode({ id: page.at(-1)!.id })
+    : undefined;
+  // ...
+}
+```
+
+- Format is `<base64url(json)>.<base64url(hmac)>`, with the expiry folded into the signed bytes when `ttlSeconds` is set, so it cannot be extended.
+- `decode()` applies the same 4 KiB cap, strict base64url, and prototype-pollution stripping as `decodeCursor()`, and verifies the MAC in constant time **before** the JSON is parsed.
+- Every failure — a tampered payload, a signature from another key, a truncated or flipped MAC, an expired or unsigned token — is one `400 Invalid pagination cursor.`, so the response never says which check failed.
+- `secret` may be a list for rotation: the first entry signs, every entry verifies, so outstanding cursors stay valid until they age out.
+- Runs on Web Crypto (`crypto.subtle`), so it works on every supported runtime.
+
 ## RFC 8288 Link header
 
 `buildPageLinks()` clones the current request URL and swaps its cursor query parameter to produce `next`, `prev`, and `first` page URLs, preserving every other query parameter (filters, `limit`, ...), then serializes them into a single `Link` header.

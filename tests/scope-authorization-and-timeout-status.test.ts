@@ -147,6 +147,44 @@ test("requireScopes preBody: a user without a scopes array owns nothing", async 
   assert.equal((await app.request("/r")).status, 403);
 });
 
+test("requireScopes: an inherited scopes property grants nothing (own property only)", async () => {
+  // A polluted Object.prototype — or any prototype-level `scopes` — must not
+  // satisfy the check; only a stamped own property counts.
+  const inherited = Object.create({ scopes: ["a"] }) as Record<string, unknown>;
+  inherited.sub = "proto-user";
+  const app = new App({ env: "test", logger: false });
+  app.use({
+    preBody(ctx) {
+      (ctx.state as Record<string, unknown>).user = inherited;
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/r",
+    hooks: requireScopes(["a"], { phase: "preBody" }),
+    responses: { 200: { description: "ok" } },
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  assert.equal((await app.request("/r")).status, 403);
+  // Sanity: the same shape as an own property is accepted.
+  const own = new App({ env: "test", logger: false });
+  own.use({
+    preBody(ctx) {
+      (ctx.state as Record<string, unknown>).user = { sub: "own-user", scopes: ["a"] };
+    },
+  });
+  own.route({
+    method: "GET",
+    path: "/r",
+    hooks: requireScopes(["a"], { phase: "preBody" }),
+    responses: { 200: { description: "ok" } },
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  assert.equal((await own.request("/r")).status, 200);
+});
+
 // ---------------------------------------------------------------------------
 // 3. match: "any"
 // ---------------------------------------------------------------------------

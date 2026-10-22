@@ -207,6 +207,9 @@ for (const status of [301, 302, 303, 307, 308]) {
       const requests: Request[] = [];
       const guarded = fetchGuard({
         resolve: async () => ["8.8.8.8"],
+        // The http: destination exercises the cross-origin strip, so the
+        // downgrade refusal (tested separately) is lifted for this matrix.
+        allowProtocolDowngrade: destination.startsWith("http:"),
         fetch: async (input) => {
           requests.push(new Request(input));
           return requests.length === 1
@@ -314,6 +317,55 @@ for (const pinDns of [false, true]) {
     assert.equal(received.host, `${hostname}:${destinationPort}`);
   });
 }
+
+for (const status of [301, 302, 303, 307, 308]) {
+  test(`fetchGuard: ${status} https -> http redirect is refused by default (protocol-downgrade)`, async () => {
+    const r = recordingFetch([
+      { status, headers: { location: "http://source.example/plain" } },
+      { status: 200, body: "leaked" },
+    ]);
+    const guarded = fetchGuard({ fetch: r.fn, resolve: async () => ["8.8.8.8"] });
+    await assert.rejects(
+      guarded("https://source.example/start", {
+        method: "POST",
+        headers: { "x-api-key": "test-only" },
+        body: "secret-body",
+      }),
+      (error: unknown) =>
+        error instanceof SsrfBlockedError &&
+        error.reason === "protocol-downgrade" &&
+        error.url === "http://source.example/plain"
+    );
+    // The plaintext hop was never dispatched.
+    assert.equal(r.calls.length, 1);
+  });
+}
+
+test("fetchGuard: http -> https redirect is always followed (an upgrade is not a downgrade)", async () => {
+  const r = recordingFetch([
+    { status: 301, headers: { location: "https://source.example/secure" } },
+    { status: 200, body: "ok" },
+  ]);
+  const guarded = fetchGuard({ fetch: r.fn, resolve: async () => ["8.8.8.8"] });
+  const res = await guarded("http://source.example/start");
+  assert.equal(res.status, 200);
+  assert.deepEqual(r.calls, ["http://source.example/start", "https://source.example/secure"]);
+});
+
+test("fetchGuard({ allowProtocolDowngrade: true }) follows https -> http with re-validation", async () => {
+  const r = recordingFetch([
+    { status: 302, headers: { location: "http://169.254.169.254/latest/meta-data/" } },
+  ]);
+  const guarded = fetchGuard({
+    fetch: r.fn,
+    resolve: async () => ["8.8.8.8"],
+    allowProtocolDowngrade: true,
+  });
+  // Opting into the downgrade never lifts the address checks on the new hop.
+  await assert.rejects(guarded("https://source.example/start"), (error: unknown) =>
+    error instanceof SsrfBlockedError && error.reason === "address-not-allowed");
+  assert.equal(r.calls.length, 1);
+});
 
 test("fetchGuard: refuses excessive redirect chains", async () => {
   // Loop: each response redirects to itself (different path).

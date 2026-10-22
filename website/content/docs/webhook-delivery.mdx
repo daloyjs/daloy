@@ -147,6 +147,8 @@ app.post(
 
 Failed deliveries are retried up to `maxAttempts` (default `5`) with exponential backoff between `retryDelayMs` and `maxRetryDelayMs`. A `Retry-After` header on a `429`/`503` takes precedence (capped at `maxRetryDelayMs`). Only transient statuses and network/timeout errors are retried. A `400` or any other non-retryable status fails immediately.
 
+Because the signature and `webhook-timestamp` are fixed on the first attempt, keep the whole retry span inside the receiver's replay window. With the defaults a delivery finishes in well under a minute, but a schedule such as `maxAttempts: 10, maxRetryDelayMs: 60_000` can run past the receiver's `toleranceSeconds` (DaloyJS's `verifyWebhookSignature()` defaults to 300 s), at which point every later retry is refused as a replay. Roughly, `(maxAttempts - 1) × maxRetryDelayMs + maxAttempts × timeoutMs` should stay below the tolerance; lengthen the receiver's window or hand long-tail redelivery to the dead-letter sink instead.
+
 ```ts
 const send = createWebhookSender({
   secret,

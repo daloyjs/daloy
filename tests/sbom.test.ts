@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -274,16 +275,28 @@ test("verifyTarget fails when SBOM version drifts from package.json", async () =
   }
 });
 
-test("the in-repo SBOMs are present and match the current published manifests", async () => {
-  // This locks the invariant that `pnpm gen:sbom` ran before commit.
-  const coreCdx = JSON.parse(await readFile(new URL("dist/sbom.cdx.json", REPO_ROOT), "utf8"));
-  const corePkg = JSON.parse(await readFile(new URL("package.json", REPO_ROOT), "utf8"));
+test("the core SBOM generated from the current manifest matches it and declares zero components", () => {
+  // `dist/sbom.*` is a gitignored build artifact that `prepublishOnly`
+  // regenerates, so a stale local copy from an earlier version is not a repo
+  // invariant. Generate from the live manifest instead, which is exactly what
+  // the publish step does.
+  const corePkg = JSON.parse(readFileSync(new URL("package.json", REPO_ROOT), "utf8")) as {
+    name: string;
+    version: string;
+    dependencies?: Record<string, string>;
+  };
+  const coreCdx = buildCycloneDx(corePkg, deriveMetadata(corePkg, { now: FIXED_DATE }));
   assert.equal(coreCdx.bomFormat, "CycloneDX");
   assert.equal(coreCdx.specVersion, "1.5");
-  assert.equal(coreCdx.metadata.component.name, corePkg.name);
-  assert.equal(coreCdx.metadata.component.version, corePkg.version);
+  const component = (coreCdx.metadata as { component: { name: string; version: string } }).component;
+  assert.equal(component.name, corePkg.name);
+  assert.equal(component.version, corePkg.version);
   assert.deepEqual(coreCdx.components, []);
+});
 
+test("the committed create-daloy SBOMs match the current published manifest", async () => {
+  // This locks the invariant that `pnpm gen:sbom` ran before commit: unlike
+  // the core SBOM, these files are checked in next to the package.
   const createDaloyCdx = JSON.parse(
     await readFile(new URL("packages/create-daloy/sbom.cdx.json", REPO_ROOT), "utf8")
   );
@@ -292,4 +305,17 @@ test("the in-repo SBOMs are present and match the current published manifests", 
   );
   assert.equal(createDaloyCdx.metadata.component.name, createDaloyPkg.name);
   assert.equal(createDaloyCdx.metadata.component.version, createDaloyPkg.version);
+});
+
+test("a dist/ core SBOM, when present, is checked only for shape so a stale local build never fails the suite", async () => {
+  let raw: string;
+  try {
+    raw = await readFile(new URL("dist/sbom.cdx.json", REPO_ROOT), "utf8");
+  } catch {
+    return; // no local build: nothing to check (`verify:sbom` covers CI, after `gen:sbom`).
+  }
+  const coreCdx = JSON.parse(raw) as { bomFormat: unknown; specVersion: unknown; components: unknown };
+  assert.equal(coreCdx.bomFormat, "CycloneDX");
+  assert.equal(coreCdx.specVersion, "1.5");
+  assert.deepEqual(coreCdx.components, []);
 });

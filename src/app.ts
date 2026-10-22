@@ -7198,6 +7198,25 @@ function toIssues(
 const TEXT_DECODER = new TextDecoder();
 
 /**
+ * Strict decoder for bodies the framework parses itself (JSON, urlencoded,
+ * text). RFC 8259 §8.1 requires UTF-8 for JSON; a lenient decode would turn
+ * malformed sequences into U+FFFD and hand the result to the schema as if
+ * the client had sent it, which lets an encoding-level smuggle past a WAF
+ * or proxy that read the raw bytes differently. The MCP handler already
+ * refuses such bodies; this keeps route bodies on the same rule.
+ */
+const STRICT_TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+/** Decode body bytes as UTF-8 or answer `400` when they are not well-formed. */
+function decodeBodyUtf8(bytes: Uint8Array): string {
+  try {
+    return STRICT_TEXT_DECODER.decode(bytes);
+  } catch {
+    throw new BadRequestError("Request body is not valid UTF-8");
+  }
+}
+
+/**
  * Synchronous fast path for {@link readBodyLimited}: returns the adapter's
  * pre-buffered body bytes when they are available on the request via
  * {@link DALOY_REQUEST_RAW_BODY}, or `undefined` when the caller must fall
@@ -7246,14 +7265,14 @@ function parseJsonBodyBytes(
   maxDepth: number,
 ): unknown {
   if (bytes.byteLength === 0) return undefined;
-  const text = TEXT_DECODER.decode(bytes);
+  const text = decodeBodyUtf8(bytes);
   // Use the limited parser when limits are enabled; falls back to safe behavior
   // when limits are disabled (0 / negative).
   return safeJsonParseLimited(text, maxKeys, maxDepth);
 }
 
 function parseUrlencodedBodyBytes(bytes: Uint8Array): Record<string, string> {
-  const params = new URLSearchParams(TEXT_DECODER.decode(bytes));
+  const params = new URLSearchParams(decodeBodyUtf8(bytes));
   // Same Spring4Shell-class defense as queryToObject: Object.fromEntries
   // would set __proto__ / constructor / prototype as own properties.
   const out: Record<string, string> = {};
@@ -7380,7 +7399,7 @@ async function readBodySlow(
     return out;
   }
   const bytes = await readBodyLimited(req, limit);
-  return new TextDecoder().decode(bytes);
+  return decodeBodyUtf8(bytes);
 }
 
 /**

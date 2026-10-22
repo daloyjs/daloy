@@ -51,7 +51,7 @@ export interface CookieAttributes {
   domain?: string;
   /** Cookie `Max-Age=` seconds. `0` omits it for set-cookie writes. */
   maxAgeSeconds?: number;
-  /** `Partitioned` attribute (CHIPS). Default `false`. */
+  /** `Partitioned` attribute (CHIPS). Default `false`. Requires `secure: true`. */
   partitioned?: boolean;
 }
 
@@ -117,6 +117,11 @@ export function assertCookieAttributes(input: {
   }
   if (sameSite === "None" && !secure) {
     throw new Error(`${scope}: cookieOptions.sameSite: "None" requires secure: true.`);
+  }
+  if (a.partitioned === true && !secure) {
+    // CHIPS: a user agent only stores a `Partitioned` cookie that is also
+    // `Secure`, so this combination is a cookie the browser silently drops.
+    throw new Error(`${scope}: cookieOptions.partitioned: true requires secure: true.`);
   }
   if (name.startsWith("__Host-")) {
     if (!secure || path !== "/" || a.domain) {

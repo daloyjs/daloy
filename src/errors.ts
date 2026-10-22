@@ -613,13 +613,26 @@ export class UnsupportedMediaTypeError extends HttpError {
  * `429 Too Many Requests` — thrown by the built-in `rateLimit` middleware
  * when the caller exceeds its quota. When `retryAfterSeconds` is provided the
  * response carries a `Retry-After` header; clients should back off for that
- * many seconds before retrying.
+ * many seconds before retrying. The response always carries
+ * `cache-control: no-store` so a private cache cannot extend the throttle
+ * window past `Retry-After`.
  *
  * @param retryAfterSeconds - Seconds the client should wait before retrying.
+ * @throws RangeError when `retryAfterSeconds` is not a non-negative safe
+ *   integer (`NaN`, a negative, or a fraction would produce an invalid
+ *   `Retry-After` that clients ignore or misread).
  * @since 0.1.0
  */
 export class TooManyRequestsError extends HttpError {
   constructor(retryAfterSeconds?: number) {
+    if (
+      retryAfterSeconds !== undefined &&
+      !(Number.isSafeInteger(retryAfterSeconds) && retryAfterSeconds >= 0)
+    ) {
+      throw new RangeError(
+        `TooManyRequestsError: retryAfterSeconds must be a non-negative integer, got ${String(retryAfterSeconds)}.`
+      );
+    }
     super(
       429,
       {
@@ -676,15 +689,23 @@ function timeoutStatus(status: unknown): RequestTimeoutStatus {
  * @param status - Response status: `408` (default), `503`, or `504`; any
  *   other value falls back to `408`. The problem `type` stays
  *   `request-timeout`; the `title` follows the status.
+ *
+ * Every variant carries `cache-control: no-store`: a timeout is a transient
+ * outcome, and a shared cache that stored the `503`/`504` would keep
+ * answering with it after the backend recovered.
  * @since 0.1.0
  */
 export class RequestTimeoutError extends HttpError {
   constructor(ms: number, status: RequestTimeoutStatus = 408) {
-    super(timeoutStatus(status), {
-      type: "https://daloyjs.dev/errors/request-timeout",
-      title: REQUEST_TIMEOUT_TITLES[timeoutStatus(status)],
-      detail: `Request exceeded ${ms}ms`,
-    });
+    super(
+      timeoutStatus(status),
+      {
+        type: "https://daloyjs.dev/errors/request-timeout",
+        title: REQUEST_TIMEOUT_TITLES[timeoutStatus(status)],
+        detail: `Request exceeded ${ms}ms`,
+      },
+      { "cache-control": "no-store" }
+    );
     this.name = "RequestTimeoutError";
   }
 }

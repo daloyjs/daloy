@@ -184,6 +184,7 @@ If you sit behind nginx / Caddy / a load balancer / a Kubernetes Ingress / a Paa
 
 - Set `behindProxy: { hops: N }` on `new App({ ... })`, where `N` is the number of trusted proxy hops in front of the app (a single edge proxy is `1`. Cloudflare in front of one PaaS edge is `2`). In production an **unconfigured** posture makes DaloyJS return `500` on the first request carrying an `X-Forwarded-*` header, so a misconfigured chain cannot feed spoofable client IPs to `rateLimit()`, request-id propagation, or audit logs. Use `behindProxy: "none"` when the app faces the public internet directly.
 - Once the posture is declared, `rateLimit()` keys on the resolved client IP automatically, no custom `keyGenerator` required.
+- `X-Forwarded-For` is read by default. Add `header: "forwarded"` for an RFC 7239 `Forwarded` proxy (Traefik, Caddy), or `header: "cf-connecting-ip"` behind Cloudflare, where the single-value header Cloudflare writes cannot be pre-populated by a client; see [which header carries the client address](/docs/api-reference/middleware#forwarded-header-source).
 - Make the LB's idle timeout **greater** than DaloyJS's `requestTimeoutMs`.
 - Make the server's `keepAliveTimeout` **greater** than the LB's idle timeout, or the LB can reuse a socket Node just closed and return a `502`. The Node adapter sets it to 5 seconds, which is shorter than most load balancers (AWS ALB defaults to 60 seconds), so raise it on the handle: `serve(app).server.keepAliveTimeout = 65_000`.
 

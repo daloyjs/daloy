@@ -152,6 +152,20 @@ toFetchHandler (app: App): FetchHandler;      // default export for Node Functio
 toRouteHandlers(app: App): RouteHandlers;     // Next.js App Router route.ts
 ```
 
+## `@daloyjs/core/netlify` [#daloyjs-core-netlify]
+
+```ts
+interface NetlifyContext {                         // structurally matches @netlify/functions and @netlify/edge-functions
+  ip?: string;                                     // client IP as Netlify's edge observed it
+  waitUntil?: (p: Promise<unknown>) => void;
+}
+type NetlifyHandler = (req: Request, context?: NetlifyContext) => Promise<Response>;
+
+toNetlifyHandler(app: App): NetlifyHandler;       // default export for Functions v2 and Edge Functions
+```
+
+Since 1.16.0. `context.ip` is attached as the request's connection peer (when it is a valid IP literal; anything else is ignored), so `behindProxy: "none"` resolves the real client for `rateLimit()` and friends. OTLP telemetry is flushed through `context.waitUntil` when present. Refuses an insecure production configuration at cold start.
+
 ## `@daloyjs/core/fastly` [#daloyjs-core-fastly]
 
 ```ts

@@ -1416,7 +1416,7 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
       ctx.set.headers.set("ratelimit", `${policyName}; r=${remaining}; t=${resetIn}`);
     }
     if (count > opts.max) {
-      const retry = Math.ceil((resetMs - Date.now()) / 1000);
+      const retry = Math.max(0, Math.ceil((resetMs - Date.now()) / 1000));
       throw new TooManyRequestsError(opts.retryAfter !== false ? retry : undefined);
     }
     return undefined;
@@ -2392,6 +2392,9 @@ export interface RequireScopesOptions {
 
 function readUserScopes(user: unknown): ReadonlySet<string> | null {
   if (!user || typeof user !== "object") return null;
+  // Own property only: a polluted `Object.prototype.scopes` must not grant
+  // anything, matching the own-property reads in `requireRoles()`.
+  if (!Object.prototype.hasOwnProperty.call(user, "scopes")) return null;
   const raw = (user as { scopes?: unknown }).scopes;
   if (!Array.isArray(raw)) return null;
   const set = new Set<string>();
@@ -2403,7 +2406,10 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  * Declarative scope-check middleware for OAuth2-style bearer credentials.
  * Reads the typed `ctx.state.user.scopes` written by the upstream auth
  * helper (`bearerAuth`, `jwt`, …) and refuses the request with `401` (no
- * credentials) or `403` (valid credentials but insufficient scopes).
+ * credentials) or `403` (valid credentials but insufficient scopes). Only an
+ * **own** `scopes` property is honoured — an inherited one (a polluted
+ * `Object.prototype`, a class getter) counts as no scopes, like
+ * {@link requireRoles}.
  *
  * Multiple `requireScopes()` hooks in the same chain aggregate their required
  * scopes into one combined `WWW-Authenticate: Bearer scope="a b c"` challenge

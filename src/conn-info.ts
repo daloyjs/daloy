@@ -42,10 +42,44 @@ import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./i
  *   peer address falls inside one of the supplied CIDR ranges (IPv4 or
  *   IPv6 acceptable).
  *
+ * Both object forms accept an optional `header` naming which proxy header
+ * carries the client address (see {@link ForwardedHeaderSource}); the
+ * default is `X-Forwarded-For`. The hop / peer trust rule is the same
+ * whichever header is read.
+ *
  * @since 0.24.0
  */
 export type BehindProxyConfig =
-  "none" | "loopback" | { readonly hops: number } | { readonly cidrs: readonly string[] };
+  | "none"
+  | "loopback"
+  | { readonly hops: number; readonly header?: ForwardedHeaderSource }
+  | { readonly cidrs: readonly string[]; readonly header?: ForwardedHeaderSource };
+
+/**
+ * Which proxy-set header carries the client address.
+ *
+ * - `"x-forwarded-for"` (default): the de-facto comma list every proxy
+ *   appends to; `X-Real-IP` is accepted as a one-hop stand-in.
+ * - `"forwarded"`: the RFC 7239 `Forwarded` header. Only its `for=`
+ *   parameters are read, in order, so the same right-to-left hop rule
+ *   applies; quoted values, bracketed IPv6, `:port` suffixes, and the
+ *   `unknown` / `_obfuscated` identifiers the RFC allows are handled (the
+ *   latter two count as "no IP" for that hop, never as an address).
+ * - `"cf-connecting-ip"`: Cloudflare's single-value header. It names exactly
+ *   one hop (the visitor Cloudflare saw), so it is honoured only with
+ *   `{ hops: 1 }` or `{ cidrs }` (list Cloudflare's published ranges); a
+ *   larger hop count yields no identity. Use this when the app is behind
+ *   Cloudflare and `X-Forwarded-For` could be pre-populated by a client.
+ *
+ * @since 1.16.0
+ */
+export type ForwardedHeaderSource = "x-forwarded-for" | "forwarded" | "cf-connecting-ip";
+
+const FORWARDED_HEADER_SOURCES: ReadonlySet<string> = new Set<ForwardedHeaderSource>([
+  "x-forwarded-for",
+  "forwarded",
+  "cf-connecting-ip",
+]);
 
 /**
  * Per-request connection metadata. Populated lazily — never enumerate
@@ -122,6 +156,19 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
   if (cfg === undefined) return;
   if (cfg === "none" || cfg === "loopback") return;
   if (typeof cfg === "object" && cfg !== null) {
+    if ("header" in cfg && cfg.header !== undefined) {
+      if (typeof cfg.header !== "string" || !FORWARDED_HEADER_SOURCES.has(cfg.header)) {
+        throw new Error(
+          `behindProxy.header must be "x-forwarded-for" | "forwarded" | "cf-connecting-ip"; got ${JSON.stringify(cfg.header)}.`
+        );
+      }
+      if (cfg.header === "cf-connecting-ip" && "hops" in cfg && cfg.hops > 1) {
+        throw new Error(
+          "behindProxy: cf-connecting-ip carries exactly one hop (the visitor Cloudflare saw), so " +
+            `it cannot satisfy hops: ${cfg.hops}. Use { hops: 1 } or { cidrs: [<Cloudflare ranges>] }.`
+        );
+      }
+    }
     if ("hops" in cfg) {
       if (!Number.isInteger(cfg.hops) || cfg.hops < 0 || cfg.hops > 64) {
         throw new Error(`behindProxy.hops must be an integer in [0, 64]; got ${String(cfg.hops)}.`);
@@ -176,14 +223,107 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
  */
 export function pickForwardedForByHops(header: string | null, hops: number): string | undefined {
   if (!header || hops < 1) return undefined;
-  const parts = header
-    .split(",")
-    .map((p) => p.trim());
+  return pickByHops(header.split(","), hops);
+}
+
+/**
+ * Select the client slot from an ordered hop list: index 0 is the leftmost
+ * (most attacker-influenceable) entry, the last entry is the one the proxy
+ * nearest Daloy appended. Returns `undefined` when the chain is shorter than
+ * `hops` or the selected slot is not an IP literal. Shared by every header
+ * source so the trust rule cannot drift between them.
+ */
+function pickByHops(parts: readonly string[], hops: number): string | undefined {
   if (parts.length < hops) return undefined;
-  // Right-to-left: index 0 is the last hop closest to Daloy. The client
-  // typically lives at parts[parts.length - hops].
-  const selected = parts[parts.length - hops];
+  const selected = parts[parts.length - hops]?.trim();
   return selected && parseIp(selected) ? selected : undefined;
+}
+
+/**
+ * Extract the `for=` node identifiers from an RFC 7239 `Forwarded` header,
+ * in order, normalised to bare IP literals where possible.
+ *
+ * Each comma-separated element is one proxy hop; within it, `;`-separated
+ * `name=value` pairs describe that hop. Only `for` is read (`by`, `host`,
+ * and `proto` never identify the client). A value may be a quoted string,
+ * an IPv6 literal in brackets with an optional `:port`, an IPv4 with an
+ * optional `:port`, or the RFC's `unknown` / `_obfuscated` tokens. Anything
+ * that is not an IP literal is kept as a non-IP placeholder so it still
+ * occupies its hop and the right-to-left count stays honest — a proxy that
+ * wrote `for=unknown` must not let the next-left (attacker) entry shift into
+ * the trusted slot.
+ *
+ * Parameter names are matched case-insensitively per RFC 7239 §4. A hop
+ * element with no `for` parameter also occupies a slot.
+ *
+ * @param header - Raw `Forwarded` header value, or `null` when absent.
+ * @returns One entry per hop: an IP literal, or a non-IP placeholder.
+ * @internal
+ */
+export function parseForwardedHeader(header: string | null): string[] {
+  if (!header) return [];
+  const out: string[] = [];
+  for (const element of header.split(",")) {
+    let forValue: string | undefined;
+    for (const pair of element.split(";")) {
+      const eq = pair.indexOf("=");
+      if (eq < 0) continue;
+      if (pair.slice(0, eq).trim().toLowerCase() !== "for") continue;
+      let v = pair.slice(eq + 1).trim();
+      if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+        v = v.slice(1, -1).replace(/\\(.)/g, "$1");
+      }
+      // `[2001:db8::1]:4711` → `2001:db8::1`; `[2001:db8::1]` → `2001:db8::1`.
+      if (v.startsWith("[")) {
+        const close = v.indexOf("]");
+        v = close > 0 ? v.slice(1, close) : v;
+      } else {
+        // `192.0.2.43:4711` → `192.0.2.43`. A bare IPv6 (no brackets) is
+        // not valid RFC 7239 but has more than one colon; leave it alone.
+        const firstColon = v.indexOf(":");
+        if (firstColon > 0 && v.indexOf(":", firstColon + 1) < 0) v = v.slice(0, firstColon);
+      }
+      // First `for` wins per element; a duplicate is malformed, not a new hop.
+      forValue = v;
+      break;
+    }
+    // `unknown`, `_obfuscated`, or a missing `for` keep the slot occupied.
+    out.push(forValue !== undefined && parseIp(forValue) ? forValue : "unknown");
+  }
+  return out;
+}
+
+/**
+ * Read the client address from the configured proxy header at the given hop.
+ *
+ * - `x-forwarded-for`: the comma list, right-to-left by `hops`.
+ * - `forwarded`: RFC 7239 `for=` values, same right-to-left rule.
+ * - `cf-connecting-ip`: a single value naming one hop; `hops` must be `1`.
+ *
+ * @param request - Incoming request.
+ * @param source - Which header to read.
+ * @param hops - Trusted proxy hop count (>= 1).
+ * @returns The IP at the selected hop, or `undefined` when the header is
+ *   absent, too short, or the slot is not an IP literal.
+ * @internal
+ */
+export function readForwardedClientIp(
+  request: Request,
+  source: ForwardedHeaderSource,
+  hops: number
+): string | undefined {
+  if (hops < 1) return undefined;
+  switch (source) {
+    case "forwarded":
+      return pickByHops(parseForwardedHeader(request.headers.get("forwarded")), hops);
+    case "cf-connecting-ip": {
+      if (hops !== 1) return undefined;
+      const v = request.headers.get("cf-connecting-ip")?.trim();
+      return v && parseIp(v) ? v : undefined;
+    }
+    default:
+      return pickForwardedForByHops(request.headers.get("x-forwarded-for"), hops);
+  }
 }
 
 /**
@@ -387,6 +527,9 @@ function isTrustedPeer(request: Request, trustedPeers: readonly IpMatcher[]): bo
  * @param trustedPeers - Optional compiled allowlist from
  *   {@link resolveTrustedProxyMatchers}. When supplied, forwarded headers
  *   are honoured only if the immediate peer matches; otherwise `undefined`.
+ * @param source - Which proxy header to read; default `"x-forwarded-for"`.
+ *   See {@link ForwardedHeaderSource}. The `X-Real-IP` one-hop fallback
+ *   applies to the default source only.
  * @returns The resolved client IP, or `undefined` when no forwarded identity
  *   is available. Placeholder and malformed identities are rejected without
  *   shifting the selected hop. Callers decide their own posture for `undefined`
@@ -396,11 +539,13 @@ function isTrustedPeer(request: Request, trustedPeers: readonly IpMatcher[]): bo
 export function resolveForwardedClientIp(
   request: Request,
   hops = 1,
-  trustedPeers?: readonly IpMatcher[]
+  trustedPeers?: readonly IpMatcher[],
+  source: ForwardedHeaderSource = "x-forwarded-for"
 ): string | undefined {
   if (trustedPeers !== undefined && !isTrustedPeer(request, trustedPeers)) {
     return undefined;
   }
+  if (source !== "x-forwarded-for") return readForwardedClientIp(request, source, hops);
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded !== null) return pickForwardedForByHops(forwarded, hops);
   // Fail closed past one hop. A chain that produced fewer than `hops` entries
@@ -459,8 +604,7 @@ export function resolveClientIp(
     return peer;
   }
   if ("hops" in cfg) {
-    const xff = request.headers.get("x-forwarded-for");
-    return pickForwardedForByHops(xff, cfg.hops) ?? peer;
+    return readForwardedClientIp(request, cfg.header ?? "x-forwarded-for", cfg.hops) ?? peer;
   }
   // { cidrs } — honour the forwarded identity only when the immediate peer
   // (the socket a remote client cannot spoof) sits inside one of the declared
@@ -479,7 +623,7 @@ export function resolveClientIp(
   if (peer) {
     const parsed = parseIp(peer);
     if (parsed && matchers.some((m) => matchesMatcher(parsed, m))) {
-      const picked = pickForwardedForByHops(request.headers.get("x-forwarded-for"), 1);
+      const picked = readForwardedClientIp(request, cfg.header ?? "x-forwarded-for", 1);
       if (picked) return picked;
     }
   }

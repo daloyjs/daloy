@@ -159,6 +159,10 @@ When a redirect leaves the original origin, `fetchGuard()` drops `Authorization`
 const partnerFetch = fetchGuard({ sensitiveHeaders: ["x-api-key", "x-partner-token"] });
 ```
 
+### No TLS downgrade on redirect [#redirect-downgrade]
+
+A redirect from an `https:` URL to an `http:` one is refused with `protocol-downgrade` (since 1.16.0). A `307`/`308` would replay the request body — and every header not in the strip list above — in plaintext, and even a `301`/`302`/`303` sends the path and query unencrypted. An `http:` → `https:` upgrade is always followed. Pass `allowProtocolDowngrade: true` only for an upstream you know downgrades and that carries nothing confidential; the address and port checks still run on the plaintext hop.
+
 ## Custom allowlists
 
 ```ts
@@ -251,5 +255,6 @@ Blocked requests throw `SsrfBlockedError` with a structured `reason`:
 - `redirect-body-not-replayable`: a `307`/`308` redirect needed to resend a streamed request body that was already consumed (since 1.3.7).
 - `port-not-allowed`: the destination port is a Fetch Standard "bad port" or is not in `allowPorts` (since 1.14.0).
 - `response-too-large`: the response's `Content-Length` or streamed body exceeded `maxResponseBytes` (since 1.14.0). When the body is already streaming, the error surfaces from reading it (`res.text()`, `res.json()`, the reader).
+- `protocol-downgrade`: a redirect went from `https:` to `http:` and `allowProtocolDowngrade` is not set (since 1.16.0).
 
 Network failures from the underlying `fetch` (DNS timeouts, TLS errors, connection refused) bubble through unchanged so your retry logic can distinguish “Daloy refused” from “the upstream is sad.” A `timeoutMs` expiry rejects with a `TimeoutError` `DOMException`.

@@ -135,7 +135,7 @@ test("csrf supports a custom token generator and a non-prefixed cookie name", as
       generator: () => `gen-${++n}`,
       cookieOptions: {
         sameSite: "Strict",
-        secure: false,
+        secure: true,
         path: "/api",
         domain: "example.com",
         maxAgeSeconds: 3600,
@@ -155,7 +155,20 @@ test("csrf supports a custom token generator and a non-prefixed cookie name", as
   const setCookie = res.headers.get("set-cookie")!;
   assert.equal(
     setCookie,
-    "csrf=gen-1; Path=/api; SameSite=Strict; Domain=example.com; Max-Age=3600; Partitioned"
+    "csrf=gen-1; Path=/api; SameSite=Strict; Secure; Domain=example.com; Max-Age=3600; Partitioned"
+  );
+});
+
+test("csrf refuses a Partitioned cookie without Secure (CHIPS requires both)", () => {
+  // A user agent only stores a `Partitioned` cookie that is also `Secure`;
+  // shipping the combination would be a cookie the browser silently drops.
+  assert.throws(
+    () =>
+      csrf({
+        cookieName: "csrf",
+        cookieOptions: { secure: false, partitioned: true },
+      }),
+    /partitioned: true requires secure: true/
   );
 });
 

@@ -13,8 +13,8 @@
  *      absent, so we audit absence.
  *   4. Auth-failure responses ship `Cache-Control: no-store` - the three
  *      auth-related error classes (`UnauthorizedError`, `ForbiddenError`,
- *      `TooManyRequestsError`), plus `ServiceUnavailableError` so an outage
- *      is never cached, must construct themselves with that header
+ *      `TooManyRequestsError`), plus `ServiceUnavailableError` and
+ *      `RequestTimeoutError` so an outage or deadline is never cached, must construct themselves with that header
  *      baked in. Lifted via static source scan, not runtime test, so
  *      removal of the header at any time trips the gate.
  *   2. WebSocket post-upgrade header immutability + pre-upgrade auth boundary -
@@ -117,6 +117,8 @@ export async function auditAuthFailureCacheControl(): Promise<readonly Finding[]
     { classRe: /class TooManyRequestsError\b[\s\S]*?^\}/m, name: "TooManyRequestsError" },
     // Not an auth failure, but an outage response a CDN must never keep serving.
     { classRe: /class ServiceUnavailableError\b[\s\S]*?^\}/m, name: "ServiceUnavailableError" },
+    // Same reasoning: a deadline answering 503/504 must not outlive the outage in a cache.
+    { classRe: /class RequestTimeoutError\b[\s\S]*?^\}/m, name: "RequestTimeoutError" },
   ];
   for (const { classRe, name } of checks) {
     const m = classRe.exec(text);

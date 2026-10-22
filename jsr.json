@@ -10,6 +10,7 @@
     "./deno": "./src/adapters/deno.ts",
     "./cloudflare": "./src/adapters/cloudflare.ts",
     "./vercel": "./src/adapters/vercel.ts",
+    "./netlify": "./src/adapters/netlify.ts",
     "./fastly": "./src/adapters/fastly.ts",
     "./lambda": "./src/adapters/lambda.ts",
     "./azure": "./src/adapters/azure.ts",

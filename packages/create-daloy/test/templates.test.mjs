@@ -845,7 +845,8 @@ test("npm scaffolds ship an npm-native hardened .npmrc without pnpm-specific key
     // The README cooldown note names npm's setting instead of being dropped.
     const readme = await readFile(path.join(tmpDir, projectName, "README.md"), "utf8");
     if (readme.includes("Install refused right after a DaloyJS release")) {
-      assert.match(readme, /`min-release-age` in(\n> | )`\.npmrc`/);
+      // `\r?` keeps the check portable to a CRLF (autocrlf) Windows checkout.
+      assert.match(readme, /`min-release-age` in(\r?\n> | )`\.npmrc`/);
       assert.doesNotMatch(readme, /pnpm-workspace\.yaml`\), a supply-chain/);
     }
   } finally {

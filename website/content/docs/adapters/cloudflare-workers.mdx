@@ -73,8 +73,10 @@ export const app = new App({
   requestTimeoutMs: 5_000,
   production: true, // no NODE_ENV on Workers: without this, production guards stay off
   // Cloudflare's edge sets X-Forwarded-For. One hop tells DaloyJS which entry
-  // Cloudflare appended, so rateLimit() keys on the real client.
-  behindProxy: { hops: 1 },
+  // Cloudflare appended, so rateLimit() keys on the real client. Prefer the
+  // single-value header Cloudflare itself writes (since 1.16.0): a client
+  // can pre-populate X-Forwarded-For, but never cf-connecting-ip.
+  behindProxy: { hops: 1, header: "cf-connecting-ip" },
 });
 
 // The in-memory store is per isolate: an abuse brake, not a global quota.

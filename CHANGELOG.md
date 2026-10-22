@@ -17,6 +17,81 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `createCursorCodec({ secret, ttlSeconds })`: HMAC-SHA256 signed pagination
+  cursors. `encodeCursor()` / `decodeCursor()` stay opaque-but-unsigned (a
+  client can edit `{ tenantId }` or `{ offset }` and re-encode); the codec
+  appends a signature, folds an optional expiry into the signed bytes, verifies
+  in constant time before any JSON is parsed, accepts a secret list for
+  rotation (first signs, every entry verifies), and answers every failure with
+  one `400 Invalid pagination cursor.`. New exports: `createCursorCodec`,
+  `CursorCodec`, `CursorCodecOptions`.
+- `behindProxy: { hops | cidrs, header }`: choose which proxy header carries
+  the client address. `"forwarded"` reads RFC 7239 `for=` values with the same
+  right-to-left hop rule as `X-Forwarded-For` (quoted values, bracketed IPv6,
+  `:port`, and `unknown` / `_obfuscated` identifiers handled; the latter still
+  occupy their hop so an attacker's left entry never slides into the trusted
+  slot). `"cf-connecting-ip"` reads Cloudflare's single-value header and is
+  refused with `hops > 1`. Every client-identity guard inherits the App
+  posture. New exports: `ForwardedHeaderSource`, `parseForwardedHeader`,
+  `readForwardedClientIp`; `resolveForwardedClientIp` gains an optional
+  `source` argument.
+- `@daloyjs/core/netlify`: `toNetlifyHandler(app)` for Netlify Functions v2
+  and Edge Functions. Attaches `context.ip` (the client Netlify's edge saw;
+  ignored unless a valid IP literal) as the connection peer, so
+  `behindProxy: "none"` keys `rateLimit()` per real client instead of one
+  shared bucket, and flushes OTLP telemetry through `context.waitUntil`.
+  Structurally compatible with `@netlify/functions` and
+  `@netlify/edge-functions` without depending on either. New exports:
+  `toNetlifyHandler`, `NetlifyContext`, `NetlifyHandler`.
+- `fetchGuard({ allowProtocolDowngrade })`: a redirect from an `https:` URL
+  to an `http:` URL is now refused with `SsrfBlockedError("protocol-downgrade")`
+  by default. A `307`/`308` would replay the request body — and every header
+  not in the cross-origin strip list — in plaintext, and a `301`/`302`/`303`
+  still sends the path and query unencrypted. An `http:` → `https:` upgrade
+  is always followed; the address and port checks still run on the plaintext
+  hop when the option is set. New `SsrfBlockReason` member: `protocol-downgrade`.
+- `fileField({ allowUnsafeFilenames })`: uploads whose file name contains a
+  path separator (`/`, `\`), a NUL or other control character, equals `.` or
+  `..`, or is longer than 255 characters now fail validation (`422`) before
+  any `filename` matcher runs, so `file.name` joined onto an upload directory
+  cannot escape it. Browsers and curl only send a basename, so real clients
+  are unaffected; a nameless `Blob` passes. Set `allowUnsafeFilenames: true`
+  for the raw value.
+
+### Changed
+
+- The JSON, urlencoded and text route-body parsers decode strictly: a body
+  with an invalid or overlong UTF-8 sequence answers `400 Request body is not
+  valid UTF-8` instead of being validated with `U+FFFD` substituted, as
+  RFC 8259 §8.1 requires and as the MCP handler already did. Well-formed
+  non-ASCII and a leading BOM still parse; `ctx.request.text()` keeps the
+  platform's lenient decode.
+- `TooManyRequestsError` validates `retryAfterSeconds` like
+  `ServiceUnavailableError`: a `NaN`, negative, fractional, or unsafe value
+  throws `RangeError` instead of emitting an invalid `Retry-After`.
+  `rateLimit()` clamps a store-reported window that already lapsed to `0`.
+- `RequestTimeoutError` carries `Cache-Control: no-store` for every status
+  (`408`, `503`, `504`), so a shared cache never keeps serving a deadline
+  response after the backend recovers. `verify:runtime-parity-audits` now
+  requires it.
+- `requireScopes()` honours only an **own** `scopes` property on
+  `ctx.state.user`, matching `requireRoles()`; an inherited one (a polluted
+  `Object.prototype`, a class getter) grants nothing.
+- Cookie attribute validation refuses `partitioned: true` without
+  `secure: true`: CHIPS only stores a `Partitioned` cookie that is also
+  `Secure`, so the combination was a cookie every browser silently dropped.
+- `create-daloy`: the `deno-basic` template pins `npm:@daloyjs/core@^1.15.0`
+  now that the release has cleared Deno's 24h minimum dependency age.
+- Docs: `errors` lists `HttpError` and the default headers of every class;
+  `webhook-delivery` explains keeping the retry span inside the receiver's
+  replay tolerance, since the signature timestamp is fixed on the first
+  attempt; `adapters/netlify` uses the dedicated adapter.
+- `tests/sbom.test.ts` generates the core SBOM from the live manifest instead
+  of reading the gitignored `dist/sbom.*`, so a stale local build no longer
+  fails `pnpm test`; the committed `create-daloy` SBOM check is unchanged.
+
 ## [1.15.0] - 2026-10-20
 
 ### Added

@@ -235,7 +235,14 @@ export interface WebhookSenderOptions {
    * Pass your own to relax or extend that posture.
    */
   fetch?: typeof fetch;
-  /** Maximum total attempts (first try + retries). Default `5`. */
+  /**
+   * Maximum total attempts (first try + retries). Default `5`.
+   *
+   * The signature and timestamp are fixed on the first attempt, so keep
+   * `(maxAttempts - 1) × maxRetryDelayMs + maxAttempts × timeoutMs` below the
+   * receiver's replay tolerance (DaloyJS's `verifyWebhookSignature()`
+   * defaults to 300 s), or late retries are refused as replays.
+   */
   maxAttempts?: number;
   /** Base backoff for the first retry, in ms. Default `500`. */
   retryDelayMs?: number;

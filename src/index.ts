@@ -30,9 +30,11 @@ export {
   readRemoteAddress,
   readRemotePort,
   pickForwardedForByHops,
+  parseForwardedHeader,
+  readForwardedClientIp,
   resolveForwardedClientIp,
 } from "./conn-info.js";
-export type { BehindProxyConfig, ConnInfo } from "./conn-info.js";
+export type { BehindProxyConfig, ConnInfo, ForwardedHeaderSource } from "./conn-info.js";
 export {
   subdomains,
   PSL_SNAPSHOT_DATE,
@@ -605,12 +607,15 @@ export type { ResponseCacheOptions, ResponseCacheStore, CachedResponse } from ".
 export {
   encodeCursor,
   decodeCursor,
+  createCursorCodec,
   buildLinkHeader,
   buildPageLinks,
   paginationQuery,
   MAX_CURSOR_LENGTH,
 } from "./pagination.js";
 export type {
+  CursorCodec,
+  CursorCodecOptions,
   PaginationLink,
   PageLinkOptions,
   PageLinks,

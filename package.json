@@ -72,6 +72,10 @@
       "types": "./dist/adapters/vercel.d.ts",
       "import": "./dist/adapters/vercel.js"
     },
+    "./netlify": {
+      "types": "./dist/adapters/netlify.d.ts",
+      "import": "./dist/adapters/netlify.js"
+    },
     "./fastly": {
       "types": "./dist/adapters/fastly.d.ts",
       "import": "./dist/adapters/fastly.js"
