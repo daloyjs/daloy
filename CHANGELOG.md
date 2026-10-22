@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-22
+
 ### Added
 
 - `createCursorCodec({ secret, ttlSeconds })`: HMAC-SHA256 signed pagination
