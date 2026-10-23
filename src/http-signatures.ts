@@ -35,7 +35,7 @@
 import { UnauthorizedError } from "./errors.js";
 import { markAuthIdentity } from "./internal-replay.js";
 import type { Hooks } from "./types.js";
-import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
+import { markAuthOptionalPassthrough, markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 /**
  * HTTP Signature algorithm identifiers from the RFC 9421 registry that this
@@ -1115,7 +1115,9 @@ export interface HttpSignatureAuthOptions extends Omit<
   /**
    * When `true`, requests **without** any `Signature` header pass through
    * unauthenticated (a present-but-invalid signature is still rejected).
-   * Defaults to `false` — signatures are mandatory.
+   * The pass-through does not count as authentication: a route that declares
+   * `auth:` (or is otherwise marked as requiring auth) still answers `401`
+   * to an unsigned request. Defaults to `false` — signatures are mandatory.
    */
   optional?: boolean;
 }
@@ -1142,7 +1144,9 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
     async preBody(ctx) {
       const headers = ctx.request.headers;
       if (opts.optional && !headers.has("signature")) {
-        markAuthPassed(ctx);
+        // Unsigned + optional: continue, but as an unauthenticated request so
+        // routes that require auth still reject it.
+        markAuthOptionalPassthrough(ctx);
         return undefined;
       }
       const result = await verifyRequest(ctx.request, opts);

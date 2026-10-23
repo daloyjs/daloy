@@ -61,7 +61,7 @@ No OTel SDK and just want spans in a collector? Use `new App({ telemetry: { trac
 
 That single hook gives every request:
 
-- `http.request.method`, `url.path`, `url.scheme`, `server.address` (host without port), `server.port` (when present), `url.query` (redacted, see below), `user_agent.original` set on `onRequest`.
+- `http.request.method`, `url.path` (JWT / credential-shaped path segments replaced with `[REDACTED]` via `sanitizeUrlPathForLog()`, since 1.17.0; the default span name uses the same redacted path), `url.scheme`, `server.address` (host without port), `server.port` (when present), `url.query` (redacted, see below), `user_agent.original` set on `onRequest`.
 - `http.response.status_code`, and `http.route` (the matched route template, e.g. `/users/:id`) set on `onSend`.
 - For `5xx` responses: `setStatus(ERROR)`, `error.type` (the exception name when one was thrown, otherwise the status code), and `recordException` with the thrown error.
 - A guaranteed single `span.end()` per request, including requests rejected before routing (for example by the cross-origin guard).

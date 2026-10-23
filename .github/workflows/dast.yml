@@ -207,14 +207,14 @@ jobs:
         # as a fresh pinned dependency just for this scan).
         if: always()
         run: |
-          have_any=0
+          missing=0
           aggregate_high=0
           for report in dast-results/zap-report.json dast-results/zap-api-report.json; do
             if [ ! -f "$report" ]; then
-              echo "::warning::No ZAP JSON report at ${report} (scan may have failed to start)."
+              echo "::error::No ZAP JSON report at ${report} (scan failed to start or crashed before writing it)."
+              missing=$((missing + 1))
               continue
             fi
-            have_any=1
             counts=$(node -e "
               const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
               const c = { high: 0, medium: 0, low: 0, info: 0 };
@@ -240,8 +240,13 @@ jobs:
               echo "----- end report -----"
             fi
           done
-          if [ "${have_any}" -eq 0 ]; then
-            exit 0
+          # Both ZAP invocations run with `|| true` so their alert exit codes do
+          # not pre-empt this summary. A missing report therefore means a scan
+          # never completed, and a green run without both reports would be a
+          # silent no-op security check: fail instead.
+          if [ "${missing}" -gt 0 ]; then
+            echo "::error::${missing} ZAP report(s) missing — the DAST scan did not complete."
+            exit 1
           fi
           if [ "${aggregate_high}" -gt 0 ]; then
             echo "::error::ZAP reported ${aggregate_high} HIGH-risk finding(s) across baseline + API scans against the example app surface."

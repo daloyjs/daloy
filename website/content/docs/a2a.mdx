@@ -339,7 +339,7 @@ const agent = createA2aHandler({
 
 **Task ownership fails closed.** A task store requires `taskOwner`. Every store call is scoped by the value it returns, so one caller can never read, continue, cancel, or list another caller's tasks: those requests get `-32001 TaskNotFound`, which does not reveal that the task exists. When `taskOwner` returns nothing, the request is refused with `401` instead of falling into a shared bucket. With tenancy, include the tenant in the owner, for example `JSON.stringify([state.tenant, user.sub])`.
 
-`memoryTaskStore()` is bounded, deep-copies on read and write, and expires entries. On serverless or several instances, a follow-up call can land somewhere else, so bring a shared store:
+`memoryTaskStore()` is bounded, deep-copies on read and write, and expires entries. Within one process, continuations and cancels of the same task are serialized per `(owner, taskId)` (since 1.17.0), so two concurrent follow-ups cannot both load one snapshot and overwrite each other's history, artifacts, or status; the second waits and sees what the first wrote. On serverless or several instances, a follow-up call can land somewhere else, so bring a shared store, and give it per-task write serialization (a lock, or a compare-and-set on a version field) if concurrent continuations of one task are possible across instances:
 
 ```ts
 import type { A2aTaskStore } from "@daloyjs/core";
@@ -501,5 +501,6 @@ propagateTrace: (headers) =>
 - Treat message text and data as untrusted input, especially if your handler passes it to a model. A peer agent is just another client. Parse every `data` part with a schema; a TypeScript cast validates nothing.
 - Build task-store keys with an unambiguous encoding such as `JSON.stringify([owner, taskId])`. Clients choose `taskId` on follow-up messages, so a plain `owner:taskId` join can collide across owners.
 - Validate artifacts returned by `createA2aClient()` before acting on them or forwarding them. A remote agent's output is untrusted input.
+- `createA2aClient()` forwards only the documented message and query fields and assigns `messageId`, `role`, and the card's `tenant` last (since 1.17.0), so an object built from an inbound request cannot claim the agent role, forge an id, or redirect the call to another tenant. Still validate request-derived objects before passing them on.
 - Fail at startup when a token environment variable is missing, instead of discovering it on the first request.
 - Rate-limit the endpoint like any other API route, and keep the default `Origin` check. Add trusted browser apps to `allowedOrigins` instead of a wildcard CORS layer.

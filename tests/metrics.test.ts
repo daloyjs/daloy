@@ -623,3 +623,20 @@ test("app.metrics() does not warn about auto-mounted docs routes", () => {
   app.metrics();
   assert.ok(!lines.some((l) => l.includes("metrics.late_install")));
 });
+
+test("app.metrics() rate-limit buckets are bounded: a flood of fresh proxy identities evicts the oldest", async () => {
+  const app = new App({ env: "development", trustProxy: true });
+  app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
+  const hit = (ip: string) => app.fetch(new Request("http://x/metrics", { headers: { "x-real-ip": ip } }));
+  assert.equal((await hit("10.0.0.1")).status, 200);
+  // Second hit from the same identity trips the limit while its bucket lives.
+  assert.equal((await hit("10.0.0.1")).status, 429);
+  // 10 000 distinct identities (the cap) push the first bucket out instead of
+  // growing the map without bound.
+  for (let i = 0; i < 10_000; i++) {
+    const res = await hit(`172.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}`);
+    if (res.status !== 200) assert.fail(`identity ${i} unexpectedly limited: ${res.status}`);
+    await res.body?.cancel();
+  }
+  assert.equal((await hit("10.0.0.1")).status, 200, "evicted identity starts a fresh window");
+});

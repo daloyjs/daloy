@@ -11,7 +11,11 @@ export function buildApp(): App {
   const app = new App({
     bodyLimitBytes: 1024 * 1024,
     requestTimeoutMs: 5_000,
-    production: process.env.NODE_ENV === "production",
+    // Only assert production when NODE_ENV says so. Passing an explicit
+    // `production: false` for an unset or misspelled NODE_ENV would silence
+    // DaloyJS's indeterminate-environment warnings and look like a deliberate
+    // non-production deploy; leaving the option out keeps that signal.
+    ...(process.env.NODE_ENV === "production" ? { production: true } : {}),
     // Reverse-proxy posture. When the app runs behind a trusted edge proxy
     // (Railway, Render, Fly, Heroku, a single nginx / load balancer), set the
     // TRUST_PROXY_HOPS env var to the number of proxy hops in front of it — a

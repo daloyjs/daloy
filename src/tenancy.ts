@@ -213,6 +213,18 @@ export interface ClaimTenantOptions {
    * a key to read only that node.
    */
   stateKey?: string;
+  /**
+   * When `true`, a request that carries an authenticated principal (a node
+   * at one of the inspected state keys) **without** the claim is rejected
+   * with `403` instead of returning `undefined`. Returning `undefined` lets
+   * the next resolver in a `tenancy({ resolve: [...] })` chain pick the
+   * tenant — typically from the `Host` header — so an authenticated caller
+   * whose token names no tenant could select any allowlisted tenant by
+   * choosing the hostname. With `strict`, the host fallback applies only to
+   * requests with no principal at all. Default `false`.
+   * @since 1.17.0
+   */
+  strict?: boolean;
 }
 
 /**
@@ -229,18 +241,33 @@ export interface ClaimTenantOptions {
  * **Ordering:** the auth middleware that populates the claim must run *before*
  * `tenancy()`. Register your verifier first, then `tenancy()`.
  *
+ * **Fallback caution:** when this resolver is chained before a host- or
+ * header-based one, a principal *without* the claim falls through to that
+ * resolver. Pass `{ strict: true }` to reject such principals instead, or
+ * bind principal to tenant in `tenancy({ allow: (id, ctx) => ... })`.
+ *
  * @param claim - Claim/property name carrying the tenant id.
- * @param opts - Where to read the principal from.
+ * @param opts - Where to read the principal from and whether a claim-less
+ *   principal is rejected ({@link ClaimTenantOptions.strict}).
  * @returns A {@link TenantResolver}.
+ * @throws {ForbiddenError} From the resolver, when `strict` is set and an
+ *   authenticated principal carries no usable claim.
  * @since 0.42.0
  */
 export function tenantFromClaim(claim: string, opts: ClaimTenantOptions = {}): TenantResolver {
   const stateKeys = opts.stateKey !== undefined ? [opts.stateKey] : ["auth", "user"];
+  const strict = opts.strict === true;
   return (ctx) => {
     const state = ctx.state as Record<string, unknown>;
+    let principalSeen = false;
     for (const key of stateKeys) {
-      const value = readClaim(state[key], claim);
+      const node = state[key];
+      if (node && typeof node === "object") principalSeen = true;
+      const value = readClaim(node, claim);
       if (value !== undefined) return value;
+    }
+    if (strict && principalSeen) {
+      throw new ForbiddenError("Authenticated principal carries no tenant claim.");
     }
     return undefined;
   };

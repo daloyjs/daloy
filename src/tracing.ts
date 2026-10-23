@@ -37,7 +37,7 @@
  */
 
 import type { Hooks } from "./types.js";
-import { sanitizeUrlQueryForLog } from "./logger.js";
+import { sanitizeUrlPathForLog, sanitizeUrlQueryForLog } from "./logger.js";
 
 /** OpenTelemetry `SpanKind.INTERNAL`, for in-process child spans. @since 1.11.0 */
 export const TRACING_SPAN_KIND_INTERNAL = 0;
@@ -204,9 +204,8 @@ const ZERO_SPAN_ID = "0".repeat(16);
 /** Longest `traceparent` value considered; anything longer is ignored. */
 const MAX_TRACEPARENT_LENGTH = 512;
 
-function defaultSpanName(req: Request, url: URL | undefined): string {
+function defaultSpanName(req: Request, path: string): string {
   const method = req.method.toUpperCase();
-  const path = url ? url.pathname : "/";
   return `${method} ${path}`;
 }
 
@@ -333,11 +332,15 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
 
     const url = safeParseUrl(req.url);
     const method = req.method.toUpperCase();
-    const name = opts.spanName ? opts.spanName(req) : defaultSpanName(req, url);
+    // Path segments that are JWTs or provider credentials are redacted before
+    // they become a span name or the `url.path` attribute (same rule as the
+    // request logger); the span is later renamed to the route template.
+    const path = url ? sanitizeUrlPathForLog(url.pathname) : "/";
+    const name = opts.spanName ? opts.spanName(req) : defaultSpanName(req, path);
 
     const attrs: TracingAttributes = { "http.request.method": method };
     if (url) {
-      attrs["url.path"] = url.pathname;
+      attrs["url.path"] = path;
       attrs["url.scheme"] = url.protocol.replace(/:$/, "");
       // Per the OTel HTTP semantic conventions `server.address` is the host
       // WITHOUT the port (which belongs in `server.port`), so derive both from

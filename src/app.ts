@@ -5,7 +5,7 @@ import {
   type WebSocketHandler,
 } from "./websocket.js";
 import { readNodeEnv } from "./internal-env.js";
-import { AUTH_RAN } from "./internal-auth.js";
+import { AUTH_OPTIONAL_PASS, AUTH_RAN } from "./internal-auth.js";
 import {
   BadRequestError,
   ForbiddenError,
@@ -2860,6 +2860,22 @@ export class App<
    * The memo only skips re-deriving the same answer; the matcher still
    * decides every distinct authority.
    */
+  /**
+   * Apply the App's `Host` allowlist (`allowedHosts`, or the development
+   * allowlist `serve()` installs) to a request that bypasses the HTTP
+   * dispatcher — the adapters' WebSocket upgrade paths. Without this, an
+   * upgrade could be routed for a host the HTTP path rejects, which also
+   * weakens `allowedOrigins: "same-origin"` (it compares `Origin` against the
+   * request's own authority).
+   *
+   * @param url - The absolute request URL the adapter built for the upgrade.
+   * @returns `true` when no allowlist is configured or the host is permitted.
+   * @internal
+   */
+  isUpgradeHostAllowed(url: string): boolean {
+    return this.hostMatcher === undefined || this.hostAllowed(url);
+  }
+
   private hostAllowed(url: string): boolean {
     const start = url.indexOf("://") + 3;
     let end = url.indexOf("/", start);
@@ -2902,9 +2918,17 @@ export class App<
    * (detail redacted); other environments log one warning per route and
    * continue, so local development keeps working while the gap is visible.
    */
-  private refuseUnauthenticatedRoute(def: RouteDefinition<any, any, any, any>): void {
+  private refuseUnauthenticatedRoute(
+    def: RouteDefinition<any, any, any, any>,
+    state: Record<PropertyKey, unknown>
+  ): void {
     // `secureDefaults: false` is the documented switch for every guard.
     if (this.options.secureDefaults === false) return;
+    if (state[AUTH_OPTIONAL_PASS] === true) {
+      // An `optional` auth middleware saw no credential. That is a legitimate
+      // unauthenticated request, not a misconfiguration: answer 401.
+      throw new UnauthorizedError("Authentication required");
+    }
     const route = `${def.method} ${def.path}`;
     const message =
       `Route ${route} requires authentication (auth:, an MCP/A2A endpoint, or requireAuth) ` +
@@ -4286,9 +4310,7 @@ export class App<
     );
     this._coldPathHooksCache = undefined;
 
-    const buckets = rateLimitConfig
-      ? new Map<string, { count: number; resetMs: number }>()
-      : null;
+    const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.frameworkRoute({
@@ -4306,21 +4328,8 @@ export class App<
         if (buckets && rateLimitConfig) {
           const identity = healthRouteKey(request, trustProxyHeaders);
           const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
-          const now = Date.now();
-          const entry = buckets.get(key);
-          if (!entry || entry.resetMs <= now) {
-            buckets.set(key, {
-              count: 1,
-              resetMs: now + rateLimitConfig.windowMs,
-            });
-          } else {
-            entry.count++;
-            if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(
-                Math.ceil((entry.resetMs - now) / 1000),
-              );
-            }
-          }
+          const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
+          if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
         }
         if (token !== undefined) {
           if (!authMatch) {
@@ -4633,9 +4642,7 @@ export class App<
       );
     }
 
-    const buckets = rateLimitConfig
-      ? new Map<string, { count: number; resetMs: number }>()
-      : null;
+    const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.frameworkRoute({
@@ -4653,21 +4660,8 @@ export class App<
         if (buckets && rateLimitConfig) {
           const identity = healthRouteKey(request, trustProxyHeaders);
           const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
-          const now = Date.now();
-          const entry = buckets.get(key);
-          if (!entry || entry.resetMs <= now) {
-            buckets.set(key, {
-              count: 1,
-              resetMs: now + rateLimitConfig.windowMs,
-            });
-          } else {
-            entry.count++;
-            if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(
-                Math.ceil((entry.resetMs - now) / 1000),
-              );
-            }
-          }
+          const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
+          if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
         }
         if (token !== undefined) {
           if (!authMatch) {
@@ -4727,9 +4721,7 @@ export class App<
       opts.rateLimit === false
         ? null
         : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
-    const buckets = rateLimitConfig
-      ? new Map<string, { count: number; resetMs: number }>()
-      : null;
+    const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
     const log = this.log;
     // Only log report bodies when explicitly enabled. In
@@ -4747,21 +4739,8 @@ export class App<
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
           const key = healthRouteKey(request, trustProxyHeaders);
-          const now = Date.now();
-          const entry = buckets.get(key);
-          if (!entry || entry.resetMs <= now) {
-            buckets.set(key, {
-              count: 1,
-              resetMs: now + rateLimitConfig.windowMs,
-            });
-          } else {
-            entry.count++;
-            if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(
-                Math.ceil((entry.resetMs - now) / 1000),
-              );
-            }
-          }
+          const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
+          if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
         }
         const contentType = (request.headers.get("content-type") ?? "")
           .split(";")[0]!
@@ -5621,7 +5600,7 @@ export class App<
             match.handler.requiresAuthRun &&
             (state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
           ) {
-            this.refuseUnauthenticatedRoute(def);
+            this.refuseUnauthenticatedRoute(def, state as Record<PropertyKey, unknown>);
           }
           assertAcknowledgedSuccessfulHookResponse(preBody, def, "preBody");
           copyContextHeaders(ctx, preBody);
@@ -5694,7 +5673,7 @@ export class App<
             match.handler.requiresAuthRun &&
             (state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
           ) {
-            this.refuseUnauthenticatedRoute(def);
+            this.refuseUnauthenticatedRoute(def, state as Record<PropertyKey, unknown>);
           }
           assertAcknowledgedSuccessfulHookResponse(before, def, "beforeHandle");
           copyContextHeaders(ctx, before);
@@ -5717,7 +5696,7 @@ export class App<
         match.handler.requiresAuthRun &&
         (ctx.state as Record<PropertyKey, unknown>)[AUTH_RAN] !== true
       ) {
-        this.refuseUnauthenticatedRoute(def);
+        this.refuseUnauthenticatedRoute(def, state as Record<PropertyKey, unknown>);
       }
       const runResult = this.options.mockMode
         ? mockResponseFor(def)
@@ -6150,6 +6129,53 @@ function joinPath(a: string, b: string): string {
  * @param trustProxyHeaders - When true, platform client-IP headers may be used.
  * @returns A stable string key for the in-memory rate-limit map.
  */
+/** Entry of a built-in probe route's fixed-window counter. */
+type ProbeBucket = { count: number; resetMs: number };
+
+/**
+ * Upper bound on distinct identities a built-in probe route (`/metrics`,
+ * health/readiness, the CSP report receiver) keeps counters for. Beyond it,
+ * expired entries are swept and then the oldest live ones are evicted, so a
+ * flood of fresh `x-real-ip` / `fly-client-ip` values behind a trusted proxy
+ * cannot grow the map without bound.
+ */
+const PROBE_BUCKET_MAX_ENTRIES = 10_000;
+
+/**
+ * Count one hit on a probe route's fixed-window limiter.
+ *
+ * @returns `0` when the request is within the limit, otherwise the number of
+ *   seconds until the window resets (for `Retry-After`).
+ */
+function probeRateLimitHit(
+  buckets: Map<string, ProbeBucket>,
+  key: string,
+  now: number,
+  config: { windowMs: number; limit: number }
+): number {
+  const entry = buckets.get(key);
+  if (entry !== undefined && entry.resetMs > now) {
+    entry.count++;
+    return entry.count > config.limit ? Math.ceil((entry.resetMs - now) / 1000) : 0;
+  }
+  if (entry !== undefined) buckets.delete(key);
+  if (buckets.size >= PROBE_BUCKET_MAX_ENTRIES) {
+    // Every entry is (re)inserted with `now + windowMs`, so Map insertion
+    // order is expiry order: expired entries form a prefix. Sweep that prefix,
+    // then evict the oldest live entries until there is room — O(evicted),
+    // not O(size), per new identity.
+    for (const [k, v] of buckets) {
+      if (v.resetMs > now) break;
+      buckets.delete(k);
+    }
+    while (buckets.size >= PROBE_BUCKET_MAX_ENTRIES) {
+      buckets.delete(buckets.keys().next().value as string);
+    }
+  }
+  buckets.set(key, { count: 1, resetMs: now + config.windowMs });
+  return 0;
+}
+
 function healthRouteKey(request: Request, trustProxyHeaders: boolean): string {
   if (!trustProxyHeaders) return "global";
   return (

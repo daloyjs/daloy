@@ -252,6 +252,11 @@ async function tryBunUpgrade(
   server: BunWebSocketServer
 ): Promise<Response | undefined> {
   const url = new URL(req.url);
+  // Same `Host` allowlist the HTTP dispatcher enforces; an upgrade must not
+  // reach a route (or pass a same-origin check) for a host the app rejects.
+  if (!app.isUpgradeHostAllowed(req.url)) {
+    return new Response("Invalid Host header", { status: 400 });
+  }
   const match = app.webSocketRoutes.find(url.pathname);
   if (!match) return new Response("Not Found", { status: 404 });
 

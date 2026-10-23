@@ -130,6 +130,42 @@ test("tenantFromClaim is unresolved when the principal is absent or the claim is
   assert.deepEqual(await res.json(), {});
 });
 
+test("tenantFromClaim({ strict }) stops a claim-less principal from picking a tenant via the Host", async () => {
+  const seed = (principal: unknown): Hooks => ({
+    beforeHandle(ctx) {
+      if (principal !== undefined) (ctx.state as Record<string, unknown>).user = principal;
+    },
+  });
+  const build = (principal: unknown, strict: boolean) => {
+    const app = new App({ hooks: seed(principal) });
+    app.use(
+      tenancy({
+        resolve: [tenantFromClaim("org", { strict }), tenantFromSubdomain({ baseDomain: "example.com" })],
+      })
+    );
+    app.route({
+      method: "GET",
+      path: "/whoami",
+      operationId: "whoami",
+      responses: { 200: { description: "ok" } },
+      handler: ({ state }) => ({ status: 200 as const, body: { tenant: (state as any).tenant } }),
+    });
+    return app;
+  };
+  // Default: the documented fallback still applies to a claim-less principal.
+  const lax = await build({ sub: "u1", claims: {} }, false).request("http://globex.example.com/whoami");
+  assert.deepEqual(await lax.json(), { tenant: "globex" });
+  // Strict: an authenticated principal without the claim is refused outright.
+  const strictRes = await build({ sub: "u1", claims: {} }, true).request("http://globex.example.com/whoami");
+  assert.equal(strictRes.status, 403);
+  // Strict: a principal with the claim resolves from the claim, not the host.
+  const claimed = await build({ sub: "u1", claims: { org: "acme" } }, true).request("http://globex.example.com/whoami");
+  assert.deepEqual(await claimed.json(), { tenant: "acme" });
+  // Strict: no principal at all still falls back to the subdomain.
+  const anon = await build(undefined, true).request("http://globex.example.com/whoami");
+  assert.deepEqual(await anon.json(), { tenant: "globex" });
+});
+
 test("resolver array tries in order: first non-empty wins", async () => {
   const app = whoamiApp({
     resolve: [tenantFromHeader("x-tenant-id"), tenantFromSubdomain({ baseDomain: "example.com" })],

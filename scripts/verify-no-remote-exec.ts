@@ -70,12 +70,23 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "`child_process` require in core enables shell-out / `curl | sh` payloads (BlokTrooper class)",
   },
   {
+    // Dynamic `import("node:child_process")` — same primitive as the static
+    // form, so it must not slip past the gate by being lazy.
+    re: /\bimport\s*\(\s*["'](?:node:)?child_process["']\s*\)/,
+    reason:
+      "dynamic `import('child_process')` in core enables shell-out / `curl | sh` payloads (BlokTrooper class)",
+  },
+  {
     re: /\bfrom\s+["'](?:node:)?vm["']/,
     reason: "`node:vm` import in core enables compiling downloaded code (BlokTrooper class)",
   },
   {
     re: /\brequire\s*\(\s*["'](?:node:)?vm["']\s*\)/,
     reason: "`node:vm` require in core enables compiling downloaded code (BlokTrooper class)",
+  },
+  {
+    re: /\bimport\s*\(\s*["'](?:node:)?vm["']\s*\)/,
+    reason: "dynamic `import('node:vm')` in core enables compiling downloaded code (BlokTrooper class)",
   },
   {
     // Dynamic import of a remote URL (Node's experimental network imports).
@@ -173,8 +184,8 @@ function stripCommentsAndStrings(line: string): string {
   return out;
 }
 
-const IMPORT_OR_REQUIRE_PATTERNS = FORBIDDEN_PATTERNS.slice(0, 5);
-const CODE_GEN_PATTERNS = FORBIDDEN_PATTERNS.slice(5);
+const IMPORT_OR_REQUIRE_PATTERNS = FORBIDDEN_PATTERNS.slice(0, 7);
+const CODE_GEN_PATTERNS = FORBIDDEN_PATTERNS.slice(7);
 
 export function findForbiddenRemoteExecCalls(
   file: string,
@@ -182,6 +193,7 @@ export function findForbiddenRemoteExecCalls(
 ): readonly ForbiddenRemoteExecCall[] {
   const out: ForbiddenRemoteExecCall[] = [];
   const lines = source.split(/\r?\n/);
+  const importLines: string[] = new Array(lines.length).fill("");
   let inBlockComment = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
@@ -204,6 +216,7 @@ export function findForbiddenRemoteExecCalls(
     const lineCommentIndex = findLineCommentStart(working);
     const noComments = lineCommentIndex >= 0 ? working.slice(0, lineCommentIndex) : working;
     if (noComments.trim().length === 0) continue;
+    importLines[i] = noComments;
 
     // Phase 1: import / require / remote-import patterns — string literals stay intact.
     let matched = false;
@@ -226,6 +239,39 @@ export function findForbiddenRemoteExecCalls(
       }
     }
   }
+  // Phase 3: the import / require patterns again over the comment-stripped
+  // source joined across lines, so `import(` ⏎ `"node:child_process"` or
+  // `from` ⏎ `"vm"` cannot dodge the line-by-line pass. Attributed to the
+  // line the match starts on; deduplicated against the earlier phases.
+  const flagged = new Set(out.map((f) => f.line));
+  const starts: number[] = [];
+  let joined = "";
+  for (let i = 0; i < lines.length; i++) {
+    starts.push(joined.length);
+    joined += importLines[i] + " ";
+  }
+  const lineAt = (index: number): number => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  for (const pattern of IMPORT_OR_REQUIRE_PATTERNS) {
+    const re = new RegExp(pattern.re.source, pattern.re.flags.includes("g") ? pattern.re.flags : pattern.re.flags + "g");
+    for (let m = re.exec(joined); m !== null; m = re.exec(joined)) {
+      const line = lineAt(m.index);
+      if (!flagged.has(line + 1)) {
+        flagged.add(line + 1);
+        out.push({ file, line: line + 1, text: lines[line]!.trim(), reason: pattern.reason });
+      }
+      if (m[0].length === 0) re.lastIndex++;
+    }
+  }
+  out.sort((a, b) => a.line - b.line);
   return out;
 }
 

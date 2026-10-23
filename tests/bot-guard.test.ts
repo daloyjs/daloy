@@ -195,6 +195,48 @@ test("botGuard() caches verification results per IP", async () => {
   assert.equal(reverseCalls, 1);
 });
 
+test("botGuard() coalesces concurrent verifications of the same claim onto one DNS lookup", async () => {
+  let reverseCalls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const resolver: BotResolver = {
+    async reverse(ip) {
+      reverseCalls++;
+      await gate;
+      return ip === "66.249.66.1" ? ["crawl.googlebot.com"] : [];
+    },
+    async forward() {
+      return ["66.249.66.1"];
+    },
+  };
+  const app = appWith({ trustProxyHeaders: true, verifiedBots: [GOOGLEBOT], resolver });
+  const burst = Array.from({ length: 25 }, () => app.fetch(req(GOOGLE_UA, "66.249.66.1")));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  release();
+  const statuses = (await Promise.all(burst)).map((r) => r.status);
+  assert.deepEqual(statuses, new Array(25).fill(200));
+  assert.equal(reverseCalls, 1, "a burst of identical claims shares one in-flight lookup");
+});
+
+test("botGuard() does not let a verdict for one rule vouch for a same-named rule with other domains", async () => {
+  const resolver = fixtureResolver(
+    { "66.249.66.1": ["crawl.googlebot.com"] },
+    { "crawl.googlebot.com": ["66.249.66.1"] }
+  );
+  const app = appWith({
+    trustProxyHeaders: true,
+    resolver,
+    verifiedBots: [
+      { name: "crawler", userAgent: /Googlebot/, domains: [".googlebot.com"] },
+      { name: "crawler", userAgent: /Bingbot/, domains: [".search.msn.com"] },
+    ],
+  });
+  // First rule verifies the IP for Googlebot ...
+  assert.equal((await app.fetch(req(GOOGLE_UA, "66.249.66.1"))).status, 200);
+  // ... which must not be reused when the same IP claims to be Bingbot.
+  assert.equal((await app.fetch(req("Mozilla/5.0 (compatible; Bingbot/2.0)", "66.249.66.1"))).status, 403);
+});
+
 test("botGuard() ignores non-crawler UAs (no DNS, always allowed)", async () => {
   let calls = 0;
   const resolver: BotResolver = {

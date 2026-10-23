@@ -268,3 +268,38 @@ test("CSWSH: Node adapter allows allowlisted origin upgrade through to beforeUpg
     await handle.close();
   }
 });
+
+test("CSWSH: Node adapter applies allowedHosts to upgrades, so same-origin cannot be satisfied via a foreign Host", async () => {
+  const app = new App({ logger: false, allowedHosts: ["app.example.com"] });
+  let beforeUpgradeRan = false;
+  app.ws("/ws", {
+    allowedOrigins: "same-origin",
+    beforeUpgrade() {
+      beforeUpgradeRan = true;
+      return new Response("nope", { status: 401 });
+    },
+    open() {},
+  });
+  const handle = serveNode(app, { port: 0, handleSignals: false });
+  await once(handle.server, "listening");
+  try {
+    const port = (handle.server.address() as AddressInfo).port;
+    // Attacker-controlled Host that matches the attacker's Origin: the HTTP
+    // dispatcher would answer 400, and so must the upgrade path.
+    const spoofed = await rawUpgrade(port, "/ws", {
+      host: "evil.example",
+      origin: "http://evil.example",
+    });
+    assert.equal(spoofed, 400);
+    assert.equal(beforeUpgradeRan, false);
+    // The allowlisted host still reaches the route.
+    const allowed = await rawUpgrade(port, "/ws", {
+      host: "app.example.com",
+      origin: "http://app.example.com",
+    });
+    assert.equal(allowed, 401);
+    assert.equal(beforeUpgradeRan, true);
+  } finally {
+    await handle.close();
+  }
+});

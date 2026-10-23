@@ -263,6 +263,36 @@ function partsOf(input: string | readonly A2aPart[]): A2aPart[] {
   return typeof input === "string" ? [{ text: input }] : input.map((part) => ({ ...part }));
 }
 
+type OutgoingMessageObject = Exclude<A2aOutgoingMessage, string | readonly A2aPart[]>;
+
+const OUTGOING_MESSAGE_FIELDS = ["contextId", "taskId", "metadata", "referenceTaskIds"] as const;
+
+const LIST_TASKS_QUERY_FIELDS = [
+  "contextId",
+  "status",
+  "pageSize",
+  "pageToken",
+  "historyLength",
+  "includeArtifacts",
+] as const;
+
+/**
+ * Copy only the declared keys of `source` (skipping `undefined`), so an
+ * application that forwards a request-derived object cannot smuggle extra
+ * protocol fields (`role`, `messageId`, `tenant`, …) onto the wire.
+ */
+function pickDefined<T extends object>(
+  source: T,
+  keys: readonly (keyof T & string)[]
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 /**
  * Create a client for a remote A2A 1.0 agent (JSON-RPC binding).
  *
@@ -413,7 +443,8 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
       options.propagateTrace(headers, callOptions.request);
     }
     // Spec 4.4.6: when the interface declares a tenant, every request carries it.
-    const body = iface.tenant !== undefined ? { tenant: iface.tenant, ...params } : params;
+    // The card's tenant is assigned last so nothing in `params` can replace it.
+    const body = iface.tenant !== undefined ? { ...params, tenant: iface.tenant } : params;
     const id = randomId();
     const signal = signalFor(callOptions.signal);
     const res = await send(
@@ -458,18 +489,21 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
     },
 
     async sendMessage(message, callOptions = {}) {
+      // Only the documented message fields are forwarded, and the protocol
+      // fields the client owns (`messageId`, `role`) are assigned last, so a
+      // caller-supplied object cannot claim the agent role or forge an id.
       const body =
         typeof message === "string" || Array.isArray(message)
           ? { parts: partsOf(message as string | readonly A2aPart[]) }
           : {
-              ...(message as Exclude<A2aOutgoingMessage, string | readonly A2aPart[]>),
-              parts: partsOf((message as { parts: readonly A2aPart[] }).parts),
+              ...pickDefined(message as OutgoingMessageObject, OUTGOING_MESSAGE_FIELDS),
+              parts: partsOf((message as OutgoingMessageObject).parts),
             };
       const configuration: Record<string, unknown> = {};
       if (callOptions.acceptedOutputModes) configuration.acceptedOutputModes = [...callOptions.acceptedOutputModes];
       if (callOptions.historyLength !== undefined) configuration.historyLength = callOptions.historyLength;
       const params: Record<string, unknown> = {
-        message: { messageId: randomId(), role: "ROLE_USER", ...body },
+        message: { ...body, messageId: randomId(), role: "ROLE_USER" },
         ...(Object.keys(configuration).length > 0 ? { configuration } : {}),
         ...(callOptions.metadata ? { metadata: callOptions.metadata } : {}),
       };
@@ -496,7 +530,7 @@ export function createA2aClient(options: A2aClientOptions): A2aClient {
     },
 
     async listTasks(query = {}, callOptions = {}) {
-      const result = await call("ListTasks", { ...query }, callOptions);
+      const result = await call("ListTasks", pickDefined(query, LIST_TASKS_QUERY_FIELDS), callOptions);
       if (!isPlainObject(result) || !Array.isArray(result.tasks)) {
         throw new A2aClientError("A2A agent returned an invalid ListTasks result.");
       }

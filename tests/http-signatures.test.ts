@@ -801,6 +801,43 @@ test("httpSignatureAuth optional mode passes unsigned requests through", async (
   assert.deepEqual(await res.json(), { keyid: null });
 });
 
+test("httpSignatureAuth optional mode still answers 401 on a route that declares auth:", async () => {
+  const app = new App({ env: "development" });
+  app.use(httpSignatureAuth({ algorithms: ["hmac-sha256"], resolveKey: () => HMAC_SECRET, optional: true }));
+  app.route({
+    method: "GET",
+    path: "/protected",
+    auth: { scheme: "http-signature" },
+    responses: { 200: { description: "ok" } },
+    handler: (ctx) => ({ status: 200 as const, body: { keyid: (ctx.state as any).httpSignature?.keyid ?? null } }),
+  });
+  app.route({
+    method: "GET",
+    path: "/open",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  // Unsigned: the open route passes through, the protected one does not.
+  assert.equal((await app.fetch(new Request("http://localhost/open"))).status, 200);
+  const refused = await app.fetch(new Request("http://localhost/protected"));
+  assert.equal(refused.status, 401);
+  // Signed: the protected route accepts and stamps the signer.
+  const url = "http://localhost/protected";
+  const sig = await signMessage({
+    method: "GET",
+    url,
+    alg: "hmac-sha256",
+    key: HMAC_SECRET,
+    keyid: "svc-a",
+    created: Math.floor(Date.now() / 1000),
+  });
+  const ok = await app.fetch(
+    new Request(url, { headers: { "signature-input": sig.signatureInput, signature: sig.signature } })
+  );
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { keyid: "svc-a" });
+});
+
 // ---------- content-digest helpers ----------
 
 test("contentDigest + verifyContentDigest round-trip", async () => {

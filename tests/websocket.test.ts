@@ -1327,6 +1327,55 @@ test("Node adapter echoes an empty CLOSE for a status-less CLOSE, never the 1005
 
 // ---------- Bun adapter (with fake Bun shim) ----------
 
+test("Bun adapter applies the App Host allowlist to upgrades", async () => {
+  const upgrades: Request[] = [];
+  const fakeServer = {
+    upgrade(req: Request) {
+      upgrades.push(req);
+      return true;
+    },
+  };
+  let wsConfig: any;
+  const prev = (globalThis as { Bun?: unknown }).Bun;
+  (globalThis as { Bun?: unknown }).Bun = {
+    serve(cfg: any) {
+      wsConfig = cfg;
+      return { port: 0, url: new URL("http://localhost:0/"), stop: () => {} };
+    },
+  };
+  try {
+    const app = new App({ logger: false, allowedHosts: ["app.example.com"] });
+    let beforeUpgradeRan = false;
+    app.ws("/ws", {
+      allowedOrigins: "same-origin",
+      beforeUpgrade: () => {
+        beforeUpgradeRan = true;
+        return undefined;
+      },
+      open: () => {},
+    });
+    serveBun(app, { port: 1234, handleSignals: false });
+    const spoofed = await wsConfig.fetch(
+      new Request("http://evil.example/ws", { headers: { upgrade: "websocket", origin: "http://evil.example" } }),
+      fakeServer as any
+    );
+    assert.equal(spoofed.status, 400);
+    assert.equal(beforeUpgradeRan, false);
+    assert.equal(upgrades.length, 0);
+    const allowed = await wsConfig.fetch(
+      new Request("http://app.example.com/ws", {
+        headers: { upgrade: "websocket", origin: "http://app.example.com" },
+      }),
+      fakeServer as any
+    );
+    assert.equal(allowed, undefined);
+    assert.equal(beforeUpgradeRan, true);
+    assert.equal(upgrades.length, 1);
+  } finally {
+    (globalThis as { Bun?: unknown }).Bun = prev;
+  }
+});
+
 test("Bun adapter wires websocket config and routes upgrades", async () => {
   type FakeWs = {
     data: any;

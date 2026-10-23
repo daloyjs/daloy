@@ -69,9 +69,11 @@ const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`
 function stripCommentsAndStrings(line: string): string {
   let out = line;
   out = out.replace(/\/\*[\s\S]*?\*\//g, " ");
+  // Blank string literals *before* looking for `//`, so a URL literal
+  // (`"https://..."`) earlier on the line cannot truncate the code after it.
+  out = out.replace(STRING_LITERAL_RE, '""');
   const lineCommentIndex = out.indexOf("//");
   if (lineCommentIndex >= 0) out = out.slice(0, lineCommentIndex);
-  out = out.replace(STRING_LITERAL_RE, '""');
   return out;
 }
 

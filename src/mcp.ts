@@ -2257,15 +2257,19 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     if (request.method === "GET") {
       // 2026-07-28 removed the standalone GET stream; older clients that still
       // try it get 405 plus a human-readable pointer at the POST endpoint.
+      // GET is deliberately unauthenticated, so it advertises only which
+      // capability *kinds* exist — never tool names, resource URIs, templates,
+      // or prompt names. Those stay behind the (authenticated) POST
+      // `server/discover` / `*/list` calls.
       return jsonResponse(
         {
           transport: "streamable-http",
           protocolVersions,
           capabilities: {
-            tools: tools.map((tool) => tool.name),
-            resources: resources.map((resource) => resource.uri),
-            resourceTemplates: resourceTemplates.map((template) => template.uriTemplate),
-            prompts: prompts.map((prompt) => prompt.name),
+            tools: tools.length > 0,
+            resources: resources.length > 0,
+            resourceTemplates: resourceTemplates.length > 0,
+            prompts: prompts.length > 0,
           },
           hint: "Send JSON-RPC 2.0 over HTTP POST to this endpoint; call server/discover for capabilities.",
         },

@@ -481,6 +481,17 @@ test("verify-no-weak-random ignores Math.random() inside comments, strings, and 
   assert.equal(findings.length, 0);
 });
 
+test("verify-no-weak-random is not blinded by a URL string literal earlier on the line", async () => {
+  const { findForbiddenWeakRandomCalls } = await import("../scripts/verify-no-weak-random.js");
+  const sample = [
+    'const url = "https://example.com"; const token = Math.random().toString(36);',
+    "const base = `https://${host}/x`; const nonce = Math.random();",
+    'const doc = "see https://example.com/docs"; // Math.random() in a trailing comment is fine',
+  ].join("\n");
+  const findings = findForbiddenWeakRandomCalls("sample.ts", sample);
+  assert.deepEqual(findings.map((f) => f.line), [1, 2]);
+});
+
 test("verify-no-weak-random accepts the live src/ tree", async () => {
   const { findForbiddenWeakRandomCalls } = await import("../scripts/verify-no-weak-random.js");
   const { readFile, readdir } = await import("node:fs/promises");
@@ -554,6 +565,39 @@ test("verify-no-remote-exec ignores forbidden tokens inside comments and strings
   assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
 });
 
+test("verify-no-remote-exec flags dynamic imports of child_process and vm", async () => {
+  const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
+  const sample = [
+    'const cp = await import("node:child_process");',
+    "const { runInNewContext } = await import('vm');",
+    'const lazy = () => import("child_process");',
+    '// const cp = await import("node:child_process"); -- commented out, fine',
+    'const ok = await import("./local-module.js");',
+  ].join("\n");
+  const findings = findForbiddenRemoteExecCalls("sample.ts", sample);
+  assert.deepEqual(findings.map((f) => f.line), [1, 2, 3]);
+  assert.match(findings[0]!.reason, /dynamic `import\('child_process'\)`/);
+  assert.match(findings[1]!.reason, /dynamic `import\('node:vm'\)`/);
+});
+
+test("verify-no-remote-exec catches imports split across lines", async () => {
+  const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
+  const sample = [
+    "const cp = await import(",
+    '  "node:child_process"',
+    ");",
+    "import * as vm from",
+    "  'vm';",
+    "const r = require(",
+    '  "child_process"',
+    ");",
+    "// import(",
+    '// "node:vm") -- both halves commented, must not trip',
+  ].join("\n");
+  const findings = findForbiddenRemoteExecCalls("sample.ts", sample);
+  assert.deepEqual(findings.map((f) => f.line), [1, 4, 6], JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-remote-exec accepts the live src/ tree", async () => {
   const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
   const { readFile, readdir } = await import("node:fs/promises");
@@ -582,6 +626,27 @@ test("verify-no-remote-exec accepts the live src/ tree", async () => {
 });
 
 // ---------- verify-no-registry-exfiltration (Socket GemStuffer gate) ----------
+
+test("verify-no-registry-exfiltration catches multi-token forms split across lines", async () => {
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
+  const sample = [
+    "const agent = new Agent({",
+    "  rejectUnauthorized:",
+    "    false,",
+    "});",
+    "process.env.HOME",
+    '  = "/tmp/gemhome";',
+    "globalThis.__hook",
+    "  = require(mod);",
+    "module.paths",
+    "  .push(dir);",
+    "// rejectUnauthorized:",
+    "// false -- both halves commented out, must not trip",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.deepEqual(findings.map((f) => f.line), [2, 5, 7, 9], JSON.stringify(findings, null, 2));
+});
 
 test("verify-no-registry-exfiltration flags every documented GemStuffer-class primitive", async () => {
   const { findForbiddenRegistryExfilCalls } =

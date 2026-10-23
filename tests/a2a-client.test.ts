@@ -175,6 +175,64 @@ describe("A2A client: happy paths", () => {
 });
 
 describe("A2A client: security refusals", () => {
+  test("caller-supplied objects cannot override messageId, role, or the card's tenant", async () => {
+    // A hostile request body forwarded straight into the client. The card
+    // declares a tenant (rewritten in transit; DaloyJS's own server does not
+    // publish one), and the caller tries to pick another tenant, forge the
+    // message id, and claim the agent role.
+    const { calls, fetchImpl } = wire(server(), async (res, call) => {
+      if (call.method !== "GET") return res;
+      const body = (await res.json()) as { supportedInterfaces: Array<Record<string, unknown>> };
+      body.supportedInterfaces[0]!.tenant = "acme";
+      return Response.json(body);
+    });
+    const c = client(fetchImpl);
+    const hostile = {
+      parts: [{ text: "x" }],
+      messageId: "forged",
+      role: "ROLE_AGENT",
+      tenant: "victim",
+      extensions: ["https://ext.example/evil"],
+    } as unknown as Parameters<typeof c.sendMessage>[0];
+    await c.sendMessage(hostile);
+    const sent = calls[1]!.body as { params: Record<string, unknown> & { message: Record<string, unknown> } };
+    assert.equal(sent.params.tenant, "acme");
+    assert.equal(sent.params.message.role, "ROLE_USER");
+    assert.notEqual(sent.params.message.messageId, "forged");
+    assert.equal("tenant" in sent.params.message, false);
+    assert.equal("extensions" in sent.params.message, false);
+    assert.deepEqual(sent.params.message.parts, [{ text: "x" }]);
+
+    await c.listTasks({ pageSize: 5, tenant: "victim", owner: "bob" } as unknown as { pageSize: number });
+    const listed = calls[2]!.body as { params: Record<string, unknown> };
+    assert.deepEqual(listed.params, { pageSize: 5, tenant: "acme" });
+  });
+
+  test("documented message fields still reach the wire after allowlisting", async () => {
+    const { calls, fetchImpl } = wire(server());
+    const c = client(fetchImpl);
+    const first = await c.sendMessage("ask");
+    await c.sendMessage({
+      parts: [{ text: "ABC-1" }],
+      taskId: first.task!.id,
+      contextId: first.task!.contextId,
+      metadata: { k: "v" },
+      referenceTaskIds: [first.task!.id],
+    });
+    const sent = calls[2]!.body as { params: { message: Record<string, unknown> } };
+    assert.equal(sent.params.message.taskId, first.task!.id);
+    assert.equal(sent.params.message.contextId, first.task!.contextId);
+    assert.deepEqual(sent.params.message.metadata, { k: "v" });
+    assert.deepEqual(sent.params.message.referenceTaskIds, [first.task!.id]);
+    await c.listTasks({ contextId: first.task!.contextId, status: "TASK_STATE_COMPLETED", includeArtifacts: true });
+    const listed = calls[3]!.body as { params: Record<string, unknown> };
+    assert.deepEqual(listed.params, {
+      contextId: first.task!.contextId,
+      status: "TASK_STATE_COMPLETED",
+      includeArtifacts: true,
+    });
+  });
+
   test("refuses unsafe agent URLs up front", () => {
     for (const url of ["http://agent.example", "ftp://agent.example", "https://u:p@agent.example", "not a url"]) {
       assert.throws(() => createA2aClient({ url }), A2aClientError, url);

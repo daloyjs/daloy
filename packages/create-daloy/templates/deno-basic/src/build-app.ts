@@ -13,7 +13,10 @@ export function buildApp(): App {
   const app = new App({
     bodyLimitBytes: 1024 * 1024,
     requestTimeoutMs: 5_000,
-    production: denoEnv === "production",
+    // Only assert production when DENO_ENV says so; an explicit `false` for
+    // an unset variable would silence DaloyJS's indeterminate-environment
+    // warnings.
+    ...(denoEnv === "production" ? { production: true } : {}),
     // 5xx error detail (the thrown message) is sent to clients only when
     // DENO_ENV=development, which the `dev` task sets; otherwise it's redacted.
     ...(denoEnv === "development" ? { env: "development" as const } : {}),

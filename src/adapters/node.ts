@@ -1313,6 +1313,12 @@ async function handleUpgrade(
     writeUpgradeError(socket, 400, "Bad Request");
     return;
   }
+  // Same `Host` allowlist the HTTP dispatcher enforces; an upgrade must not
+  // reach a route (or pass a same-origin check) for a host the app rejects.
+  if (!app.isUpgradeHostAllowed(url.href)) {
+    writeUpgradeError(socket, 400, "Invalid Host header");
+    return;
+  }
   const match = app.webSocketRoutes.find(url.pathname);
   if (!match) {
     writeUpgradeError(socket, 404, "Not Found");

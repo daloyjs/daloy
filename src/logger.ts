@@ -569,21 +569,72 @@ function isSensitiveUrlQueryKey(lowerKey: string): boolean {
  * @since 1.0.0
  */
 export function sanitizeUrlForLog(url: string): string {
-  if (url.indexOf("?") === -1 && url.indexOf("#") === -1 && url.indexOf("@") === -1) {
+  const pathMayCarrySecret = PATH_SECRET_HINT_RE.test(url);
+  if (
+    !pathMayCarrySecret &&
+    url.indexOf("?") === -1 &&
+    url.indexOf("#") === -1 &&
+    url.indexOf("@") === -1
+  ) {
     return url;
   }
   try {
     const parsed = new URL(url);
+    const pathname = pathMayCarrySecret ? redactPathSegments(parsed.pathname) : parsed.pathname;
     if (parsed.search === "" && parsed.hash === "") {
-      return `${parsed.origin}${parsed.pathname}`;
+      return `${parsed.origin}${pathname}`;
     }
-    const safe = new URL(parsed.origin + parsed.pathname);
+    const safe = new URL(parsed.origin + pathname);
     appendRedactedParams(parsed.searchParams, safe.searchParams);
     return safe.toString();
   } catch {
     const cut = url.search(/[?#]/);
-    return cut === -1 ? url : url.slice(0, cut);
+    const path = cut === -1 ? url : url.slice(0, cut);
+    return pathMayCarrySecret ? redactPathSegments(path) : path;
   }
+}
+
+/**
+ * Cheap pre-check for secret-looking material anywhere in a URL (JWT header
+ * prefix, well-known provider token prefixes). Only when it matches does
+ * {@link sanitizeUrlForLog} pay for per-segment path redaction, so the common
+ * request keeps its no-parse fast path.
+ */
+const PATH_SECRET_HINT_RE =
+  /eyJ|gh[opsru]_|github_pat_|xox[abprs]-|AKIA|ASIA|(?:sk|rk|pk)_(?:live|test)_|npm_|glpat-|AIza|sk-/;
+
+/**
+ * Log-safe form of a URL **path**: every segment that is a JWT or looks like a
+ * provider credential is replaced with `[REDACTED]`, so a token embedded in a
+ * route path (`/reset/<jwt>`, `/callback/ghp_…`) never reaches a log line or a
+ * trace attribute. The surrounding route structure is kept. Paths with no
+ * secret-looking material are returned as-is after one cheap regex test.
+ * {@link sanitizeUrlForLog} applies this to full URLs; `otelTracing()` uses it
+ * for the `url.path` span attribute and the default span name.
+ *
+ * @param pathname - A URL path (`url.pathname`), with or without a leading `/`.
+ * @returns The same path with secret-looking segments redacted.
+ * @since 1.17.0
+ */
+export function sanitizeUrlPathForLog(pathname: string): string {
+  return PATH_SECRET_HINT_RE.test(pathname) ? redactPathSegments(pathname) : pathname;
+}
+
+/** Per-segment redaction behind {@link sanitizeUrlPathForLog}; callers pre-check the hint. */
+function redactPathSegments(pathname: string): string {
+  const segments = pathname.split("/");
+  let changed = false;
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i]!;
+    if (segment.length < 20) continue;
+    const secret = JWT_LIKE_RE.test(segment) || CREDENTIAL_LIKE_RE.test(segment);
+    CREDENTIAL_LIKE_RE.lastIndex = 0;
+    if (secret) {
+      segments[i] = "[REDACTED]";
+      changed = true;
+    }
+  }
+  return changed ? segments.join("/") : pathname;
 }
 
 /**

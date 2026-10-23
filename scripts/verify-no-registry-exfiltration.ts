@@ -1581,6 +1581,7 @@ export function findForbiddenRegistryExfilCalls(
 ): readonly ForbiddenRegistryExfilCall[] {
   const out: ForbiddenRegistryExfilCall[] = [];
   const lines = source.split(/\r?\n/);
+  const codeLines: string[] = new Array(lines.length).fill("");
   let inBlockComment = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
@@ -1606,6 +1607,7 @@ export function findForbiddenRegistryExfilCalls(
     if (noComments.trim().length === 0) continue;
 
     const codeOnly = noComments.replace(STRING_LITERAL_RE, '""');
+    codeLines[i] = codeOnly;
     for (const pattern of FORBIDDEN_PATTERNS) {
       const haystack = pattern.keepStrings ? noComments : codeOnly;
       if (pattern.re.test(haystack)) {
@@ -1614,6 +1616,41 @@ export function findForbiddenRegistryExfilCalls(
       }
     }
   }
+  // Second pass: the same code-only patterns over the comment-stripped source
+  // joined across lines, so a multi-token form split by a line break
+  // (`rejectUnauthorized:` ⏎ `false`, `process.env.HOME` ⏎ `=`) cannot dodge
+  // the line-by-line pass. Findings are attributed to the line the match
+  // starts on and deduplicated against the first pass.
+  const flagged = new Set(out.map((f) => f.line));
+  const starts: number[] = [];
+  let joined = "";
+  for (let i = 0; i < lines.length; i++) {
+    starts.push(joined.length);
+    joined += (codeLines[i] ?? "") + " ";
+  }
+  const lineAt = (index: number): number => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  for (const pattern of FORBIDDEN_PATTERNS) {
+    if (pattern.keepStrings) continue;
+    const re = new RegExp(pattern.re.source, pattern.re.flags.includes("g") ? pattern.re.flags : pattern.re.flags + "g");
+    for (let m = re.exec(joined); m !== null; m = re.exec(joined)) {
+      const line = lineAt(m.index);
+      if (!flagged.has(line + 1)) {
+        flagged.add(line + 1);
+        out.push({ file, line: line + 1, text: lines[line]!.trim(), reason: pattern.reason });
+      }
+      if (m[0].length === 0) re.lastIndex++;
+    }
+  }
+  out.sort((a, b) => a.line - b.line);
   return out;
 }
 

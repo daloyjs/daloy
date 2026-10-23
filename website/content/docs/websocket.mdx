@@ -196,6 +196,8 @@ app.ws("/api", {
 
 `allowedOrigins` is checked before `beforeUpgrade` in both Node and Bun. Use `"same-origin"` for browser clients served from the same scheme, host, and port as the WS endpoint, use an array for explicit cross-origin browser clients, or use a predicate when machine clients must also send an `Origin` header.
 
+`"same-origin"` compares `Origin` with the request's own authority, which comes from the `Host` header. Since 1.17.0 the Node and Bun upgrade paths apply the App's `allowedHosts` allowlist (and the development allowlist `serve()` installs) before routing, exactly like the HTTP dispatcher, so an upgrade for a host the app does not serve is answered `400 Invalid Host header` and cannot satisfy a same-origin check with a matching attacker-controlled `Host`. Set `allowedHosts` in production so this comparison is anchored to the hostnames you actually serve.
+
 ```ts
 app.ws("/session", {
   allowedOrigins: "same-origin",

@@ -217,6 +217,22 @@ test("node-basic template auto-mounts /docs and /openapi.json outside production
   assert.doesNotMatch(source, /info:\s*\{\s*title:\s*"My Daloy API"/);
 });
 
+test("templates never pass an explicit `production: false` for an unset NODE_ENV", async () => {
+  for (const file of [
+    "templates/node-basic/src/build-app.ts",
+    "templates/bun-basic/src/build-app.ts",
+    "templates/deno-basic/src/build-app.ts",
+  ]) {
+    const source = await readFile(path.join(pkgRoot, file), "utf8");
+    // `production: <env> === "production"` evaluates to `false` when the
+    // variable is unset or misspelled, which silences the framework's
+    // indeterminate-environment warnings. The option must be asserted only
+    // when the environment positively says production.
+    assert.doesNotMatch(source, /production:\s*[A-Za-z_.]+\s*===\s*"production"/, file);
+    assert.match(source, /===\s*"production"\s*\?\s*\{\s*production:\s*true\s*\}\s*:\s*\{\}/, file);
+  }
+});
+
 test("node-basic separates buildApp() from server boot so codegen has no side effects", async () => {
   const buildApp = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),

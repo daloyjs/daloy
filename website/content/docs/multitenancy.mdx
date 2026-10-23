@@ -147,7 +147,7 @@ Pass one resolver to `resolve`, or an array tried in order until one returns a n
 <tr>
 <td><code>tenantFromClaim("org")</code></td>
 <td><code>ctx.state.auth</code>{", "}then <code>ctx.state.user</code></td>
-<td>For a verified JWT/session claim. On each node the claim is read from <code>credentials</code>{", "}then <code>claims</code>{", "}then the node itself, so it finds the identity that{" "}<code>jwk()</code> (<code>ctx.state.user.claims</code>) and{" "}<code>basicAuth()</code> (<code>ctx.state.user</code>) record, as well as an <code>AuthContext</code> at{" "}<code>ctx.state.auth.credentials</code> (since 1.3.7). Pass{" "}<code>{`{ stateKey }`}</code> to read one node only. The auth middleware that populates it must run <em>before</em>{" "}<code>tenancy()</code>.</td>
+<td>For a verified JWT/session claim. On each node the claim is read from <code>credentials</code>{", "}then <code>claims</code>{", "}then the node itself, so it finds the identity that{" "}<code>jwk()</code> (<code>ctx.state.user.claims</code>) and{" "}<code>basicAuth()</code> (<code>ctx.state.user</code>) record, as well as an <code>AuthContext</code> at{" "}<code>ctx.state.auth.credentials</code> (since 1.3.7). Pass{" "}<code>{`{ stateKey }`}</code> to read one node only. Pass{" "}<code>{`{ strict: true }`}</code> to reject (<code>403</code>) an authenticated principal that carries <em>no</em> claim instead of letting a later host/header resolver choose its tenant (since 1.17.0). The auth middleware that populates it must run <em>before</em>{" "}<code>tenancy()</code>.</td>
 </tr>
 <tr>
 <td><code>(ctx) =\> string | undefined</code></td>
@@ -162,6 +162,8 @@ Pass one resolver to `resolve`, or an array tried in order until one returns a n
 // Prefer a verified claim, fall back to the subdomain.
 // jwk() runs first and records { sub, scopes, claims } on ctx.state.user,
 // so tenantFromClaim("org") reads ctx.state.user.claims.org.
+// `strict: true` keeps the subdomain fallback for anonymous requests only:
+// a token that names no tenant cannot pick one by choosing the hostname.
 app.use(
   jwk({
     jwks: "https://issuer.example.com/.well-known/jwks.json",
@@ -173,7 +175,7 @@ app.use(
 app.use(
   tenancy({
     resolve: [
-      tenantFromClaim("org"),
+      tenantFromClaim("org", { strict: true }),
       tenantFromSubdomain({ baseDomain: "example.com", production: true }),
     ],
   }),

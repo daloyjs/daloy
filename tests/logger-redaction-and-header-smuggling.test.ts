@@ -920,6 +920,26 @@ test("sanitizeUrlForLog redacts OAuth/code/token query values", () => {
   assert.ok(SENSITIVE_URL_QUERY_KEYS.includes("code"));
 });
 
+test("sanitizeUrlForLog redacts JWT-like and credential-like path segments", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2lnbmF0dXJlLXNpZ25hdHVyZQ";
+  assert.equal(
+    sanitizeUrlForLog(`https://app.example.com/reset/${jwt}/confirm`),
+    "https://app.example.com/reset/[REDACTED]/confirm"
+  );
+  const ghp = "ghp_" + "A".repeat(36);
+  assert.equal(
+    sanitizeUrlForLog(`https://app.example.com/hooks/${ghp}?q=1`),
+    "https://app.example.com/hooks/[REDACTED]?q=1"
+  );
+  // Relative / malformed input still gets the path treatment.
+  assert.equal(sanitizeUrlForLog(`/reset/${jwt}?token=abc`), "/reset/[REDACTED]");
+  // Ordinary paths (ids, slugs, long but non-secret segments) are untouched
+  // and the fast path returns the same string.
+  const plain = "https://app.example.com/users/0192b1f4-9c3e-7a1b-8f0e-1234567890ab/orders";
+  assert.equal(sanitizeUrlForLog(plain), plain);
+  assert.equal(sanitizeUrlForLog("https://app.example.com/eyJ-prefixed-but-not-a-jwt"), "https://app.example.com/eyJ-prefixed-but-not-a-jwt");
+});
+
 test("sanitizeUrlForLog strips query on malformed relative-ish input without crashing", () => {
   assert.equal(sanitizeUrlForLog("/path?token=abc"), "/path");
 });

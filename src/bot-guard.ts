@@ -401,9 +401,11 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
   }
   const resolver = opts.resolver ?? createDefaultResolver();
 
-  // Per-IP verification cache (keyed by `ip\u0000botName`) so a crawler's DNS
-  // round-trip is paid once per TTL, not on every request.
+  // Per-IP verification cache (keyed by `ip\u0000ruleIndex`) so a crawler's
+  // DNS round-trip is paid once per TTL, not on every request.
   const cache = new Map<string, { verified: boolean; expiresMs: number }>();
+  // Verifications currently in flight, so concurrent claims share one lookup.
+  const inflight = new Map<string, Promise<boolean>>();
   const readCache = (key: string): boolean | undefined => {
     const entry = cache.get(key);
     if (!entry) return undefined;
@@ -462,13 +464,14 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
         return undefined;
       }
 
-      const rule = verifiedBots.find((r) => {
+      const ruleIndex = verifiedBots.findIndex((r) => {
         r.userAgent.lastIndex = 0;
         const hit = r.userAgent.test(ua);
         r.userAgent.lastIndex = 0;
         return hit;
       });
-      if (!rule) return undefined;
+      if (ruleIndex === -1) return undefined;
+      const rule = verifiedBots[ruleIndex]!;
 
       const ip = resolveIp(ctx);
       if (!ip) {
@@ -478,7 +481,10 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
         return undefined;
       }
 
-      const cacheKey = `${ip}\u0000${rule.name}`;
+      // Keyed by rule *position*, not `name`: two rules may share a name but
+      // allow different domains, and a verdict for one must not vouch for the
+      // other.
+      const cacheKey = `${ip}\u0000${ruleIndex}`;
       const cached = readCache(cacheKey);
       if (cached === true) return undefined;
       if (cached === false) {
@@ -488,7 +494,14 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
 
       let verified: boolean;
       try {
-        verified = await verifyCrawler(resolver, ip, rule);
+        // Coalesce concurrent claims for the same (ip, rule) onto one DNS
+        // round-trip so a burst cannot multiply resolver work.
+        let pending = inflight.get(cacheKey);
+        if (pending === undefined) {
+          pending = verifyCrawler(resolver, ip, rule).finally(() => inflight.delete(cacheKey));
+          inflight.set(cacheKey, pending);
+        }
+        verified = await pending;
       } catch {
         // DNS failure — cannot confirm. Don't cache transient errors.
         if (blockUnverifiable) {

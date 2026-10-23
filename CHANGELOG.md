@@ -17,6 +17,74 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+Hardening pass driven by a [`deepsec`](https://github.com/vercel-labs/deepsec)
+agent review of `src/`, `scripts/`, and the scaffolder templates. No public
+API is removed; one opt-in knob is added.
+
+### Added
+
+- `tenantFromClaim(claim, { strict: true })`: rejects (`403`) an authenticated
+  principal that carries **no** tenant claim instead of letting the next
+  resolver in a `tenancy({ resolve: [...] })` chain (typically the `Host`
+  subdomain) choose its tenant. The default is unchanged; the docs example now
+  uses `strict: true`.
+
+### Fixed
+
+- **`httpSignatureAuth({ optional: true })` no longer counts an unsigned
+  request as authenticated.** The pass-through is recorded as a distinct
+  unauthenticated marker, so a route that declares `auth:` (or an MCP/A2A
+  route, or any route under `requireAuth`) answers `401` to an unsigned
+  request while routes without an auth declaration still proceed.
+- **WebSocket upgrades now honor `allowedHosts`.** The Node and Bun upgrade
+  paths apply the App's `Host` allowlist (and the development allowlist
+  `serve()` installs) before routing, matching the HTTP dispatcher's
+  `400 Invalid Host header`. Previously `allowedOrigins: "same-origin"` compared
+  `Origin` with an authority derived from an unchecked `Host`.
+- **A2A task continuations are serialized per `(owner, taskId)`** within a
+  process, so two concurrent follow-ups (or a follow-up racing `CancelTask`)
+  cannot both load one snapshot and overwrite each other's history, artifacts,
+  or status. Multi-instance deployments still need per-task write
+  serialization in their shared store (documented).
+- **`createA2aClient()` allowlists outbound fields.** Only the documented
+  message / `listTasks` query fields are forwarded, and `messageId`, `role`,
+  and the Agent Card's `tenant` are assigned last, so a request-derived object
+  passed to `sendMessage()` / `listTasks()` cannot claim the agent role, forge
+  an id, or redirect the call to another tenant.
+- `botGuard()` keys its crawler-verification cache by rule *position* rather
+  than `name` (two rules may share a name but allow different domains), and
+  coalesces concurrent verifications of the same `(ip, rule)` onto one DNS
+  round-trip.
+- The built-in `/metrics`, health/readiness, and CSP-report rate limiters
+  cap their per-identity bucket maps (10 000 entries; expired entries are
+  swept, then the oldest evicted) so a flood of fresh `x-real-ip` /
+  `fly-client-ip` values behind a trusted proxy cannot grow memory without
+  bound.
+- `sanitizeUrlForLog()` also redacts JWT-like and credential-like **path
+  segments** (`/reset/<jwt>` -> `/reset/[REDACTED]`), not just query values.
+  The rule is exported as `sanitizeUrlPathForLog()`, and `otelTracing()`
+  applies it to the `url.path` span attribute and the default span name.
+- The unauthenticated MCP `GET` hint reports capability kinds as booleans
+  instead of listing tool names, resource URIs, templates, and prompt names.
+- CI gates: `verify-no-toxic-agent-skills` no longer skips a whole line
+  because a negation word appears somewhere on it (only a negation in the same
+  sentence segment *before* the match counts) and reports symlinked
+  instruction files instead of ignoring them; `verify-no-remote-exec` flags
+  dynamic `import("node:child_process" | "node:vm")` and import/require forms
+  split across lines; `verify-no-weak-random`
+  blanks string literals before looking for `//` so a URL literal cannot hide
+  a later `Math.random()`; `verify-no-registry-exfiltration` adds a cross-line
+  pass so multi-token forms split by a line break are caught.
+- Workflows: `dast.yml` now fails when either ZAP JSON report is missing
+  (both ZAP runs use `|| true`, so a crashed scan previously produced a green
+  no-op run); `secret-scan.yml` fetches full history on `workflow_dispatch`
+  too, so a manual full-history gitleaks sweep no longer runs against a
+  one-commit shallow clone.
+- `create-daloy` templates pass `production: true` only when
+  `NODE_ENV` / `DENO_ENV` is `production` instead of an explicit `false` for an
+  unset or misspelled variable, which silenced the framework's
+  indeterminate-environment warnings.
+
 ## [1.16.0] - 2026-10-22
 
 ### Added

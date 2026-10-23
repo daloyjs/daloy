@@ -788,6 +788,80 @@ describe("A2A with a task store", () => {
     assert.match(res.body.error?.data?.detail, /task result/);
   });
 
+  test("concurrent continuations of one task are serialized instead of overwriting each other", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let continuations = 0;
+    const historySeen: number[] = [];
+    const handler = stateful({
+      onMessage: async (ctx) => {
+        if (!ctx.task) return { status: "input-required", message: "Which SKU?" };
+        continuations++;
+        historySeen.push(ctx.task.history?.length ?? 0);
+        if (continuations === 1) await gate;
+        return { status: "input-required", message: `got ${ctx.text}`, artifacts: [{ parts: [a2aText(ctx.text)] }] };
+      },
+    });
+    const t = (await send(handler, userMessage(), alice)).body.result.task;
+    const first = send(handler, userMessage([{ text: "one" }], { messageId: "m-2", taskId: t.id }), alice);
+    const second = send(handler, userMessage([{ text: "two" }], { messageId: "m-3", taskId: t.id }), alice);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(continuations, 1, "the second continuation waits for the first to commit");
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(a.body.result.task.artifacts.length, 1);
+    assert.equal(b.body.result.task.artifacts.length, 2);
+    assert.deepEqual(historySeen, [2, 4], "the second continuation loads the snapshot the first one wrote");
+    const stored = (await call(handler, "GetTask", { id: t.id }, alice)).body.result as A2aTask;
+    assert.equal(stored.artifacts?.length, 2);
+    assert.deepEqual(
+      stored.history?.filter((m) => m.role === "ROLE_USER").map((m) => m.parts[0]?.text),
+      ["hello", "one", "two"]
+    );
+    // Unrelated tasks are not held up by a slow continuation elsewhere.
+    const other = (await send(handler, userMessage(), alice)).body.result.task;
+    assert.notEqual(other.id, t.id);
+  });
+
+  test("a cancel racing a continuation cannot clobber the finished task", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const handler = stateful({
+      onMessage: async (ctx) => {
+        if (!ctx.task) return { status: "input-required", message: "Which SKU?" };
+        await gate;
+        return { status: "completed" };
+      },
+    });
+    const t = (await send(handler, userMessage(), alice)).body.result.task;
+    const finish = send(handler, userMessage([{ text: "ABC-1" }], { taskId: t.id }), alice);
+    const cancel = call(handler, "CancelTask", { id: t.id }, alice);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    release();
+    const [done, canceled] = await Promise.all([finish, cancel]);
+    assert.equal(done.body.result.task.status.state, "TASK_STATE_COMPLETED");
+    assert.equal(canceled.body.error?.code, A2A_ERROR_CODES.taskNotCancelable);
+    const stored = (await call(handler, "GetTask", { id: t.id }, alice)).body.result;
+    assert.equal(stored.status.state, "TASK_STATE_COMPLETED");
+  });
+
+  test("a failing continuation releases the task for the next one", async () => {
+    let fails = true;
+    const handler = stateful({
+      onMessage: async (ctx) => {
+        if (!ctx.task) return { status: "input-required", message: "Which SKU?" };
+        if (fails) throw new Error("boom");
+        return { status: "completed" };
+      },
+    });
+    const t = (await send(handler, userMessage(), alice)).body.result.task;
+    const failed = await send(handler, userMessage(undefined, { taskId: t.id }), alice);
+    assert.equal(failed.status, 500);
+    fails = false;
+    const ok = await send(handler, userMessage([{ text: "x" }], { taskId: t.id }), alice);
+    assert.equal(ok.body.result.task.status.state, "TASK_STATE_COMPLETED");
+  });
+
   test("CancelTask cancels an interrupted task once", async () => {
     const handler = stateful();
     const t = (await send(handler, userMessage(), alice)).body.result.task;

@@ -729,9 +729,16 @@ test("createMcpHandler handles OPTIONS, GET discovery, and unsupported methods",
 
   const get = await handler(new Request(ENDPOINT, { method: "GET" }));
   assert.equal(get.status, 405);
-  const discovery = (await get.json()) as { transport: string; capabilities: { tools: string[] } };
+  const discovery = (await get.json()) as {
+    transport: string;
+    capabilities: { tools: boolean; resources: boolean; resourceTemplates: boolean; prompts: boolean };
+  };
   assert.equal(discovery.transport, "streamable-http");
-  assert.ok(Array.isArray(discovery.capabilities.tools));
+  // The unauthenticated GET hint says only which capability kinds exist;
+  // names, URIs, and templates stay behind the authenticated POST calls.
+  assert.equal(discovery.capabilities.tools, true);
+  const body = JSON.stringify(discovery);
+  assert.doesNotMatch(body, /inventory_lookup|inventory_fail/);
 
   const del = await handler(new Request(ENDPOINT, { method: "DELETE" }));
   assert.equal(del.status, 405);

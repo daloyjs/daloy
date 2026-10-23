@@ -137,7 +137,7 @@ pnpm add @daloyjs/core
 
 ## Create an MCP server
 
-Use `createMcpHandler()` for the MCP protocol layer and `mcpRoutes()` to mount `POST`, `GET`, and `OPTIONS` on a DaloyJS app. The `POST` route is the actual MCP transport. `GET` returns a JSON hint instead of opening a server-initiated SSE stream, and `OPTIONS` supports browser-based clients when CORS middleware is installed.
+Use `createMcpHandler()` for the MCP protocol layer and `mcpRoutes()` to mount `POST`, `GET`, and `OPTIONS` on a DaloyJS app. The `POST` route is the actual MCP transport. `GET` returns a JSON hint instead of opening a server-initiated SSE stream, and `OPTIONS` supports browser-based clients when CORS middleware is installed. The `GET` hint is credential-free, so it only says which capability *kinds* exist (`tools`, `resources`, `resourceTemplates`, `prompts` as booleans); tool names, resource URIs, templates, and prompt names are returned by the authenticated `POST` discovery calls only (since 1.17.0).
 
 ```ts
 import {

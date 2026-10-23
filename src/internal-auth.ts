@@ -19,6 +19,13 @@
 const AUTH_HOOK = Symbol.for("daloyjs.auth.hook");
 /** Per-request record: an auth hook ran and did not reject. */
 export const AUTH_RAN = Symbol.for("daloyjs.auth.ran");
+/**
+ * Per-request record: an auth hook in `optional` mode saw no credential and
+ * let the request through **unauthenticated**. Distinct from {@link AUTH_RAN}
+ * so a route that declares `auth:` still answers `401` instead of treating
+ * the pass-through as a successful authentication.
+ */
+export const AUTH_OPTIONAL_PASS = Symbol.for("daloyjs.auth.optionalPass");
 /** Set on a bundle once its functions are wrapped, so stamping is idempotent. */
 const AUTH_WRAPPED = Symbol.for("daloyjs.auth.wrapped");
 
@@ -77,4 +84,17 @@ export function stampAuthHook<T extends object>(hooks: T, selfRecording = false)
  */
 export function markAuthPassed(ctx: { state: unknown }): void {
   (ctx.state as Record<PropertyKey, unknown>)[AUTH_RAN] = true;
+}
+
+/**
+ * Record, from inside an `optional`-mode auth hook, that no credential was
+ * presented and the request continues unauthenticated. Routes without an
+ * `auth:` declaration proceed as before; routes that require authentication
+ * reject the request with `401`.
+ *
+ * @param ctx - The request context passed to the hook.
+ * @internal
+ */
+export function markAuthOptionalPassthrough(ctx: { state: unknown }): void {
+  (ctx.state as Record<PropertyKey, unknown>)[AUTH_OPTIONAL_PASS] = true;
 }

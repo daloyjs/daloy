@@ -404,6 +404,21 @@ test("otelTracing redacts credential-bearing query values in url.query by defaul
   for (const s of spans) assert.ok(!JSON.stringify(s.attributes).includes("SECRET_TOKEN"));
 });
 
+test("otelTracing redacts JWT / credential path segments in url.path and the span name", async () => {
+  const { tracer, spans } = makeFakeTracer();
+  const app = makeApp(otelTracing({ tracer }));
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2lnbmF0dXJlLXNpZ25hdHVyZQ";
+  // Unmatched route, so the span keeps its default name (no route template).
+  await app.request(`http://api.test.local/reset/${jwt}/confirm`);
+  const span = spans[0]!;
+  assert.equal(span.attributes["url.path"], "/reset/[REDACTED]/confirm");
+  assert.equal(span.name, "GET /reset/[REDACTED]/confirm");
+  assert.ok(!JSON.stringify(spans).includes(jwt));
+  // Ordinary paths are untouched.
+  await app.request("http://api.test.local/ok");
+  assert.equal(spans[1]!.attributes["url.path"], "/ok");
+});
+
 test("otelTracing redactQuery accepts a custom function or an explicit false opt-out", async () => {
   const custom = makeFakeTracer();
   const seen: string[] = [];

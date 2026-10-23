@@ -497,6 +497,7 @@ export {
   DEFAULT_REDACT_KEYS,
   SENSITIVE_URL_QUERY_KEYS,
   sanitizeUrlForLog,
+  sanitizeUrlPathForLog,
   sanitizeUrlQueryForLog,
 } from "./logger.js";
 export type { Logger, LogLevel, ConsoleLoggerOptions, LoggerRedactionOptions } from "./logger.js";

@@ -1282,6 +1282,30 @@ export function createA2aHandler(options: A2aHandlerOptions): A2aHandler {
     return task;
   }
 
+  // Continuations and cancels of one task are serialized per (owner, taskId)
+  // inside this process. Each one does load -> work -> store.set, so two
+  // concurrent requests would otherwise read the same snapshot and the later
+  // write would discard the earlier one's history, artifacts, or status.
+  // Entries are removed once the last waiter settles. Deployments that run
+  // several instances against a shared store still need per-task write
+  // serialization in that store.
+  const taskLocks = new Map<string, Promise<void>>();
+  async function withTaskLock<T>(owner: string, taskId: string, work: () => Promise<T>): Promise<T> {
+    const key = JSON.stringify([owner, taskId]);
+    const previous = taskLocks.get(key) ?? Promise.resolve();
+    const run = previous.then(work);
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    );
+    taskLocks.set(key, settled);
+    try {
+      return await run;
+    } finally {
+      if (taskLocks.get(key) === settled) taskLocks.delete(key);
+    }
+  }
+
   function agentMessage(
     parts: A2aPart[],
     contextId: string,
@@ -1340,96 +1364,103 @@ export function createA2aHandler(options: A2aHandlerOptions): A2aHandler {
     }
 
     const owner = store ? resolveOwner(request, state) : undefined;
-    let existing: A2aTask | undefined;
-    if (message.taskId !== undefined) {
-      if (!store) fail(CODES.taskNotFound, "Task not found", { taskId: message.taskId });
-      existing = await loadTask(owner!, message.taskId);
-      if (TERMINAL_STATES.has(existing.status.state)) {
-        fail(CODES.unsupportedOperation, "Task is in a terminal state and cannot accept messages.", {
-          taskId: existing.id,
-        });
-      }
-      if (message.contextId !== undefined && message.contextId !== existing.contextId) {
-        throw new RpcFailure(CODES.invalidParams, "Invalid parameters", badRequest([
-          { field: "message.contextId", description: "Does not match the referenced task." },
-        ]));
-      }
-    }
-    const contextId = existing?.contextId ?? message.contextId ?? randomId();
-    const taskId = existing?.id ?? randomId();
-    const text = message.parts
-      .filter((p) => typeof p.text === "string")
-      .map((p) => p.text)
-      .join("\n");
+    if (message.taskId === undefined) return complete(message, undefined);
+    if (!store) fail(CODES.taskNotFound, "Task not found", { taskId: message.taskId });
+    const inbound = message;
+    const continuedTaskId = message.taskId;
+    return withTaskLock(owner!, continuedTaskId, async () =>
+      complete(inbound, await loadTask(owner!, continuedTaskId))
+    );
 
-    const ctx: A2aMessageContext = {
-      request,
-      state,
-      message,
-      text,
-      taskId,
-      contextId,
-      extensions,
-      signal: request.signal,
-      ...(existing ? { task: structuredClone(existing) } : {}),
-      ...(acceptedOutputModes ? { acceptedOutputModes } : {}),
-      ...(isPlainObject(params.metadata) ? { metadata: params.metadata } : {}),
-      ...(owner !== undefined ? { owner } : {}),
-    };
-
-    const reply = await options.onMessage(ctx);
-
-    if (typeof reply === "string" || (isPlainObject(reply) && "reply" in reply)) {
+    async function complete(message: A2aMessage, existing: A2aTask | undefined): Promise<unknown> {
       if (existing) {
+        if (TERMINAL_STATES.has(existing.status.state)) {
+          fail(CODES.unsupportedOperation, "Task is in a terminal state and cannot accept messages.", {
+            taskId: existing.id,
+          });
+        }
+        if (message.contextId !== undefined && message.contextId !== existing.contextId) {
+          throw new RpcFailure(CODES.invalidParams, "Invalid parameters", badRequest([
+            { field: "message.contextId", description: "Does not match the referenced task." },
+          ]));
+        }
+      }
+      const contextId = existing?.contextId ?? message.contextId ?? randomId();
+      const taskId = existing?.id ?? randomId();
+      const text = message.parts
+        .filter((p) => typeof p.text === "string")
+        .map((p) => p.text)
+        .join("\n");
+
+      const ctx: A2aMessageContext = {
+        request,
+        state,
+        message,
+        text,
+        taskId,
+        contextId,
+        extensions,
+        signal: request.signal,
+        ...(existing ? { task: structuredClone(existing) } : {}),
+        ...(acceptedOutputModes ? { acceptedOutputModes } : {}),
+        ...(isPlainObject(params.metadata) ? { metadata: params.metadata } : {}),
+        ...(owner !== undefined ? { owner } : {}),
+      };
+
+      const reply = await options.onMessage(ctx);
+
+      if (typeof reply === "string" || (isPlainObject(reply) && "reply" in reply)) {
+        if (existing) {
+          throw new TypeError(
+            "A2A onMessage must return a task result ({ status }) when continuing an existing task."
+          );
+        }
+        const parts =
+          typeof reply === "string" ? [{ text: reply }] : normalizeParts(reply.reply, "reply");
+        const metadata = typeof reply === "string" ? undefined : reply.metadata;
+        return { message: agentMessage(parts, contextId, undefined, metadata) };
+      }
+      if (!isPlainObject(reply) || !("status" in reply) || !(reply.status in RESULT_STATES)) {
+        throw new TypeError("A2A onMessage returned an unrecognized result.");
+      }
+      const state_ = RESULT_STATES[reply.status];
+      const interrupted = state_ === "TASK_STATE_INPUT_REQUIRED" || state_ === "TASK_STATE_AUTH_REQUIRED";
+      if (interrupted && !store) {
         throw new TypeError(
-          "A2A onMessage must return a task result ({ status }) when continuing an existing task."
+          `A2A onMessage returned "${reply.status}" but no taskStore is configured, so the client could never continue the task.`
         );
       }
-      const parts =
-        typeof reply === "string" ? [{ text: reply }] : normalizeParts(reply.reply, "reply");
-      const metadata = typeof reply === "string" ? undefined : reply.metadata;
-      return { message: agentMessage(parts, contextId, undefined, metadata) };
+      const newArtifacts: A2aArtifact[] = (reply.artifacts ?? []).map((artifact, i) => ({
+        artifactId: artifact.artifactId ?? randomId(),
+        ...(artifact.name !== undefined ? { name: artifact.name } : {}),
+        ...(artifact.description !== undefined ? { description: artifact.description } : {}),
+        parts: normalizeParts(artifact.parts, `artifacts[${i}].parts`),
+        ...(artifact.metadata ? { metadata: artifact.metadata } : {}),
+      }));
+      const statusMessage =
+        reply.message !== undefined
+          ? agentMessage(normalizeParts(reply.message, "message"), contextId, taskId)
+          : undefined;
+      const inbound: A2aMessage = { ...message, contextId, taskId };
+      const history = [...(existing?.history ?? []), inbound, ...(statusMessage ? [statusMessage] : [])];
+      const artifacts = [...(existing?.artifacts ?? []), ...newArtifacts];
+      const task: A2aTask = {
+        id: taskId,
+        contextId,
+        status: {
+          state: state_,
+          ...(statusMessage ? { message: statusMessage } : {}),
+          timestamp: new Date().toISOString(),
+        },
+        ...(artifacts.length > 0 ? { artifacts } : {}),
+        ...(maxHistory > 0 ? { history: history.slice(-maxHistory) } : {}),
+        ...(reply.metadata ?? existing?.metadata
+          ? { metadata: reply.metadata ?? existing!.metadata! }
+          : {}),
+      };
+      if (store) await store.set(owner!, task);
+      return { task: applyHistoryLength(task, historyLength) };
     }
-    if (!isPlainObject(reply) || !("status" in reply) || !(reply.status in RESULT_STATES)) {
-      throw new TypeError("A2A onMessage returned an unrecognized result.");
-    }
-    const state_ = RESULT_STATES[reply.status];
-    const interrupted = state_ === "TASK_STATE_INPUT_REQUIRED" || state_ === "TASK_STATE_AUTH_REQUIRED";
-    if (interrupted && !store) {
-      throw new TypeError(
-        `A2A onMessage returned "${reply.status}" but no taskStore is configured, so the client could never continue the task.`
-      );
-    }
-    const newArtifacts: A2aArtifact[] = (reply.artifacts ?? []).map((artifact, i) => ({
-      artifactId: artifact.artifactId ?? randomId(),
-      ...(artifact.name !== undefined ? { name: artifact.name } : {}),
-      ...(artifact.description !== undefined ? { description: artifact.description } : {}),
-      parts: normalizeParts(artifact.parts, `artifacts[${i}].parts`),
-      ...(artifact.metadata ? { metadata: artifact.metadata } : {}),
-    }));
-    const statusMessage =
-      reply.message !== undefined
-        ? agentMessage(normalizeParts(reply.message, "message"), contextId, taskId)
-        : undefined;
-    const inbound: A2aMessage = { ...message, contextId, taskId };
-    const history = [...(existing?.history ?? []), inbound, ...(statusMessage ? [statusMessage] : [])];
-    const artifacts = [...(existing?.artifacts ?? []), ...newArtifacts];
-    const task: A2aTask = {
-      id: taskId,
-      contextId,
-      status: {
-        state: state_,
-        ...(statusMessage ? { message: statusMessage } : {}),
-        timestamp: new Date().toISOString(),
-      },
-      ...(artifacts.length > 0 ? { artifacts } : {}),
-      ...(maxHistory > 0 ? { history: history.slice(-maxHistory) } : {}),
-      ...(reply.metadata ?? existing?.metadata
-        ? { metadata: reply.metadata ?? existing!.metadata! }
-        : {}),
-    };
-    if (store) await store.set(owner!, task);
-    return { task: applyHistoryLength(task, historyLength) };
   }
 
   async function getTask(
@@ -1452,13 +1483,15 @@ export function createA2aHandler(options: A2aHandlerOptions): A2aHandler {
     const id = requireTaskId(params);
     if (!store) fail(CODES.taskNotFound, "Task not found", { taskId: id });
     const owner = resolveOwner(request, state);
-    const task = await loadTask(owner, id);
-    if (TERMINAL_STATES.has(task.status.state)) {
-      fail(CODES.taskNotCancelable, "Task cannot be canceled", { taskId: id });
-    }
-    task.status = { state: "TASK_STATE_CANCELED", timestamp: new Date().toISOString() };
-    await store.set(owner, task);
-    return task;
+    return withTaskLock(owner, id, async () => {
+      const task = await loadTask(owner, id);
+      if (TERMINAL_STATES.has(task.status.state)) {
+        fail(CODES.taskNotCancelable, "Task cannot be canceled", { taskId: id });
+      }
+      task.status = { state: "TASK_STATE_CANCELED", timestamp: new Date().toISOString() };
+      await store.set(owner, task);
+      return task;
+    });
   }
 
   async function listTasks(
