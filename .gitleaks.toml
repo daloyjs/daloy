@@ -144,3 +144,16 @@ paths = [
 regexes = [
   '''eyJhbGciOiJub25lIn0\.eyJzdWIiOiJhZG1pbiJ9\.''',
 ]
+[[allowlists]]
+description = "Allow the intentionally fake HMAC signing-secret fixtures (SECRET / OTHER) in the signed-cursor codec tests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(?:^|/)tests/signed-cursor\.test\.ts$''',
+]
+# Character-class split for the same reason as the fixtures above.
+regexes = [
+  '''cursor-secret-with-enough-length-012[3]''',
+  '''a-different-secret-with-enough-lengt[h]''',
+]
