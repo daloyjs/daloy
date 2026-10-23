@@ -3,7 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "npm:@daloyjs/core@^1.15.0": "1.15.0",
+    "npm:@daloyjs/core@^1.16.0": "1.16.0",
     "npm:zod@^4.4.3": "4.4.3"
   },
   "jsr": {
@@ -18,8 +18,8 @@
     }
   },
   "npm": {
-    "@daloyjs/core@1.15.0": {
-      "integrity": "sha512-HVz9rnlBgdCNfll+UTp3KUveZ2I7hs0mvz8hvoibahFcg+8xQok3M2/O7PpB2TUCIhZ2cuxLs5h8JECLss4GZA==",
+    "@daloyjs/core@1.16.0": {
+      "integrity": "sha512-5CMnqW+9ToBwStzzSJzOAtrx8yU5erReBOIxMFhrKFG0T490Qms92Xlx9kN37yXHI2dwY2eo4ScJ5Zw8V6hXyw==",
       "bin": true
     },
     "zod@4.4.3": {
@@ -28,7 +28,7 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@daloyjs/core@^1.15.0",
+      "npm:@daloyjs/core@^1.16.0",
       "npm:zod@^4.4.3"
     ]
   }

@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-22
+
 Hardening pass driven by a [`deepsec`](https://github.com/vercel-labs/deepsec)
 agent review of `src/`, `scripts/`, and the scaffolder templates. No public
 API is removed; one opt-in knob is added.
