@@ -17,15 +17,25 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
-## [1.17.1] - 2026-10-24
+## [1.17.2] - 2026-10-24
 
 Response to the [Node.js October 21, 2026 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
 No `@daloyjs/core` code path is exploitable on a patched Node; one template
 fix is required and one defense-in-depth hardening is added. Upgrade to
 Node 24.22.1 / 26.12.1.
 
+`1.17.1` was tagged with the same changes but never published: the release
+run's `pnpm audit --prod` gate flagged the zod advisory below, so the fix
+ships as `1.17.2` instead.
+
 ### Security
 
+- **zod floor raised to `^4.6.6`** in the root dev dependencies, `workshop/`,
+  `website/`, and all five `create-daloy` templates (incl. `deno-basic`), to
+  clear [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)
+  (high: memory exhaustion while validating oversized constrained collections,
+  `zod <4.6.6`). zod is a peer of your app, not a dependency of
+  `@daloyjs/core`; existing projects should bump their own pin.
 - **`botGuard()` validates PTR hostnames before the domain-suffix check**
   (CVE-2026-105482 class). Crawler verification reads the PTR record from
   attacker-influenced DNS, tests it against `.googlebot.com` et al., then
