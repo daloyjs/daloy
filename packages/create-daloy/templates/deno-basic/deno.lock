@@ -4,7 +4,7 @@
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:@daloyjs/core@^1.17.0": "1.17.0",
-    "npm:zod@^4.4.3": "4.4.3"
+    "npm:zod@^4.6.6": "4.6.7"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -22,14 +22,14 @@
       "integrity": "sha512-aGX++gk3GwK0rTA0vWjc4yCLWKW3CYHzSFIpjxeQ8/a/66eL0UL2jNzXadwp5TCs3qhi/na/uh5HaNwuK04H/w==",
       "bin": true
     },
-    "zod@4.4.3": {
-      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
+    "zod@4.6.7": {
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
     }
   },
   "workspace": {
     "dependencies": [
       "npm:@daloyjs/core@^1.17.0",
-      "npm:zod@^4.4.3"
+      "npm:zod@^4.6.6"
     ]
   }
 }

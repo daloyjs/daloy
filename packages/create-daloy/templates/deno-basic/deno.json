@@ -15,7 +15,7 @@
     "@daloyjs/core/contract": "npm:@daloyjs/core@^1.17.0/contract",
     "@daloyjs/core/deno": "npm:@daloyjs/core@^1.17.0/deno",
     "@daloyjs/core/openapi": "npm:@daloyjs/core@^1.17.0/openapi",
-    "zod": "npm:zod@^4.4.3"
+    "zod": "npm:zod@^4.6.6"
   },
   "compilerOptions": {
     "strict": true,
