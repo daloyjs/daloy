@@ -298,6 +298,137 @@ test("botGuard() does not let evilgooglebot.com satisfy .googlebot.com", async (
   assert.equal((await app.fetch(req(GOOGLE_UA, "1.2.3.4"))).status, 403);
 });
 
+// ---------- PTR hostname syntax (CVE-2026-105482 class) ----------
+
+/**
+ * Resolver whose forward step mimics an unpatched `dns.resolve*()` / DoH
+ * client: the hostname is truncated at the first NUL before lookup, so
+ * `attacker.example\0.googlebot.com` resolves `attacker.example`.
+ */
+function nulTruncatingResolver(ptr: Record<string, string[]>, fwd: Record<string, string[]>) {
+  const forwarded: string[] = [];
+  const resolver: BotResolver = {
+    async reverse(ip) {
+      return ptr[ip] ?? [];
+    },
+    async forward(hostname) {
+      forwarded.push(hostname);
+      const nul = hostname.indexOf("\0");
+      return fwd[nul === -1 ? hostname : hostname.slice(0, nul)] ?? [];
+    },
+  };
+  return { resolver, forwarded };
+}
+
+test("botGuard() rejects a PTR with an embedded NUL even when the resolver truncates at it", async () => {
+  const { resolver, forwarded } = nulTruncatingResolver(
+    { "6.6.6.6": ["attacker.example\0.googlebot.com"] },
+    { "attacker.example": ["6.6.6.6"] }
+  );
+  const events: BotGuardEvent[] = [];
+  const app = appWith({
+    trustProxyHeaders: true,
+    verifiedBots: [GOOGLEBOT],
+    resolver,
+    onBlock: (e) => events.push(e),
+  });
+  assert.equal((await app.fetch(req(GOOGLE_UA, "6.6.6.6"))).status, 403);
+  assert.equal(events[0]!.reason, "spoofed-bot");
+  assert.deepEqual(forwarded, [], "a malformed PTR must never reach the forward resolver");
+});
+
+test("botGuard() rejects non-LDH PTR hostnames before the suffix check", async () => {
+  const bad = [
+    "crawl\\000.googlebot.com", // c-ares escape of a NUL
+    "crawl .googlebot.com", // whitespace
+    "crawl_1.googlebot.com", // underscore
+    "-crawl.googlebot.com", // leading hyphen
+    "crawl..googlebot.com", // empty label
+    `${"a".repeat(64)}.googlebot.com`, // label > 63
+    `${"a.".repeat(130)}googlebot.com`, // name > 253
+    "", // empty
+  ];
+  for (const hostname of bad) {
+    let forwardCalls = 0;
+    const resolver: BotResolver = {
+      async reverse() {
+        return [hostname];
+      },
+      async forward() {
+        forwardCalls++;
+        return ["1.2.3.4"];
+      },
+    };
+    const app = appWith({ trustProxyHeaders: true, verifiedBots: [GOOGLEBOT], resolver });
+    assert.equal(
+      (await app.fetch(req(GOOGLE_UA, "1.2.3.4"))).status,
+      403,
+      `PTR ${JSON.stringify(hostname)} must be rejected`
+    );
+    assert.equal(forwardCalls, 0, `PTR ${JSON.stringify(hostname)} must not be forwarded`);
+  }
+});
+
+test("botGuard() still verifies a well-formed PTR with a trailing dot (FQDN form)", async () => {
+  const resolver = fixtureResolver(
+    { "66.249.66.1": ["crawl-66-249-66-1.googlebot.com."] },
+    { "crawl-66-249-66-1.googlebot.com.": ["66.249.66.1"] }
+  );
+  const app = appWith({ trustProxyHeaders: true, verifiedBots: [GOOGLEBOT], resolver });
+  assert.equal((await app.fetch(req(GOOGLE_UA, "66.249.66.1"))).status, 200);
+});
+
+test("botGuard() skips a malformed PTR but still verifies a valid sibling PTR", async () => {
+  const resolver = fixtureResolver(
+    { "66.249.66.1": ["bogus\0.googlebot.com", "crawl-66-249-66-1.googlebot.com"] },
+    { "crawl-66-249-66-1.googlebot.com": ["66.249.66.1"] }
+  );
+  const app = appWith({ trustProxyHeaders: true, verifiedBots: [GOOGLEBOT], resolver });
+  assert.equal((await app.fetch(req(GOOGLE_UA, "66.249.66.1"))).status, 200);
+});
+
+test("botGuard() treats a non-IP resolveIp result as unverifiable and never calls the resolver", async () => {
+  let reverseCalls = 0;
+  const resolver: BotResolver = {
+    async reverse() {
+      reverseCalls++;
+      return ["crawl.googlebot.com"];
+    },
+    async forward() {
+      return ["crawl.googlebot.com"];
+    },
+  };
+  const events: BotGuardEvent[] = [];
+  const blocked = appWith({
+    resolveIp: () => "crawl.googlebot.com",
+    verifiedBots: [GOOGLEBOT],
+    resolver,
+    onBlock: (e) => events.push(e),
+  });
+  assert.equal((await blocked.fetch(req(GOOGLE_UA))).status, 403);
+  assert.equal(events[0]!.reason, "unverifiable-bot");
+  assert.equal(events[0]!.ip, "crawl.googlebot.com");
+  assert.equal(reverseCalls, 0);
+
+  const open = appWith({
+    resolveIp: () => "not-an-ip",
+    verifiedBots: [GOOGLEBOT],
+    resolver,
+    blockUnverifiableBots: false,
+  });
+  assert.equal((await open.fetch(req(GOOGLE_UA))).status, 200);
+  assert.equal(reverseCalls, 0);
+});
+
+test("botGuard() accepts IPv6 client IPs from resolveIp", async () => {
+  const resolver = fixtureResolver(
+    { "2001:db8::1": ["crawl.googlebot.com"] },
+    { "crawl.googlebot.com": ["2001:db8::1"] }
+  );
+  const app = appWith({ resolveIp: () => "2001:db8::1", verifiedBots: [GOOGLEBOT], resolver });
+  assert.equal((await app.fetch(req(GOOGLE_UA))).status, 200);
+});
+
 // ---------- default node:dns resolver ----------
 
 test("default BotResolver forward-resolves loopback via node:dns", async () => {

@@ -12,8 +12,10 @@
  * 3. **Verify declared crawlers** — when a request *claims* to be Googlebot or
  *    Bingbot, confirm it via reverse-DNS + forward-confirm (the method Google
  *    and Bing themselves document) so a spoofed `User-Agent` can't impersonate a
- *    trusted crawler. Verification results are cached per IP to keep DNS off the
- *    hot path.
+ *    trusted crawler. PTR names are validated as LDH hostnames before the
+ *    domain-suffix check, so a NUL-truncating resolver (CVE-2026-105482 class)
+ *    cannot be tricked into verifying `attacker.example\0.googlebot.com`.
+ *    Verification results are cached per IP to keep DNS off the hot path.
  *
  * The middleware is dependency-free and runtime-portable. The default DNS
  * resolver is lazily imported from `node:dns/promises`; supply a custom
@@ -44,7 +46,7 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
+import { parseIp, type IpMatcher } from "./ip-match.js";
 
 /**
  * Pluggable DNS resolver used to verify declared crawlers. The default
@@ -337,9 +339,46 @@ function hostnameMatchesDomains(hostname: string, domains: readonly string[]): b
 }
 
 /**
+ * Whether `hostname` is a syntactically valid DNS hostname: 1–253 chars, an
+ * optional trailing dot, and only LDH labels (letters, digits, hyphen; 1–63
+ * chars; no leading/trailing hyphen). Anything else — in particular a raw NUL,
+ * a c-ares `\000` escape, whitespace, or an underscore — is rejected.
+ *
+ * This runs **before** the domain-suffix check in {@link verifyCrawler} so a
+ * PTR record such as `attacker.example\0.googlebot.com` can never pass the
+ * suffix test and then be handed to a resolver that truncates at the NUL
+ * (CVE-2026-105482 class: `dns.resolve*()` on unpatched Node, or any custom
+ * {@link BotResolver} built on a DoH/JSON API). The check is independent of
+ * the resolver and the Node version, so it closes the gap everywhere.
+ *
+ * @internal
+ */
+export function isDnsHostname(hostname: string): boolean {
+  const host = hostname.endsWith(".") ? hostname.slice(0, -1) : hostname;
+  const len = host.length;
+  if (len === 0 || len > 253) return false;
+  let labelStart = 0;
+  for (let i = 0; i <= len; i++) {
+    if (i === len || host.charCodeAt(i) === 46 /* . */) {
+      const labelLen = i - labelStart;
+      if (labelLen === 0 || labelLen > 63) return false;
+      if (host.charCodeAt(labelStart) === 45 || host.charCodeAt(i - 1) === 45) return false;
+      labelStart = i + 1;
+      continue;
+    }
+    const c = host.charCodeAt(i);
+    const ldh =
+      (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 45;
+    if (!ldh) return false;
+  }
+  return true;
+}
+
+/**
  * Reverse-DNS + forward-confirm a client IP against a verified-bot rule, the way
- * Google and Bing document. Returns `true` only when a PTR hostname both ends in
- * an allowed domain and forward-resolves back to the same IP.
+ * Google and Bing document. Returns `true` only when a PTR hostname is a valid
+ * DNS hostname ({@link isDnsHostname}), ends in an allowed domain, and
+ * forward-resolves back to the same IP.
  *
  * @internal
  */
@@ -350,6 +389,9 @@ async function verifyCrawler(
 ): Promise<boolean> {
   const hostnames = await resolver.reverse(ip);
   for (const hostname of hostnames) {
+    // Syntax first: a malformed PTR must never reach the suffix check or the
+    // forward resolver, whatever that resolver does with odd bytes.
+    if (!isDnsHostname(hostname)) continue;
     if (!hostnameMatchesDomains(hostname, rule.domains)) continue;
     const addresses = await resolver.forward(hostname);
     if (addresses.includes(ip)) return true;
@@ -396,7 +438,7 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
   if (verifiedBots.length > 0 && !opts.resolveIp && hops === undefined) {
     throw new Error(
       "botGuard(): verifiedBots requires a client-IP source — provide resolveIp, trustedHops, " +
-        "trustedProxies, or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
+      "trustedProxies, or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
     );
   }
   const resolver = opts.resolver ?? createDefaultResolver();
@@ -474,9 +516,17 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
       const rule = verifiedBots[ruleIndex]!;
 
       const ip = resolveIp(ctx);
-      if (!ip) {
+      // A custom `resolveIp` may hand back anything; only a real IP literal
+      // can be reverse-resolved, so anything else is unverifiable (never
+      // forwarded to the resolver, never cached).
+      if (!ip || parseIp(ip) === undefined) {
         if (blockUnverifiable) {
-          reject({ reason: "unverifiable-bot", userAgent: ua, botName: rule.name });
+          reject({
+            reason: "unverifiable-bot",
+            userAgent: ua,
+            ...(ip ? { ip } : {}),
+            botName: rule.name,
+          });
         }
         return undefined;
       }

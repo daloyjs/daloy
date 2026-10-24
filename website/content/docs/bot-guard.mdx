@@ -133,7 +133,13 @@ app.use(
 );
 ```
 
-Because `verifiedBots` needs the client IP, the middleware **refuses to construct** unless you supply `resolveIp` or set `trustProxyHeaders`. A request that claims to be a crawler but can't be verified (no client IP, or a DNS failure) is blocked by default (`blockUnverifiableBots`, the secure-by-default posture). Set it to `false` to fail open. Verification results are cached per IP (default 1 h via `cacheTtlMs`) so DNS stays off the hot path.
+Because `verifiedBots` needs the client IP, the middleware **refuses to construct** unless you supply `resolveIp` or set `trustProxyHeaders`. A request that claims to be a crawler but can't be verified (no client IP, a `resolveIp` result that is not an IP literal, or a DNS failure) is blocked by default (`blockUnverifiableBots`, the secure-by-default posture). Set it to `false` to fail open. Verification results are cached per IP (default 1 h via `cacheTtlMs`) so DNS stays off the hot path.
+
+### PTR hostnames are validated before the suffix check
+
+The PTR record belongs to whoever controls the client's IP range, so it is attacker-influenced input. Before the domain-suffix test, every PTR name must be a syntactically valid DNS hostname: 1–253 characters, LDH labels only (letters, digits, hyphen; 1–63 characters each; no leading or trailing hyphen), with an optional trailing dot. Anything else — a raw NUL byte, a c-ares `\000` escape, whitespace, an underscore — is skipped and never handed to the forward resolver.
+
+This closes the "validate, then resolve" gap described in [CVE-2026-105482](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases): on unpatched Node, `dns.resolve*()` truncates `attacker.example\0.googlebot.com` at the NUL and happily returns the records for `attacker.example`, so a PTR crafted that way would pass the `.googlebot.com` suffix test and forward-confirm to the attacker's own IP. The default resolver uses `dns.lookup()` (already NUL-safe) and c-ares escapes NULs as `\000`, but a custom `BotResolver` built on `dns.resolve4()` or a DoH/JSON API has no such protection — the syntax gate makes the outcome the same for every resolver and every Node version.
 
 ## Monitor mode & callbacks [#monitor-mode-and-callbacks]
 
@@ -170,3 +176,5 @@ const resolver: BotResolver = {
 
 app.use(botGuard({ trustProxyHeaders: true, verifiedBots: WELL_KNOWN_BOTS, resolver }));
 ```
+
+`forward()` only ever receives a hostname that already passed the [LDH syntax gate](#ptr-hostnames-are-validated-before-the-suffix-check), so a resolver backed by `dns.resolve4()` or a DoH endpoint cannot be fed a NUL-truncatable name. Still prefer `dns.lookup()` semantics where you can, and return addresses in canonical form — the forward-confirm step is an exact string match against the client IP.
