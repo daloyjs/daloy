@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/daloy",
-  "version": "1.17.0",
+  "version": "1.17.1",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
@@ -58,6 +58,10 @@
     "./time-claims": "./src/time-claims.ts"
   },
   "publish": {
-    "include": ["src", "README.md", "LICENSE"]
+    "include": [
+      "src",
+      "README.md",
+      "LICENSE"
+    ]
   }
 }

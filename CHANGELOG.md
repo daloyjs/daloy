@@ -17,6 +17,37 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.17.1] - 2026-10-24
+
+Response to the [Node.js October 21, 2026 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+No `@daloyjs/core` code path is exploitable on a patched Node; one template
+fix is required and one defense-in-depth hardening is added. Upgrade to
+Node 24.22.1 / 26.12.1.
+
+### Security
+
+- **`botGuard()` validates PTR hostnames before the domain-suffix check**
+  (CVE-2026-105482 class). Crawler verification reads the PTR record from
+  attacker-influenced DNS, tests it against `.googlebot.com` et al., then
+  forward-resolves it. A PTR such as `attacker.example\0.googlebot.com` passed
+  the suffix test and, on unpatched Node, a custom `BotResolver` built on
+  `dns.resolve*()` or a DoH API truncated it at the NUL and confirmed the
+  attacker's own IP. Every PTR name must now be a syntactically valid LDH
+  hostname (1–253 chars, labels 1–63, no leading/trailing hyphen, optional
+  trailing dot) or it is skipped and never reaches `forward()`. The default
+  `node:dns` resolver was already safe (`dns.lookup()` is NUL-safe since
+  CVE-2026-48930 and c-ares escapes NULs as `\000`); the gate makes every
+  resolver and every Node version behave the same. A custom `resolveIp` result
+  that is not an IP literal is now treated as `unverifiable-bot` instead of
+  being handed to `reverse()`.
+- **`create-daloy` Dockerfiles: `node:24-alpine` digest bumped to 24.22.1.**
+  The pinned digest (`ebfe2f90…`) resolved to Node 24.21.0, which carries
+  CVE-2026-105482, -105483, -106069, -111497 (Brotli OOB write / RCE),
+  -105481, -106072, -106074 and -106073. All four templates
+  (`node-basic`, `bun-basic`, `vercel`, `cloudflare-worker`) now pin
+  `sha256:06d7adf3…8b53`. Digests never float, so re-scaffold or bump the
+  `NODE_IMAGE` ARG in existing projects.
+
 ## [1.17.0] - 2026-10-22
 
 Hardening pass driven by a [`deepsec`](https://github.com/vercel-labs/deepsec)
