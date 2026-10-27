@@ -26,7 +26,7 @@ These are core-enforced and require no opt-in. They don't replace parameterized 
 | Strict per-route schemas (Zod) | Routes declare `params`, `query`, and `body` shapes. Inputs that don't match the schema are rejected with **422 problem+json** before your handler runs, so you almost never have to coerce raw strings into query parameters yourself. |
 | JSON parser hardening | `safeJsonParse` strips `__proto__`, `constructor`, and `prototype` keys. Prevents prototype pollution that NoSQL/SQL adapters can turn into operator injection. |
 | Body-size cap | 1 MiB default, streamed. Removes the “upload a 50 MB payload of `OR 1=1`” DoS-amplified-SQLi pattern. |
-| Structured logging redaction | `redactRecord()` scrubs known credential-shaped fields before they hit logs, helpful when post-incident triage needs to share logs without re-leaking the secrets the injection grabbed. |
+| Structured logging redaction | The built-in [`createLogger()`](/docs/logging) redacts known credential keys (`DEFAULT_REDACT_KEYS`) and token-shaped values before they hit logs, helpful when post-incident triage needs to share logs without re-leaking the secrets the injection grabbed. |
 | Secure-by-default HTTP boundary | CRLF header sanitization, path-traversal rejection in the router, and 405 instead of 404 on method confusion all mean attackers can't smuggle DB-bound payloads through quirky transport layers. |
 
 None of that *parameterizes your query*. That is on you and your ORM. The next sections show what “safe” looks like for the ORMs Daloy documents, and what the unsafe siblings look like so you can grep for them in code review.

@@ -223,7 +223,7 @@ app.get(
 
 ## Discriminated unions
 
-Use `v.variant` for tagged unions. DaloyJS emits a proper `discriminator` in the OpenAPI document so generated clients get narrowing for free.
+Use `v.variant` for tagged unions. Validation and handler narrowing work out of the box. The OpenAPI document only gets a `oneOf` + `discriminator` when the schema exposes `toJSONSchema()`: a plain Valibot schema does not, so wrap the variants in DaloyJS's `discriminatedUnion()` (with `toJSONSchema()`-capable variants) when generated clients need the discriminator. See [OpenAPI](#openapi) below.
 
 ```ts
 import * as v from "valibot";
@@ -284,7 +284,7 @@ Validation failures produce the same response as every other validator in DaloyJ
 
 ## OpenAPI
 
-Valibot schemas are converted into JSON Schema by DaloyJS's OpenAPI generator the same way Zod schemas are. Run the CLI and your spec is in sync with the route definitions:
+DaloyJS's OpenAPI generator converts any schema that exposes a `toJSONSchema()` method, which Zod 4 schemas do natively. Plain Valibot schemas do not, so they appear in the spec as an empty schema (`{}`) while still validating requests at runtime. To document them, attach a `toJSONSchema()` method to the schemas you pass to routes (for example one that calls `toJsonSchema` from `@valibot/to-json-schema`). Then run the CLI and your spec is in sync with the route definitions:
 
 ```ts
 pnpm daloy openapi --out openapi.json

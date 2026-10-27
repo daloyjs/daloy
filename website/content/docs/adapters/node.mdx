@@ -42,7 +42,7 @@ The Node adapter runs your REST API on the built-in `node:http` server. It's the
 
 ## Scaffold
 
-The fastest way to start is the `node-basic` template. It ships with TypeScript, pnpm workspaces, a `/healthz` route, graceful shutdown, and Hey API codegen wired up.
+The fastest way to start is the `node-basic` template. It ships with TypeScript, hardened pnpm supply-chain settings (24h release-age cooldown, blocked install scripts), a `/healthz` route, graceful shutdown, and Hey API codegen wired up.
 
 ```bash
 pnpm create daloy@latest my-api --template node-basic

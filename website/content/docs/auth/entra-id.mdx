@@ -49,7 +49,7 @@ keywords:
             label: "Return protected data after the scope or role guard passes",
             kind: "response",
           },
-        ]} caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jwk(). Keys refresh automatically on a missing kid, so signing-key rollover needs no redeploy. Multi-tenant apps must also validate the tid claim against an allowlist." />
+        ]} caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jwk(). The JWKS is cached and refetched once fetchTtlSeconds (default 300 s) expires, so signing-key rollover needs no redeploy. A token whose kid is not in the cached set is rejected until then. Multi-tenant apps must also validate the tid claim against an allowlist." />
 
 ## 1. Register the API in Entra ID
 

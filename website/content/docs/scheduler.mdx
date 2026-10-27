@@ -118,7 +118,7 @@ state.nextRunAt;       // epoch ms of the next scheduled run
 
 ## Per-run timeouts
 
-Set `timeoutMs` to bound a run. When it elapses the run's `signal` is aborted. Forward it to your I/O so the handler unwinds promptly. A timed-out run is recorded as a failure and reported to `onError` with `timedOut: true`.
+Set `timeoutMs` to bound a run. When it elapses the run's `signal` is aborted. Forward it to your I/O so the handler unwinds promptly. If the handler then throws or rejects, the run is recorded as a failure and reported to `onError` with `timedOut: true`. A handler that ignores the signal and resolves anyway still counts as a success, so always honor `signal`.
 
 ```ts
 app.cron(

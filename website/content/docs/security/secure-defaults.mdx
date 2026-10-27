@@ -153,10 +153,10 @@ app.post(
 
 ## The master escape hatch
 
-If you need to adopt Daloy without changing an existing application's behavior in the same deployment, pass `secureDefaults: false` as a temporary migration hatch:
+If you need to adopt Daloy without changing an existing application's behavior in the same deployment, pass `secureDefaults: false` as a temporary migration hatch. In production it is refused at construction unless you also set `acknowledgeInsecureDefaults: true`:
 
 ```ts
-const app = new App({ secureDefaults: false });
+const app = new App({ secureDefaults: false, acknowledgeInsecureDefaults: true });
 ```
 
 This is intentionally one-shot: there is no per-feature granular master flag because the per-feature opt-outs already exist (`secureHeaders: false`, `corsCrossOriginGuard: false`). Use `secureDefaults: false` as a time-boxed migration hatch, not a permanent posture.
@@ -192,7 +192,7 @@ export function myCustomHeaders() {
 - Audit any custom `secureHeaders()` call sites. Behavior is the same, the auto-installed instance is automatically replaced when you register your own.
 - Audit any cross-origin `POST` / `PUT` / `PATCH` / `DELETE` tests / integrations. Register `cors()` (recommended) or pass `corsCrossOriginGuard: false` (if you handle cross-origin admission via `csrf({ strategy: 'fetch-metadata' })`, for example).
 - For legacy form-encoded routes, add `accepts: ["application/x-www-form-urlencoded"]` on the route definition.
-- If you must ship the upgrade with zero behavior change while you triage, set `secureDefaults: false` as a temporary escape hatch.
+- If you must ship the upgrade with zero behavior change while you triage, set `secureDefaults: false` (plus `acknowledgeInsecureDefaults: true` in production) as a temporary escape hatch, or prefer the per-feature opt-outs.
 
 ## Related secure defaults
 

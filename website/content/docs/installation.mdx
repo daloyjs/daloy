@@ -12,7 +12,7 @@ sitemap:
 
 # Installation
 
-DaloyJS targets **Node.js ≥ 24.0.0 (active LTS)** and is distributed on the public npm registry as `@daloyjs/core`. The package has **no peer dependencies**, so `npm`, `yarn`, `pnpm`, and `bun` can all install it directly. We *recommend* [pnpm](https://pnpm.io/motivation) together with the hardened `.npmrc` defaults below for supply-chain reasons, but it is not required. The `engines.pnpm` entry in `package.json` is advisory metadata, while `engines.node` communicates the supported runtime and may warn or fail depending on your package manager and engine-strict settings.
+DaloyJS targets **Node.js 24 LTS or Node.js 26 and newer** (`engines.node`: `^24.0.0 || >=26.0.0`) and is distributed on the public npm registry as `@daloyjs/core`. The package has **no peer dependencies**, so `npm`, `yarn`, `pnpm`, and `bun` can all install it directly. We *recommend* [pnpm](https://pnpm.io/motivation) together with the hardened `.npmrc` defaults below for supply-chain reasons, but it is not required. The `engines.pnpm` entry in `package.json` is advisory metadata, while `engines.node` communicates the supported runtime and may warn or fail depending on your package manager and engine-strict settings.
 
 <FlowDiagram numbered title="Two ways in" steps={[
           {
@@ -60,7 +60,7 @@ See [Scaffold a project](/docs/scaffolder) for templates and flags.
 
 ### Prerequisites
 
-- **Node.js** 24.0.0 or newer (active LTS).
+- **Node.js** 24 LTS, or 26.0.0 and newer (Node.js 25 is not supported).
 - A package manager. Any of these works, pnpm 11.x or newer is recommended for supply-chain hardening, but `npm`, `yarn`, and `bun` install `@daloyjs/core` cleanly because the package has no peer dependencies.
 
 To enable pnpm via [Corepack](https://nodejs.org/api/corepack.html):
