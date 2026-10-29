@@ -56,6 +56,18 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "Suivant",
     lastUpdated: "Dernière mise à jour :",
   },
+  pt: {
+    indexTitle: "Documentação em português",
+    allDocs: "Toda a documentação (em inglês)",
+    allDocsBody:
+      "Segurança, adaptadores, bancos de dados, autenticação e a referência completa da API.",
+    tocLabel: "Nesta página",
+    breadcrumb: "Trilha de navegação",
+    pager: "Navegação entre páginas",
+    previous: "Anterior",
+    next: "Próxima",
+    lastUpdated: "Última atualização:",
+  },
 };
 
 /**

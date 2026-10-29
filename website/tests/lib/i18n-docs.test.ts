@@ -54,6 +54,7 @@ const DESCRIPTION_RANGE: Record<TranslatedLocale, [number, number]> = {
   es: [140, 160],
   zh: [40, 90],
   fr: [140, 160],
+  pt: [140, 160],
 };
 
 test("each content/<locale>/docs holds exactly the translated docs paths", () => {

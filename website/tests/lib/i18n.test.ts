@@ -34,7 +34,7 @@ test("each translated prefix and the paths under it map to its locale", () => {
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/docs/es", "/docs/zh", "/docs/fr", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
@@ -43,7 +43,8 @@ test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("es"), "es");
   assert.equal(parseLocaleHeader("zh"), "zh");
   assert.equal(parseLocaleHeader("fr"), "fr");
-  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "de", "es ", "constructor", "__proto__"]) {
+  assert.equal(parseLocaleHeader("pt"), "pt");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "de", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
   assert.equal(isTranslatedLocale("toString"), false);
@@ -76,6 +77,7 @@ test("hreflang alternates list every locale with English as x-default", () => {
     "es-ES": "/es/about",
     "zh-CN": "/zh/about",
     "fr-FR": "/fr/about",
+    "pt-BR": "/pt/about",
     "x-default": "/about",
   });
   assert.equal(HTML_LANG.zh, "zh-CN");
@@ -93,7 +95,7 @@ test("buildMetadata emits hreflang and every other og:locale for translated page
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
   assert.equal(og.locale, "zh_CN");
-  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR"]);
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -128,7 +130,7 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
@@ -156,7 +158,7 @@ function strings(value: unknown, out: string[] = []): string[] {
 }
 
 test("translated page copy uses no em dashes and sized meta descriptions", () => {
-  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160] } as const;
+  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160] } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     for (const text of strings(pages)) {
@@ -193,20 +195,25 @@ test("every translated home copy mirrors the English structure", async () => {
   }
 });
 
-test("home pages advertise the promoted locales; French is header-menu only", async () => {
+test("home pages advertise the promoted locales; French and Portuguese are header-menu only", async () => {
   const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
   const { PROMOTED_LOCALES } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...PROMOTED_LOCALES].sort());
-  assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes("fr"), "no French hero pill or footer link");
+  for (const locale of ["fr", "pt"]) {
+    assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes(locale), `no ${locale} hero pill or footer link`);
+  }
   for (const notice of Object.values(LANGUAGE_NOTICES)) {
     assert.ok(notice.badge && notice.text && notice.cta);
   }
 });
 
-test("the header language menu offers every locale, French included", async () => {
+test("the header language menu offers every locale, French and Portuguese included", async () => {
   const { LOCALE_NATIVE_NAME } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LOCALE_NATIVE_NAME).sort(), [...SITE_LOCALES].sort());
   assert.equal(LOCALE_NATIVE_NAME.fr, "Français");
+  assert.equal(LOCALE_NATIVE_NAME.pt, "Português");
+  assert.equal(switchLocaleHref("/fr/privacy", "pt"), "/pt/privacy");
+  assert.equal(switchLocaleHref("/pt/docs/tutorials/bookstore", "en"), "/docs/tutorials/bookstore");
   // Every page maps to its French counterpart when one exists.
   assert.equal(switchLocaleHref("/about", "fr"), "/fr/about");
   assert.equal(switchLocaleHref("/zh/docs/installation", "fr"), "/fr/docs/installation");

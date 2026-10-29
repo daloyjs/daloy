@@ -136,6 +136,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     link: "version anglaise",
     after: " fait foi.",
   },
+  pt: {
+    before: "Tradução da página original em inglês. Em caso de divergência, vale a ",
+    link: "versão em inglês",
+    after: ".",
+  },
 };
 
 /**

@@ -74,6 +74,14 @@ export const UI_STRINGS: Record<
     copiedAria: "Code copié dans le presse-papiers",
     packageManager: "Gestionnaire de paquets",
   },
+  pt: {
+    copy: "Copiar",
+    copied: "Copiado",
+    retryCopy: "Tentar de novo",
+    copyAria: "Copiar o código para a área de transferência",
+    copiedAria: "Código copiado para a área de transferência",
+    packageManager: "Gerenciador de pacotes",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

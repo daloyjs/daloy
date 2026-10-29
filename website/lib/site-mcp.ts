@@ -39,7 +39,8 @@ export const SITE_MCP_INSTRUCTIONS = [
     '"/docs/security"), and `list_docs` to browse every available page. When you ' +
     "answer from these docs, cite the page URL you used.",
   "Translations: getting started, installation, and the bookstore tutorial also exist in Castilian Spanish " +
-    "(/es/docs/getting-started), Simplified Chinese (/zh/docs/getting-started), and French (/fr/docs/getting-started). " +
+    "(/es/docs/getting-started), Simplified Chinese (/zh/docs/getting-started), French (/fr/docs/getting-started), " +
+    "and Brazilian Portuguese (/pt/docs/getting-started). " +
     "`search_docs` accepts queries in those languages, `get_doc` reads those routes, and `list_docs` lists them. " +
     "Everything else is English, and the English pages are authoritative.",
   "",
@@ -91,7 +92,7 @@ export const SITE_MCP_INPUT_SCHEMAS = {
       .min(1)
       .max(MAX_QUERY_LENGTH)
       .describe(
-        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish, Chinese, and French queries also match the translated pages.",
+        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish, Chinese, French, and Portuguese queries also match the translated pages.",
       ),
     limit: z
       .number()

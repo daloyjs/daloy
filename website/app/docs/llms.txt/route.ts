@@ -70,14 +70,14 @@ export async function GET(request: Request) {
     lines.push("");
   }
 
-  // Translations live outside /docs/ (under /es/docs/, /zh/docs/, /fr/docs/), so
+  // Translations live outside /docs/ (under /es/docs/, /zh/docs/, /fr/docs/, /pt/docs/), so
   // they are listed in /llms.txt; this section only cross-references them.
   const translated = await getAllTranslatedDocPages();
   if (translated.length > 0) {
     lines.push(
       "## Translations",
       "",
-      `These pages are also available in Castilian Spanish, Simplified Chinese, and French; the English pages above are authoritative. They are listed in ${SITE_URL}/llms.txt.`,
+      `These pages are also available in Castilian Spanish, Simplified Chinese, French, and Brazilian Portuguese; the English pages above are authoritative. They are listed in ${SITE_URL}/llms.txt.`,
       "",
     );
     for (const page of translated) {

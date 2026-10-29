@@ -57,6 +57,16 @@ const SEARCH_COPY: Record<
     loading: "Chargement de l’index anglais…",
     englishHint: "Pour chercher dans la documentation en anglais, essayez des mots-clés en anglais.",
   },
+  pt: {
+    label: "Pesquisar na documentação",
+    placeholder: "Pesquisar na documentação…",
+    translated: "Em português",
+    english: "Documentação em inglês",
+    englishTag: "em inglês",
+    empty: "Nenhum resultado.",
+    loading: "Carregando o índice em inglês…",
+    englishHint: "Para pesquisar na documentação em inglês, tente palavras-chave em inglês.",
+  },
 };
 
 /**

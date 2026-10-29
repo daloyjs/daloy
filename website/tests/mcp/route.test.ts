@@ -689,3 +689,25 @@ test("search_docs maps French terms to English and lists the French page", async
   assert.match(text, /Searched the English docs for: logging \(from journalisation\)/);
   assert.match(text, /1\. [^\n]*\(\/docs\/logging\)/);
 });
+
+test("get_doc reads a Portuguese route", async () => {
+  const { json } = await legacyRpc(84, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/pt/docs/installation" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /^# Instalação/);
+  assert.match(toolText(json), /Language: pt-BR \(translation of \/docs\/installation; the English page is authoritative/);
+});
+
+test("search_docs maps Portuguese terms to English", async () => {
+  const { json } = await legacyRpc(85, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "rastreamento distribuído" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /Searched the English docs for: tracing \(from rastreamento\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/tracing\)/);
+});

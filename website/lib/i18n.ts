@@ -3,7 +3,8 @@
  *
  * English is the default and lives at the root. Each translated locale lives
  * under its own prefix ({@link LOCALE_PREFIX}: `/es` for Castilian Spanish,
- * `/zh` for Simplified Chinese, `/fr` for French) and covers exactly the pages listed in
+ * `/zh` for Simplified Chinese, `/fr` for French, `/pt` for Brazilian
+ * Portuguese) and covers exactly the pages listed in
  * {@link TRANSLATED_PATHS}: the marketing pages plus the docs on-ramp
  * (`content/<locale>/docs`). Every other docs page and the blog stay
  * English-only.
@@ -16,21 +17,21 @@
  */
 
 /** A locale the site renders. */
-export type SiteLocale = "en" | "es" | "zh" | "fr";
+export type SiteLocale = "en" | "es" | "zh" | "fr" | "pt";
 
 /** A locale other than the English default. */
 export type TranslatedLocale = Exclude<SiteLocale, "en">;
 
 /** Every locale, English first (the order of the language switcher). */
-export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr"];
+export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr", "pt"];
 
 /** Every translated locale. */
-export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr"];
+export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr", "pt"];
 
 /**
  * Locales advertised outside the header language menu: the home-page hero
- * pills and the footer language links. French is deliberately absent: it is
- * offered only through the header menu.
+ * pills and the footer language links. French and Portuguese are
+ * deliberately absent: they are offered only through the header menu.
  */
 export const PROMOTED_LOCALES: readonly PromotedLocale[] = ["en", "es", "zh"];
 
@@ -45,6 +46,7 @@ export const LOCALE_PREFIX: Record<TranslatedLocale, string> = {
   es: "/es",
   zh: "/zh",
   fr: "/fr",
+  pt: "/pt",
 };
 
 /** BCP 47 tag for `<html lang>` and `hreflang`. */
@@ -53,6 +55,7 @@ export const HTML_LANG: Record<SiteLocale, string> = {
   es: "es-ES",
   zh: "zh-CN",
   fr: "fr-FR",
+  pt: "pt-BR",
 };
 
 /** OpenGraph `og:locale` value. */
@@ -61,6 +64,7 @@ export const OG_LOCALE: Record<SiteLocale, string> = {
   es: "es_ES",
   zh: "zh_CN",
   fr: "fr_FR",
+  pt: "pt_BR",
 };
 
 /** Each locale's name, written in that language (for the switcher). */
@@ -69,6 +73,7 @@ export const LOCALE_NATIVE_NAME: Record<SiteLocale, string> = {
   es: "Español",
   zh: "简体中文",
   fr: "Français",
+  pt: "Português",
 };
 
 /**
@@ -80,6 +85,7 @@ export const OG_USES_ENGLISH_CARD: Record<SiteLocale, boolean> = {
   es: false,
   zh: true,
   fr: false,
+  pt: false,
 };
 
 /**

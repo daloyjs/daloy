@@ -13,6 +13,7 @@ const {
   englishSearchQuery,
   ES_GLOSSARY,
   FR_GLOSSARY,
+  PT_GLOSSARY,
   glossaryMatches,
   MAX_GLOSSARY_MATCHES,
   ZH_GLOSSARY,
@@ -25,7 +26,7 @@ test("every glossary mapping surfaces its expected English page", async () => {
   const pages = await getAllDocPages();
   const routes = new Set(pages.map((page) => page.href));
   const misses: string[] = [];
-  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY]) {
+  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY]) {
     assert.ok(routes.has(entry.expect as never), `${entry.term}: ${entry.expect} is not a docs page`);
     const top = rankDocPages(pages, entry.english, TOP).map((hit) => hit.page.href);
     if (!top.includes(entry.expect as never)) misses.push(`${entry.term} → "${entry.english}": ${top.join(", ")}`);
@@ -47,6 +48,10 @@ test("a glossary term in a full query reaches the English page end to end", asyn
     ["Limitation de débit", "/docs/security/rate-limit-redis"],
     ["chaîne d’approvisionnement", "/docs/security/supply-chain"],
     ["les tests de contrat", "/docs/testing"],
+    ["rastreamento distribuído", "/docs/tracing"],
+    ["limite de requisições por IP", "/docs/security/rate-limit-redis"],
+    ["validação com zod", "/docs/validation"],
+    ["como fazer testes de contrato", "/docs/testing"],
   ];
   for (const [query, expected] of cases) {
     const english = englishSearchQuery(query, glossaryMatches(query));
@@ -56,7 +61,7 @@ test("a glossary term in a full query reaches the English page end to end", asyn
 });
 
 test("terms are unique and well-formed", () => {
-  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY]] as const) {
+  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY]] as const) {
     const terms = list.map((entry) => entry.term);
     assert.equal(new Set(terms).size, terms.length, `${name} has duplicate terms`);
     for (const entry of list) {
@@ -64,13 +69,15 @@ test("terms are unique and well-formed", () => {
       assert.equal(entry.term, entry.term.toLowerCase(), `${name} ${entry.term} must be lowercase`);
     }
   }
-  for (const entry of [...ES_GLOSSARY, ...FR_GLOSSARY]) {
+  for (const entry of [...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY]) {
     assert.equal(entry.term, entry.term.normalize("NFD").replace(/\p{M}+/gu, ""), `${entry.term} must be accent-free`);
     assert.match(entry.term, /^[a-z0-9 ]+$/, `${entry.term} must be folded (no apostrophes or hyphens)`);
   }
-  // Spanish and French share one matcher, so a term may not mean two things.
-  const latinTerms = [...ES_GLOSSARY, ...FR_GLOSSARY].map((entry) => entry.term);
-  assert.equal(new Set(latinTerms).size, latinTerms.length, "es/fr term collision");
+  // Spanish, French and Portuguese share one matcher, so a term may not
+  // appear twice (or mean two things).
+  const latinTerms = [...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY].map((entry) => entry.term);
+  const dupes = latinTerms.filter((term, index) => latinTerms.indexOf(term) !== index);
+  assert.deepEqual(dupes, [], "es/fr/pt term collision");
 });
 
 test("Chinese matches prefer the longest term and use each span once", () => {
