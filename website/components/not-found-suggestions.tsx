@@ -17,6 +17,7 @@ const SUGGESTION_COPY: Record<SiteLocale, { nav: string; heading: string; englis
   fr: { nav: "Pages suggérées", heading: "Cherchiez-vous l’une de ces pages ?", english: "en anglais" },
   pt: { nav: "Páginas sugeridas", heading: "Você estava procurando uma destas páginas?", english: "em inglês" },
   ar: { nav: "صفحات مقترحة", heading: "هل كنت تبحث عن إحدى هذه الصفحات؟", english: "بالإنجليزية" },
+  ru: { nav: "Похожие страницы", heading: "Возможно, вы искали одну из этих страниц?", english: "на английском" },
 };
 
 const LOCALE_SEGMENTS = new Set<string>(TRANSLATED_LOCALES);

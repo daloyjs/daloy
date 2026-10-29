@@ -22,6 +22,7 @@ const CONTRIBUTORS: Record<SiteLocale, string> = {
   fr: "contributeurs de DaloyJS",
   pt: "colaboradores do DaloyJS",
   ar: "المساهمون في DaloyJS",
+  ru: "участники DaloyJS",
 };
 
 /** One footer link. `crossLocale` links reload the document (see lib/i18n). */
@@ -127,6 +128,20 @@ const FOOTER_COPY: Record<
       { href: "/ar/contact", label: "اتصل بنا" },
       { href: "/ar/privacy", label: "الخصوصية" },
       { href: "/ar/about-the-name", label: "عن الاسم" },
+    ],
+  },
+  ru: {
+    home: "/ru",
+    homeLabel: "Главная DaloyJS",
+    license: "Лицензия MIT",
+    distributed: "Распространяется через",
+    links: [
+      { href: "/ru/docs", label: "Документация" },
+      { href: "/blog", label: "Блог (на английском)", crossLocale: true, hrefLang: HTML_LANG.en },
+      { href: "/ru/about", label: "О проекте" },
+      { href: "/ru/contact", label: "Контакты" },
+      { href: "/ru/privacy", label: "Конфиденциальность" },
+      { href: "/ru/about-the-name", label: "О названии" },
     ],
   },
 };

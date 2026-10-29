@@ -1,4 +1,5 @@
 import { foldArabic, hasArabic } from "./arabic";
+import { foldCyrillic, hasCyrillic, stemRussian } from "./cyrillic";
 import type { DocPage } from "./docs-content";
 
 /**
@@ -14,7 +15,8 @@ export type RankablePage = Pick<DocPage, "title" | "href" | "description" | "key
  * any script; Chinese and Japanese runs are split into overlapping bigrams
  * and matched as substrings, since those scripts have no word spaces. Arabic
  * is folded (lib/arabic.ts) and matched as substrings too, because the
- * article and prepositions attach to the word.
+ * article and prepositions attach to the word. Russian is folded (ё → е) and
+ * stemmed (lib/cyrillic.ts) so case forms of a word match each other.
  *
  * Improvements over plain substring scoring:
  *
@@ -97,7 +99,7 @@ function bigrams(run: string): string[] {
  */
 export function tokenize(query: string): string[] {
   const terms: string[] = [];
-  for (const token of foldArabic(query.toLowerCase()).match(TOKEN) ?? []) {
+  for (const token of foldCyrillic(foldArabic(query.toLowerCase())).match(TOKEN) ?? []) {
     for (const run of token.match(SCRIPT_RUNS) ?? []) {
       terms.push(...(isUnspacedTerm(run) ? bigrams(run) : [run]));
     }
@@ -137,7 +139,8 @@ const STEM_SUFFIXES = [
 ] as const;
 
 /**
- * Reduce a lowercase word to a light stem by stripping one common suffix,
+ * Reduce a lowercase word to a light stem by stripping one common suffix
+ * (Russian words use lib/cyrillic.ts instead),
  * keeping at least three characters ("validation" → "valid", "validate" →
  * "validat" → prefix-compatible with "valid"). Words too short to strip are
  * returned unchanged.
@@ -146,6 +149,8 @@ const STEM_SUFFIXES = [
  * @returns The stemmed token.
  */
 export function stem(word: string): string {
+  // Russian inflects by case; it gets its own suffix stripper.
+  if (hasCyrillic(word)) return stemRussian(word);
   for (const suffix of STEM_SUFFIXES) {
     if (word.length - suffix.length >= 3 && word.endsWith(suffix)) {
       return word.slice(0, -suffix.length);
@@ -165,11 +170,11 @@ export function stem(word: string): string {
  * "rout" finds "Routing", but "rate" no longer finds "Integrate".
  */
 function wordText(text: string): string {
-  return ` ${foldArabic(text.toLowerCase()).replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
+  return ` ${foldCyrillic(foldArabic(text.toLowerCase())).replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
 }
 
 function stemText(text: string): string {
-  const tokens = foldArabic(text.toLowerCase()).match(TOKEN) ?? [];
+  const tokens = foldCyrillic(foldArabic(text.toLowerCase())).match(TOKEN) ?? [];
   return ` ${tokens.map(stem).join(" ")} `;
 }
 
@@ -280,7 +285,7 @@ export function rankDocPages<T extends RankablePage>(
 
   // Ordered (non-deduplicated) token sequence for adjacent-pair matching.
   // Unspaced-script terms are already bigrams, so they take no part in it.
-  const sequence = (foldArabic(query.toLowerCase()).match(TOKEN) ?? [])
+  const sequence = (foldCyrillic(foldArabic(query.toLowerCase())).match(TOKEN) ?? [])
     .filter((token) => !isSubstringTerm(token))
     .slice(0, MAX_QUERY_TERMS)
     .map(stem);

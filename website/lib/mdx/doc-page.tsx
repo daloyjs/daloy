@@ -146,6 +146,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     link: "النسخة الإنجليزية",
     after: ".",
   },
+  ru: {
+    before: "Перевод страницы с английского оригинала. При расхождениях приоритет имеет ",
+    link: "английская версия",
+    after: ".",
+  },
 };
 
 /**

@@ -57,6 +57,7 @@ const DESCRIPTION_RANGE: Record<TranslatedLocale, [number, number]> = {
   pt: [140, 160],
   // Arabic packs more per character than Latin script; this fills the same snippet.
   ar: [100, 160],
+  ru: [140, 160],
 };
 
 test("each content/<locale>/docs holds exactly the translated docs paths", () => {

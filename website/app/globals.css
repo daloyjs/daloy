@@ -950,3 +950,11 @@ html:lang(ar) body {
 [dir="rtl"] pre {
   text-align: left;
 }
+
+/* Russian pages (<html lang="ru">): put Inter's Cyrillic subset first. Its
+   unicode-range covers Cyrillic only, so Latin text still falls through to
+   the main Inter face and both scripts share one typeface. Unlayered so it
+   wins over the `font-sans` utility on <body>. */
+html:lang(ru) body {
+  font-family: var(--font-sans-cyrillic), var(--font-sans), sans-serif;
+}

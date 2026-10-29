@@ -119,6 +119,20 @@ const NAV_COPY: Record<
     closeMenu: "إغلاق قائمة التنقل",
     otherLanguage: "محتوى بالإنجليزية",
   },
+  ru: {
+    home: "/ru" as Route,
+    items: [
+      { href: "/ru/docs" as Route, label: "Документация" },
+      { href: "/blog", label: "Блог" },
+      { href: "/ru/docs/getting-started" as Route, label: "Быстрый старт" },
+      { href: "/ru/docs/tutorials/bookstore" as Route, label: "Руководства" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/ru/docs/installation" as Route, label: "Установка" },
+    openMenu: "Открыть меню навигации",
+    closeMenu: "Закрыть меню навигации",
+    otherLanguage: "Материалы на английском",
+  },
 };
 
 const socialLinks = [

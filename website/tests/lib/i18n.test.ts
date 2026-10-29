@@ -34,7 +34,7 @@ test("each translated prefix and the paths under it map to its locale", () => {
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/rus", "/ru-RU", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/docs/ru", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
@@ -45,7 +45,8 @@ test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("fr"), "fr");
   assert.equal(parseLocaleHeader("pt"), "pt");
   assert.equal(parseLocaleHeader("ar"), "ar");
-  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "de", "es ", "constructor", "__proto__"]) {
+  assert.equal(parseLocaleHeader("ru"), "ru");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "RU", "ru-RU", "de", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
   assert.equal(isTranslatedLocale("toString"), false);
@@ -80,6 +81,7 @@ test("hreflang alternates list every locale with English as x-default", () => {
     "fr-FR": "/fr/about",
     "pt-BR": "/pt/about",
     ar: "/ar/about",
+    ru: "/ru/about",
     "x-default": "/about",
   });
   assert.equal(HTML_LANG.zh, "zh-CN");
@@ -97,7 +99,7 @@ test("buildMetadata emits hreflang and every other og:locale for translated page
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
   assert.equal(og.locale, "zh_CN");
-  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR"]);
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR", "ru_RU"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -132,7 +134,7 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026", ru: "29 октября 2026" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
@@ -160,7 +162,7 @@ function strings(value: unknown, out: string[] = []): string[] {
 }
 
 test("translated page copy uses no em dashes and sized meta descriptions", () => {
-  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160] } as const;
+  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160], ru: [140, 160] } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     for (const text of strings(pages)) {
@@ -197,11 +199,11 @@ test("every translated home copy mirrors the English structure", async () => {
   }
 });
 
-test("home pages advertise the promoted locales; French, Portuguese and Arabic are header-menu only", async () => {
+test("home pages advertise the promoted locales; French, Portuguese, Arabic and Russian are header-menu only", async () => {
   const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
   const { PROMOTED_LOCALES } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...PROMOTED_LOCALES].sort());
-  for (const locale of ["fr", "pt", "ar"]) {
+  for (const locale of ["fr", "pt", "ar", "ru"]) {
     assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes(locale), `no ${locale} hero pill or footer link`);
   }
   for (const notice of Object.values(LANGUAGE_NOTICES)) {
@@ -215,6 +217,8 @@ test("the header language menu offers every locale, French and Portuguese includ
   assert.equal(LOCALE_NATIVE_NAME.fr, "Français");
   assert.equal(LOCALE_NATIVE_NAME.pt, "Português");
   assert.equal(LOCALE_NATIVE_NAME.ar, "العربية");
+  assert.equal(LOCALE_NATIVE_NAME.ru, "Русский");
+  assert.equal(switchLocaleHref("/ru/privacy", "ar"), "/ar/privacy");
   assert.equal(switchLocaleHref("/ar/about", "en"), "/about");
   assert.equal(switchLocaleHref("/docs/installation", "ar"), "/ar/docs/installation");
   assert.equal(switchLocaleHref("/fr/privacy", "pt"), "/pt/privacy");
@@ -320,4 +324,32 @@ test("text in another language carries its own direction", async () => {
       assert.ok(source.includes(`dir={HTML_DIR[${key}]}`), `${file}: ${attr} needs a matching dir`);
     }
   }
+});
+
+test("no translated copy uses an em dash, including the JSX-rich fields", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement, Fragment } = await import("react");
+  const { HOME_COPIES } = await import("../../components/home/home-copies");
+  // Plain-string checks skip React elements, so render every JSX field too.
+  const texts = (value: unknown, out: string[] = []): string[] => {
+    if (typeof value === "string") out.push(value);
+    else if (Array.isArray(value)) value.forEach((item) => texts(item, out));
+    else if (value && typeof value === "object") {
+      if ("$$typeof" in value) out.push(renderToStaticMarkup(createElement(Fragment, null, value as never)));
+      else Object.values(value).forEach((item) => texts(item, out));
+    }
+    return out;
+  };
+  for (const locale of TRANSLATED_LOCALES) {
+    for (const text of texts([HOME_COPIES[locale], PAGES_COPY[locale]])) {
+      assert.ok(!text.includes("\u2014"), `${locale}: ${text.slice(0, 60)}`);
+    }
+  }
+});
+
+test("Russian pages load Inter's Cyrillic subset without preloading it", async () => {
+  const { readFileSync } = await import("node:fs");
+  const layout = readFileSync("app/layout.tsx", "utf8");
+  assert.match(layout, /subsets: \["cyrillic"\][\s\S]*?preload: false/);
+  assert.match(readFileSync("app/globals.css", "utf8"), /html:lang\(ru\) body \{\s*font-family: var\(--font-sans-cyrillic\)/);
 });

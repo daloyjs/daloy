@@ -90,6 +90,14 @@ export const UI_STRINGS: Record<
     copiedAria: "تم نسخ الشيفرة إلى الحافظة",
     packageManager: "مدير الحزم",
   },
+  ru: {
+    copy: "Копировать",
+    copied: "Скопировано",
+    retryCopy: "Повторить",
+    copyAria: "Скопировать код в буфер обмена",
+    copiedAria: "Код скопирован в буфер обмена",
+    packageManager: "Менеджер пакетов",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

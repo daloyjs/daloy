@@ -1,4 +1,5 @@
 import { foldArabic } from "./arabic";
+import { foldCyrillic } from "./cyrillic";
 
 /**
  * Cross-language search glossary: maps the technical terms Chinese and
@@ -13,6 +14,8 @@ import { foldArabic } from "./arabic";
  *   cognates.
  * - Arabic has established terms for many concepts (التوجيه، المصادقة،
  *   تحديد المعدل), matched after folding spelling variants.
+ * - Russian terms are stems matched at word starts, because Russian inflects
+ *   by case.
  * - Spanish mostly keeps the English term ("middleware", "token"), so the list
  *   only covers translations and cognates the ranker cannot link on its own
  *   ("validación" ≠ "validation" to a suffix stemmer).
@@ -341,11 +344,88 @@ export const AR_GLOSSARY: readonly GlossaryEntry[] = [
   { term: "التزامن", english: "concurrency limit", expect: "/docs/concurrency-limit" },
 ];
 
+/**
+ * Russian → English. Russian inflects by case, so terms are stored as stems
+ * (one per word) and match the start of consecutive query words. Stems stop
+ * before a consonant cluster that gains a vowel in the genitive plural
+ * ("установ" covers установка and установок; "ошиб" covers ошибка and
+ * ошибок). Example:
+ * "ограничен частот" matches "ограничение частоты" and "ограничения
+ * частоты запросов". Folded: lowercase, ё as е. Russian developers keep many
+ * English terms ("middleware", "deploy"), so this lists the established
+ * Russian ones.
+ */
+export const RU_GLOSSARY: readonly GlossaryEntry[] = [
+  { term: "маршрутизац", english: "routing", expect: "/docs/routing" },
+  { term: "маршрут", english: "routing", expect: "/docs/routing" },
+  { term: "промежуточн", english: "middleware", expect: "/docs/api-reference/middleware" },
+  { term: "ограничен частот", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "ограничен скорост", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "лимит запрос", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "валидац", english: "validation", expect: "/docs/validation" },
+  { term: "провер данн", english: "validation", expect: "/docs/validation" },
+  { term: "аутентификац", english: "authentication", expect: "/docs/auth" },
+  { term: "авторизац", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "сесси", english: "session", expect: "/docs/security/session" },
+  { term: "развертыван", english: "deployment", expect: "/docs/deployment" },
+  { term: "деплой", english: "deployment", expect: "/docs/deployment" },
+  { term: "установ", english: "installation", expect: "/docs/installation" },
+  { term: "быстр старт", english: "getting started", expect: "/docs/getting-started" },
+  { term: "контрактн тест", english: "contract tests", expect: "/docs/testing" },
+  { term: "тестирован", english: "testing", expect: "/docs/testing" },
+  { term: "тест", english: "testing", expect: "/docs/testing" },
+  { term: "цепоч постав", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "зависимост", english: "dependencies supply chain", expect: "/docs/security/supply-chain" },
+  { term: "логирован", english: "logging", expect: "/docs/logging" },
+  { term: "журналирован", english: "logging", expect: "/docs/logging" },
+  { term: "трассиров", english: "tracing", expect: "/docs/tracing" },
+  { term: "метрик", english: "metrics", expect: "/docs/metrics" },
+  { term: "ошиб", english: "errors", expect: "/docs/errors" },
+  { term: "пагинац", english: "pagination", expect: "/docs/pagination" },
+  { term: "идемпотентност", english: "idempotency", expect: "/docs/idempotency" },
+  { term: "баз данн", english: "databases", expect: "/docs/databases" },
+  { term: "электронн почт", english: "email", expect: "/docs/email" },
+  { term: "платеж", english: "payment integrations", expect: "/docs/payments" },
+  { term: "оплат", english: "payment integrations", expect: "/docs/payments" },
+  { term: "плагин", english: "plugins", expect: "/docs/plugins" },
+  { term: "адаптер", english: "adapters", expect: "/docs/adapters" },
+  { term: "кеширован", english: "response cache", expect: "/docs/response-cache" },
+  { term: "кэширован", english: "response cache", expect: "/docs/response-cache" },
+  { term: "загруз файл", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "поток передач", english: "streaming", expect: "/docs/streaming" },
+  { term: "стриминг", english: "streaming", expect: "/docs/streaming" },
+  { term: "планировщик", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "фонов задач", english: "jobs", expect: "/docs/jobs" },
+  { term: "мультитенантн", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "мультиарендн", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "sql инъекц", english: "sql injection", expect: "/docs/security/sql-injection" },
+  { term: "инъекц команд", english: "command injection", expect: "/docs/security/command-injection" },
+  { term: "переменн окружен", english: "environment variables config", expect: "/docs/config" },
+  { term: "конфигурац", english: "config", expect: "/docs/config" },
+  { term: "повторн попыт", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "предохранител", english: "circuit breaker", expect: "/docs/fetch-resilience" },
+  { term: "сжат", english: "compression", expect: "/docs/security/compression" },
+  { term: "распаков", english: "decompression", expect: "/docs/request-decompression" },
+  { term: "редирект", english: "safe redirect", expect: "/docs/security/safe-redirect" },
+  { term: "перенаправлен", english: "safe redirect", expect: "/docs/security/safe-redirect" },
+  { term: "версионирован", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "корректн завершен", english: "graceful shutdown", expect: "/docs/security/lifecycle-health" },
+  { term: "провер работоспособност", english: "health check", expect: "/docs/security/lifecycle-health" },
+  { term: "заголов безопасност", english: "secure headers", expect: "/docs/security/secure-defaults" },
+  { term: "конкурентност", english: "concurrency limit", expect: "/docs/concurrency-limit" },
+  { term: "типизированн клиент", english: "typed client", expect: "/docs/typed-client" },
+];
+
 /** Upper bound on glossary expansions applied to one query. */
 export const MAX_GLOSSARY_MATCHES = 8;
 
 /** One applied mapping, for transparency in tool output. */
 export type GlossaryMatch = { source: string; english: string };
+
+/** Russian terms as stem lists, most words first, then longest. */
+const RU_TERMS = [...RU_GLOSSARY]
+  .map((entry) => ({ entry, stems: entry.term.split(" ") }))
+  .sort((a, b) => b.stems.length - a.stems.length || b.entry.term.length - a.entry.term.length);
 
 /** Longest first, so "اعاده التوجيه" (redirect) is consumed before "توجيه" (routing). */
 const AR_BY_LENGTH = [...AR_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
@@ -397,6 +477,24 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     if (ar.includes(entry.term)) {
       matches.push({ source: entry.term, english: entry.english });
       ar = ar.split(entry.term).join("\u0000");
+    }
+  }
+
+  // Russian: each stem must start consecutive query words; matched words are
+  // consumed so a shorter term ("маршрут") cannot re-match "маршрутизация".
+  const ruWords = foldCyrillic(query.toLowerCase())
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  for (const { entry, stems } of RU_TERMS) {
+    if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
+    for (let i = 0; i + stems.length <= ruWords.length; i++) {
+      if (stems.every((stemPart, k) => ruWords[i + k]!.startsWith(stemPart))) {
+        matches.push({ source: entry.term, english: entry.english });
+        for (let k = 0; k < stems.length; k++) ruWords[i + k] = "\u0000";
+        break;
+      }
     }
   }
 

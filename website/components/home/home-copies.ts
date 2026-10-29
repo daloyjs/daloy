@@ -5,6 +5,7 @@ import { HOME_COPY_AR } from "./home-copy-ar";
 import { HOME_COPY_ES } from "./home-copy-es";
 import { HOME_COPY_FR } from "./home-copy-fr";
 import { HOME_COPY_PT } from "./home-copy-pt";
+import { HOME_COPY_RU } from "./home-copy-ru";
 import { HOME_COPY_ZH } from "./home-copy-zh";
 
 /** Landing-page copy for every translated locale. */
@@ -14,4 +15,5 @@ export const HOME_COPIES: Record<TranslatedLocale, HomeCopy> = {
   fr: HOME_COPY_FR,
   pt: HOME_COPY_PT,
   ar: HOME_COPY_AR,
+  ru: HOME_COPY_RU,
 };

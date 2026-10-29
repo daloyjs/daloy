@@ -54,3 +54,17 @@ test("English ranking is unchanged for ASCII queries", () => {
   assert.equal(rankDocPages(PAGES, "routing", 5)[0]?.page.href, "/docs/routing");
   assert.equal(rankDocPages(PAGES, "install", 5)[0]?.page.href, "/docs/installation");
 });
+
+test("Russian case forms of a word find each other", async () => {
+  const ru = [
+    page("/ru/docs/installation", "Установка", "Установите DaloyJS", "период ожидания снижает риски"),
+    page("/ru/docs/getting-started", "Быстрый старт", "Первое приложение", "маршрут и поток"),
+  ];
+  for (const query of ["установка", "установки", "установку", "установок", "Установке"]) {
+    assert.equal(rankDocPages(ru, query, 1)[0]?.page.href, "/ru/docs/installation", query);
+  }
+  // ё and е are the same letter for search.
+  assert.equal(rankDocPages([page("/x", "Развёртывание", "", "")], "развертывание", 1).length, 1);
+  // Short words are not over-stemmed into false matches.
+  assert.deepEqual(rankDocPages(ru, "пот", 5), []);
+});

@@ -733,3 +733,25 @@ test("search_docs maps Arabic terms (with diacritics) to English", async () => {
   assert.match(text, /Searched the English docs for: rate limit \(from تحديد المعدل\)/);
   assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
 });
+
+test("get_doc reads a Russian route", async () => {
+  const { json } = await legacyRpc(88, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/ru/docs/installation" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /^# Установка/);
+  assert.match(toolText(json), /Language: ru \(translation of \/docs\/installation; the English page is authoritative/);
+});
+
+test("search_docs maps inflected Russian terms to English", async () => {
+  const { json } = await legacyRpc(89, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "как настроить ограничение частоты запросов" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /Searched the English docs for: rate limit \(from ограничен частот\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
+});

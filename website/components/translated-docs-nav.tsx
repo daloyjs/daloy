@@ -79,6 +79,17 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "التالي",
     lastUpdated: "آخر تحديث:",
   },
+  ru: {
+    indexTitle: "Документация на русском",
+    allDocs: "Вся документация (на английском)",
+    allDocsBody: "Безопасность, адаптеры, базы данных, аутентификация и полный справочник API.",
+    tocLabel: "На этой странице",
+    breadcrumb: "Навигационная цепочка",
+    pager: "Навигация по страницам",
+    previous: "Назад",
+    next: "Далее",
+    lastUpdated: "Последнее обновление:",
+  },
 };
 
 /**

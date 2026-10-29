@@ -13,6 +13,7 @@ const { foldArabic } = await import("../../lib/arabic");
 const {
   AR_GLOSSARY,
   englishSearchQuery,
+  RU_GLOSSARY,
   ES_GLOSSARY,
   FR_GLOSSARY,
   PT_GLOSSARY,
@@ -28,7 +29,7 @@ test("every glossary mapping surfaces its expected English page", async () => {
   const pages = await getAllDocPages();
   const routes = new Set(pages.map((page) => page.href));
   const misses: string[] = [];
-  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY]) {
+  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY, ...RU_GLOSSARY]) {
     assert.ok(routes.has(entry.expect as never), `${entry.term}: ${entry.expect} is not a docs page`);
     const top = rankDocPages(pages, entry.english, TOP).map((hit) => hit.page.href);
     if (!top.includes(entry.expect as never)) misses.push(`${entry.term} → "${entry.english}": ${top.join(", ")}`);
@@ -58,6 +59,10 @@ test("a glossary term in a full query reaches the English page end to end", asyn
     ["البرمجيات الوسيطة", "/docs/api-reference/middleware"],
     ["إعادة التوجيه الآمنة", "/docs/security/safe-redirect"],
     ["سلسلة التوريد", "/docs/security/supply-chain"],
+    ["как настроить ограничение частоты запросов", "/docs/security/rate-limit-redis"],
+    ["Маршрутизация", "/docs/routing"],
+    ["подключение к базе данных", "/docs/databases"],
+    ["контрактные тесты", "/docs/testing"],
   ];
   for (const [query, expected] of cases) {
     const english = englishSearchQuery(query, glossaryMatches(query));
@@ -67,7 +72,7 @@ test("a glossary term in a full query reaches the English page end to end", asyn
 });
 
 test("terms are unique and well-formed", () => {
-  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY]] as const) {
+  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY], ["ru", RU_GLOSSARY]] as const) {
     const terms = list.map((entry) => entry.term);
     assert.equal(new Set(terms).size, terms.length, `${name} has duplicate terms`);
     for (const entry of list) {
@@ -158,4 +163,24 @@ test("Arabic folding normalizes only Arabic text", () => {
   assert.equal(foldArabic("مستشفى مدرسة"), "مستشفي مدرسه");
   assert.equal(foldArabic("تَـــثْبِيت"), "تثبيت");
   assert.equal(foldArabic("rate limit"), "rate limit");
+});
+
+test("Russian terms are folded stems that match any case form", async () => {
+  const { foldCyrillic, stemRussian } = await import("../../lib/cyrillic");
+  for (const entry of RU_GLOSSARY) {
+    assert.equal(entry.term, foldCyrillic(entry.term), `${entry.term} must be folded (no ё)`);
+  }
+  // Nominative, genitive, accusative and plural all reach the same mapping.
+  for (const form of ["установка", "установки", "установку", "установок", "установить"]) {
+    assert.deepEqual(glossaryMatches(form).map((m) => m.english), ["installation"], form);
+  }
+  // Multi-word stems must be consecutive and in order.
+  assert.deepEqual(glossaryMatches("частоты ограничение").map((m) => m.english), []);
+  // Fleeting vowels in the genitive plural still match ("ошибок", "заголовков").
+  assert.deepEqual(glossaryMatches("обработка ошибок").map((m) => m.english), ["errors"]);
+  assert.deepEqual(glossaryMatches("заголовков безопасности").map((m) => m.english), ["secure headers"]);
+  // The longer term consumes its words: "маршрут" does not re-match.
+  assert.deepEqual(glossaryMatches("маршрутизация").map((m) => m.english), ["routing"]);
+  assert.equal(stemRussian("развертывание"), stemRussian("развертывания"));
+  assert.equal(foldCyrillic("развёртывание"), "развертывание");
 });

@@ -38,6 +38,7 @@ const SKIP_LINK: Record<SiteLocale, string> = {
   fr: "Aller au contenu",
   pt: "Pular para o conteúdo",
   ar: "انتقل إلى المحتوى",
+  ru: "Перейти к содержимому",
 };
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 
@@ -134,6 +135,15 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
+// Inter's Cyrillic glyphs for the Russian pages. Not preloaded, and its
+// @font-face carries a Cyrillic unicode-range, so browsers fetch it only on a
+// page that actually contains Cyrillic text: other locales pay nothing.
+const interCyrillic = Inter({
+  subsets: ["cyrillic"],
+  variable: "--font-sans-cyrillic",
+  preload: false,
+});
+
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
@@ -163,6 +173,7 @@ export default async function RootLayout({
         "antialiased",
         "font-sans",
         inter.variable,
+        interCyrillic.variable,
         geistMono.variable
       )}
     >
