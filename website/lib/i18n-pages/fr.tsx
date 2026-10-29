@@ -15,6 +15,7 @@ export const PAGES_COPY_FR: TranslatedPagesCopy = {
   home: {
     title:
       "API REST TypeScript orientées contrat et sûres par défaut, pensées pour les équipes qui développent avec l’IA",
+    documentTitle: "API TypeScript orientées contrat, sûres par défaut",
     description:
       "Réglages sûrs par défaut, refus de démarrer en production sur une configuration erronée, zéro dépendance et clients typés OpenAPI 3.1 issus d’un contrat.",
     keywords: [

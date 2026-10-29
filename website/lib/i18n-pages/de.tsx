@@ -14,6 +14,7 @@ export const PAGES_COPY_DE: TranslatedPagesCopy = {
   end: ".",
   home: {
     title: "Contract-first REST-APIs in TypeScript, standardmäßig sicher, gebaut für Teams, die mit KI entwickeln",
+    documentTitle: "Contract-first TypeScript-APIs, sicher ab Werk",
     description:
       "Sichere Standardeinstellungen, kein Start in Produktion bei bekannten Fehlkonfigurationen, null Laufzeitabhängigkeiten und typisierte OpenAPI-3.1-Clients.",
     keywords: [

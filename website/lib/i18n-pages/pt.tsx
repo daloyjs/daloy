@@ -16,6 +16,7 @@ export const PAGES_COPY_PT: TranslatedPagesCopy = {
   home: {
     title:
       "APIs REST em TypeScript orientadas a contrato e seguras por padrão, feitas para equipes que desenvolvem com IA",
+    documentTitle: "APIs TypeScript por contrato e seguras por padrão",
     description:
       "Configurações seguras por padrão, recusa em iniciar em produção com configuração incorreta, zero dependências e clientes tipados OpenAPI 3.1 de um contrato.",
     keywords: [

@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const locale = await resolveLocale(params);
   const home = PAGES_COPY[locale].home;
   return buildMetadata({
-    title: home.title,
+    title: home.documentTitle,
     description: home.description,
     keywords: home.keywords,
     path: localeHome(locale),
@@ -31,7 +31,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     translatedPath: "/",
     image: `${localeHome(locale)}/opengraph-image`,
     // A locale without its own card (ogFooter: null) shows the English one.
-    ...(home.ogFooter === null ? { imageAlt: `${SITE_NAME} - ${HOME_TITLE}` } : {}),
+    // The card shows the full tagline: the English one when this locale has
+    // no card of its own (ogFooter: null), otherwise this locale's.
+    imageAlt: home.ogFooter === null ? `${SITE_NAME} - ${HOME_TITLE}` : `${home.title} · ${SITE_NAME}`,
   });
 }
 

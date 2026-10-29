@@ -14,6 +14,7 @@ export const PAGES_COPY_JA: TranslatedPagesCopy = {
   end: "。",
   home: {
     title: "AI を活用する開発チームのための、コントラクトファーストでセキュアバイデフォルトな TypeScript REST API フレームワーク",
+    documentTitle: "コントラクトファーストで安全な TypeScript API",
     description:
       "安全なデフォルト設定、本番環境での既知の設定ミスによる起動拒否、ランタイム依存ゼロ、そして 1 つのルート定義から OpenAPI 3.1 と型付きクライアントを生成します。",
     keywords: [

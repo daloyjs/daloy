@@ -30,6 +30,12 @@ export type TranslatedPagesCopy = {
   end: string;
   home: PageMeta & {
     /**
+     * Short `<title>` (`· DaloyJS` is appended) that fits a search result,
+     * about 60 characters with CJK counted double. `title` stays the full
+     * tagline for the OG card and JSON-LD.
+     */
+    documentTitle: string;
+    /**
      * Footer tagline of this locale's OG card, or `null` to reuse the English
      * card (the OG renderer ships Latin fonts only).
      */

@@ -205,6 +205,23 @@ async function renderHtmlAsMarkdown(
   return markdown;
 }
 
+/**
+ * Move a translated docs page's translation notice below its H1. In HTML the
+ * notice is a banner above the MDX body, so the converted Markdown would
+ * start with it; agents read the first line as the title, so the H1 goes
+ * first (as on English pages) and the notice follows as a blockquote.
+ * Markdown that does not start with a one-line paragraph followed by an H1
+ * is returned unchanged.
+ *
+ * @param markdown - Markdown converted from a translated docs page.
+ * @returns The same Markdown with the heading first.
+ */
+export function translatedDocHeadingFirst(markdown: string): string {
+  const match = /^([^\n#>][^\n]*)\n\n(# [^\n]+)\n/.exec(markdown);
+  if (!match) return markdown;
+  return `${match[2]}\n\n> ${match[1]}\n${markdown.slice(match[0].length)}`;
+}
+
 export type MarkdownRenderResult = {
   markdown: string;
   status: number;
@@ -243,7 +260,7 @@ export async function renderPathMarkdown(
         status: 500,
       };
     }
-    return { markdown, status: 200 };
+    return { markdown: translatedDocHeadingFirst(markdown), status: 200 };
   }
 
   if (isDocsPath(path)) {

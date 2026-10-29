@@ -80,6 +80,13 @@ export const CORE_PACKAGE_VERSION =
 export const HOME_TITLE =
   "Contract-first TypeScript REST APIs with secure defaults, built for AI-assisted teams";
 
+/**
+ * Short `<title>` for the home page (`· DaloyJS` is appended). Search results
+ * cut titles at about 60 characters, so {@link HOME_TITLE}, the full tagline,
+ * stays on the hero, the OG card and the JSON-LD name instead.
+ */
+export const HOME_DOCUMENT_TITLE = "Contract-first, secure-by-default TypeScript APIs";
+
 export const HOME_DESCRIPTION =
   "Secure defaults, production refuse-to-boot checks for known misconfigurations, zero runtime dependencies, and OpenAPI 3.1 typed clients from one route contract.";
 

@@ -15,6 +15,7 @@ export const PAGES_COPY_AR: TranslatedPagesCopy = {
   end: ".",
   home: {
     title: "واجهات REST بلغة TypeScript قائمة على العقود وآمنة افتراضيًا، مصممة للفرق التي تطور بمساعدة الذكاء الاصطناعي",
+    documentTitle: "واجهات TypeScript قائمة على العقود وآمنة افتراضيًا",
     description:
       "إعدادات آمنة افتراضيًا، ورفض الإقلاع في الإنتاج عند وجود إعدادات خاطئة معروفة، وصفر اعتماديات، وعملاء OpenAPI 3.1 مكتوبو الأنواع من عقد واحد.",
     keywords: [

@@ -7,7 +7,7 @@ mock.module("next/cache", {
   namedExports: { cacheLife: () => {}, cacheTag: () => {} },
 });
 
-const { renderPathMarkdown, resolveSafeOrigin } =
+const { renderPathMarkdown, resolveSafeOrigin, translatedDocHeadingFirst } =
   await import("../../lib/render-page-markdown");
 const { SITE_URL } = await import("../../lib/seo");
 
@@ -72,4 +72,27 @@ test("[unhappy] unknown marketing paths 404 without any self-fetch", async (t) =
   const result = await renderPathMarkdown(LOCAL, "/not-a-real-page");
   assert.equal(result.status, 404);
   assert.deepEqual(calls, []);
+});
+
+test("translated docs Markdown starts with the H1; the notice follows as a quote", () => {
+  const notice = "このページは英語の原文を翻訳したものです。[英語版](/docs/getting-started)が優先されます。";
+  const body = `${notice}\n\n# はじめに\n\n5 分で始めます。\n\n## 1. 作成\n`;
+  assert.equal(
+    translatedDocHeadingFirst(body),
+    `# はじめに\n\n> ${notice}\n\n5 分で始めます。\n\n## 1. 作成\n`,
+  );
+  // Right-to-left text moves the same way.
+  assert.ok(translatedDocHeadingFirst("هذه ترجمة.\n\n# البدء\n\nنص\n").startsWith("# البدء\n\n> هذه ترجمة."));
+});
+
+test("Markdown not shaped as notice-then-H1 is left alone", () => {
+  for (const markdown of [
+    "# Getting started\n\nBody\n", // already heading-first (English)
+    "Intro\n\n## Not an H1\n\nBody\n", // second block is not an H1
+    "Line one\nline two\n\n# Title\n", // multi-line first paragraph
+    "> Quote\n\n# Title\n", // already a quote
+    "",
+  ]) {
+    assert.equal(translatedDocHeadingFirst(markdown), markdown);
+  }
 });

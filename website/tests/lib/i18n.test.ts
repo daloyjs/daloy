@@ -377,3 +377,29 @@ test("Japanese pages name Japanese fonts so kanji never fall back to Chinese gly
   assert.equal(HTML_LANG.ja, "ja");
   assert.equal(OG_USES_ENGLISH_CARD.ja, true, "the OG renderer has no Japanese glyphs");
 });
+
+test("home <title>s fit a search result; the full tagline stays on the card", async () => {
+  const { HOME_DOCUMENT_TITLE, HOME_TITLE } = await import("../../lib/seo");
+  // Search results show roughly 60 Latin characters; CJK glyphs are about
+  // twice as wide, so they count double.
+  const width = (text: string) => [...text].reduce((sum, ch) => sum + (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}、]/u.test(ch) ? 2 : 1), 0);
+  const titles: Array<[string, string, string]> = [
+    ["en", HOME_DOCUMENT_TITLE, HOME_TITLE],
+    ...TRANSLATED_LOCALES.map((locale): [string, string, string] => [locale, PAGES_COPY[locale].home.documentTitle, PAGES_COPY[locale].home.title]),
+  ];
+  for (const [locale, short, full] of titles) {
+    const shown = `${short} · DaloyJS`;
+    assert.ok(width(shown) <= 60, `${locale}: "${shown}" is ${width(shown)} wide`);
+    assert.ok(!short.includes("DaloyJS"), `${locale}: the suffix already names the brand`);
+    assert.ok(width(full) > width(short), `${locale}: the tagline is the long form`);
+  }
+  // Unhappy path: the old full-tagline title would not fit.
+  assert.ok(width(`${HOME_TITLE} · DaloyJS`) > 60);
+});
+
+test("llms.txt lists the translations in the language menu's order", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync("app/llms.txt/route.ts", "utf8");
+  const listed = [...route.matchAll(/title: "DaloyJS [^"]*\(([^)]+)\)"/g)].map((m) => m[1]);
+  assert.deepEqual(listed, TRANSLATED_LOCALES.map((locale) => HTML_LANG[locale]));
+});

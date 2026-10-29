@@ -15,6 +15,7 @@ export const PAGES_COPY_RU: TranslatedPagesCopy = {
   end: ".",
   home: {
     title: "REST API на TypeScript по принципу contract-first, безопасные по умолчанию, для команд, работающих с ИИ",
+    documentTitle: "Безопасные по умолчанию API на TypeScript",
     description:
       "Безопасные настройки по умолчанию, отказ запускаться в продакшене при известных ошибках конфигурации, ноль зависимостей и типизированные клиенты OpenAPI 3.1.",
     keywords: [

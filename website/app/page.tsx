@@ -6,11 +6,15 @@ import {
   buildSoftwareApplicationJsonLd,
   buildWebSiteJsonLd,
   HOME_DESCRIPTION,
+  HOME_DOCUMENT_TITLE,
   HOME_TITLE,
+  SITE_NAME,
 } from "@/lib/seo";
 
-export const metadata = buildMetadata({
-  title: HOME_TITLE,
+const homeMetadata = buildMetadata({
+  title: HOME_DOCUMENT_TITLE,
+  // The card shows the full tagline, not the short <title>.
+  imageAlt: `${HOME_TITLE} · ${SITE_NAME}`,
   description: HOME_DESCRIPTION,
   path: "/",
   translatedPath: "/",
@@ -44,6 +48,13 @@ export const metadata = buildMetadata({
     "AI agent docs",
   ],
 });
+
+// The root page shares the layout's segment, so the `%s · DaloyJS` template
+// does not apply; spell the suffix out to match the translated home pages.
+export const metadata = {
+  ...homeMetadata,
+  title: { absolute: `${HOME_DOCUMENT_TITLE} · ${SITE_NAME}` },
+};
 
 export default function Page() {
   // Connected entity graph for search engines. The goal is entity

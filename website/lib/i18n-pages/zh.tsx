@@ -13,6 +13,7 @@ export const PAGES_COPY_ZH: TranslatedPagesCopy = {
   end: "。",
   home: {
     title: "契约优先、默认安全的 TypeScript REST API 框架，为 AI 辅助开发团队打造",
+    documentTitle: "契约优先、默认安全的 TypeScript REST API",
     description:
       "默认安全配置，生产环境遇到已知错误配置时拒绝启动，零运行时依赖，并从一份路由契约生成 OpenAPI 3.1 文档和类型化客户端。",
     keywords: [
