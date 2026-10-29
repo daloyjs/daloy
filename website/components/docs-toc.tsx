@@ -269,9 +269,10 @@ function TocList({ entries, activeId, onNavigate }: { entries: TocEntry[]; activ
  * wires up the CSS-drawn hover "#" deep links, and highlights the section
  * currently in view. Renders nothing on pages with fewer than two headings.
  *
+ * @param props.label - Heading and accessible name (defaults to English).
  * @returns The table-of-contents navigation, or `null` when not useful.
  */
-export function DocsToc() {
+export function DocsToc({ label = "On this page" }: { label?: string } = {}) {
   const { entries, activeId } = useDocsToc(true);
 
   if (entries.length < 2) {
@@ -279,9 +280,9 @@ export function DocsToc() {
   }
 
   return (
-    <nav aria-label="On this page" className="text-sm">
+    <nav aria-label={label} className="text-sm">
       <h4 className="text-[11px] font-semibold tracking-[0.24em] text-muted-foreground uppercase">
-        On this page
+        {label}
       </h4>
       <TocList entries={entries} activeId={activeId} />
     </nav>
@@ -293,9 +294,10 @@ export function DocsToc() {
  * TOC is hidden. Sticks under the site header and shows the current section,
  * like Fumadocs' TOC popover. Closes after a jump.
  *
+ * @param props.label - Bar label and accessible name (defaults to English).
  * @returns The mobile TOC bar, or `null` on pages with fewer than two headings.
  */
-export function DocsTocMobile() {
+export function DocsTocMobile({ label = "On this page" }: { label?: string } = {}) {
   const { entries, activeId } = useDocsToc(false);
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
@@ -315,7 +317,7 @@ export function DocsTocMobile() {
 
   return (
     <nav
-      aria-label="On this page"
+      aria-label={label}
       className="sticky top-14 z-30 -mx-4 mb-4 border-b bg-background/90 px-4 backdrop-blur supports-backdrop-filter:bg-background/75 sm:-mx-6 sm:px-6 xl:hidden"
     >
       <button
@@ -325,7 +327,7 @@ export function DocsTocMobile() {
         className="flex w-full items-center gap-2 py-2.5 text-start text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <span className="shrink-0 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-          On this page
+          {label}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{active?.text}</span>
         <CaretDownIcon

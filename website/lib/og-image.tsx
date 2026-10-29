@@ -404,6 +404,8 @@ export function renderPageOgImage(input: PageOgImageInput): ImageResponse {
  */
 export function renderHomeOgImage(input: {
   title: string;
+  /** Footer tagline; defaults to the English one. */
+  footer?: string;
 }): ImageResponse {
   const title = clampText(input.title, 120);
 
@@ -445,7 +447,7 @@ export function renderHomeOgImage(input: {
           <OgAccentBar width={128} />
         </div>
 
-        <OgFooter left="Secure by default · Zero runtime deps" />
+        <OgFooter left={input.footer ?? "Secure by default · Zero runtime deps"} />
       </OgShell>
     ),
     ogImageSize,

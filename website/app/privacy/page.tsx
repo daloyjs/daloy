@@ -9,6 +9,7 @@ export const metadata = buildMetadata({
   description:
     "What the daloyjs.dev website collects, which vendors process traffic, and how to reach the maintainers about privacy.",
   path: "/privacy",
+  translatedPath: "/privacy",
   keywords: [
     "DaloyJS privacy",
     "daloyjs.dev privacy policy",

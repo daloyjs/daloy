@@ -16,6 +16,7 @@ export const metadata = buildMetadata({
   description:
     "What DaloyJS is, who maintains it, and how the open-source TypeScript framework is licensed and published.",
   path: "/about",
+  translatedPath: "/about",
   keywords: [
     "about DaloyJS",
     "DaloyJS team",

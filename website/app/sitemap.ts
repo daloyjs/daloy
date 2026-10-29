@@ -12,7 +12,7 @@ import { buildSitemapEntries } from "@/lib/sitemap-entries";
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return Promise.all(
-    (await buildSitemapEntries()).map(async ({ path, changeFrequency, priority }) => {
+    (await buildSitemapEntries()).map(async ({ path, changeFrequency, priority, languages }) => {
       const lastModified =
         path.startsWith("/docs") || path.startsWith("/blog/") ? await lastModifiedForRoute(path) : undefined;
       return {
@@ -20,6 +20,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ...(lastModified ? { lastModified } : {}),
         changeFrequency,
         priority,
+        ...(languages
+          ? {
+              alternates: {
+                languages: Object.fromEntries(
+                  Object.entries(languages).map(([lang, p]) => [lang, `${SITE_URL}${p}`]),
+                ),
+              },
+            }
+          : {}),
       };
     }),
   );

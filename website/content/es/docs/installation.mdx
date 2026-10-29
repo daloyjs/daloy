@@ -1,0 +1,126 @@
+---
+title: Instalación
+description: Instala DaloyJS con pnpm, npm, yarn o bun. Configura el framework en Node.js, Bun, Deno, Cloudflare Workers o Vercel en pocos minutos y sin dependencias.
+keywords:
+  - instalar DaloyJS
+  - pnpm add daloyjs
+  - configuración DaloyJS
+  - instalar framework TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# Instalación
+
+DaloyJS está pensado para **Node.js 24 LTS o Node.js 26 y posteriores** (`engines.node`: `^24.0.0 || >=26.0.0`) y se distribuye en el registro público de npm como `@daloyjs/core`. El paquete **no tiene dependencias peer**, así que `npm`, `yarn`, `pnpm` y `bun` pueden instalarlo directamente. *Recomendamos* [pnpm](https://pnpm.io/motivation) junto con los valores reforzados de `.npmrc` que verás más abajo por motivos de cadena de suministro, pero no es obligatorio. La entrada `engines.pnpm` de `package.json` es metadato orientativo, mientras que `engines.node` indica el runtime compatible y puede mostrar un aviso o fallar según tu gestor de paquetes y su configuración de engine-strict.
+
+<FlowDiagram numbered title="Dos caminos" steps={[
+          {
+            eyebrow: "lo más rápido",
+            label: "Crear el proyecto",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "o bien",
+            label: "Instalar en un proyecto",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "reforzar",
+            label: "Añadir los valores de .npmrc",
+            detail: "strict-peer-dependencies, lockfile congelado",
+            tone: "muted",
+          },
+          {
+            eyebrow: "comprobar",
+            label: "Verificar la importación",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]} caption="Crea un proyecto reforzado con un solo comando o añade el paquete sin dependencias a uno que ya tengas; después, pon el .npmrc reforzado y comprueba que la importación se resuelve." />
+
+## Lo más rápido: crea un proyecto
+
+Usa el generador oficial: configura un `.npmrc` reforzado, TypeScript estricto y una ruta que funciona, todo con un solo comando.
+
+Enlaces a los paquetes: [create-daloy en npm](https://www.npmjs.com/package/create-daloy) y [@daloyjs/core en npm](https://www.npmjs.com/package/@daloyjs/core).
+
+```bash
+# elige un gestor de paquetes
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+Consulta [Scaffold a project](/docs/scaffolder) (en inglés) para ver las plantillas y las opciones.
+
+## O instálalo en un proyecto que ya tengas
+
+### Requisitos previos
+
+- **Node.js** 24 LTS, o 26.0.0 y posteriores (Node.js 25 no está soportado).
+- Un gestor de paquetes. Sirve cualquiera de estos; se recomienda pnpm 11.x o posterior por el refuerzo de la cadena de suministro, pero `npm`, `yarn` y `bun` instalan `@daloyjs/core` sin problemas porque el paquete no tiene dependencias peer.
+
+Para activar pnpm mediante [Corepack](https://nodejs.org/api/corepack.html):
+
+```bash
+corepack enable
+corepack prepare pnpm@11.1.3 --activate
+pnpm --version
+```
+
+### Instala DaloyJS
+
+<PackageInstall packages="@daloyjs/core zod" />
+
+Opcional, solo si quieres generar un SDK tipado:
+
+<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+
+El paquete del framework publicado en npm es [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core).
+
+## Ajustes de instalación reforzados [#hardened-npmrc]
+
+Con pnpm 11+, pon los ajustes de cadena de suministro en `pnpm-workspace.yaml`, en la raíz del proyecto (claves en camelCase; pnpm 11 lee este archivo incluso en un proyecto de un solo paquete). pnpm 11 ignora estos ajustes en `.npmrc`, así que una configuración solo con `.npmrc` se queda sin el periodo de espera y sin la política de scripts.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
+```
+
+Para npm y versiones anteriores de pnpm, mantén también los mismos valores en `.npmrc`:
+
+```ini title=".npmrc"
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+minimum-release-age=1440
+ignore-scripts=true
+```
+
+El periodo de espera e `ignoreScripts` reducen el riesgo en la cadena de suministro para estas instalaciones; no detienen todos los ataques. `ignoreScripts` bloquea las cargas maliciosas en scripts de instalación, no el código que se ejecuta al importar un paquete, y el periodo de espera de 24 horas solo protege frente a compromisos que se detectan en menos de un día.
+
+Lee los motivos en [Security](/docs/security) (en inglés) y en la [guía de motivación de pnpm](https://pnpm.io/motivation).
+
+## Comprueba la instalación
+
+Ejecuta esto desde la raíz del proyecto después de instalar; funciona igual con pnpm, npm, yarn o bun porque llama directamente a `node`:
+
+```bash
+node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
+```
+
+## Siguiente paso
+
+<Cards>
+<Card title="Primeros pasos" href="/es/docs/getting-started">Escribe tu primera ruta, valídala y sirve la documentación OpenAPI.</Card>
+<Card title="Scaffold a project (en inglés)" href="/docs/scaffolder">Deja que <code>create-daloy</code> te prepare un proyecto reforzado.</Card>
+</Cards>

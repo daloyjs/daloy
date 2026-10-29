@@ -11,6 +11,7 @@ import { parseHTML } from "linkedom";
 
 import { BLOG_POSTS } from "@/lib/blog-posts";
 import { getDocPage } from "@/lib/docs-content";
+import { getSpanishMdxDoc, SPANISH_DOCS_PREFIX } from "@/lib/mdx/content";
 import { notFoundMarkdown } from "@/lib/not-found-body";
 import { buildPageMarkdown } from "@/lib/page-markdown";
 import { SITE_URL } from "@/lib/seo";
@@ -28,6 +29,13 @@ const MARKETING_PATHS: ReadonlySet<string> = new Set([
   "/contact",
   "/privacy",
   "/about-the-name",
+  // Castilian Spanish versions (lib/i18n.ts TRANSLATED_PATHS).
+  "/es",
+  "/es/about",
+  "/es/contact",
+  "/es/privacy",
+  "/es/about-the-name",
+  "/es/docs",
 ]);
 
 function isKnownSitePath(path: string): boolean {
@@ -211,6 +219,23 @@ export async function renderPathMarkdown(
 ): Promise<MarkdownRenderResult> {
   const path = canonicalMarkdownPath(pathname);
   const safeOrigin = resolveSafeOrigin(origin);
+
+  // Spanish docs pages (content/es/docs): an untranslated path is a 404.
+  if (path.startsWith(`${SPANISH_DOCS_PREFIX}/`)) {
+    const segments = path.slice(SPANISH_DOCS_PREFIX.length + 1).split("/");
+    const page = await getSpanishMdxDoc(segments);
+    if (!page) {
+      return { markdown: notFoundMarkdown(path), status: 404 };
+    }
+    const markdown = await renderHtmlAsMarkdown(safeOrigin, page.route);
+    if (!markdown) {
+      return {
+        markdown: "Failed to render markdown for this page.\n",
+        status: 500,
+      };
+    }
+    return { markdown, status: 200 };
+  }
 
   if (isDocsPath(path)) {
     const page = await getDocPage(path === "/docs" ? "/docs" : path);

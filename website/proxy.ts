@@ -7,6 +7,7 @@ import {
   preferredType,
   shouldNegotiatePage,
 } from "@/lib/accept";
+import { LOCALE_HEADER, localeFromPathname } from "@/lib/i18n";
 import { notAcceptableProblem, problemResponse } from "@/lib/problem-json";
 import { findApiSurface, surfaceLinkRelations } from "@/lib/site-deprecation";
 
@@ -150,6 +151,11 @@ function markdownRewritePath(pathname: string): string {
  * agents reading a preview deployment should get the same discovery relations
  * as agents reading production. See {@link buildLlmsTxtLinkHeader}.
  *
+ * The page locale (`en`, or `es` under `/es`) is forwarded on `x-site-locale`
+ * so the root layout can render `<html lang>` and the localized chrome. The
+ * value is derived from the pathname and always overwrites whatever the client
+ * sent, so a forged header cannot relabel a page.
+ *
  * Markdown negotiation follows acceptmarkdown.com: parse `Accept` by q-value
  * and specificity, rewrite the canonical URL to `/md/...` when Markdown wins,
  * return 406 problem+json when the header cannot be satisfied, and always
@@ -164,6 +170,10 @@ export function proxy(request: NextRequest): NextResponse {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set(
+    LOCALE_HEADER,
+    localeFromPathname(request.nextUrl.pathname),
+  );
 
   if (isProduction) {
     requestHeaders.set(

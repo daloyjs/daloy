@@ -1,15 +1,15 @@
-import type { Metadata, Route, Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { Geist_Mono, Inter } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
-import { LogoLockup } from "@/components/daloyjs-logo";
+import { SiteFooter } from "@/components/site-footer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReadingProgress } from "@/components/reading-progress";
 import { BackToTop } from "@/components/back-to-top";
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { cn } from "@/lib/utils";
+import { HTML_LANG, LOCALE_HEADER, parseLocaleHeader } from "@/lib/i18n";
 import {
   DEFAULT_KEYWORDS,
   HOME_DESCRIPTION,
@@ -30,7 +30,6 @@ export const instant = false;
 
 const DEFAULT_TITLE = `${SITE_NAME} - ${HOME_TITLE}`;
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
-const COPYRIGHT_YEAR = 2026;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -138,11 +137,16 @@ export default async function RootLayout({
   // which nonce-based CSP requires. It is stamped onto the inline scripts we
   // control — next-themes' anti-FOUC script and the analytics loader — so they
   // satisfy `script-src 'nonce-…'` without `'unsafe-inline'`.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  // Locale from proxy.ts (derived from the pathname, never client-supplied).
+  // Cross-locale links are full document loads, so this stays accurate for
+  // the life of the document (see lib/i18n.ts).
+  const locale = parseLocaleHeader(requestHeaders.get(LOCALE_HEADER));
 
   return (
     <html
-      lang="en"
+      lang={HTML_LANG[locale]}
       suppressHydrationWarning
       className={cn(
         "antialiased",
@@ -157,75 +161,14 @@ export default async function RootLayout({
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:border focus:border-border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
           >
-            Skip to content
+            {locale === "es" ? "Saltar al contenido" : "Skip to content"}
           </a>
           <ReadingProgress />
-          <SiteHeader />
+          <SiteHeader locale={locale} />
           <div id="main-content" tabIndex={-1} className="flex flex-1 flex-col">
             {children}
           </div>
-          <footer className="border-t px-6 py-6 text-sm text-muted-foreground">
-            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
-              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-                <Link href="/" aria-label="DaloyJS Home">
-                  <LogoLockup className="h-6 w-auto transition-opacity hover:opacity-80" />
-                </Link>
-                <span className="hidden text-border sm:inline-block">|</span>
-                <p className="text-center sm:text-left">
-                  MIT licensed · Distributed via{" "}
-                  <a
-                    className="underline"
-                    href="https://pnpm.io/motivation"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    pnpm
-                  </a>{" "}
-                  ·{" "}
-                  <Link className="underline underline-offset-4" href="/blog">
-                    Blog
-                  </Link>{" "}
-                  ·{" "}
-                  <Link
-                    className="underline underline-offset-4"
-                    href={"/about" as Route}
-                  >
-                    About
-                  </Link>{" "}
-                  ·{" "}
-                  <Link
-                    className="underline underline-offset-4"
-                    href={"/contact" as Route}
-                  >
-                    Contact
-                  </Link>{" "}
-                  ·{" "}
-                  <Link
-                    className="underline underline-offset-4"
-                    href={"/privacy" as Route}
-                  >
-                    Privacy
-                  </Link>{" "}
-                  ·{" "}
-                  <Link
-                    className="underline underline-offset-4"
-                    href="/about-the-name"
-                  >
-                    About the name
-                  </Link>
-                </p>
-              </div>
-              <p className="text-center sm:text-right">
-                <a
-                  className="underline underline-offset-4"
-                  href="mailto:daloyjs@gmail.com"
-                >
-                  daloyjs@gmail.com
-                </a>{" "}
-                · © {COPYRIGHT_YEAR} DaloyJS contributors
-              </p>
-            </div>
-          </footer>
+          <SiteFooter locale={locale} />
           <BackToTop />
         </ThemeProvider>
         <SpeedInsights />

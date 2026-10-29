@@ -19,6 +19,7 @@ import { SiteApiReference } from "@/components/site-api-reference";
 import { Step, Steps } from "@/components/steps";
 import { TypeTable } from "@/components/type-table";
 import { UseCaseGuide } from "@/components/use-case-guide";
+import { HTML_LANG, localeFromPathname, type SiteLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 import remarkDaloy from "./remark-daloy";
@@ -81,6 +82,41 @@ export const mdxComponents: MDXComponents = {
 };
 
 /**
+ * Spanish-page overrides: a markdown link or `<Card>` into the English site
+ * (most of `/docs`, the blog) must reload the document so the root layout
+ * re-renders `<html lang>` and the chrome (see lib/i18n.ts); links inside
+ * `/es` keep client navigation.
+ */
+const spanishMdxComponents: MDXComponents = {
+  a: function SpanishMdxLink({ href = "", children, ...rest }: ComponentProps<"a">) {
+    if (href.startsWith("/")) {
+      const target = localeFromPathname(href.split(/[?#]/, 1)[0] ?? href);
+      if (target !== "es") {
+        return (
+          <a href={href} hrefLang={HTML_LANG[target]} {...rest}>
+            {children}
+          </a>
+        );
+      }
+    }
+    return <MdxLink href={href} {...rest}>{children}</MdxLink>;
+  },
+  Card: function SpanishCard(props: ComponentProps<typeof Card>) {
+    return <Card {...props} locale="es" />;
+  },
+};
+
+/**
+ * The MDX component map for a page in `locale`.
+ *
+ * @param locale - Locale of the page being rendered.
+ * @returns {@link mdxComponents}, with locale-aware links for Spanish pages.
+ */
+export function mdxComponentsFor(locale: SiteLocale): MDXComponents {
+  return locale === "es" ? { ...mdxComponents, ...spanishMdxComponents } : mdxComponents;
+}
+
+/**
  * Compile and render an MDX body on the server.
  *
  * Security: MDX compiles to JavaScript that is executed here, so this must
@@ -91,6 +127,7 @@ export const mdxComponents: MDXComponents = {
  * @param props.file - Source path, for error messages.
  * @param props.components - Extra components available to this page only.
  * @param props.scope - Page-specific helpers, exposed to the MDX as `props.scope`.
+ * @param props.locale - Page locale; picks locale-aware link components.
  * @returns The rendered page body.
  * @throws {Error} When the MDX fails to compile; the message names the file.
  */
@@ -99,6 +136,7 @@ export async function MdxContent({
   file,
   components,
   scope = {},
+  locale = "en",
 }: {
   source: string;
   file: string;
@@ -106,6 +144,8 @@ export async function MdxContent({
   components?: MDXComponents;
   /** Page-specific helper values, reachable from the MDX as `props.scope.<name>`. */
   scope?: Record<string, unknown>;
+  /** Locale of the page (defaults to English). */
+  locale?: SiteLocale;
 }) {
   let Content;
   try {
@@ -120,5 +160,6 @@ export async function MdxContent({
 
   // `cn` is exposed as a prop because MDX cannot import: content written as
   // `className={props.cn("a", cond && "b")}` keeps the same class merging.
-  return <Content components={components ? { ...mdxComponents, ...components } : mdxComponents} cn={cn} scope={scope} />;
+  const base = mdxComponentsFor(locale);
+  return <Content components={components ? { ...base, ...components } : base} cn={cn} scope={scope} />;
 }

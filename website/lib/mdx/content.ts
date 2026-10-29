@@ -36,9 +36,12 @@ export const docFrontmatterSchema = z
 /** Parsed, validated docs frontmatter. */
 export type DocFrontmatter = z.infer<typeof docFrontmatterSchema>;
 
+/** Route prefix of the Castilian Spanish docs (`content/es/docs`). */
+export const SPANISH_DOCS_PREFIX = "/es/docs";
+
 /** One MDX docs page on disk. */
 export type MdxDoc = {
-  /** Canonical route, e.g. `/docs/tutorials/bookstore`. */
+  /** Canonical route, e.g. `/docs/tutorials/bookstore` or `/es/docs/installation`. */
   route: string;
   /** Route segments under `/docs`, e.g. `["tutorials", "bookstore"]`. */
   segments: string[];
@@ -99,11 +102,11 @@ async function walk(dir: string): Promise<string[]> {
 }
 
 /**
- * Map a content file to its docs route: `content/docs/a/b.mdx` → `/docs/a/b`
- * and `content/docs/a/index.mdx` → `/docs/a`.
+ * Map a content file to its route segments under `root`:
+ * `<root>/a/b.mdx` → `["a", "b"]` and `<root>/a/index.mdx` → `["a"]`.
  */
-function routeSegments(file: string): string[] {
-  const relative = path.relative(path.join(contentDir, "docs"), file).split(path.sep).join("/");
+function routeSegments(root: string, file: string): string[] {
+  const relative = path.relative(root, file).split(path.sep).join("/");
   const segments = relative.replace(/\.mdx$/, "").split("/");
   if (segments.at(-1) === "index") segments.pop();
   return segments;
@@ -120,14 +123,45 @@ export async function getMdxDocs(): Promise<MdxDoc[]> {
   "use cache";
   cacheLife("max");
 
-  const files = await walk(path.join(contentDir, "docs"));
+  return readDocsTree(path.join(contentDir, "docs"), "/docs");
+}
+
+/**
+ * Read every Castilian Spanish docs page under `content/es/docs`, routed at
+ * `/es/docs/...`. Each file translates the English page with the same
+ * segments; the English tree ({@link getMdxDocs}) never includes them, so
+ * search, MCP, llms.txt and the docs sidebar stay English-only.
+ *
+ * @returns All Spanish MDX docs pages, sorted by route.
+ * @throws {Error} When any page has invalid frontmatter.
+ */
+export async function getSpanishMdxDocs(): Promise<MdxDoc[]> {
+  "use cache";
+  cacheLife("max");
+
+  return readDocsTree(path.join(contentDir, "es", "docs"), SPANISH_DOCS_PREFIX);
+}
+
+/**
+ * Look up one Spanish docs page by its segments under `/es/docs`.
+ *
+ * @param segments - e.g. `["tutorials", "bookstore"]`.
+ * @returns The page, or `null` when it has not been translated.
+ */
+export async function getSpanishMdxDoc(segments: string[]): Promise<MdxDoc | null> {
+  const route = segments.length ? `${SPANISH_DOCS_PREFIX}/${segments.join("/")}` : SPANISH_DOCS_PREFIX;
+  return (await getSpanishMdxDocs()).find((doc) => doc.route === route) ?? null;
+}
+
+async function readDocsTree(root: string, prefix: string): Promise<MdxDoc[]> {
+  const files = await walk(root);
   const docs = await Promise.all(
     files.map(async (file) => {
       const relative = path.relative(process.cwd(), file).split(path.sep).join("/");
       const { frontmatter, body } = parseMdxSource(await readFile(file, "utf8"), relative);
-      const segments = routeSegments(file);
+      const segments = routeSegments(root, file);
       return {
-        route: segments.length ? `/docs/${segments.join("/")}` : "/docs",
+        route: segments.length ? `${prefix}/${segments.join("/")}` : prefix,
         segments,
         file: relative,
         frontmatter,

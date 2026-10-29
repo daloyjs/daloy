@@ -14,6 +14,7 @@ export const metadata = buildMetadata({
   description:
     "Email, GitHub issues, and private security reporting for DaloyJS. How to reach the maintainers.",
   path: "/contact",
+  translatedPath: "/contact",
   keywords: [
     "contact DaloyJS",
     "DaloyJS email",

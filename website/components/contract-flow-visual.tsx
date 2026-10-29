@@ -1,9 +1,20 @@
-const FLOW_STEPS = [
-  { label: "contract", detail: "GET /books/:id + z.object(...)" },
-  { label: "validation", detail: "runtime, both directions" },
-  { label: "OpenAPI 3.1", detail: "live spec + /docs UI" },
-  { label: "typed client", detail: "pnpm gen -> fetch SDK" },
-];
+/** Visible strings of {@link ContractFlowVisual}. */
+export type ContractFlowCopy = {
+  title: string;
+  tagline: string;
+  steps: ReadonlyArray<{ label: string; detail: string }>;
+};
+
+const ENGLISH_COPY: ContractFlowCopy = {
+  title: "contract flow",
+  tagline: "define once -> generate the rest",
+  steps: [
+    { label: "contract", detail: "GET /books/:id + z.object(...)" },
+    { label: "validation", detail: "runtime, both directions" },
+    { label: "OpenAPI 3.1", detail: "live spec + /docs UI" },
+    { label: "typed client", detail: "pnpm gen -> fetch SDK" },
+  ],
+};
 
 const PATH_A = "M 36 112 C 170 30, 260 190, 392 112 S 620 35, 864 112";
 const PATH_B = "M 36 112 C 170 194, 260 34, 392 112 S 620 190, 864 112";
@@ -45,7 +56,17 @@ function Spark({
   );
 }
 
-export function ContractFlowVisual() {
+/**
+ * Animated "one contract feeds validation, OpenAPI and the client" strip on
+ * the landing page.
+ *
+ * @param props.copy - Translated strings; defaults to English.
+ */
+export function ContractFlowVisual({
+  copy = ENGLISH_COPY,
+}: {
+  copy?: ContractFlowCopy;
+}) {
   return (
     <div
       className="contract-flow-visual float-up mx-auto w-full max-w-5xl"
@@ -54,8 +75,8 @@ export function ContractFlowVisual() {
       <div className="contract-flow-visual__shell">
         <div className="contract-flow-visual__glow" />
         <div className="contract-flow-visual__topline">
-          <span>contract flow</span>
-          <span>define once -&gt; generate the rest</span>
+          <span>{copy.title}</span>
+          <span>{copy.tagline}</span>
         </div>
 
         <div className="contract-flow-visual__stage">
@@ -99,7 +120,7 @@ export function ContractFlowVisual() {
           </svg>
 
           <div className="contract-flow-visual__nodes">
-            {FLOW_STEPS.map((step, index) => (
+            {copy.steps.map((step, index) => (
               <div
                 className="contract-flow-visual__node"
                 key={step.label}

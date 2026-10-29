@@ -68,6 +68,10 @@ const nextConfig: NextConfig = {
     "/docs": ["./content/**/*.mdx"],
     "/docs/[slug]": ["./content/**/*.mdx"],
     "/docs/[slug]/[child]": ["./content/**/*.mdx"],
+    // Castilian Spanish docs (content/es/docs) and the index that lists them.
+    "/es/docs": ["./content/es/docs/**/*.mdx"],
+    "/es/docs/[slug]": ["./content/es/docs/**/*.mdx"],
+    "/es/docs/[slug]/[child]": ["./content/es/docs/**/*.mdx"],
     "/blog": ["./content/blog/*.mdx"],
     "/blog/[slug]": ["./content/blog/*.mdx"],
     "/blog/rss.xml": ["./content/blog/*.mdx"],

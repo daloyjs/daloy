@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
 
+import {
+  HTML_LANG,
+  languageAlternates,
+  OG_LOCALE,
+  type SiteLocale,
+  type TranslatedPath,
+} from "@/lib/i18n";
+
 /**
  * Serialize a JSON-LD payload for safe inline injection inside a
  * `<script type="application/ld+json">` rendered via React's
@@ -106,6 +114,13 @@ export type PageSeoInput = {
   image?: string;
   /** Mark the page as documentation/article instead of website. */
   type?: "website" | "article";
+  /** Language of this page. Defaults to `"en"`. */
+  locale?: SiteLocale;
+  /**
+   * English path of a page that exists in every locale (see
+   * `TRANSLATED_PATHS`). Adds `hreflang` alternates and `og:locale:alternate`.
+   */
+  translatedPath?: TranslatedPath;
 };
 
 function getDefaultImage(path: string): string {
@@ -146,6 +161,14 @@ function isDocsPath(path: string): boolean {
   );
 }
 
+/**
+ * Build page metadata. A page with `translatedPath` also gets `hreflang`
+ * alternates for every locale (English as `x-default`) and the matching
+ * `og:locale` / `og:locale:alternate` pair.
+ *
+ * @param input - Page title, description, path, and optional locale data.
+ * @returns The Next.js `Metadata` for the page.
+ */
 export function buildMetadata(input: PageSeoInput): Metadata {
   const path = input.path.startsWith("/") ? input.path : `/${input.path}`;
   const url = `${SITE_URL}${path}`;
@@ -154,6 +177,7 @@ export function buildMetadata(input: PageSeoInput): Metadata {
   const keywords = Array.from(
     new Set([...(input.keywords ?? []), ...DEFAULT_KEYWORDS]),
   );
+  const locale = input.locale ?? "en";
 
   return {
     title: input.title,
@@ -166,6 +190,9 @@ export function buildMetadata(input: PageSeoInput): Metadata {
       // matching `rel="describedby"` pointer, and the header form of both
       // relations, are set in proxy.ts.
       ...(isDocsPath(path) ? { types: { "text/markdown": `${path}.md` } } : {}),
+      ...(input.translatedPath
+        ? { languages: languageAlternates(input.translatedPath) }
+        : {}),
     },
     openGraph: {
       type: input.type ?? "website",
@@ -174,7 +201,10 @@ export function buildMetadata(input: PageSeoInput): Metadata {
       title: fullTitle,
       description: input.description,
       images: [{ url: image, width: 1200, height: 630, alt: fullTitle }],
-      locale: "en_US",
+      locale: OG_LOCALE[locale],
+      ...(input.translatedPath
+        ? { alternateLocale: [OG_LOCALE[locale === "es" ? "en" : "es"]] }
+        : {}),
     },
     twitter: {
       card: "summary_large_image",
@@ -242,7 +272,7 @@ export function buildWebSiteJsonLd(): Record<string, unknown> {
     name: SITE_NAME,
     alternateName: [...BRAND_ALTERNATE_NAMES],
     url: SITE_URL,
-    inLanguage: "en",
+    inLanguage: [HTML_LANG.en, HTML_LANG.es],
     publisher: { "@id": ORGANIZATION_ID },
   };
 }

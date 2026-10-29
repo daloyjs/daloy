@@ -285,8 +285,10 @@ test("memory rate limiter returns 429 after the quota is exhausted", () => {
 });
 
 test("homepage SSR markup has an H1 and nested H2/H3 headings", async () => {
+  // Both locales' home pages (app/page.tsx, app/es/page.tsx) render this one
+  // shared component, so its heading order holds for every language.
   const source = await readFile(
-    path.join(process.cwd(), "app/page.tsx"),
+    path.join(process.cwd(), "components/home/home-page.tsx"),
     "utf8",
   );
   assert.match(source, /<h1\b/);

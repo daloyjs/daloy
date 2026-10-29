@@ -13,15 +13,57 @@ import { buttonVariants } from "./ui/button";
 import { LogoMark } from "./daloyjs-logo";
 import { NavLink } from "./nav-link";
 import { ThemeSwitcher } from "./theme-switcher";
+import { LanguageSwitcher } from "./language-switcher";
 import { CORE_PACKAGE_VERSION } from "@/lib/seo";
+import { HTML_LANG, localeFromPathname, type SiteLocale } from "@/lib/i18n";
 
-const primaryNav: Array<{ href: Route; label: string }> = [
-  { href: "/docs" as Route, label: "Docs" },
-  { href: "/blog", label: "Blog" },
-  { href: "/docs/getting-started" as Route, label: "Getting started" },
-  { href: "/docs/tutorials/bookstore" as Route, label: "Tutorials" },
-  { href: "/docs/api-reference" as Route, label: "API" },
-];
+type NavItem = { href: Route; label: string };
+
+/**
+ * Header copy per locale. A nav item whose target is in the other locale
+ * (from Spanish: the blog and the untranslated docs) renders as a plain <a>
+ * (a full document load, see lib/i18n.ts) marked `hreflang`.
+ */
+const NAV_COPY: Record<
+  SiteLocale,
+  {
+    home: Route;
+    items: NavItem[];
+    installation: NavItem;
+    openMenu: string;
+    closeMenu: string;
+    /** Tooltip on links that leave this locale. */
+    otherLanguage?: string;
+  }
+> = {
+  en: {
+    home: "/",
+    items: [
+      { href: "/docs" as Route, label: "Docs" },
+      { href: "/blog", label: "Blog" },
+      { href: "/docs/getting-started" as Route, label: "Getting started" },
+      { href: "/docs/tutorials/bookstore" as Route, label: "Tutorials" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/docs/installation" as Route, label: "Installation" },
+    openMenu: "Open navigation menu",
+    closeMenu: "Close navigation menu",
+  },
+  es: {
+    home: "/es" as Route,
+    items: [
+      { href: "/es/docs" as Route, label: "Documentación" },
+      { href: "/blog", label: "Blog" },
+      { href: "/es/docs/getting-started" as Route, label: "Primeros pasos" },
+      { href: "/es/docs/tutorials/bookstore" as Route, label: "Tutoriales" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/es/docs/installation" as Route, label: "Instalación" },
+    openMenu: "Abrir el menú de navegación",
+    closeMenu: "Cerrar el menú de navegación",
+    otherLanguage: "Contenido en inglés",
+  },
+};
 
 const socialLinks = [
   {
@@ -41,7 +83,15 @@ const socialLinks = [
   },
 ];
 
-export function SiteHeader() {
+/**
+ * Sticky site header. Rendered once per document by the root layout.
+ *
+ * @param props.locale - Locale of the current document; picks the nav copy
+ *   and the language switcher's target.
+ */
+export function SiteHeader({ locale }: { locale: SiteLocale }) {
+  const copy = NAV_COPY[locale];
+  const isCrossLocale = (href: string) => localeFromPathname(href) !== locale;
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const mobileNavButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const mobileNavPanelRef = React.useRef<HTMLDivElement | null>(null);
@@ -96,7 +146,7 @@ export function SiteHeader() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-14 items-center gap-3">
           <Link
-            href="/"
+            href={copy.home}
             className="flex min-w-0 items-center gap-2 font-semibold"
           >
             <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/4 ring-1 ring-foreground/10 dark:bg-white/5 dark:ring-white/10">
@@ -111,23 +161,36 @@ export function SiteHeader() {
           </Link>
 
           <nav className="ml-8 hidden items-center gap-5 text-sm xl:flex">
-            {primaryNav.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                exact
-                className={({ isActive }) =>
-                  isActive
-                    ? "font-medium text-foreground transition-colors"
-                    : "text-muted-foreground transition-colors hover:text-foreground"
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {copy.items.map((item) =>
+              isCrossLocale(item.href) ? (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  hrefLang={HTML_LANG[localeFromPathname(item.href)]}
+                  title={copy.otherLanguage}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  exact
+                  className={({ isActive }) =>
+                    isActive
+                      ? "font-medium text-foreground transition-colors"
+                      : "text-muted-foreground transition-colors hover:text-foreground"
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ),
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <LanguageSwitcher locale={locale} />
             <ThemeSwitcher />
 
             <div className="hidden items-center gap-2 xl:flex">
@@ -154,7 +217,7 @@ export function SiteHeader() {
               {mobileNavOpen ? (
                 <button
                   type="button"
-                  aria-label="Close navigation menu"
+                  aria-label={copy.closeMenu}
                   className="fixed inset-0 top-14 z-40 bg-background/40 backdrop-blur-[2px]"
                   onClick={closeMobileNav}
                 />
@@ -163,11 +226,7 @@ export function SiteHeader() {
               <button
                 ref={mobileNavButtonRef}
                 type="button"
-                aria-label={
-                  mobileNavOpen
-                    ? "Close navigation menu"
-                    : "Open navigation menu"
-                }
+                aria-label={mobileNavOpen ? copy.closeMenu : copy.openMenu}
                 aria-expanded={mobileNavOpen}
                 aria-controls="mobile-site-nav"
                 className={
@@ -190,33 +249,34 @@ export function SiteHeader() {
                 }
               >
                 <nav className="flex flex-col gap-1">
-                  {primaryNav.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      href={item.href}
-                      exact
-                      onClick={closeMobileNav}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition-colors"
-                          : "rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-
-                  <NavLink
-                    href="/docs/installation"
-                    onClick={closeMobileNav}
-                    className={({ isActive }) =>
-                      isActive
-                        ? "rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition-colors"
-                        : "rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
-                    }
-                  >
-                    Installation
-                  </NavLink>
+                  {[...copy.items, copy.installation].map((item) =>
+                    isCrossLocale(item.href) ? (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        hrefLang={HTML_LANG[localeFromPathname(item.href)]}
+                        title={copy.otherLanguage}
+                        onClick={closeMobileNav}
+                        className="rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <NavLink
+                        key={item.href}
+                        href={item.href}
+                        exact={item !== copy.installation}
+                        onClick={closeMobileNav}
+                        className={({ isActive }) =>
+                          isActive
+                            ? "rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition-colors"
+                            : "rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ),
+                  )}
                 </nav>
 
                 <div className="mt-2 flex items-center gap-2 border-t border-border px-1 pt-2">

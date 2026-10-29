@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowRightIcon, ArrowUpRightIcon } from "@phosphor-icons/react/ssr";
 
+import { HTML_LANG, localeFromPathname, type SiteLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,13 +22,19 @@ export interface CardProps {
   children?: ReactNode;
   /** Optional leading icon element. */
   icon?: ReactNode;
+  /**
+   * Locale of the page rendering the card. When set and `href` belongs to the
+   * other locale, the card is a plain `<a hreflang>` (a full document load,
+   * see lib/i18n.ts) instead of `next/link`.
+   */
+  locale?: SiteLocale;
 }
 
 /**
  * A single linked card inside {@link Cards}. The whole card is the link
  * target; external links get `rel="noopener noreferrer"` and an outbound arrow.
  */
-export function Card({ title, href, children, icon }: CardProps) {
+export function Card({ title, href, children, icon, locale }: CardProps) {
   const external = /^https?:\/\//.test(href);
   const Arrow = external ? ArrowUpRightIcon : ArrowRightIcon;
   const className =
@@ -49,6 +56,15 @@ export function Card({ title, href, children, icon }: CardProps) {
   if (external) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        {body}
+      </a>
+    );
+  }
+
+  const target = localeFromPathname(href.split(/[?#]/, 1)[0] ?? href);
+  if (locale && target !== locale) {
+    return (
+      <a href={href} hrefLang={HTML_LANG[target]} className={className}>
         {body}
       </a>
     );

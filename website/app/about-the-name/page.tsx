@@ -5,6 +5,7 @@ export const metadata = buildMetadata({
   description:
     "Learn what Daloy means, how to pronounce it, and why the framework uses the name.",
   path: "/about-the-name",
+  translatedPath: "/about-the-name",
   keywords: [
     "Daloy meaning",
     "Daloy pronunciation",
