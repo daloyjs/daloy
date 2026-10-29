@@ -1,5 +1,6 @@
 import { foldArabic } from "./arabic";
 import { foldCyrillic } from "./cyrillic";
+import type { TranslatedLocale } from "./i18n";
 
 /**
  * Cross-language search glossary: maps the technical terms Chinese and
@@ -577,11 +578,23 @@ export const DE_GLOSSARY: readonly GlossaryEntry[] = [
 /** Upper bound on glossary expansions applied to one query. */
 export const MAX_GLOSSARY_MATCHES = 8;
 
-/** One applied mapping, for transparency in tool output. */
-export type GlossaryMatch = { source: string; english: string };
+/**
+ * One applied mapping, for transparency in tool output. `language` names the
+ * glossary list the term came from, so the anonymous search counter can tell
+ * which list helps (Spanish, French, Portuguese and German share one script).
+ */
+export type GlossaryMatch = { source: string; english: string; language: TranslatedLocale };
+
+/** A glossary entry tagged with the language of its list. */
+type TaggedEntry = GlossaryEntry & { language: TranslatedLocale };
+
+/** Tag every entry of one list with its language. */
+function tagged(list: readonly GlossaryEntry[], language: TranslatedLocale): TaggedEntry[] {
+  return list.map((entry) => ({ ...entry, language }));
+}
 
 /** German terms, longest first ("dekomprimierung" before "komprimierung"). */
-const DE_BY_LENGTH = [...DE_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
+const DE_BY_LENGTH = tagged(DE_GLOSSARY, "de").sort((a, b) => b.term.length - a.term.length);
 
 /** German folding: lowercase, umlauts without dots, ß as ss, words single-spaced. */
 function foldGerman(text: string): string {
@@ -595,22 +608,26 @@ function foldGerman(text: string): string {
 }
 
 /** Russian terms as stem lists, most words first, then longest. */
-const RU_TERMS = [...RU_GLOSSARY]
+const RU_TERMS = tagged(RU_GLOSSARY, "ru")
   .map((entry) => ({ entry, stems: entry.term.split(" ") }))
   .sort((a, b) => b.stems.length - a.stems.length || b.entry.term.length - a.entry.term.length);
 
 /** Longest first, so "اعاده التوجيه" (redirect) is consumed before "توجيه" (routing). */
-const AR_BY_LENGTH = [...AR_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
+const AR_BY_LENGTH = tagged(AR_GLOSSARY, "ar").sort((a, b) => b.term.length - a.term.length);
 
 /**
  * Chinese and Japanese share the substring matcher. Longest terms first, so
  * "速率限制" and "コントラクトテスト" win over anything shorter inside them.
  */
-const CJK_BY_LENGTH = [...ZH_GLOSSARY, ...JA_GLOSSARY].sort(
+const CJK_BY_LENGTH = [...tagged(ZH_GLOSSARY, "zh"), ...tagged(JA_GLOSSARY, "ja")].sort(
   (a, b) => [...b.term].length - [...a.term].length,
 );
 /** Spanish, French and Portuguese share the accent-free whole-word matcher. */
-const LATIN_BY_LENGTH = [...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY].sort(
+const LATIN_BY_LENGTH = [
+  ...tagged(ES_GLOSSARY, "es"),
+  ...tagged(FR_GLOSSARY, "fr"),
+  ...tagged(PT_GLOSSARY, "pt"),
+].sort(
   (a, b) => b.term.length - a.term.length,
 );
 
@@ -644,7 +661,7 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
   for (const entry of CJK_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     if (zh.includes(entry.term)) {
-      matches.push({ source: entry.term, english: entry.english });
+      matches.push({ source: entry.term, english: entry.english, language: entry.language });
       zh = zh.split(entry.term).join("\u0000");
     }
   }
@@ -654,7 +671,7 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
   for (const entry of AR_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     if (ar.includes(entry.term)) {
-      matches.push({ source: entry.term, english: entry.english });
+      matches.push({ source: entry.term, english: entry.english, language: entry.language });
       ar = ar.split(entry.term).join("\u0000");
     }
   }
@@ -670,7 +687,7 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     for (let i = 0; i + stems.length <= ruWords.length; i++) {
       if (stems.every((stemPart, k) => ruWords[i + k]!.startsWith(stemPart))) {
-        matches.push({ source: entry.term, english: entry.english });
+        matches.push({ source: entry.term, english: entry.english, language: entry.language });
         for (let k = 0; k < stems.length; k++) ruWords[i + k] = "\u0000";
         break;
       }
@@ -682,7 +699,7 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
   for (const entry of DE_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     if (de.includes(entry.term)) {
-      matches.push({ source: entry.term, english: entry.english });
+      matches.push({ source: entry.term, english: entry.english, language: entry.language });
       de = de.split(entry.term).join("\u0000");
     }
   }
@@ -692,7 +709,7 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     const needle = ` ${entry.term} `;
     if (es.includes(needle)) {
-      matches.push({ source: entry.term, english: entry.english });
+      matches.push({ source: entry.term, english: entry.english, language: entry.language });
       es = es.split(needle).join(" \u0000 ");
     }
   }

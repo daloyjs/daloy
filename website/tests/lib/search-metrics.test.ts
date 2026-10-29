@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  glossaryLanguages,
   isNonEnglishSearch,
   NON_ENGLISH_SEARCH_EVENT,
   queryScript,
@@ -16,6 +17,7 @@ const SIGNAL: NonEnglishSearchSignal = {
   englishResultsWithoutGlossary: "none",
   translatedResults: "some",
   glossaryTerms: 1,
+  glossaryLanguages: "zh",
 };
 
 test("queryScript classifies coarsely", () => {
@@ -24,9 +26,28 @@ test("queryScript classifies coarsely", () => {
   assert.equal(queryScript("ミドルウェア"), "kana");
   assert.equal(queryScript("認証の設定"), "kana");
   assert.equal(queryScript("認証"), "han");
+  assert.equal(queryScript("تحديد المعدل"), "arabic");
+  assert.equal(queryScript("маршрутизация"), "cyrillic");
+  // Mixed scripts take the first non-Latin family they contain.
+  assert.equal(queryScript("rate limit для API"), "cyrillic");
   assert.equal(queryScript("validación"), "latin");
   assert.equal(queryScript("rate limit"), "latin");
   assert.equal(queryScript("123 !!"), "other");
+});
+
+test("glossaryLanguages separates languages that share a script", () => {
+  assert.equal(glossaryLanguages(glossaryMatches("pruebas de contrato")), "es");
+  assert.equal(glossaryLanguages(glossaryMatches("journalisation")), "fr");
+  assert.equal(glossaryLanguages(glossaryMatches("Fehlerbehandlung")), "de");
+  // Sorted and de-duplicated across lists.
+  assert.equal(glossaryLanguages(glossaryMatches("限流 ミドルウェア 中间件")), "ja+zh");
+  // Unhappy paths: English or unmatched queries name no language, and the
+  // value never carries the matched text.
+  assert.equal(glossaryLanguages([]), "none");
+  assert.equal(glossaryLanguages(glossaryMatches("rate limit middleware")), "none");
+  const value = glossaryLanguages(glossaryMatches("限流 pruebas Ratenbegrenzung"));
+  assert.match(value, /^[a-z]{2}(\+[a-z]{2})*$/);
+  assert.ok(!value.includes("限流") && !value.includes("pruebas"));
 });
 
 test("only non-ASCII or glossary-matched searches count as non-English", () => {

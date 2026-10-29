@@ -6,7 +6,7 @@ import type { GlossaryMatch } from "@/lib/docs-glossary";
 export const NON_ENGLISH_SEARCH_EVENT = "mcp_search_non_english";
 
 /** Script family of a query; coarse on purpose (no query text is kept). */
-export type QueryScript = "kana" | "han" | "latin" | "other";
+export type QueryScript = "kana" | "han" | "arabic" | "cyrillic" | "latin" | "other";
 
 /**
  * Aggregate-only facts about one non-English search. No query text, no
@@ -22,16 +22,25 @@ export type NonEnglishSearchSignal = {
   translatedResults: "none" | "some";
   /** Glossary mappings applied (0 to MAX_GLOSSARY_MATCHES). */
   glossaryTerms: number;
+  /**
+   * Languages of the glossary lists that matched, sorted and joined with
+   * "+" (for example "de" or "es+pt"), or "none". Language codes only, never
+   * the matched terms. See {@link glossaryLanguages}.
+   */
+  glossaryLanguages: string;
 };
 
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 const HAN = /\p{Script=Han}/u;
+const ARABIC = /\p{Script=Arabic}/u;
+const CYRILLIC = /\p{Script=Cyrillic}/u;
 const NON_ASCII = /[^\x00-\x7f]/;
 
 /**
  * Coarse script of a query: kana (Japanese, checked first because Japanese
- * also writes kanji), Han (Chinese), Latin (incl. accented Spanish), or
- * other.
+ * also writes kanji), Han (Chinese), Arabic, Cyrillic (Russian), Latin
+ * (incl. accented Spanish), or other. A query mixing scripts takes the first
+ * of these it contains, so "rate limit для API" counts as Cyrillic.
  *
  * @param query - Raw query.
  * @returns The script family.
@@ -39,8 +48,23 @@ const NON_ASCII = /[^\x00-\x7f]/;
 export function queryScript(query: string): QueryScript {
   if (KANA.test(query)) return "kana";
   if (HAN.test(query)) return "han";
+  if (ARABIC.test(query)) return "arabic";
+  if (CYRILLIC.test(query)) return "cyrillic";
   if (/\p{Script=Latin}/u.test(query)) return "latin";
   return "other";
+}
+
+/**
+ * Which glossary lists a search used, for the counter. Spanish, French,
+ * Portuguese and German share the Latin script, so this is the only way to
+ * tell them apart. Bounded: at most the eight translated locale codes.
+ *
+ * @param matches - Glossary mappings applied to the query.
+ * @returns Sorted, de-duplicated language codes joined with "+", or "none".
+ */
+export function glossaryLanguages(matches: readonly GlossaryMatch[]): string {
+  const languages = [...new Set(matches.map((match) => match.language))].sort();
+  return languages.length > 0 ? languages.join("+") : "none";
 }
 
 /**

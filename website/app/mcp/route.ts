@@ -8,7 +8,7 @@ import {
 } from "@/lib/docs-content";
 import { englishSearchQuery, glossaryMatches } from "@/lib/docs-glossary";
 import { rankDocPages, tokenize } from "@/lib/docs-ranking";
-import { isNonEnglishSearch, queryScript, recordNonEnglishSearch } from "@/lib/search-metrics";
+import { glossaryLanguages, isNonEnglishSearch, queryScript, recordNonEnglishSearch } from "@/lib/search-metrics";
 import { SITE_URL } from "@/lib/seo";
 import {
   DEFAULT_SEARCH_LIMIT,
@@ -146,7 +146,7 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
   const matches = glossaryMatches(trimmed);
   const ranked = rankDocPages(pages, englishSearchQuery(trimmed, matches), limit);
 
-  // Translated pages (es, zh) join the results only when the query looks
+  // Translated pages (every translated locale) join the results only when the query looks
   // like it is in another language or nothing English matched, so English
   // queries keep their English-only result list.
   const wantTranslations = NON_ASCII.test(trimmed) || ranked.length === 0;
@@ -164,6 +164,7 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
           : rankDocPages(pages, trimmed, 1).length > 0 ? "some" : "none",
       translatedResults: translated.length > 0 ? "some" : "none",
       glossaryTerms: matches.length,
+      glossaryLanguages: glossaryLanguages(matches),
     });
   }
 

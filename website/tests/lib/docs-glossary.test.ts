@@ -130,8 +130,31 @@ test("Japanese matches fold width, accept long-vowel variants and avoid false fr
   }
 });
 
+test("every match names the language of the list it came from", () => {
+  const cases: Array<[string, string]> = [
+    ["限流", "zh"],
+    ["ミドルウェア", "ja"],
+    ["pruebas", "es"],
+    ["journalisation", "fr"],
+    ["rastreamento", "pt"],
+    ["تحديد المعدل", "ar"],
+    ["маршрутизация", "ru"],
+    ["Ratenbegrenzung", "de"],
+  ];
+  for (const [query, language] of cases) {
+    assert.deepEqual(glossaryMatches(query).map((m) => m.language), [language], query);
+  }
+  // Each list tags its own entries, including the lists that share a matcher.
+  for (const [language, list] of [["zh", ZH_GLOSSARY], ["ja", JA_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY]] as const) {
+    for (const entry of list) {
+      const own = glossaryMatches(entry.term).filter((m) => m.source === entry.term);
+      assert.ok(own.every((m) => m.language === language), `${entry.term} → ${own.map((m) => m.language)}`);
+    }
+  }
+});
+
 test("Chinese matches prefer the longest term and use each span once", () => {
-  assert.deepEqual(glossaryMatches("速率限制"), [{ source: "速率限制", english: "rate limit" }]);
+  assert.deepEqual(glossaryMatches("速率限制"), [{ source: "速率限制", english: "rate limit", language: "zh" }]);
   assert.deepEqual(
     glossaryMatches("单元测试").map((m) => m.source),
     ["单元测试"],
