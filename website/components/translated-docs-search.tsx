@@ -87,6 +87,16 @@ const SEARCH_COPY: Record<
     loading: "Загрузка английского индекса…",
     englishHint: "Для поиска по документации на английском попробуйте английские ключевые слова.",
   },
+  de: {
+    label: "Dokumentation durchsuchen",
+    placeholder: "Dokumentation durchsuchen…",
+    translated: "Auf Deutsch",
+    english: "Dokumentation auf Englisch",
+    englishTag: "auf Englisch",
+    empty: "Keine Ergebnisse.",
+    loading: "Englischer Index wird geladen…",
+    englishHint: "Für die englische Dokumentation probieren Sie englische Suchbegriffe.",
+  },
 };
 
 /**

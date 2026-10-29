@@ -70,6 +70,12 @@ const PROJECT_LINKS: ReadonlyArray<{
       "Russian versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /ru/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
   },
   {
+    title: "DaloyJS auf Deutsch (de)",
+    url: `${SITE_URL}/de`,
+    description:
+      "Standard German versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /de/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+  },
+  {
     title: "DaloyJS 简体中文版 (zh-CN)",
     url: `${SITE_URL}/zh`,
     description:
@@ -190,13 +196,13 @@ export async function GET(request: Request) {
     lines.push("");
   }
 
-  // Translated docs (under /es/docs/, /zh/docs/, /fr/docs/, /pt/docs/, /ar/docs/, /ru/docs/): outside /docs/, so this
+  // Translated docs (under /es/docs/, /zh/docs/, /fr/docs/, /pt/docs/, /ar/docs/, /ru/docs/, /de/docs/): outside /docs/, so this
   // site-wide file is the one that covers them.
   const translated = await getAllTranslatedDocPages();
   if (translated.length > 0) {
     lines.push("## Translations", "");
     lines.push(
-      "Castilian Spanish, Simplified Chinese, French, Brazilian Portuguese, Modern Standard Arabic, and Russian versions of the docs on-ramp. The English pages are authoritative.",
+      "Castilian Spanish, Simplified Chinese, French, Brazilian Portuguese, Modern Standard Arabic, Russian, and German versions of the docs on-ramp. The English pages are authoritative.",
       "",
     );
     for (const page of translated) {

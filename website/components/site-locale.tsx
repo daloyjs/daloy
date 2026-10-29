@@ -98,6 +98,14 @@ export const UI_STRINGS: Record<
     copiedAria: "Код скопирован в буфер обмена",
     packageManager: "Менеджер пакетов",
   },
+  de: {
+    copy: "Kopieren",
+    copied: "Kopiert",
+    retryCopy: "Erneut versuchen",
+    copyAria: "Code in die Zwischenablage kopieren",
+    copiedAria: "Code in die Zwischenablage kopiert",
+    packageManager: "Paketmanager",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

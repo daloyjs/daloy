@@ -39,6 +39,7 @@ const SKIP_LINK: Record<SiteLocale, string> = {
   pt: "Pular para o conteúdo",
   ar: "انتقل إلى المحتوى",
   ru: "Перейти к содержимому",
+  de: "Zum Inhalt springen",
 };
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 

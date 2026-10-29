@@ -90,6 +90,17 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "Далее",
     lastUpdated: "Последнее обновление:",
   },
+  de: {
+    indexTitle: "Dokumentation auf Deutsch",
+    allDocs: "Gesamte Dokumentation (auf Englisch)",
+    allDocsBody: "Sicherheit, Adapter, Datenbanken, Authentifizierung und die vollständige API-Referenz.",
+    tocLabel: "Auf dieser Seite",
+    breadcrumb: "Brotkrümelnavigation",
+    pager: "Seitennavigation",
+    previous: "Zurück",
+    next: "Weiter",
+    lastUpdated: "Zuletzt aktualisiert:",
+  },
 };
 
 /**

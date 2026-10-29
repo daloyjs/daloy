@@ -72,6 +72,14 @@ const NOT_FOUND_COPY: Record<
     sitemap: "Карта сайта",
     contact: "Контакты",
   },
+  de: {
+    title: "Seite nicht gefunden",
+    body: "Diesen Pfad gibt es auf daloyjs.dev nicht. Wenn Sie einem veralteten Link gefolgt sind, helfen Ihnen die Sitemap, der Index für Agenten und die Startseite der Dokumentation weiter.",
+    home: "Startseite",
+    docs: "Dokumentation auf Deutsch",
+    sitemap: "Sitemap",
+    contact: "Kontakt",
+  },
 };
 
 /**

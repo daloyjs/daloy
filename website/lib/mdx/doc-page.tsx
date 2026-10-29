@@ -151,6 +151,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     link: "английская версия",
     after: ".",
   },
+  de: {
+    before: "Übersetzung der englischen Originalseite. Bei Abweichungen gilt die ",
+    link: "englische Fassung",
+    after: ".",
+  },
 };
 
 /**

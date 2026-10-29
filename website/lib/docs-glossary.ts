@@ -16,6 +16,8 @@ import { foldCyrillic } from "./cyrillic";
  *   تحديد المعدل), matched after folding spelling variants.
  * - Russian terms are stems matched at word starts, because Russian inflects
  *   by case.
+ * - German terms match inside words, because German writes compounds as one
+ *   word.
  * - Spanish mostly keeps the English term ("middleware", "token"), so the list
  *   only covers translations and cognates the ranker cannot link on its own
  *   ("validación" ≠ "validation" to a suffix stemmer).
@@ -416,11 +418,85 @@ export const RU_GLOSSARY: readonly GlossaryEntry[] = [
   { term: "типизированн клиент", english: "typed client", expect: "/docs/typed-client" },
 ];
 
+/**
+ * Standard German → English. German writes compounds as one word
+ * ("Ratenbegrenzung", "Lieferkettensicherheit"), so terms match as
+ * substrings of the folded query (lowercase, umlauts without dots, ß as ss),
+ * longest first: "lieferkette" also finds "Lieferkettensicherheit". German
+ * developers keep many English terms ("Routing", "Deployment", "Middleware"),
+ * so this lists the German ones.
+ */
+export const DE_GLOSSARY: readonly GlossaryEntry[] = [
+  { term: "ratenbegrenz", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "ratenlimit", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "anfragelimit", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "drosselung", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "weiterleitung", english: "safe redirect", expect: "/docs/security/safe-redirect" },
+  { term: "validier", english: "validation", expect: "/docs/validation" },
+  { term: "authentifizier", english: "authentication", expect: "/docs/auth" },
+  { term: "autorisier", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "berechtigung", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "sitzung", english: "session", expect: "/docs/security/session" },
+  { term: "bereitstellung", english: "deployment", expect: "/docs/deployment" },
+  { term: "installier", english: "installation", expect: "/docs/installation" },
+  { term: "erste schritte", english: "getting started", expect: "/docs/getting-started" },
+  { term: "vertragstest", english: "contract tests", expect: "/docs/testing" },
+  { term: "lieferkette", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "abhangigkeit", english: "dependencies supply chain", expect: "/docs/security/supply-chain" },
+  { term: "protokollierung", english: "logging", expect: "/docs/logging" },
+  { term: "nachverfolgung", english: "tracing", expect: "/docs/tracing" },
+  { term: "metriken", english: "metrics", expect: "/docs/metrics" },
+  { term: "fehlerbehandlung", english: "errors", expect: "/docs/errors" },
+  { term: "fehler", english: "errors", expect: "/docs/errors" },
+  { term: "paginierung", english: "pagination", expect: "/docs/pagination" },
+  { term: "seitennummerierung", english: "pagination", expect: "/docs/pagination" },
+  { term: "idempotenz", english: "idempotency", expect: "/docs/idempotency" },
+  { term: "datenbank", english: "databases", expect: "/docs/databases" },
+  { term: "zahlung", english: "payment integrations", expect: "/docs/payments" },
+  { term: "erweiterung", english: "plugins", expect: "/docs/plugins" },
+  { term: "zwischenspeicher", english: "response cache", expect: "/docs/response-cache" },
+  { term: "dateiupload", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "datei upload", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "geplante aufgab", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "zeitplan", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "hintergrundjob", english: "jobs", expect: "/docs/jobs" },
+  { term: "hintergrundauftr", english: "jobs", expect: "/docs/jobs" },
+  { term: "mandant", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "sql injektion", english: "sql injection", expect: "/docs/security/sql-injection" },
+  { term: "befehlsinjektion", english: "command injection", expect: "/docs/security/command-injection" },
+  { term: "umgebungsvariabl", english: "environment variables config", expect: "/docs/config" },
+  { term: "konfiguration", english: "config", expect: "/docs/config" },
+  { term: "wiederholung", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "leistungsschalter", english: "circuit breaker", expect: "/docs/fetch-resilience" },
+  { term: "dekomprimierung", english: "decompression", expect: "/docs/request-decompression" },
+  { term: "komprimierung", english: "compression", expect: "/docs/security/compression" },
+  { term: "versionierung", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "herunterfahren", english: "graceful shutdown", expect: "/docs/security/lifecycle-health" },
+  { term: "zustandsprufung", english: "health check", expect: "/docs/security/lifecycle-health" },
+  { term: "sicherheitsheader", english: "secure headers", expect: "/docs/security/secure-defaults" },
+  { term: "nebenlaufigkeit", english: "concurrency limit", expect: "/docs/concurrency-limit" },
+  { term: "typisierter client", english: "typed client", expect: "/docs/typed-client" },
+];
+
 /** Upper bound on glossary expansions applied to one query. */
 export const MAX_GLOSSARY_MATCHES = 8;
 
 /** One applied mapping, for transparency in tool output. */
 export type GlossaryMatch = { source: string; english: string };
+
+/** German terms, longest first ("dekomprimierung" before "komprimierung"). */
+const DE_BY_LENGTH = [...DE_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
+
+/** German folding: lowercase, umlauts without dots, ß as ss, words single-spaced. */
+function foldGerman(text: string): string {
+  return ` ${text
+    .toLowerCase()
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()} `;
+}
 
 /** Russian terms as stem lists, most words first, then longest. */
 const RU_TERMS = [...RU_GLOSSARY]
@@ -498,6 +574,16 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     }
   }
 
+  // German: substrings, so compounds ("Ratenbegrenzung") match their parts.
+  let de = foldGerman(query);
+  for (const entry of DE_BY_LENGTH) {
+    if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
+    if (de.includes(entry.term)) {
+      matches.push({ source: entry.term, english: entry.english });
+      de = de.split(entry.term).join("\u0000");
+    }
+  }
+
   let es = foldLatin(query);
   for (const entry of LATIN_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
@@ -511,8 +597,8 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
 }
 
 /**
- * Spanish, French and Portuguese function words. Once the glossary has
- * recognised such a query, these are dropped from the English-side search:
+ * Spanish, French, Portuguese and German function words. Once the glossary
+ * has recognised such a query, these are dropped from the English-side search:
  * "de" or "la" would only match stray words in English pages and push the
  * right page down.
  */
@@ -526,6 +612,9 @@ const LATIN_STOPWORDS = new Set([
   // Portuguese
   "as", "com", "da", "das", "do", "dos", "e", "em", "fazer", "meu", "minha", "na", "nas", "no",
   "nos", "os", "pela", "pelo", "seu", "sua", "um", "uma",
+  // German (folded: für → fur)
+  "auf", "bei", "das", "dem", "den", "der", "des", "die", "ein", "eine", "einem", "einen",
+  "einer", "fur", "ich", "im", "mit", "oder", "und", "von", "wie", "zu", "zum", "zur",
 ]);
 
 /**

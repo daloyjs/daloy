@@ -12,6 +12,7 @@ const { rankDocPages, MAX_QUERY_TERMS, tokenize } = await import("../../lib/docs
 const { foldArabic } = await import("../../lib/arabic");
 const {
   AR_GLOSSARY,
+  DE_GLOSSARY,
   englishSearchQuery,
   RU_GLOSSARY,
   ES_GLOSSARY,
@@ -29,7 +30,7 @@ test("every glossary mapping surfaces its expected English page", async () => {
   const pages = await getAllDocPages();
   const routes = new Set(pages.map((page) => page.href));
   const misses: string[] = [];
-  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY, ...RU_GLOSSARY]) {
+  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY, ...RU_GLOSSARY, ...DE_GLOSSARY]) {
     assert.ok(routes.has(entry.expect as never), `${entry.term}: ${entry.expect} is not a docs page`);
     const top = rankDocPages(pages, entry.english, TOP).map((hit) => hit.page.href);
     if (!top.includes(entry.expect as never)) misses.push(`${entry.term} → "${entry.english}": ${top.join(", ")}`);
@@ -63,6 +64,10 @@ test("a glossary term in a full query reaches the English page end to end", asyn
     ["Маршрутизация", "/docs/routing"],
     ["подключение к базе данных", "/docs/databases"],
     ["контрактные тесты", "/docs/testing"],
+    ["Wie konfiguriere ich die Ratenbegrenzung?", "/docs/security/rate-limit-redis"],
+    ["Lieferkettensicherheit", "/docs/security/supply-chain"],
+    ["Datenbankverbindung", "/docs/databases"],
+    ["Fehlerbehandlung", "/docs/errors"],
   ];
   for (const [query, expected] of cases) {
     const english = englishSearchQuery(query, glossaryMatches(query));
@@ -72,7 +77,7 @@ test("a glossary term in a full query reaches the English page end to end", asyn
 });
 
 test("terms are unique and well-formed", () => {
-  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY], ["ru", RU_GLOSSARY]] as const) {
+  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY], ["ru", RU_GLOSSARY], ["de", DE_GLOSSARY]] as const) {
     const terms = list.map((entry) => entry.term);
     assert.equal(new Set(terms).size, terms.length, `${name} has duplicate terms`);
     for (const entry of list) {
@@ -183,4 +188,17 @@ test("Russian terms are folded stems that match any case form", async () => {
   assert.deepEqual(glossaryMatches("маршрутизация").map((m) => m.english), ["routing"]);
   assert.equal(stemRussian("развертывание"), stemRussian("развертывания"));
   assert.equal(foldCyrillic("развёртывание"), "развертывание");
+});
+
+test("German terms match inside compounds, folded and longest first", () => {
+  for (const entry of DE_GLOSSARY) {
+    assert.match(entry.term, /^[a-z0-9 ]+$/, `${entry.term} must be folded (no umlauts or ß)`);
+    assert.ok(entry.term.length >= 6, `${entry.term} is too short to match safely inside words`);
+  }
+  assert.deepEqual(glossaryMatches("Abhängigkeitsprüfung").map((m) => m.english), ["dependencies supply chain"]);
+  assert.deepEqual(glossaryMatches("Zustandsprüfung").map((m) => m.english), ["health check"]);
+  // "dekomprimierung" is consumed before the shorter "komprimierung" inside it.
+  assert.deepEqual(glossaryMatches("Dekomprimierung").map((m) => m.english), ["decompression"]);
+  // Function words are dropped once German is recognised; English words stay.
+  assert.equal(englishSearchQuery("die Ratenbegrenzung mit Redis", glossaryMatches("die Ratenbegrenzung mit Redis")), "rate limit Ratenbegrenzung Redis");
 });

@@ -133,6 +133,20 @@ const NAV_COPY: Record<
     closeMenu: "Закрыть меню навигации",
     otherLanguage: "Материалы на английском",
   },
+  de: {
+    home: "/de" as Route,
+    items: [
+      { href: "/de/docs" as Route, label: "Dokumentation" },
+      { href: "/blog", label: "Blog" },
+      { href: "/de/docs/getting-started" as Route, label: "Erste Schritte" },
+      { href: "/de/docs/tutorials/bookstore" as Route, label: "Tutorials" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/de/docs/installation" as Route, label: "Installation" },
+    openMenu: "Navigationsmenü öffnen",
+    closeMenu: "Navigationsmenü schließen",
+    otherLanguage: "Inhalt auf Englisch",
+  },
 };
 
 const socialLinks = [

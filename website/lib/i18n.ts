@@ -4,7 +4,8 @@
  * English is the default and lives at the root. Each translated locale lives
  * under its own prefix ({@link LOCALE_PREFIX}: `/es` for Castilian Spanish,
  * `/zh` for Simplified Chinese, `/fr` for French, `/pt` for Brazilian
- * Portuguese, `/ar` for Modern Standard Arabic, `/ru` for Russian) and covers
+ * Portuguese, `/ar` for Modern Standard Arabic, `/ru` for Russian, `/de` for
+ * standard German) and covers
  * exactly the pages listed in
  * {@link TRANSLATED_PATHS}: the marketing pages plus the docs on-ramp
  * (`content/<locale>/docs`). Every other docs page and the blog stay
@@ -18,22 +19,22 @@
  */
 
 /** A locale the site renders. */
-export type SiteLocale = "en" | "es" | "zh" | "fr" | "pt" | "ar" | "ru";
+export type SiteLocale = "en" | "es" | "zh" | "fr" | "pt" | "ar" | "ru" | "de";
 
 /** A locale other than the English default. */
 export type TranslatedLocale = Exclude<SiteLocale, "en">;
 
 /** Every locale, English first (the order of the language switcher). */
-export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr", "pt", "ar", "ru"];
+export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr", "pt", "ar", "ru", "de"];
 
 /** Every translated locale. */
-export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr", "pt", "ar", "ru"];
+export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr", "pt", "ar", "ru", "de"];
 
 /**
  * Locales advertised outside the header language menu: the home-page hero
- * pills and the footer language links. French, Portuguese, Arabic and
- * Russian are deliberately absent: they are offered only through the header
- * menu.
+ * pills and the footer language links. French, Portuguese, Arabic, Russian
+ * and German are deliberately absent: they are offered only through the
+ * header menu.
  */
 export const PROMOTED_LOCALES: readonly PromotedLocale[] = ["en", "es", "zh"];
 
@@ -51,6 +52,7 @@ export const LOCALE_PREFIX: Record<TranslatedLocale, string> = {
   pt: "/pt",
   ar: "/ar",
   ru: "/ru",
+  de: "/de",
 };
 
 /** BCP 47 tag for `<html lang>` and `hreflang`. */
@@ -62,6 +64,7 @@ export const HTML_LANG: Record<SiteLocale, string> = {
   pt: "pt-BR",
   ar: "ar",
   ru: "ru",
+  de: "de",
 };
 
 /** OpenGraph `og:locale` value. */
@@ -73,6 +76,7 @@ export const OG_LOCALE: Record<SiteLocale, string> = {
   pt: "pt_BR",
   ar: "ar_AR",
   ru: "ru_RU",
+  de: "de_DE",
 };
 
 /** Each locale's name, written in that language (for the switcher). */
@@ -84,6 +88,7 @@ export const LOCALE_NATIVE_NAME: Record<SiteLocale, string> = {
   pt: "Português",
   ar: "العربية",
   ru: "Русский",
+  de: "Deutsch",
 };
 
 /**
@@ -99,6 +104,7 @@ export const HTML_DIR: Record<SiteLocale, "ltr" | "rtl"> = {
   pt: "ltr",
   ar: "rtl",
   ru: "ltr",
+  de: "ltr",
 };
 
 /**
@@ -124,6 +130,7 @@ export const OG_USES_ENGLISH_CARD: Record<SiteLocale, boolean> = {
   pt: false,
   ar: true,
   ru: true,
+  de: false,
 };
 
 /**

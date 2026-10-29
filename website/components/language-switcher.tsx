@@ -25,6 +25,7 @@ const SWITCH_COPY: Record<SiteLocale, { short: string; label: string }> = {
   pt: { short: "PT", label: "Mudar de idioma (atual: português)" },
   ar: { short: "عربي", label: "تغيير اللغة (الحالية: العربية)" },
   ru: { short: "RU", label: "Сменить язык (текущий: русский)" },
+  de: { short: "DE", label: "Sprache wechseln (aktuell: Deutsch)" },
 };
 
 function LanguageMenu({

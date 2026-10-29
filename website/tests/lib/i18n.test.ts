@@ -34,7 +34,7 @@ test("each translated prefix and the paths under it map to its locale", () => {
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/rus", "/ru-RU", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/docs/ru", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/rus", "/ru-RU", "/deu", "/de-DE", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/docs/ru", "/docs/de", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
@@ -46,7 +46,8 @@ test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("pt"), "pt");
   assert.equal(parseLocaleHeader("ar"), "ar");
   assert.equal(parseLocaleHeader("ru"), "ru");
-  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "RU", "ru-RU", "de", "es ", "constructor", "__proto__"]) {
+  assert.equal(parseLocaleHeader("de"), "de");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "RU", "ru-RU", "DE", "de-DE", "it", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
   assert.equal(isTranslatedLocale("toString"), false);
@@ -82,6 +83,7 @@ test("hreflang alternates list every locale with English as x-default", () => {
     "pt-BR": "/pt/about",
     ar: "/ar/about",
     ru: "/ru/about",
+    de: "/de/about",
     "x-default": "/about",
   });
   assert.equal(HTML_LANG.zh, "zh-CN");
@@ -99,7 +101,7 @@ test("buildMetadata emits hreflang and every other og:locale for translated page
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
   assert.equal(og.locale, "zh_CN");
-  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR", "ru_RU"]);
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR", "ru_RU", "de_DE"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -134,7 +136,7 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026", ru: "29 октября 2026" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026", ru: "29 октября 2026", de: "29. Oktober 2026" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
@@ -162,7 +164,7 @@ function strings(value: unknown, out: string[] = []): string[] {
 }
 
 test("translated page copy uses no em dashes and sized meta descriptions", () => {
-  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160], ru: [140, 160] } as const;
+  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160], ru: [140, 160], de: [140, 160] } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     for (const text of strings(pages)) {
@@ -199,11 +201,11 @@ test("every translated home copy mirrors the English structure", async () => {
   }
 });
 
-test("home pages advertise the promoted locales; French, Portuguese, Arabic and Russian are header-menu only", async () => {
+test("home pages advertise the promoted locales; French, Portuguese, Arabic, Russian and German are header-menu only", async () => {
   const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
   const { PROMOTED_LOCALES } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...PROMOTED_LOCALES].sort());
-  for (const locale of ["fr", "pt", "ar", "ru"]) {
+  for (const locale of ["fr", "pt", "ar", "ru", "de"]) {
     assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes(locale), `no ${locale} hero pill or footer link`);
   }
   for (const notice of Object.values(LANGUAGE_NOTICES)) {
@@ -218,6 +220,8 @@ test("the header language menu offers every locale, French and Portuguese includ
   assert.equal(LOCALE_NATIVE_NAME.pt, "Português");
   assert.equal(LOCALE_NATIVE_NAME.ar, "العربية");
   assert.equal(LOCALE_NATIVE_NAME.ru, "Русский");
+  assert.equal(LOCALE_NATIVE_NAME.de, "Deutsch");
+  assert.equal(switchLocaleHref("/de/docs/installation", "fr"), "/fr/docs/installation");
   assert.equal(switchLocaleHref("/ru/privacy", "ar"), "/ar/privacy");
   assert.equal(switchLocaleHref("/ar/about", "en"), "/about");
   assert.equal(switchLocaleHref("/docs/installation", "ar"), "/ar/docs/installation");

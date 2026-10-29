@@ -20,6 +20,7 @@ const DOCS_LABEL: Record<TranslatedLocale, string> = {
   pt: "Documentação",
   ar: "Docs",
   ru: "Docs",
+  de: "Dokumentation",
 };
 export const size = ogImageSize;
 export const contentType = ogImageContentType;

@@ -652,7 +652,7 @@ test("get_doc refuses traversal and untranslated routes under a locale prefix", 
   for (const [id, path] of [
     [75, "/zh/docs/../../docs/installation"],
     [76, "/zh/docs/routing"],
-    [77, "/de/docs/installation"],
+    [77, "/it/docs/installation"],
   ] as const) {
     const { json } = await legacyRpc(id, "tools/call", { name: "get_doc", arguments: { path } });
     assert.equal(json.result.isError, true, path);
@@ -753,5 +753,27 @@ test("search_docs maps inflected Russian terms to English", async () => {
 
   const text = toolText(json);
   assert.match(text, /Searched the English docs for: rate limit \(from ограничен частот\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
+});
+
+test("get_doc reads a German route", async () => {
+  const { json } = await legacyRpc(90, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/de/docs/installation" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /^# Installation/);
+  assert.match(toolText(json), /Language: de \(translation of \/docs\/installation; the English page is authoritative/);
+});
+
+test("search_docs maps German compounds to English", async () => {
+  const { json } = await legacyRpc(91, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "Wie konfiguriere ich die Ratenbegrenzung?" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /Searched the English docs for: rate limit \(from ratenbegrenz\)/);
   assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
 });
