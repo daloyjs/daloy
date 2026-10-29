@@ -198,3 +198,42 @@ test("every home page advertises every other locale", async () => {
     assert.ok(notice.badge && notice.text && notice.cta);
   }
 });
+
+test("translated docs pages advertise their markdown sibling like English docs", async () => {
+  const { isTranslatedDocsPath } = await import("../../lib/i18n");
+  assert.equal(isTranslatedDocsPath("/zh/docs/installation"), true);
+  assert.equal(isTranslatedDocsPath("/es/docs/tutorials/bookstore"), true);
+  assert.equal(isTranslatedDocsPath("/zh/docs"), false);
+  assert.equal(isTranslatedDocsPath("/docs/installation"), false);
+  assert.equal(isTranslatedDocsPath("/zh/about"), false);
+
+  const meta = buildMetadata({ title: "安装", description: "x", path: "/zh/docs/installation", locale: "zh" });
+  assert.deepEqual(meta.alternates?.types, { "text/markdown": "/zh/docs/installation.md" });
+  const marketing = buildMetadata({ title: "关于", description: "x", path: "/zh/about", locale: "zh" });
+  assert.equal(marketing.alternates?.types, undefined);
+});
+
+test("imageAlt overrides the OG alt text; the title is the default", () => {
+  const og = (meta: ReturnType<typeof buildMetadata>) =>
+    (meta.openGraph as { images: Array<{ alt: string }> }).images[0]!.alt;
+  assert.equal(og(buildMetadata({ title: "安装", description: "x", path: "/zh/docs/installation", imageAlt: "Installation · DaloyJS" })), "Installation · DaloyJS");
+  assert.equal(og(buildMetadata({ title: "Routing", description: "x", path: "/docs/routing" })), "Routing · DaloyJS");
+});
+
+test("shared UI strings exist for every locale", async () => {
+  const { UI_STRINGS } = await import("../../components/site-locale");
+  for (const locale of SITE_LOCALES) {
+    for (const value of Object.values(UI_STRINGS[locale])) {
+      assert.ok(value.length > 0, locale);
+    }
+  }
+  assert.equal(UI_STRINGS.zh.copy, "复制");
+});
+
+test("a translated 404 path turns into search words without the locale segment", async () => {
+  const { queryFromPath } = await import("../../components/not-found-suggestions");
+  assert.equal(queryFromPath("/zh/docs/rate-limits/redis"), "rate limits redis");
+  assert.equal(queryFromPath("/es/docs/routing"), "routing");
+  // A word that merely equals a locale id later in the path is kept.
+  assert.equal(queryFromPath("/docs/guides/es"), "guides es");
+});

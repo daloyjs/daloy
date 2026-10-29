@@ -1,3 +1,4 @@
+import { getAllTranslatedDocPages } from "@/lib/docs-content";
 import { getDocsSearchSections } from "@/lib/docs-search";
 import { CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
 import { consumeSiteApiQuota } from "@/lib/site-api-response";
@@ -66,6 +67,22 @@ export async function GET(request: Request) {
       );
     }
 
+    lines.push("");
+  }
+
+  // Translations live outside /docs/ (under /es/docs/ and /zh/docs/), so
+  // they are listed in /llms.txt; this section only cross-references them.
+  const translated = await getAllTranslatedDocPages();
+  if (translated.length > 0) {
+    lines.push(
+      "## Translations",
+      "",
+      `These pages are also available in Castilian Spanish and Simplified Chinese; the English pages above are authoritative. They are listed in ${SITE_URL}/llms.txt.`,
+      "",
+    );
+    for (const page of translated) {
+      lines.push(`- [${page.title}](${SITE_URL}${page.href}.md): ${page.lang} translation of ${page.translates}`);
+    }
     lines.push("");
   }
 

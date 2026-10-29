@@ -193,3 +193,17 @@ test("a Card that crosses locales is a plain hreflang link", () => {
   const plain = Card({ title: "x", href: "/zh", locale: undefined }) as Element;
   assert.notEqual(plain.type, "a");
 });
+
+test("translated docs routes resolve to their own content file for git dates", async () => {
+  const { lastModifiedIso, sourceFileForRoute } = await import("../../lib/git-dates");
+  for (const locale of TRANSLATED_LOCALES) {
+    for (const english of translatedDocs) {
+      const route = localizedPath(english, locale);
+      assert.equal(sourceFileForRoute(route), `content${route}.mdx`, route);
+    }
+  }
+  const dates = { "content/zh/docs/installation.mdx": "2026-10-29T11:36:16-06:00" };
+  assert.equal(lastModifiedIso("/zh/docs/installation", dates), "2026-10-29T11:36:16-06:00");
+  // No date for a translated page git has not seen, rather than a fake one.
+  assert.equal(lastModifiedIso("/es/docs/installation", dates), undefined);
+});

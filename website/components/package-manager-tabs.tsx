@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { useUiStrings } from "@/components/site-locale";
+
 import { PACKAGE_MANAGERS, type PackageManager } from "@/lib/package-managers";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +72,7 @@ export interface PackageManagerTabsProps {
  * `data-md-skip` so the markdown export only carries the default one.
  */
 export function PackageManagerTabs({ panels }: PackageManagerTabsProps) {
+  const strings = useUiStrings();
   const [manager, setManager] = usePackageManager();
   const baseId = React.useId();
 
@@ -85,7 +88,7 @@ export function PackageManagerTabs({ panels }: PackageManagerTabsProps) {
 
   return (
     <div data-package-manager-tabs className="not-prose my-4">
-      <div role="tablist" aria-label="Package manager" className="flex gap-1">
+      <div role="tablist" aria-label={strings.packageManager} className="flex gap-1">
         {PACKAGE_MANAGERS.map((id) => {
           const selected = id === manager;
           return (

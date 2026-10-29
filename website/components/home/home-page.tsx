@@ -121,7 +121,9 @@ export function HomePage({
         <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-16">
           <div className="flex flex-col items-center gap-5 text-center">
             {/* Language notices: plain <a> links because they cross locales. */}
-            <div className="flex flex-col items-center gap-2">
+            {/* data-md-skip: navigation chrome, not page content, so the
+                Markdown version (.md, Accept: text/markdown) leaves it out. */}
+            <div data-md-skip className="flex flex-col items-center gap-2">
               {SITE_LOCALES.filter((other) => other !== locale).map((other, index) => {
                 const notice = LANGUAGE_NOTICES[other];
                 return (

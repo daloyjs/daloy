@@ -9,6 +9,8 @@ import {
   buildMetadata,
   buildOrganizationJsonLd,
   buildSoftwareApplicationJsonLd,
+  HOME_TITLE,
+  SITE_NAME,
   SITE_URL,
   WEBSITE_ID,
 } from "@/lib/seo";
@@ -28,6 +30,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     locale,
     translatedPath: "/",
     image: `${localeHome(locale)}/opengraph-image`,
+    // A locale without its own card (ogFooter: null) shows the English one.
+    ...(home.ogFooter === null ? { imageAlt: `${SITE_NAME} - ${HOME_TITLE}` } : {}),
   });
 }
 

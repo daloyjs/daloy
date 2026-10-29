@@ -5,7 +5,7 @@ import { TRANSLATED_DOCS_COPY, translatedDocsList } from "@/components/translate
 import { localeHome, translatedDocsIndex } from "@/lib/i18n";
 import { PAGES_COPY } from "@/lib/i18n-pages";
 import { resolveLocale } from "@/lib/i18n-route";
-import { buildMetadata } from "@/lib/seo";
+import { buildMetadata, HOME_TITLE, SITE_NAME } from "@/lib/seo";
 
 export const instant = false;
 
@@ -21,6 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     path: translatedDocsIndex(locale),
     locale,
     image: `${localeHome(locale)}/opengraph-image`,
+    ...(PAGES_COPY[locale].home.ogFooter === null ? { imageAlt: `${SITE_NAME} - ${HOME_TITLE}` } : {}),
   });
 }
 

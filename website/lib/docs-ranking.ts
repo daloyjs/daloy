@@ -9,7 +9,9 @@ export type RankablePage = Pick<DocPage, "title" | "href" | "description" | "key
 
 /**
  * Zero-dependency relevance ranking for docs search (used by the MCP
- * `search_docs` tool in `app/mcp/route.ts`).
+ * `search_docs` tool in `app/mcp/route.ts`). Terms are letter/digit runs in
+ * any script; Chinese and Japanese runs are split into overlapping bigrams
+ * and matched as substrings, since those scripts have no word spaces.
  *
  * Improvements over plain substring scoring:
  *
@@ -29,14 +31,63 @@ export type RankablePage = Pick<DocPage, "title" | "href" | "description" | "key
  *   a single high-field term plus body noise.
  */
 
+/** A run of letters or digits in any script. Linear-time (no backtracking). */
+const TOKEN = /[\p{L}\p{N}]+/gu;
+
+/** Characters of scripts written without spaces between words. */
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+/** Splits a token into unspaced-script runs and everything else. */
+const SCRIPT_RUNS =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+|[^\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+/gu;
+
 /**
- * Split a query into a deduplicated list of lowercase alphanumeric terms.
+ * Upper bound on terms taken from one query. The query is public input (the
+ * MCP `search_docs` tool, the 404 page) and ranking cost is terms × pages, so
+ * the cap bounds the work regardless of what a caller sends.
+ */
+export const MAX_QUERY_TERMS = 32;
+
+/**
+ * Whether a term comes from an unspaced script (Chinese, Japanese kana). Such
+ * terms match as substrings: there are no word boundaries to anchor on.
+ *
+ * @param term - A lowercase search term.
+ * @returns `true` for a CJK term.
+ */
+export function isUnspacedTerm(term: string): boolean {
+  return UNSPACED.test(term);
+}
+
+/**
+ * Overlapping two-character slices of an unspaced run ("安装教程" → "安装",
+ * "装教", "教程"), the standard way to search text without word breaks. Runs
+ * of one or two characters are kept whole.
+ */
+function bigrams(run: string): string[] {
+  const chars = [...run];
+  if (chars.length <= 2) return [run];
+  const out: string[] = [];
+  for (let i = 0; i + 1 < chars.length; i++) out.push(chars[i]! + chars[i + 1]!);
+  return out;
+}
+
+/**
+ * Split a query into a deduplicated list of lowercase search terms: letter or
+ * digit runs in any script, with Chinese and Japanese runs expanded to
+ * overlapping bigrams. At most {@link MAX_QUERY_TERMS} terms are returned.
  *
  * @param query - Raw query string.
  * @returns Unique search terms in first-seen order.
  */
 export function tokenize(query: string): string[] {
-  return [...new Set(query.toLowerCase().match(/[a-z0-9]+/g) ?? [])];
+  const terms: string[] = [];
+  for (const token of query.toLowerCase().match(TOKEN) ?? []) {
+    for (const run of token.match(SCRIPT_RUNS) ?? []) {
+      terms.push(...(isUnspacedTerm(run) ? bigrams(run) : [run]));
+    }
+  }
+  return [...new Set(terms)].slice(0, MAX_QUERY_TERMS);
 }
 
 /**
@@ -76,7 +127,7 @@ const STEM_SUFFIXES = [
  * "validat" → prefix-compatible with "valid"). Words too short to strip are
  * returned unchanged.
  *
- * @param word - A lowercase alphanumeric token.
+ * @param word - A lowercase letter/digit token.
  * @returns The stemmed token.
  */
 export function stem(word: string): string {
@@ -99,11 +150,11 @@ export function stem(word: string): string {
  * "rout" finds "Routing", but "rate" no longer finds "Integrate".
  */
 function wordText(text: string): string {
-  return ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+  return ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
 }
 
 function stemText(text: string): string {
-  const tokens = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const tokens = text.toLowerCase().match(TOKEN) ?? [];
   return ` ${tokens.map(stem).join(" ")} `;
 }
 
@@ -209,17 +260,34 @@ export function rankDocPages<T extends RankablePage>(
 ): RankedDocPage<T>[] {
   const index = getIndex(pages);
   const phrase = wordText(query).trim();
-  const terms = tokenize(query).map((raw) => ({ raw, stem: stem(raw) }));
+  const terms = tokenize(query).map((raw) => ({ raw, stem: stem(raw), unspaced: isUnspacedTerm(raw) }));
   if (terms.length === 0) return [];
 
   // Ordered (non-deduplicated) token sequence for adjacent-pair matching.
-  const sequence = (query.toLowerCase().match(/[a-z0-9]+/g) ?? []).map(stem);
+  // Unspaced-script terms are already bigrams, so they take no part in it.
+  const sequence = (query.toLowerCase().match(TOKEN) ?? [])
+    .filter((token) => !isUnspacedTerm(token))
+    .slice(0, MAX_QUERY_TERMS)
+    .map(stem);
+
+  // Field predicate per term: word-prefix / stem match for spaced scripts,
+  // plain substring for unspaced ones (no word boundaries to anchor on).
+  const fieldMatch = (
+    term: (typeof terms)[number],
+    field: string,
+    stemmedField: string,
+  ): boolean =>
+    term.unspaced
+      ? field.includes(term.raw)
+      : field.includes(` ${term.raw}`) || stemMatch(stemmedField, term.stem);
 
   // Document frequency per query term, using the same word-boundary stem
   // predicate as scoring, so the IDF weight reflects what actually matches.
   const totalPages = index.length;
   const bodyMatches = terms.map((term) =>
-    index.map((entry) => stemMatch(entry.stemmedBody, term.stem))
+    index.map((entry) =>
+      term.unspaced ? entry.stemmedBody.includes(term.raw) : stemMatch(entry.stemmedBody, term.stem)
+    )
   );
 
   const scored = index.map((entry, pageIdx) => {
@@ -229,27 +297,21 @@ export function rankDocPages<T extends RankablePage>(
 
     let highFieldTerms = 0;
     for (let t = 0; t < terms.length; t++) {
-      const { raw, stem: qstem } = terms[t];
+      const term = terms[t];
       let inHighField = false;
-      if (entry.title.includes(` ${raw}`) || stemMatch(entry.stemmedTitle, qstem)) {
+      if (fieldMatch(term, entry.title, entry.stemmedTitle)) {
         score += WEIGHT_TITLE;
         inHighField = true;
       }
-      if (entry.href.includes(` ${raw}`) || stemMatch(entry.stemmedHref, qstem)) {
+      if (fieldMatch(term, entry.href, entry.stemmedHref)) {
         score += WEIGHT_HREF;
         inHighField = true;
       }
-      if (
-        entry.keywords.includes(` ${raw}`) ||
-        stemMatch(entry.stemmedKeywords, qstem)
-      ) {
+      if (fieldMatch(term, entry.keywords, entry.stemmedKeywords)) {
         score += WEIGHT_KEYWORDS;
         inHighField = true;
       }
-      if (
-        entry.description.includes(` ${raw}`) ||
-        stemMatch(entry.stemmedDescription, qstem)
-      ) {
+      if (fieldMatch(term, entry.description, entry.stemmedDescription)) {
         score += WEIGHT_DESCRIPTION;
         inHighField = true;
       }

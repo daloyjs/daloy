@@ -1,15 +1,60 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { headers } from "next/headers";
 
 import { NotFoundSuggestions } from "@/components/not-found-suggestions";
+import {
+  LOCALE_HEADER,
+  localeHome,
+  localizedPath,
+  parseLocaleHeader,
+  translatedDocsIndex,
+  type SiteLocale,
+} from "@/lib/i18n";
+
+const NOT_FOUND_COPY: Record<
+  SiteLocale,
+  { title: string; body: string; home: string; docs: string; sitemap: string; contact: string }
+> = {
+  en: {
+    title: "Page not found",
+    body: "That path does not exist on daloyjs.dev. If you followed a stale link, the sitemap, the agent index, and the docs home are the recovery paths.",
+    home: "Home",
+    docs: "Docs index",
+    sitemap: "Sitemap",
+    contact: "Contact",
+  },
+  es: {
+    title: "Página no encontrada",
+    body: "Esa ruta no existe en daloyjs.dev. Si has llegado desde un enlace antiguo, el mapa del sitio, el índice para agentes y el inicio de la documentación te ayudarán a encontrar lo que buscas.",
+    home: "Inicio",
+    docs: "Documentación en español",
+    sitemap: "Mapa del sitio",
+    contact: "Contacto",
+  },
+  zh: {
+    title: "页面未找到",
+    body: "daloyjs.dev 上不存在这个路径。如果你是通过过期的链接来到这里，可以从网站地图、面向智能体的索引或文档首页重新找到所需内容。",
+    home: "首页",
+    docs: "中文文档",
+    sitemap: "网站地图",
+    contact: "联系我们",
+  },
+};
 
 /**
- * HTML 404 for browsers. Agents that send `Accept: text/markdown` are rewritten
- * to `/md/...` in proxy.ts and receive a Markdown recovery body instead, still
- * with HTTP 404. JSON API clients receive problem+json from `/api` and
- * `/openapi.json`.
+ * HTML 404 for browsers, in the language of the URL that missed (`/zh/...`
+ * gets Chinese; proxy.ts derives the locale header from the pathname, so this
+ * also works for paths that match no route). Agents that send
+ * `Accept: text/markdown` are rewritten to `/md/...` in proxy.ts and receive
+ * a Markdown recovery body instead, still with HTTP 404. JSON API clients
+ * receive problem+json from `/api` and `/openapi.json`.
  */
-export default function NotFound() {
+export default async function NotFound() {
+  const locale = parseLocaleHeader((await headers()).get(LOCALE_HEADER));
+  const copy = NOT_FOUND_COPY[locale];
+  const docs = locale === "en" ? "/docs" : translatedDocsIndex(locale);
+
   return (
     <main className="flex-1">
       <section className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16 lg:py-24">
@@ -17,23 +62,19 @@ export default function NotFound() {
           404
         </p>
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Page not found</h1>
-          <p className="mt-4 text-lg leading-8 text-muted-foreground">
-            That path does not exist on daloyjs.dev. If you followed a stale
-            link, the sitemap, the agent index, and the docs home are the
-            recovery paths.
-          </p>
+          <h1 className="text-4xl font-bold tracking-tight">{copy.title}</h1>
+          <p className="mt-4 text-lg leading-8 text-muted-foreground">{copy.body}</p>
         </div>
         <NotFoundSuggestions />
         <ul className="list-disc space-y-2 ps-5 text-muted-foreground">
           <li>
-            <Link className="underline underline-offset-4" href={"/" as Route}>
-              Home
+            <Link className="underline underline-offset-4" href={localeHome(locale) as Route}>
+              {copy.home}
             </Link>
           </li>
           <li>
-            <Link className="underline underline-offset-4" href={"/docs" as Route}>
-              Docs index
+            <Link className="underline underline-offset-4" href={docs as Route}>
+              {copy.docs}
             </Link>
           </li>
           <li>
@@ -43,12 +84,15 @@ export default function NotFound() {
           </li>
           <li>
             <a className="underline underline-offset-4" href="/sitemap.xml">
-              Sitemap
+              {copy.sitemap}
             </a>
           </li>
           <li>
-            <Link className="underline underline-offset-4" href={"/contact" as Route}>
-              Contact
+            <Link
+              className="underline underline-offset-4"
+              href={localizedPath("/contact", locale) as Route}
+            >
+              {copy.contact}
             </Link>
           </li>
         </ul>

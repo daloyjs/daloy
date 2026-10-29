@@ -5,6 +5,12 @@ import { isTranslatedPath, type TranslatedLocale } from "@/lib/i18n";
 import { buildMetadata } from "@/lib/seo";
 
 import { getMdxDoc, getMdxDocs, getTranslatedMdxDoc, getTranslatedMdxDocs } from "./content";
+import {
+  TranslatedDocsBreadcrumb,
+  TranslatedDocsLastUpdated,
+  TranslatedDocsPager,
+} from "@/components/translated-docs-nav";
+
 import { MdxContent } from "./render";
 
 /**
@@ -98,6 +104,9 @@ export async function translatedDocMetadata(
   const doc = await getTranslatedMdxDoc(locale, segments);
   const english = englishDocRoute(segments);
   if (!doc || !isTranslatedPath(english)) return {};
+  // Chinese pages render the English page's card (Latin-only OG fonts), so
+  // the alt text must describe that card, not the Chinese title.
+  const englishTitle = locale === "zh" ? (await getMdxDoc(segments))?.frontmatter.title : undefined;
   return buildMetadata({
     ...doc.frontmatter,
     path: doc.route,
@@ -107,6 +116,7 @@ export async function translatedDocMetadata(
     // The route's own opengraph-image file (Chinese renders the English card:
     // the OG renderer ships Latin fonts only).
     image: `${doc.route}/opengraph-image`,
+    ...(englishTitle ? { imageAlt: `${englishTitle} · DaloyJS` } : {}),
   });
 }
 
@@ -145,6 +155,7 @@ export async function TranslatedMdxDocPage({
   const notice = TRANSLATION_NOTICE[locale];
   return (
     <>
+      <TranslatedDocsBreadcrumb locale={locale} title={doc.frontmatter.title} />
       <p className="not-prose mb-6 rounded-lg border bg-muted/40 px-4 py-3 text-sm leading-6 text-muted-foreground">
         {notice.before}
         {/* Cross-locale: a full document load (see lib/i18n.ts). */}
@@ -154,6 +165,8 @@ export async function TranslatedMdxDocPage({
         {notice.after}
       </p>
       <MdxContent source={doc.body} file={doc.file} locale={locale} />
+      <TranslatedDocsLastUpdated locale={locale} route={doc.route} />
+      <TranslatedDocsPager locale={locale} route={doc.route} />
     </>
   );
 }

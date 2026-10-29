@@ -4,6 +4,7 @@ import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteLocaleProvider } from "@/components/site-locale";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReadingProgress } from "@/components/reading-progress";
 import { BackToTop } from "@/components/back-to-top";
@@ -163,6 +164,7 @@ export default async function RootLayout({
     >
       <body className="flex min-h-screen flex-col bg-background font-sans antialiased">
         <ThemeProvider nonce={nonce}>
+          <SiteLocaleProvider locale={locale}>
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:border focus:border-border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
@@ -176,6 +178,7 @@ export default async function RootLayout({
           </div>
           <SiteFooter locale={locale} />
           <BackToTop />
+          </SiteLocaleProvider>
         </ThemeProvider>
         <SpeedInsights />
         <Analytics />

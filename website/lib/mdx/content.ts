@@ -4,7 +4,12 @@ import { cacheLife } from "next/cache";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
-import { translatedDocsIndex, type TranslatedLocale } from "@/lib/i18n";
+import {
+  localizedPath,
+  TRANSLATED_PATHS,
+  translatedDocsIndex,
+  type TranslatedLocale,
+} from "@/lib/i18n";
 
 /** Root of the MDX content tree (`website/content`). */
 export const contentDir = path.join(process.cwd(), "content");
@@ -167,6 +172,22 @@ export async function getTranslatedMdxDoc(
   const prefix = translatedDocsPrefix(locale);
   const route = segments.length ? `${prefix}/${segments.join("/")}` : prefix;
   return (await getTranslatedMdxDocs(locale)).find((doc) => doc.route === route) ?? null;
+}
+
+/**
+ * A locale's translated docs in reading order (the order of
+ * `TRANSLATED_PATHS`), shared by the sidebar, the pager and the search box.
+ *
+ * @param locale - Translated locale.
+ * @returns That locale's docs pages, getting-started first.
+ */
+export async function getOrderedTranslatedDocs(locale: TranslatedLocale): Promise<MdxDoc[]> {
+  const order = TRANSLATED_PATHS.filter((path) => path.startsWith("/docs/")).map((path) =>
+    localizedPath(path, locale),
+  );
+  return (await getTranslatedMdxDocs(locale))
+    .filter((doc) => order.includes(doc.route))
+    .sort((a, b) => order.indexOf(a.route) - order.indexOf(b.route));
 }
 
 async function readDocsTree(root: string, prefix: string): Promise<MdxDoc[]> {

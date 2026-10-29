@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import {
   HTML_LANG,
+  isTranslatedDocsPath,
   languageAlternates,
   OG_LOCALE,
   SITE_LOCALES,
@@ -113,6 +114,12 @@ export type PageSeoInput = {
   keywords?: string[];
   /** Override the og/twitter image. Defaults to `/opengraph-image`. */
   image?: string;
+  /**
+   * Alt text for the og/twitter image. Defaults to the page title; set it
+   * when the image shows something else (Chinese pages reuse the English
+   * card because the OG renderer ships Latin fonts only).
+   */
+  imageAlt?: string;
   /** Mark the page as documentation/article instead of website. */
   type?: "website" | "article";
   /** Language of this page. Defaults to `"en"`. */
@@ -144,8 +151,8 @@ function getDefaultImage(path: string): string {
  * canonical URL, OpenGraph, Twitter card, robots, and keyword merging.
  */
 /**
- * Whether a site path is a documentation page, and therefore has a markdown
- * sibling served by `app/docs-md/[[...slug]]/route.ts`.
+ * Whether a site path is a documentation page (English or translated), and
+ * therefore has a markdown sibling served by the `.md` routes.
  *
  * `/docs/llms.txt` is a route handler rather than a docs page, so it is
  * excluded; it never calls {@link buildMetadata}, but the check keeps the
@@ -156,7 +163,7 @@ function getDefaultImage(path: string): string {
  */
 function isDocsPath(path: string): boolean {
   return (
-    (path === "/docs" || path.startsWith("/docs/")) &&
+    (path === "/docs" || path.startsWith("/docs/") || isTranslatedDocsPath(path)) &&
     !path.endsWith(".md") &&
     !path.endsWith("/llms.txt")
   );
@@ -201,7 +208,7 @@ export function buildMetadata(input: PageSeoInput): Metadata {
       siteName: SITE_NAME,
       title: fullTitle,
       description: input.description,
-      images: [{ url: image, width: 1200, height: 630, alt: fullTitle }],
+      images: [{ url: image, width: 1200, height: 630, alt: input.imageAlt ?? fullTitle }],
       locale: OG_LOCALE[locale],
       ...(input.translatedPath
         ? {

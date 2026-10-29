@@ -1,3 +1,4 @@
+import { getAllTranslatedDocPages } from "@/lib/docs-content";
 import { BLOG_POSTS } from "@/lib/blog-posts";
 import { getDocsSearchSections } from "@/lib/docs-search";
 import { CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
@@ -162,6 +163,23 @@ export async function GET(request: Request) {
       );
     }
 
+    lines.push("");
+  }
+
+  // Translated docs (under /es/docs/ and /zh/docs/): outside /docs/, so this
+  // site-wide file is the one that covers them.
+  const translated = await getAllTranslatedDocPages();
+  if (translated.length > 0) {
+    lines.push("## Translations", "");
+    lines.push(
+      "Castilian Spanish and Simplified Chinese versions of the docs on-ramp. The English pages are authoritative.",
+      "",
+    );
+    for (const page of translated) {
+      lines.push(
+        `- [${page.title}](${SITE_URL}${page.href}.md): ${page.lang} translation of ${page.translates}. ${page.description}`,
+      );
+    }
     lines.push("");
   }
 

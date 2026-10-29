@@ -560,3 +560,77 @@ test("[unhappy] POST enforces the shared site API rate limit with 429 problem+js
   assert.ok(last?.headers.get("retry-after"));
   assert.equal(last?.headers.get("ratelimit-remaining"), "0");
 });
+
+test("search_docs with a Chinese query returns the Chinese pages and an English hint", async () => {
+  const { json } = await legacyRpc(70, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "安装" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  const text = toolText(json);
+  assert.match(text, /\/zh\/docs\/installation, zh-CN translation of \/docs\/installation/);
+  assert.match(text, /English docs are the complete reference/);
+});
+
+test("search_docs with a Spanish query reaches the Spanish pages", async () => {
+  const { json } = await legacyRpc(71, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "instalación" },
+  });
+
+  assert.match(toolText(json), /\/es\/docs\/installation, es-ES translation of \/docs\/installation/);
+});
+
+test("search_docs keeps English queries English-only", async () => {
+  const { json } = await legacyRpc(72, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "installation" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /\/docs\/installation/);
+  assert.doesNotMatch(text, /Translated pages/);
+});
+
+test("search_docs bounds a huge multi-term query instead of scanning every term", async () => {
+  const { json } = await legacyRpc(73, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "安装教程快速开始".repeat(30).slice(0, 256) },
+  });
+
+  assert.notEqual(json.result.isError, true);
+});
+
+test("get_doc reads a translated route and names the authoritative English page", async () => {
+  const { json } = await legacyRpc(74, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "https://daloyjs.dev/zh/docs/installation.md" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  const text = toolText(json);
+  assert.match(text, /^# 安装/);
+  assert.match(text, /Language: zh-CN \(translation of \/docs\/installation; the English page is authoritative/);
+});
+
+test("get_doc refuses traversal and untranslated routes under a locale prefix", async () => {
+  for (const [id, path] of [
+    [75, "/zh/docs/../../docs/installation"],
+    [76, "/zh/docs/routing"],
+    [77, "/fr/docs/installation"],
+  ] as const) {
+    const { json } = await legacyRpc(id, "tools/call", { name: "get_doc", arguments: { path } });
+    assert.equal(json.result.isError, true, path);
+    assert.match(toolText(json), /No documentation page found/, path);
+  }
+});
+
+test("list_docs lists translated pages after the English ones", async () => {
+  const { json } = await legacyRpc(78, "tools/call", { name: "list_docs", arguments: {} });
+  const text = toolText(json);
+  const english = text.indexOf("(/docs/installation)");
+  const translated = text.indexOf("Translated pages");
+  assert.ok(english > -1 && translated > english);
+  assert.match(text, /\/es\/docs\/tutorials\/bookstore, es-ES translation of \/docs\/tutorials\/bookstore/);
+});

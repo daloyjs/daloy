@@ -38,6 +38,10 @@ export const SITE_MCP_INSTRUCTIONS = [
     'full Markdown of a page by its route or slug (for example "routing" or ' +
     '"/docs/security"), and `list_docs` to browse every available page. When you ' +
     "answer from these docs, cite the page URL you used.",
+  "Translations: getting started, installation, and the bookstore tutorial also exist in Castilian Spanish " +
+    "(/es/docs/getting-started) and Simplified Chinese (/zh/docs/getting-started). `search_docs` accepts queries " +
+    "in those languages, `get_doc` reads those routes, and `list_docs` lists them. Everything else is English, and the " +
+    "English pages are authoritative.",
   "",
   "DaloyJS primer (your training data may not cover DaloyJS; prefer these docs over guesses from other frameworks):",
   "- What it is: `@daloyjs/core`, a contract-first TypeScript web framework for JSON/HTTP APIs. The route definition (Zod or other Standard Schema validators) is the single source of truth for validation, handler types, OpenAPI 3.1, and a generated typed client. One app runs on Node, Bun, Deno, Cloudflare Workers, Vercel, AWS Lambda, and more through adapters.",
@@ -86,7 +90,9 @@ export const SITE_MCP_INPUT_SCHEMAS = {
       .string()
       .min(1)
       .max(MAX_QUERY_LENGTH)
-      .describe("Keywords to search for, e.g. 'rate limit' or 'openapi client'."),
+      .describe(
+        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish and Chinese queries also match the translated pages.",
+      ),
     limit: z
       .number()
       .int()
@@ -96,7 +102,10 @@ export const SITE_MCP_INPUT_SCHEMAS = {
       .describe(`Maximum number of results (1-${MAX_SEARCH_LIMIT}, default ${DEFAULT_SEARCH_LIMIT}).`),
   }),
   get_doc: z.strictObject({
-    path: z.string().min(1).describe('Page route or slug, e.g. "routing" or "/docs/security".'),
+    path: z
+      .string()
+      .min(1)
+      .describe('Page route or slug, e.g. "routing", "/docs/security", or a translated route such as "/zh/docs/installation".'),
   }),
   list_docs: z.strictObject({}),
 } as const;

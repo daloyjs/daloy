@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { lastModifiedForRoute } from "@/lib/git-dates";
+import { isTranslatedDocsPath } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/seo";
 import { buildSitemapEntries } from "@/lib/sitemap-entries";
 
@@ -14,7 +15,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return Promise.all(
     (await buildSitemapEntries()).map(async ({ path, changeFrequency, priority, languages }) => {
       const lastModified =
-        path.startsWith("/docs") || path.startsWith("/blog/") ? await lastModifiedForRoute(path) : undefined;
+        path.startsWith("/docs") || path.startsWith("/blog/") || isTranslatedDocsPath(path)
+          ? await lastModifiedForRoute(path)
+          : undefined;
       return {
         url: `${SITE_URL}${path}`,
         ...(lastModified ? { lastModified } : {}),

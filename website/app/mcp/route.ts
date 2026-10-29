@@ -1,5 +1,11 @@
 import { createMcpHandler } from "mcp-handler";
-import { getAllDocPages, getDocPage } from "@/lib/docs-content";
+import {
+  getAllDocPages,
+  getAllTranslatedDocPages,
+  getDocPage,
+  getTranslatedDocPage,
+  type TranslatedDocPage,
+} from "@/lib/docs-content";
 import { rankDocPages, tokenize } from "@/lib/docs-ranking";
 import { SITE_URL } from "@/lib/seo";
 import {
@@ -124,26 +130,58 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
   const trimmed = query.trim().slice(0, MAX_QUERY_LENGTH);
   if (trimmed.length === 0 || tokenize(trimmed).length === 0) {
     return toolErrorResult(
-      "`query` must contain at least one alphanumeric term."
+      "`query` must contain at least one alphanumeric term (letters or digits, in any script)."
     );
   }
 
   const pages = await getAllDocPages();
   const ranked = rankDocPages(pages, trimmed, limit);
 
-  if (ranked.length === 0) {
+  // Translated pages (es, zh) join the results only when the query looks
+  // like it is in another language or nothing English matched, so English
+  // queries keep their English-only result list.
+  const wantTranslations = NON_ASCII.test(trimmed) || ranked.length === 0;
+  const translated = wantTranslations
+    ? rankDocPages(await getAllTranslatedDocPages(), trimmed, limit)
+    : [];
+
+  if (ranked.length === 0 && translated.length === 0) {
     return textResult(
-      `No documentation pages matched "${trimmed}". Try broader keywords or use list_docs.`
+      `No documentation pages matched "${trimmed}". Try broader keywords or use list_docs. ${ENGLISH_HINT}`
     );
   }
 
-  const lines = ranked.map(
-    (entry, index) =>
-      `${index + 1}. ${entry.page.title} (${entry.page.href})\n   ${entry.page.description}\n   ${absoluteUrl(entry.page.href)}`
-  );
-  return textResult(
-    `Found ${ranked.length} result(s) for "${trimmed}":\n\n${lines.join("\n\n")}`
-  );
+  const sections: string[] = [];
+  if (ranked.length > 0) {
+    const lines = ranked.map(
+      (entry, index) =>
+        `${index + 1}. ${entry.page.title} (${entry.page.href})\n   ${entry.page.description}\n   ${absoluteUrl(entry.page.href)}`
+    );
+    sections.push(`Found ${ranked.length} result(s) for "${trimmed}":\n\n${lines.join("\n\n")}`);
+  }
+  if (translated.length > 0) {
+    const lines = translated.map((entry, index) => `${index + 1}. ${translatedLine(entry.page)}`);
+    sections.push(
+      `${ranked.length === 0 ? `No English pages matched "${trimmed}". ` : ""}Translated pages (${translated.length}):\n\n${lines.join("\n\n")}` +
+        (ranked.length === 0 ? `\n\n${ENGLISH_HINT}` : "")
+    );
+  }
+  return textResult(sections.join("\n\n"));
+}
+
+/** Detects queries written in a language other than plain-ASCII English. */
+const NON_ASCII = /[^\x00-\x7f]/;
+
+/** Steer agents back to the complete English corpus. */
+const ENGLISH_HINT =
+  "The English docs are the complete reference; only getting started, installation, and the bookstore tutorial are translated (Spanish /es/docs, Simplified Chinese /zh/docs). Search again with English keywords for everything else.";
+
+/**
+ * One translated search or list row: title, route, language, the English
+ * page it translates, description and URL.
+ */
+function translatedLine(page: TranslatedDocPage): string {
+  return `${page.title} (${page.href}, ${page.lang} translation of ${page.translates})\n   ${page.description}\n   ${absoluteUrl(page.href)}`;
 }
 
 /**
@@ -168,6 +206,11 @@ async function runGetDoc(path: string, origin: string): Promise<ToolResult> {
     return toolErrorResult(
       '`path` is required, e.g. "routing" or "/docs/security".'
     );
+  }
+
+  const translatedPage = await getTranslatedDocPage(trimmed);
+  if (translatedPage) {
+    return runGetTranslatedDoc(translatedPage, origin);
   }
 
   const page = await getDocPage(trimmed);
@@ -195,6 +238,31 @@ async function runGetDoc(path: string, origin: string): Promise<ToolResult> {
 }
 
 /**
+ * `get_doc` for a translated page: the same Markdown its `.md` sibling
+ * serves, headed with its language and the English page it translates (which
+ * stays authoritative).
+ *
+ * @param page - The resolved translated page.
+ * @param origin - Inbound origin, pinned by {@link renderPathMarkdown}.
+ * @returns The MCP tool result.
+ */
+async function runGetTranslatedDoc(page: TranslatedDocPage, origin: string): Promise<ToolResult> {
+  const rendered = await renderPathMarkdown(origin, page.href).catch(() => null);
+  const content =
+    rendered && rendered.status === 200
+      ? rendered.markdown.replace(/^# [^\n]*\n+/m, "").trim()
+      : `${page.body}\n\n[Markdown rendering unavailable; this is a plain-text fallback. Read ${absoluteUrl(page.href)}.md for the exact source.]`;
+  const body =
+    content.length > MAX_DOC_BODY_CHARS
+      ? `${content.slice(0, MAX_DOC_BODY_CHARS)}\n\n[truncated; read the full page at ${absoluteUrl(page.href)}.md]`
+      : content;
+
+  return textResult(
+    `# ${page.title}\n\nRoute: ${page.href}\nLanguage: ${page.lang} (translation of ${page.translates}; the English page is authoritative: ${absoluteUrl(page.translates)})\nURL: ${absoluteUrl(page.href)}\nMarkdown: ${absoluteUrl(page.href)}.md\n\n${body}`
+  );
+}
+
+/**
  * Execute `list_docs`.
  *
  * @returns The MCP tool result: a bulleted list of every documentation page.
@@ -204,8 +272,15 @@ async function runListDocs(): Promise<ToolResult> {
   const lines = pages.map(
     (page) => `- ${page.title} (${page.href}): ${page.description}`
   );
+  const translated = await getAllTranslatedDocPages();
+  const translatedLines = translated.map(
+    (page) => `- ${page.title} (${page.href}, ${page.lang} translation of ${page.translates}): ${page.description}`
+  );
   return textResult(
-    `DaloyJS has ${pages.length} documentation pages:\n\n${lines.join("\n")}`
+    `DaloyJS has ${pages.length} documentation pages:\n\n${lines.join("\n")}` +
+      (translated.length > 0
+        ? `\n\nTranslated pages (${translated.length}; the English pages above are authoritative):\n\n${translatedLines.join("\n")}`
+        : "")
   );
 }
 

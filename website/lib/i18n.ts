@@ -198,3 +198,15 @@ export function languageAlternates(path: TranslatedPath): Record<string, string>
 export function translatedDocsIndex(locale: TranslatedLocale): string {
   return `${LOCALE_PREFIX[locale]}/docs`;
 }
+
+/**
+ * Whether a path is a page inside a translated docs tree (`/es/docs/...`,
+ * `/zh/docs/...`), excluding the docs index itself.
+ *
+ * @param path - Site path.
+ * @returns `true` for a translated docs page route.
+ */
+export function isTranslatedDocsPath(path: string): boolean {
+  const locale = localeFromPathname(path);
+  return locale !== "en" && path.startsWith(`${translatedDocsIndex(locale)}/`);
+}

@@ -1,16 +1,25 @@
 import { TranslatedDocsNavList } from "@/components/translated-docs-nav-list";
-import {
-  localizedPath,
-  TRANSLATED_PATHS,
-  translatedDocsIndex,
-  type TranslatedLocale,
-} from "@/lib/i18n";
-import { getTranslatedMdxDocs } from "@/lib/mdx/content";
+import type { Route } from "next";
+import Link from "next/link";
+
+import { lastModifiedForRoute } from "@/lib/git-dates";
+import { HTML_LANG, translatedDocsIndex, type TranslatedLocale } from "@/lib/i18n";
+import { getOrderedTranslatedDocs } from "@/lib/mdx/content";
 
 /** Chrome strings of the translated docs section, per locale. */
 export const TRANSLATED_DOCS_COPY: Record<
   TranslatedLocale,
-  { indexTitle: string; allDocs: string; allDocsBody: string; tocLabel: string }
+  {
+    indexTitle: string;
+    allDocs: string;
+    allDocsBody: string;
+    tocLabel: string;
+    breadcrumb: string;
+    pager: string;
+    previous: string;
+    next: string;
+    lastUpdated: string;
+  }
 > = {
   es: {
     indexTitle: "Documentación en español",
@@ -18,25 +27,24 @@ export const TRANSLATED_DOCS_COPY: Record<
     allDocsBody:
       "Seguridad, adaptadores, bases de datos, autenticación y la referencia completa de la API.",
     tocLabel: "En esta página",
+    breadcrumb: "Ruta de navegación",
+    pager: "Navegación entre páginas",
+    previous: "Anterior",
+    next: "Siguiente",
+    lastUpdated: "Última actualización:",
   },
   zh: {
     indexTitle: "中文文档",
     allDocs: "全部文档（英文）",
     allDocsBody: "安全、适配器、数据库、身份验证以及完整的 API 参考。",
     tocLabel: "本页内容",
+    breadcrumb: "面包屑导航",
+    pager: "页面导航",
+    previous: "上一页",
+    next: "下一页",
+    lastUpdated: "最后更新：",
   },
 };
-
-/** A locale's translated docs in reading order: the order of `TRANSLATED_PATHS`. */
-async function orderedTranslatedDocs(locale: TranslatedLocale) {
-  const docs = await getTranslatedMdxDocs(locale);
-  const order = TRANSLATED_PATHS.filter((path) => path.startsWith("/docs/")).map((path) =>
-    localizedPath(path, locale),
-  );
-  return docs
-    .filter((doc) => order.includes(doc.route))
-    .sort((a, b) => order.indexOf(a.route) - order.indexOf(b.route));
-}
 
 /**
  * Sidebar for a translated docs section: the translated pages, then a link
@@ -46,7 +54,7 @@ async function orderedTranslatedDocs(locale: TranslatedLocale) {
  * @param props.locale - Translated locale.
  */
 export async function TranslatedDocsNav({ locale }: { locale: TranslatedLocale }) {
-  const docs = await orderedTranslatedDocs(locale);
+  const docs = await getOrderedTranslatedDocs(locale);
   const copy = TRANSLATED_DOCS_COPY[locale];
 
   return (
@@ -76,9 +84,93 @@ export async function TranslatedDocsNav({ locale }: { locale: TranslatedLocale }
 export async function translatedDocsList(
   locale: TranslatedLocale,
 ): Promise<Array<{ href: string; title: string; description: string }>> {
-  return (await orderedTranslatedDocs(locale)).map((doc) => ({
+  return (await getOrderedTranslatedDocs(locale)).map((doc) => ({
     href: doc.route,
     title: doc.frontmatter.title,
     description: doc.frontmatter.description,
   }));
+}
+
+/**
+ * Breadcrumb for a translated docs page: the locale's docs index, then the
+ * page. Server-rendered, so it is in the HTML crawlers and agents read.
+ *
+ * @param props.locale - Translated locale.
+ * @param props.title - Current page title.
+ */
+export function TranslatedDocsBreadcrumb({ locale, title }: { locale: TranslatedLocale; title: string }) {
+  const copy = TRANSLATED_DOCS_COPY[locale];
+  return (
+    <nav data-md-skip aria-label={copy.breadcrumb} className="not-prose mb-4 text-sm text-muted-foreground">
+      <ol className="flex flex-wrap items-center gap-1.5">
+        <li>
+          <Link href={translatedDocsIndex(locale) as Route} className="hover:text-foreground">
+            {copy.indexTitle}
+          </Link>
+        </li>
+        <li aria-hidden>›</li>
+        <li aria-current="page" className="text-foreground">
+          {title}
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * Previous/next links between a locale's translated docs pages, in reading
+ * order.
+ *
+ * @param props.locale - Translated locale.
+ * @param props.route - Current page route.
+ */
+export async function TranslatedDocsPager({ locale, route }: { locale: TranslatedLocale; route: string }) {
+  const docs = await getOrderedTranslatedDocs(locale);
+  const index = docs.findIndex((doc) => doc.route === route);
+  if (index === -1) return null;
+  const copy = TRANSLATED_DOCS_COPY[locale];
+  const previous = docs[index - 1];
+  const next = docs[index + 1];
+  if (!previous && !next) return null;
+
+  const cell =
+    "flex flex-col gap-1 rounded-xl border p-4 text-sm no-underline transition-colors hover:border-foreground/25 hover:bg-muted/40";
+  return (
+    <nav data-md-skip aria-label={copy.pager} className="not-prose mt-12 grid gap-3 sm:grid-cols-2">
+      {previous ? (
+        <Link href={previous.route as Route} className={cell}>
+          <span className="text-muted-foreground">← {copy.previous}</span>
+          <span className="font-medium text-foreground">{previous.frontmatter.title}</span>
+        </Link>
+      ) : (
+        <span />
+      )}
+      {next ? (
+        <Link href={next.route as Route} className={`${cell} sm:text-right`}>
+          <span className="text-muted-foreground">{copy.next} →</span>
+          <span className="font-medium text-foreground">{next.frontmatter.title}</span>
+        </Link>
+      ) : null}
+    </nav>
+  );
+}
+
+/**
+ * Git-derived "last updated" line for a translated docs page, formatted for
+ * the locale. Renders nothing when history is unavailable (shallow clone),
+ * like the English footer.
+ *
+ * @param props.locale - Translated locale.
+ * @param props.route - Current page route.
+ */
+export async function TranslatedDocsLastUpdated({ locale, route }: { locale: TranslatedLocale; route: string }) {
+  const date = await lastModifiedForRoute(route);
+  if (!date) return null;
+  const formatted = new Intl.DateTimeFormat(HTML_LANG[locale], { dateStyle: "long" }).format(date);
+  return (
+    <p className="not-prose mt-10 text-sm text-muted-foreground">
+      {TRANSLATED_DOCS_COPY[locale].lastUpdated}{" "}
+      <time dateTime={date.toISOString()}>{formatted}</time>
+    </p>
+  );
 }

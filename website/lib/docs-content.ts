@@ -1,7 +1,13 @@
 import type { Route } from "next";
 import { cacheLife } from "next/cache";
 
-import { extractMdxBodyText, getMdxDocs } from "./mdx/content";
+import {
+  HTML_LANG,
+  localeFromPathname,
+  TRANSLATED_LOCALES,
+  type TranslatedLocale,
+} from "./i18n";
+import { extractMdxBodyText, getMdxDocs, getTranslatedMdxDocs } from "./mdx/content";
 
 /**
  * A single documentation page from the `content/docs` MDX tree, with its
@@ -94,4 +100,64 @@ export async function getDocPage(route: string): Promise<DocPage | null> {
 
   const pages = await getAllDocPages();
   return pages.find((page) => page.href === normalized) ?? null;
+}
+
+/**
+ * A translated docs page (`content/<locale>/docs`): the {@link DocPage}
+ * fields plus its language and the English page it translates. The English
+ * page stays the complete, authoritative reference.
+ */
+export type TranslatedDocPage = DocPage & {
+  locale: TranslatedLocale;
+  /** BCP 47 tag, e.g. `zh-CN`. */
+  lang: string;
+  /** English route this page translates, e.g. `/docs/installation`. */
+  translates: Route;
+};
+
+/**
+ * Every translated docs page in every locale, sorted by route. Kept apart
+ * from {@link getAllDocPages} so English search, the sidebar and llms.txt
+ * sections stay English; MCP and llms.txt list these explicitly.
+ *
+ * @returns Every {@link TranslatedDocPage}.
+ */
+export async function getAllTranslatedDocPages(): Promise<TranslatedDocPage[]> {
+  "use cache";
+  cacheLife("max");
+
+  const perLocale = await Promise.all(
+    TRANSLATED_LOCALES.map(async (locale) =>
+      (await getTranslatedMdxDocs(locale)).map((doc) => ({
+        title: doc.frontmatter.title,
+        href: doc.route as Route,
+        description: doc.frontmatter.description,
+        keywords: doc.frontmatter.keywords,
+        body: extractMdxBodyText(doc.body),
+        locale,
+        lang: HTML_LANG[locale],
+        translates: `/docs/${doc.segments.join("/")}` as Route,
+      })),
+    ),
+  );
+  return perLocale.flat().sort((a, b) => a.href.localeCompare(b.href));
+}
+
+/**
+ * Look up a translated docs page by route or URL (e.g. `/zh/docs/installation`
+ * or `https://daloyjs.dev/es/docs/installation.md`). Bare slugs are not
+ * accepted here: without a locale prefix they mean the English page.
+ *
+ * @param input - Raw route or URL from a caller.
+ * @returns The page, or `null` when the input is not a translated docs route,
+ *   is unsafe (path traversal), or names an untranslated page.
+ */
+export async function getTranslatedDocPage(input: string): Promise<TranslatedDocPage | null> {
+  let value = input.trim().replace(/^https?:\/\/[^/]+/i, "");
+  value = value.split(/[?#]/, 1)[0] ?? "";
+  value = value.replace(/\/+/g, "/").replace(/(.)\/$/, "$1").replace(/\.md$/, "");
+  if (!value.startsWith("/") || value.includes("..")) return null;
+  if (localeFromPathname(value) === "en") return null;
+
+  return (await getAllTranslatedDocPages()).find((page) => page.href === value) ?? null;
 }

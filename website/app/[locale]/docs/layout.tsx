@@ -1,12 +1,19 @@
+import type { Route } from "next";
+
 import { DocsToc, DocsTocMobile } from "@/components/docs-toc";
 import { TRANSLATED_DOCS_COPY, TranslatedDocsNav } from "@/components/translated-docs-nav";
+import { TranslatedDocsSearch } from "@/components/translated-docs-search";
 import { resolveLocale } from "@/lib/i18n-route";
+import { extractMdxBodyText, getOrderedTranslatedDocs } from "@/lib/mdx/content";
+
+/** Body text per page sent to the client search box (keeps the payload small). */
+const SEARCH_BODY_CHARS = 4_000;
 
 /**
  * Layout for a translated docs section (`/es/docs`, `/zh/docs`). Lighter
- * than the English docs layout: the search, breadcrumb, pager and page
- * footer read the English docs tree, so they stay there; this one lists only
- * the translated pages and links out to the full English docs.
+ * than the English docs layout: it lists only the translated pages, links out
+ * to the full English docs, and has its own search (translated pages plus
+ * the English index). Each page adds its breadcrumb, date and pager.
  */
 export default async function TranslatedDocsLayout({
   children,
@@ -17,9 +24,19 @@ export default async function TranslatedDocsLayout({
 }) {
   const locale = await resolveLocale(params);
   const copy = TRANSLATED_DOCS_COPY[locale];
+  const searchPages = (await getOrderedTranslatedDocs(locale)).map((doc) => ({
+    title: doc.frontmatter.title,
+    href: doc.route as Route,
+    description: doc.frontmatter.description,
+    keywords: doc.frontmatter.keywords,
+    body: extractMdxBodyText(doc.body, SEARCH_BODY_CHARS),
+  }));
 
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8">
+      <div className="pt-6 lg:pt-8">
+        <TranslatedDocsSearch locale={locale} pages={searchPages} />
+      </div>
       <details className="group mt-6 rounded-lg border px-4 py-3 lg:hidden">
         <summary className="cursor-pointer text-sm font-medium">{copy.indexTitle}</summary>
         <div className="mt-3">
