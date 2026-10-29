@@ -35,6 +35,7 @@ const SKIP_LINK: Record<SiteLocale, string> = {
   en: "Skip to content",
   es: "Saltar al contenido",
   zh: "跳到主要内容",
+  fr: "Aller au contenu",
 };
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 

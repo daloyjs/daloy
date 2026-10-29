@@ -3,7 +3,7 @@
  *
  * English is the default and lives at the root. Each translated locale lives
  * under its own prefix ({@link LOCALE_PREFIX}: `/es` for Castilian Spanish,
- * `/zh` for Simplified Chinese) and covers exactly the pages listed in
+ * `/zh` for Simplified Chinese, `/fr` for French) and covers exactly the pages listed in
  * {@link TRANSLATED_PATHS}: the marketing pages plus the docs on-ramp
  * (`content/<locale>/docs`). Every other docs page and the blog stay
  * English-only.
@@ -16,16 +16,26 @@
  */
 
 /** A locale the site renders. */
-export type SiteLocale = "en" | "es" | "zh";
+export type SiteLocale = "en" | "es" | "zh" | "fr";
 
 /** A locale other than the English default. */
 export type TranslatedLocale = Exclude<SiteLocale, "en">;
 
 /** Every locale, English first (the order of the language switcher). */
-export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh"];
+export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr"];
 
 /** Every translated locale. */
-export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh"];
+export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr"];
+
+/**
+ * Locales advertised outside the header language menu: the home-page hero
+ * pills and the footer language links. French is deliberately absent: it is
+ * offered only through the header menu.
+ */
+export const PROMOTED_LOCALES: readonly PromotedLocale[] = ["en", "es", "zh"];
+
+/** A locale listed in {@link PROMOTED_LOCALES}. */
+export type PromotedLocale = "en" | "es" | "zh";
 
 /** Request header `proxy.ts` sets (always overwriting client input). */
 export const LOCALE_HEADER = "x-site-locale";
@@ -34,6 +44,7 @@ export const LOCALE_HEADER = "x-site-locale";
 export const LOCALE_PREFIX: Record<TranslatedLocale, string> = {
   es: "/es",
   zh: "/zh",
+  fr: "/fr",
 };
 
 /** BCP 47 tag for `<html lang>` and `hreflang`. */
@@ -41,6 +52,7 @@ export const HTML_LANG: Record<SiteLocale, string> = {
   en: "en",
   es: "es-ES",
   zh: "zh-CN",
+  fr: "fr-FR",
 };
 
 /** OpenGraph `og:locale` value. */
@@ -48,6 +60,7 @@ export const OG_LOCALE: Record<SiteLocale, string> = {
   en: "en_US",
   es: "es_ES",
   zh: "zh_CN",
+  fr: "fr_FR",
 };
 
 /** Each locale's name, written in that language (for the switcher). */
@@ -55,6 +68,18 @@ export const LOCALE_NATIVE_NAME: Record<SiteLocale, string> = {
   en: "English",
   es: "Español",
   zh: "简体中文",
+  fr: "Français",
+};
+
+/**
+ * Whether social cards for a locale reuse the English card. The OG renderer
+ * ships Latin fonts only, so a non-Latin script would render as empty boxes.
+ */
+export const OG_USES_ENGLISH_CARD: Record<SiteLocale, boolean> = {
+  en: false,
+  es: false,
+  zh: true,
+  fr: false,
 };
 
 /**
@@ -83,7 +108,7 @@ const TRANSLATED = new Set<string>(TRANSLATED_PATHS);
  * Whether a value is a translated locale id (e.g. a `[locale]` route param).
  *
  * @param value - Candidate locale id.
- * @returns `true` (and narrows the type) for `"es"` or `"zh"`.
+ * @returns `true` (and narrows the type) for a translated locale id.
  */
 export function isTranslatedLocale(value: string): value is TranslatedLocale {
   return (TRANSLATED_LOCALES as readonly string[]).includes(value);

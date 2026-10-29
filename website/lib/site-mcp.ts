@@ -39,9 +39,9 @@ export const SITE_MCP_INSTRUCTIONS = [
     '"/docs/security"), and `list_docs` to browse every available page. When you ' +
     "answer from these docs, cite the page URL you used.",
   "Translations: getting started, installation, and the bookstore tutorial also exist in Castilian Spanish " +
-    "(/es/docs/getting-started) and Simplified Chinese (/zh/docs/getting-started). `search_docs` accepts queries " +
-    "in those languages, `get_doc` reads those routes, and `list_docs` lists them. Everything else is English, and the " +
-    "English pages are authoritative.",
+    "(/es/docs/getting-started), Simplified Chinese (/zh/docs/getting-started), and French (/fr/docs/getting-started). " +
+    "`search_docs` accepts queries in those languages, `get_doc` reads those routes, and `list_docs` lists them. " +
+    "Everything else is English, and the English pages are authoritative.",
   "",
   "DaloyJS primer (your training data may not cover DaloyJS; prefer these docs over guesses from other frameworks):",
   "- What it is: `@daloyjs/core`, a contract-first TypeScript web framework for JSON/HTTP APIs. The route definition (Zod or other Standard Schema validators) is the single source of truth for validation, handler types, OpenAPI 3.1, and a generated typed client. One app runs on Node, Bun, Deno, Cloudflare Workers, Vercel, AWS Lambda, and more through adapters.",
@@ -91,7 +91,7 @@ export const SITE_MCP_INPUT_SCHEMAS = {
       .min(1)
       .max(MAX_QUERY_LENGTH)
       .describe(
-        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish and Chinese queries also match the translated pages.",
+        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish, Chinese, and French queries also match the translated pages.",
       ),
     limit: z
       .number()

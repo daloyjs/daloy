@@ -1,0 +1,279 @@
+---
+title: "Tutoriel : construire l’API d’une librairie"
+description: "Tutoriel DaloyJS pas à pas : une API REST typée pour une librairie, avec routes orientées contrat, validation Zod, OpenAPI et client TypeScript généré."
+keywords:
+  - tutoriel DaloyJS
+  - tutoriel API librairie
+  - tutoriel API REST TypeScript
+  - tutoriel OpenAPI
+---
+
+# Tutoriel : construire l’API d’une librairie
+
+Nous allons construire de bout en bout un petit service de librairie : routes, validation, sécurité, OpenAPI, un SDK typé avec Hey API et des tests de contrat. À la fin, vous aurez une application DaloyJS prête pour la production dans sa forme.
+
+<FlowDiagram
+  title="Ce que vous allez construire"
+  numbered
+  steps={[
+    { label: "Créer le projet", detail: "pnpm add @daloyjs/core zod" },
+    {
+      label: "Fabrique buildApp",
+      detail: "routes · Zod · hooks de sécurité",
+      tone: "accent",
+    },
+    { label: "Servir", detail: "serve(app) sur Node" },
+    { label: "Spécification OpenAPI", detail: "generateOpenAPI(app)" },
+    { label: "SDK typé", detail: "Hey API openapi-ts" },
+    {
+      label: "Tests de contrat",
+      detail: "runContractTests(app)",
+      tone: "success",
+    },
+  ]}
+  caption="Une seule fabrique buildApp est partagée par le serveur, l’export OpenAPI et les tests : la spécification, le client typé et les tests de contrat ne peuvent donc jamais diverger."
+/>
+
+## 1. Créez le projet
+
+```bash
+mkdir bookstore && cd bookstore
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node @hey-api/openapi-ts prettier
+```
+
+```json
+// package.json, remplacez-le par ceci
+{
+  "name": "bookstore",
+  "type": "module",
+  "scripts": {
+    "dev":         "node --watch src/server.ts",
+    "test":        "node --test tests/**/*.test.ts",
+    "typecheck":   "tsc --noEmit",
+    "gen:openapi": "node scripts/dump-openapi.ts",
+    "gen:client":  "openapi-ts",
+    "gen":         "pnpm gen:openapi && pnpm gen:client"
+  }
+}
+```
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "openapi-ts.config.ts"]
+}
+```
+
+```ini
+# .npmrc
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+```
+
+## 2. Créez une fabrique `buildApp` partagée
+
+Partagez l’App entre le serveur, la génération de code et les tests pour que la spécification, le client et les tests restent alignés :
+
+```ts
+// src/build-app.ts
+import { z } from "zod";
+import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError, timingSafeEqual } from "@daloyjs/core";
+
+export const BookSchema = z.object({
+  id:    z.string(),
+  title: z.string(),
+  year:  z.number().int().optional(),
+});
+
+export function buildApp() {
+  const books = new Map<string, z.infer<typeof BookSchema>>([
+    ["1", { id: "1", title: "Foundation", year: 1951 }],
+    ["2", { id: "2", title: "Dune",       year: 1965 }],
+  ]);
+
+  const app = new App({ bodyLimitBytes: 64 * 1024, requestTimeoutMs: 5_000 });
+
+  app.use(requestId());
+  app.use(secureHeaders());
+  app.use(cors({ origin: ["http://localhost:5173"] }));
+  app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global, sauf si vous configurez keyGenerator ou trustProxyHeaders
+
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string() }) },
+      responses: {
+        200: {
+          description: "Found",
+          body: BookSchema,
+          examples: { default: { id: "1", title: "Foundation", year: 1951 } },
+        },
+        404: { description: "Not found" },
+      },
+    },
+    async ({ params }) => {
+      const book = books.get(params.id);
+      if (!book) throw new NotFoundError(`book ${params.id} not found`);
+      return { status: 200, body: book };
+    },
+  );
+
+  app.post(
+    "/books",
+    {
+      operationId: "createBook",
+      tags: ["Books"],
+      hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, "demo-token") }),
+      request: { body: BookSchema.omit({ id: true }) },
+      responses: {
+        201: { description: "Created", body: BookSchema },
+        401: { description: "Unauthorized" },
+        422: { description: "Validation error" },
+      },
+    },
+    async ({ body }) => {
+      const id = String(books.size + 1);
+      const book = { id, ...body };
+      books.set(id, book);
+      return { status: 201, body: book };
+    },
+  );
+
+  return app;
+}
+```
+
+## 3. Démarrez le serveur
+
+```ts
+// src/server.ts
+import { buildApp } from "./build-app.js";
+import { serve }    from "@daloyjs/core/node";
+
+const app = buildApp();
+const { port } = serve(app, { port: 3000 });
+console.log(`bookstore listening on http://localhost:${port}`);
+```
+
+```bash
+pnpm dev
+curl http://localhost:3000/books/1
+# {"id":"1","title":"Foundation","year":1951}
+
+curl -X POST http://localhost:3000/books \
+  -H "authorization: Bearer demo-token" \
+  -H "content-type: application/json" \
+  -d '{"title":"Hyperion","year":1989}'
+# {"id":"3","title":"Hyperion","year":1989}
+```
+
+## 4. Générez la spécification OpenAPI
+
+```ts
+// scripts/dump-openapi.ts
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname }          from "node:path";
+import { generateOpenAPI }  from "@daloyjs/core/openapi";
+import { buildApp }         from "../src/build-app.js";
+
+const app  = buildApp();
+const out  = "./generated/openapi.json";
+const doc  = generateOpenAPI(app, {
+  info: { title: "Bookstore API", version: "1.0.0" },
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+});
+
+await mkdir(dirname(out), { recursive: true });
+await writeFile(out, JSON.stringify(doc, null, 2));
+console.log(`wrote ${out}`);
+```
+
+```bash
+pnpm gen:openapi
+```
+
+## 5. Générez un SDK typé avec Hey API
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```bash
+pnpm gen
+# generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## 6. Utilisez le SDK depuis n’importe quel consommateur TS
+
+```ts
+import { client } from "../generated/client/client.gen.js";
+import { getBookById } from "../generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "http://localhost:3000" });
+
+const { data } = await getBookById({ path: { id: "1" } });
+console.log(data?.title); // string | undefined, entièrement typé
+```
+
+## 7. Ajoutez des tests
+
+```ts
+// tests/books.test.ts
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildApp } from "../src/build-app.js";
+import { runContractTests } from "@daloyjs/core/contract";
+
+test("contract is clean", async () => {
+  const report = await runContractTests(buildApp());
+  assert.equal(report.ok, true, JSON.stringify(report.issues, null, 2));
+});
+
+test("GET /books/:id returns 200", async () => {
+  const res = await buildApp().request("/books/1");
+  assert.equal(res.status, 200);
+});
+
+test("POST /books rejects without token", async () => {
+  const res = await buildApp().request("/books", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: "Hyperion" }),
+  });
+  assert.equal(res.status, 401);
+});
+```
+
+```bash
+pnpm test
+```
+
+## Ce que vous avez construit
+
+- Une API HTTP typée, validée et sécurisée.
+- Un vrai document OpenAPI 3.1 et un SDK typé généré, tous deux synchronisés.
+- Des tests de contrat qui protègent contre les divergences dans la CI.
+- Une chaîne d’installation renforcée avec pnpm et un `.npmrc` verrouillé.
+
+Poursuivez avec le [tutoriel d’autorisation multi-utilisateur](/docs/tutorials/multi-user-api), [Security](/docs/security), [Adapters](/docs/adapters) ou la [référence de l’API](/docs/api-reference), tous en anglais.

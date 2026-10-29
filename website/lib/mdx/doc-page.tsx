@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { isTranslatedPath, type TranslatedLocale } from "@/lib/i18n";
+import { isTranslatedPath, OG_USES_ENGLISH_CARD, type TranslatedLocale } from "@/lib/i18n";
 import { buildMetadata } from "@/lib/seo";
 
 import { getMdxDoc, getMdxDocs, getTranslatedMdxDoc, getTranslatedMdxDocs } from "./content";
@@ -106,7 +106,7 @@ export async function translatedDocMetadata(
   if (!doc || !isTranslatedPath(english)) return {};
   // Chinese pages render the English page's card (Latin-only OG fonts), so
   // the alt text must describe that card, not the Chinese title.
-  const englishTitle = locale === "zh" ? (await getMdxDoc(segments))?.frontmatter.title : undefined;
+  const englishTitle = OG_USES_ENGLISH_CARD[locale] ? (await getMdxDoc(segments))?.frontmatter.title : undefined;
   return buildMetadata({
     ...doc.frontmatter,
     path: doc.route,
@@ -130,6 +130,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     before: "本页译自英文原文。如有出入，以",
     link: "英文版本",
     after: "为准。",
+  },
+  fr: {
+    before: "Traduction de la page originale en anglais. En cas de divergence, la ",
+    link: "version anglaise",
+    after: " fait foi.",
   },
 };
 

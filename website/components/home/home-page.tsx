@@ -29,7 +29,7 @@ import { ContractFlowVisual } from "@/components/contract-flow-visual";
 import { FlowHeroScene } from "@/components/flow-hero-scene";
 import { LocaleLink } from "@/components/locale-link";
 import { ScalarPreview } from "@/components/scalar-preview";
-import { HTML_LANG, localeHome, SITE_LOCALES } from "@/lib/i18n";
+import { HTML_LANG, localeHome, PROMOTED_LOCALES } from "@/lib/i18n";
 import { serializeJsonLd } from "@/lib/seo";
 import { LANGUAGE_NOTICES } from "./language-notices";
 import {
@@ -124,7 +124,7 @@ export function HomePage({
             {/* data-md-skip: navigation chrome, not page content, so the
                 Markdown version (.md, Accept: text/markdown) leaves it out. */}
             <div data-md-skip className="flex flex-col items-center gap-2">
-              {SITE_LOCALES.filter((other) => other !== locale).map((other, index) => {
+              {PROMOTED_LOCALES.filter((other) => other !== locale).map((other, index) => {
                 const notice = LANGUAGE_NOTICES[other];
                 return (
                   <a

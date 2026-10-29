@@ -66,6 +66,14 @@ export const UI_STRINGS: Record<
     copiedAria: "代码已复制到剪贴板",
     packageManager: "包管理器",
   },
+  fr: {
+    copy: "Copier",
+    copied: "Copié",
+    retryCopy: "Réessayer",
+    copyAria: "Copier le code dans le presse-papiers",
+    copiedAria: "Code copié dans le presse-papiers",
+    packageManager: "Gestionnaire de paquets",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

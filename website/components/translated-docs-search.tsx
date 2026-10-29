@@ -8,7 +8,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { englishSearchQuery, glossaryMatches } from "@/lib/docs-glossary";
 import { isUnspacedTerm, rankDocPages, tokenize, type RankablePage } from "@/lib/docs-ranking";
 import { useDocsSearchIndex } from "@/lib/docs-search-client";
-import type { TranslatedLocale } from "@/lib/i18n";
+import { HTML_LANG, type TranslatedLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /** Results shown per group. */
@@ -46,6 +46,16 @@ const SEARCH_COPY: Record<
     empty: "没有找到结果。",
     loading: "正在加载英文索引…",
     englishHint: "搜索英文文档时，请尝试使用英文关键词。",
+  },
+  fr: {
+    label: "Rechercher dans la documentation",
+    placeholder: "Rechercher dans la documentation…",
+    translated: "En français",
+    english: "Documentation en anglais",
+    englishTag: "en anglais",
+    empty: "Aucun résultat.",
+    loading: "Chargement de l’index anglais…",
+    englishHint: "Pour chercher dans la documentation en anglais, essayez des mots-clés en anglais.",
   },
 };
 
@@ -169,7 +179,7 @@ export function TranslatedDocsSearch({
                   <a href={page.href} hrefLang="en" className={row}>
                     <span className="font-medium text-foreground">
                       {page.title}{" "}
-                      <span lang={locale === "zh" ? "zh-CN" : "es-ES"} className="text-xs font-normal text-muted-foreground">
+                      <span lang={HTML_LANG[locale]} className="text-xs font-normal text-muted-foreground">
                         ({copy.englishTag})
                       </span>
                     </span>

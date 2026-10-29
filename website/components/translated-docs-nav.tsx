@@ -44,6 +44,18 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "下一页",
     lastUpdated: "最后更新：",
   },
+  fr: {
+    indexTitle: "Documentation en français",
+    allDocs: "Toute la documentation (en anglais)",
+    allDocsBody:
+      "Sécurité, adaptateurs, bases de données, authentification et la référence complète de l’API.",
+    tocLabel: "Sur cette page",
+    breadcrumb: "Fil d’Ariane",
+    pager: "Navigation entre les pages",
+    previous: "Précédent",
+    next: "Suivant",
+    lastUpdated: "Dernière mise à jour :",
+  },
 };
 
 /**

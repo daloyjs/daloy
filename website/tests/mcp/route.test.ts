@@ -652,7 +652,7 @@ test("get_doc refuses traversal and untranslated routes under a locale prefix", 
   for (const [id, path] of [
     [75, "/zh/docs/../../docs/installation"],
     [76, "/zh/docs/routing"],
-    [77, "/fr/docs/installation"],
+    [77, "/de/docs/installation"],
   ] as const) {
     const { json } = await legacyRpc(id, "tools/call", { name: "get_doc", arguments: { path } });
     assert.equal(json.result.isError, true, path);
@@ -667,4 +667,25 @@ test("list_docs lists translated pages after the English ones", async () => {
   const translated = text.indexOf("Translated pages");
   assert.ok(english > -1 && translated > english);
   assert.match(text, /\/es\/docs\/tutorials\/bookstore, es-ES translation of \/docs\/tutorials\/bookstore/);
+});
+
+test("get_doc reads a French route too", async () => {
+  const { json } = await legacyRpc(82, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/fr/docs/tutorials/bookstore" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /Language: fr-FR \(translation of \/docs\/tutorials\/bookstore; the English page is authoritative/);
+});
+
+test("search_docs maps French terms to English and lists the French page", async () => {
+  const { json } = await legacyRpc(83, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "journalisation des requêtes" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /Searched the English docs for: logging \(from journalisation\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/logging\)/);
 });

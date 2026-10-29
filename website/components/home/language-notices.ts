@@ -1,11 +1,12 @@
-import type { SiteLocale } from "@/lib/i18n";
+import type { PromotedLocale } from "@/lib/i18n";
 
 /**
  * The home-page pill advertising each locale, written in that locale's own
  * language so the reader who needs it can read it. Every home page shows the
- * pills of all the other locales.
+ * pills of the other promoted locales (`PROMOTED_LOCALES`); French is offered
+ * only in the header language menu, so it has no pill.
  */
-export const LANGUAGE_NOTICES: Record<SiteLocale, { badge: string; text: string; cta: string }> = {
+export const LANGUAGE_NOTICES: Record<PromotedLocale, { badge: string; text: string; cta: string }> = {
   en: {
     badge: "English",
     text: "This page is also available in English.",

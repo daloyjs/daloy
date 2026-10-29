@@ -46,6 +46,12 @@ const PROJECT_LINKS: ReadonlyArray<{
       "Castilian Spanish versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /es/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
   },
   {
+    title: "DaloyJS en français (fr-FR)",
+    url: `${SITE_URL}/fr`,
+    description:
+      "French versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /fr/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+  },
+  {
     title: "DaloyJS 简体中文版 (zh-CN)",
     url: `${SITE_URL}/zh`,
     description:
@@ -166,13 +172,13 @@ export async function GET(request: Request) {
     lines.push("");
   }
 
-  // Translated docs (under /es/docs/ and /zh/docs/): outside /docs/, so this
+  // Translated docs (under /es/docs/, /zh/docs/, /fr/docs/): outside /docs/, so this
   // site-wide file is the one that covers them.
   const translated = await getAllTranslatedDocPages();
   if (translated.length > 0) {
     lines.push("## Translations", "");
     lines.push(
-      "Castilian Spanish and Simplified Chinese versions of the docs on-ramp. The English pages are authoritative.",
+      "Castilian Spanish, Simplified Chinese, and French versions of the docs on-ramp. The English pages are authoritative.",
       "",
     );
     for (const page of translated) {

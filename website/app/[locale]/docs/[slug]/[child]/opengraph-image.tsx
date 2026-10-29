@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { resolveLocale } from "@/lib/i18n-route";
-import { TRANSLATED_LOCALES } from "@/lib/i18n";
+import { OG_USES_ENGLISH_CARD, TRANSLATED_LOCALES, type TranslatedLocale } from "@/lib/i18n";
 import { getMdxDoc, getTranslatedMdxDoc } from "@/lib/mdx/content";
 import { translatedDocParams } from "@/lib/mdx/doc-page";
 import {
@@ -11,6 +11,13 @@ import {
 } from "@/lib/og-image";
 
 export const alt = "DaloyJS documentation";
+
+/** The card's label pill, in the page's language. */
+const DOCS_LABEL: Record<TranslatedLocale, string> = {
+  es: "Documentación",
+  zh: "Docs",
+  fr: "Documentation",
+};
 export const size = ogImageSize;
 export const contentType = ogImageContentType;
 
@@ -24,8 +31,8 @@ export async function generateStaticParams() {
 }
 
 /**
- * Card for a translated docs page. Chinese renders the English page's card:
- * the OG renderer ships Latin fonts only.
+ * Card for a translated docs page. A locale in a non-Latin script (Chinese)
+ * renders the English page's card: the OG renderer ships Latin fonts only.
  */
 export default async function Image({ params }: { params: Promise<{ locale: string; child: string; slug: string }> }) {
   const locale = await resolveLocale(params);
@@ -33,10 +40,10 @@ export default async function Image({ params }: { params: Promise<{ locale: stri
   const doc = await getTranslatedMdxDoc(locale, [slug, child]);
   if (!doc) notFound();
 
-  if (locale === "zh") {
+  if (OG_USES_ENGLISH_CARD[locale]) {
     const english = await getMdxDoc([slug, child]);
     if (!english) notFound();
     return renderPageOgImage({ label: "Docs", title: english.frontmatter.title, path: english.route });
   }
-  return renderPageOgImage({ label: "Documentación", title: doc.frontmatter.title, path: doc.route });
+  return renderPageOgImage({ label: DOCS_LABEL[locale], title: doc.frontmatter.title, path: doc.route });
 }

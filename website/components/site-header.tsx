@@ -77,6 +77,20 @@ const NAV_COPY: Record<
     closeMenu: "关闭导航菜单",
     otherLanguage: "英文内容",
   },
+  fr: {
+    home: "/fr" as Route,
+    items: [
+      { href: "/fr/docs" as Route, label: "Documentation" },
+      { href: "/blog", label: "Blog" },
+      { href: "/fr/docs/getting-started" as Route, label: "Premiers pas" },
+      { href: "/fr/docs/tutorials/bookstore" as Route, label: "Tutoriels" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/fr/docs/installation" as Route, label: "Installation" },
+    openMenu: "Ouvrir le menu de navigation",
+    closeMenu: "Fermer le menu de navigation",
+    otherLanguage: "Contenu en anglais",
+  },
 };
 
 const socialLinks = [

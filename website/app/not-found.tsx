@@ -40,6 +40,14 @@ const NOT_FOUND_COPY: Record<
     sitemap: "网站地图",
     contact: "联系我们",
   },
+  fr: {
+    title: "Page introuvable",
+    body: "Ce chemin n’existe pas sur daloyjs.dev. Si vous avez suivi un lien obsolète, le plan du site, l’index pour les agents et l’accueil de la documentation vous aideront à retrouver ce que vous cherchez.",
+    home: "Accueil",
+    docs: "Documentation en français",
+    sitemap: "Plan du site",
+    contact: "Contact",
+  },
 };
 
 /**

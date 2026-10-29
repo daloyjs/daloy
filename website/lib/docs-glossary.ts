@@ -7,6 +7,7 @@
  * Scope is deliberate:
  * - Chinese has established translations for most concepts (中间件, 限流,
  *   路由, 跨域…), and our own `/zh` pages use them, so the list is broad.
+ * - French, like Spanish, gets a short list of translations and cognates.
  * - Spanish mostly keeps the English term ("middleware", "token"), so the list
  *   only covers translations and cognates the ranker cannot link on its own
  *   ("validación" ≠ "validation" to a suffix stemmer).
@@ -166,6 +167,57 @@ export const ES_GLOSSARY: readonly GlossaryEntry[] = [
   { term: "comprobacion de salud", english: "health check", expect: "/docs/security/lifecycle-health" },
 ];
 
+/**
+ * French (accent-free, lowercase; elided articles fold to separate words,
+ * so "chaîne d’approvisionnement" is "chaine d approvisionnement") → English.
+ * Like Spanish, French developers keep most English terms ("middleware",
+ * "token", "endpoint"), so this lists only translations and the cognates the
+ * ranker cannot link.
+ */
+export const FR_GLOSSARY: readonly GlossaryEntry[] = [
+  { term: "routage", english: "routing", expect: "/docs/routing" },
+  { term: "deploiement", english: "deployment", expect: "/docs/deployment" },
+  { term: "deployer", english: "deployment", expect: "/docs/deployment" },
+  { term: "authentification", english: "authentication", expect: "/docs/auth" },
+  { term: "autorisation", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "limitation de debit", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "limite de debit", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "intergiciel", english: "middleware", expect: "/docs/api-reference/middleware" },
+  { term: "journalisation", english: "logging", expect: "/docs/logging" },
+  { term: "journaux", english: "logging", expect: "/docs/logging" },
+  { term: "tracage", english: "tracing", expect: "/docs/tracing" },
+  { term: "metriques", english: "metrics", expect: "/docs/metrics" },
+  { term: "erreurs", english: "errors", expect: "/docs/errors" },
+  { term: "idempotence", english: "idempotency", expect: "/docs/idempotency" },
+  { term: "base de donnees", english: "databases", expect: "/docs/databases" },
+  { term: "bases de donnees", english: "databases", expect: "/docs/databases" },
+  { term: "courriel", english: "email", expect: "/docs/email" },
+  { term: "paiements", english: "payment integrations", expect: "/docs/payments" },
+  { term: "adaptateurs", english: "adapters", expect: "/docs/adapters" },
+  { term: "dependances", english: "dependencies supply chain", expect: "/docs/security/supply-chain" },
+  { term: "chaine d approvisionnement", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "taches planifiees", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "planificateur", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "arriere plan", english: "jobs", expect: "/docs/jobs" },
+  { term: "televersement", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "envoi de fichiers", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "en tetes securises", english: "secure headers", expect: "/docs/security/secure-defaults" },
+  { term: "multilocataire", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "multi locataire", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "variables d environnement", english: "environment variables config", expect: "/docs/config" },
+  { term: "premiers pas", english: "getting started", expect: "/docs/getting-started" },
+  { term: "client type", english: "typed client", expect: "/docs/typed-client" },
+  { term: "nouvelles tentatives", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "disjoncteur", english: "circuit breaker", expect: "/docs/fetch-resilience" },
+  { term: "versionnage", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "gestion des versions", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "arret propre", english: "graceful shutdown", expect: "/docs/security/lifecycle-health" },
+  { term: "controle de sante", english: "health check", expect: "/docs/security/lifecycle-health" },
+  { term: "tests de contrat", english: "contract tests", expect: "/docs/testing" },
+  { term: "mise en cache", english: "response cache", expect: "/docs/response-cache" },
+  { term: "concurrence", english: "concurrency limit", expect: "/docs/concurrency-limit" },
+];
+
 /** Upper bound on glossary expansions applied to one query. */
 export const MAX_GLOSSARY_MATCHES = 8;
 
@@ -174,10 +226,11 @@ export type GlossaryMatch = { source: string; english: string };
 
 /** Longest terms first, so "速率限制" wins over anything shorter inside it. */
 const ZH_BY_LENGTH = [...ZH_GLOSSARY].sort((a, b) => [...b.term].length - [...a.term].length);
-const ES_BY_LENGTH = [...ES_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
+/** Spanish and French share the accent-free whole-word matcher. */
+const LATIN_BY_LENGTH = [...ES_GLOSSARY, ...FR_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
 
 /** Lowercase, accents stripped, every non-letter/digit run as one space. */
-function foldSpanish(text: string): string {
+function foldLatin(text: string): string {
   return ` ${text
     .normalize("NFD")
     .replace(/\p{M}+/gu, "")
@@ -189,7 +242,8 @@ function foldSpanish(text: string): string {
 /**
  * Find glossary terms in a query and return the English keywords to search
  * for. Chinese terms match as substrings (longest first, each span used
- * once); Spanish terms match as accent-insensitive whole words or phrases.
+ * once); Spanish and French terms match as accent-insensitive whole words
+ * or phrases.
  * At most {@link MAX_GLOSSARY_MATCHES} mappings apply.
  *
  * @param query - Raw query (already length-capped by the caller).
@@ -208,8 +262,8 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     }
   }
 
-  let es = foldSpanish(query);
-  for (const entry of ES_BY_LENGTH) {
+  let es = foldLatin(query);
+  for (const entry of LATIN_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     const needle = ` ${entry.term} `;
     if (es.includes(needle)) {
@@ -221,20 +275,25 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
 }
 
 /**
- * Spanish function words. Once the glossary has recognised a Spanish query,
- * these are dropped from the English-side search: "de" or "la" would only
- * match stray words in English pages and push the right page down.
+ * Spanish and French function words. Once the glossary has recognised a
+ * Spanish or French query, these are dropped from the English-side search:
+ * "de" or "la" would only match stray words in English pages and push the
+ * right page down.
  */
-const SPANISH_STOPWORDS = new Set([
+const LATIN_STOPWORDS = new Set([
+  // Spanish
   "a", "al", "como", "con", "de", "del", "el", "en", "es", "hacer", "la", "las", "lo", "los",
   "mi", "mis", "o", "para", "por", "que", "se", "su", "sus", "un", "una", "y",
+  // French (elisions fold to "l" and "d")
+  "au", "aux", "ce", "cette", "comment", "d", "dans", "des", "du", "est", "et", "faire", "l",
+  "le", "les", "ma", "mes", "mon", "ou", "pour", "qui", "sa", "ses", "son", "sur", "une", "avec",
 ]);
 
 /**
  * The query to rank the English docs with: the glossary's English keywords
  * first (so the term cap in `tokenize` never drops them), then the rest of
  * the original query (which may carry English words such as "zod"), minus
- * Spanish function words and the Spanish words already translated.
+ * Spanish and French function words and the words already translated.
  *
  * @param query - Raw query.
  * @param matches - Result of {@link glossaryMatches}.
@@ -242,13 +301,13 @@ const SPANISH_STOPWORDS = new Set([
  */
 export function englishSearchQuery(query: string, matches: readonly GlossaryMatch[]): string {
   if (matches.length === 0) return query;
-  // Words already translated by a Spanish match carry nothing for English.
+  // Words already translated by a Spanish or French match carry nothing for English.
   const translated = new Set(matches.flatMap((match) => match.source.split(" ")));
   const rest = query
     .split(/\s+/)
     .filter((word) => {
-      const folded = foldSpanish(word).trim();
-      return !SPANISH_STOPWORDS.has(folded) && !translated.has(folded);
+      const folded = foldLatin(word).trim();
+      return !LATIN_STOPWORDS.has(folded) && !translated.has(folded);
     })
     .join(" ");
   return [...new Set(matches.map((match) => match.english)), rest].join(" ").trim();

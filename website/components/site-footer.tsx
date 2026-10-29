@@ -6,7 +6,7 @@ import {
   HTML_LANG,
   LOCALE_NATIVE_NAME,
   localeHome,
-  SITE_LOCALES,
+  PROMOTED_LOCALES,
   type SiteLocale,
 } from "@/lib/i18n";
 
@@ -18,6 +18,7 @@ const CONTRIBUTORS: Record<SiteLocale, string> = {
   en: "DaloyJS contributors",
   es: "colaboradores de DaloyJS",
   zh: "DaloyJS 贡献者",
+  fr: "contributeurs de DaloyJS",
 };
 
 /** One footer link. `crossLocale` links reload the document (see lib/i18n). */
@@ -81,11 +82,28 @@ const FOOTER_COPY: Record<
       { href: "/zh/about-the-name", label: "名字的由来" },
     ],
   },
+  fr: {
+    home: "/fr",
+    homeLabel: "Accueil DaloyJS",
+    license: "Licence MIT",
+    distributed: "Distribué via",
+    links: [
+      { href: "/fr/docs", label: "Documentation" },
+      { href: "/blog", label: "Blog (en anglais)", crossLocale: true, hrefLang: HTML_LANG.en },
+      { href: "/fr/about", label: "À propos" },
+      { href: "/fr/contact", label: "Contact" },
+      { href: "/fr/privacy", label: "Confidentialité" },
+      { href: "/fr/about-the-name", label: "À propos du nom" },
+    ],
+  },
 };
 
-/** Links to every other locale's home page, each labelled in its own language. */
+/**
+ * Links to the other promoted locales' home pages, each labelled in its own
+ * language. French is offered only in the header language menu.
+ */
 function languageLinks(locale: SiteLocale): FooterLink[] {
-  return SITE_LOCALES.filter((other) => other !== locale).map((other) => ({
+  return PROMOTED_LOCALES.filter((other) => other !== locale).map((other) => ({
     href: localeHome(other),
     label: LOCALE_NATIVE_NAME[other],
     crossLocale: true,
