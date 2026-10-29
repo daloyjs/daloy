@@ -126,14 +126,14 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "21 de agosto de 2026", zh: "2026 年 8 月 21 日" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
     assert.equal(pages.contact.paragraphs.length, CONTACT_PARAGRAPHS.length, locale);
     assert.equal(pages.privacy.paragraphs.length, PRIVACY_PARAGRAPHS.length, locale);
     const privacy = pages.privacy.paragraphs.join(" ");
-    for (const fact of ["G-DSBFBZT7RQ", "Vercel", "daloyjs@gmail.com", dates[locale]]) {
+    for (const fact of ["G-DSBFBZT7RQ", "Vercel", "daloyjs@gmail.com", "/mcp", dates[locale]]) {
       assert.ok(privacy.includes(fact), `${locale}: ${fact}`);
     }
     // In-page links stay inside the locale.

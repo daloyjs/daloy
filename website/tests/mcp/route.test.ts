@@ -561,7 +561,7 @@ test("[unhappy] POST enforces the shared site API rate limit with 429 problem+js
   assert.equal(last?.headers.get("ratelimit-remaining"), "0");
 });
 
-test("search_docs with a Chinese query returns the Chinese pages and an English hint", async () => {
+test("search_docs maps a Chinese query to English and also lists the Chinese page", async () => {
   const { json } = await legacyRpc(70, "tools/call", {
     name: "search_docs",
     arguments: { query: "安装" },
@@ -569,8 +569,42 @@ test("search_docs with a Chinese query returns the Chinese pages and an English 
 
   assert.notEqual(json.result.isError, true);
   const text = toolText(json);
+  assert.match(text, /Searched the English docs for: installation \(from 安装\)\./);
+  assert.match(text, /\(\/docs\/installation\)/);
   assert.match(text, /\/zh\/docs\/installation, zh-CN translation of \/docs\/installation/);
-  assert.match(text, /English docs are the complete reference/);
+});
+
+test("search_docs reaches an untranslated English page from a Chinese term", async () => {
+  const { json } = await legacyRpc(79, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "如何配置限流" },
+  });
+
+  const text = toolText(json);
+  // "how to configure rate limiting": both terms map, and the rate-limit
+  // page ranks first.
+  assert.match(text, /Searched the English docs for: rate limit, config \(from 限流, 配置\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
+});
+
+test("search_docs maps unaccented Spanish terms too", async () => {
+  const { json } = await legacyRpc(80, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "pruebas de contrato" },
+  });
+
+  assert.match(toolText(json), /Searched the English docs for: contract tests \(from pruebas de contrato\)/);
+  assert.match(toolText(json), /1\. [^\n]*\(\/docs\/testing\)/);
+});
+
+test("search_docs gives the English hint when nothing matches in any language", async () => {
+  const { json } = await legacyRpc(81, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "量子纠缠" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /English docs are the complete reference/);
 });
 
 test("search_docs with a Spanish query reaches the Spanish pages", async () => {

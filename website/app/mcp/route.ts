@@ -6,7 +6,9 @@ import {
   getTranslatedDocPage,
   type TranslatedDocPage,
 } from "@/lib/docs-content";
+import { englishSearchQuery, glossaryMatches } from "@/lib/docs-glossary";
 import { rankDocPages, tokenize } from "@/lib/docs-ranking";
+import { isNonEnglishSearch, queryScript, recordNonEnglishSearch } from "@/lib/search-metrics";
 import { SITE_URL } from "@/lib/seo";
 import {
   DEFAULT_SEARCH_LIMIT,
@@ -121,6 +123,10 @@ function toolErrorResult(message: string): ToolResult {
 /**
  * Execute `search_docs`.
  *
+ * Chinese and Spanish technical terms are mapped to English keywords first
+ * (lib/docs-glossary.ts), and non-English searches are counted in aggregate
+ * with no query text (lib/search-metrics.ts).
+ *
  * @param query - Search keywords (already schema-validated).
  * @param limit - Maximum number of hits (already schema-validated).
  * @returns The MCP tool result: a ranked result list, or an `isError` result
@@ -135,7 +141,10 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
   }
 
   const pages = await getAllDocPages();
-  const ranked = rankDocPages(pages, trimmed, limit);
+  // Cross-language glossary: "限流" or "pruebas" also searches the English
+  // docs for "rate limit" / "testing" (lib/docs-glossary.ts).
+  const matches = glossaryMatches(trimmed);
+  const ranked = rankDocPages(pages, englishSearchQuery(trimmed, matches), limit);
 
   // Translated pages (es, zh) join the results only when the query looks
   // like it is in another language or nothing English matched, so English
@@ -145,6 +154,19 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
     ? rankDocPages(await getAllTranslatedDocPages(), trimmed, limit)
     : [];
 
+  if (isNonEnglishSearch(trimmed, matches)) {
+    recordNonEnglishSearch({
+      script: queryScript(trimmed),
+      englishResults: ranked.length > 0 ? "some" : "none",
+      englishResultsWithoutGlossary:
+        matches.length === 0
+          ? ranked.length > 0 ? "some" : "none"
+          : rankDocPages(pages, trimmed, 1).length > 0 ? "some" : "none",
+      translatedResults: translated.length > 0 ? "some" : "none",
+      glossaryTerms: matches.length,
+    });
+  }
+
   if (ranked.length === 0 && translated.length === 0) {
     return textResult(
       `No documentation pages matched "${trimmed}". Try broader keywords or use list_docs. ${ENGLISH_HINT}`
@@ -152,6 +174,11 @@ async function runSearchDocs(query: string, limit: number): Promise<ToolResult> 
   }
 
   const sections: string[] = [];
+  if (matches.length > 0 && ranked.length > 0) {
+    sections.push(
+      `Searched the English docs for: ${[...new Set(matches.map((m) => m.english))].join(", ")} (from ${matches.map((m) => m.source).join(", ")}).`
+    );
+  }
   if (ranked.length > 0) {
     const lines = ranked.map(
       (entry, index) =>

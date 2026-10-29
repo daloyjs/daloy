@@ -99,7 +99,7 @@ export const PAGES_COPY_ZH: TranslatedPagesCopy = {
       "daloyjs.dev 网站会收集哪些数据、哪些服务商处理网站流量，以及如何就隐私问题联系维护者。",
     keywords: ["DaloyJS 隐私", "daloyjs.dev 隐私政策", "DaloyJS 分析统计"],
     heading: "DaloyJS 隐私政策",
-    updated: "最后更新：2026 年 8 月 21 日",
+    updated: "最后更新：2026 年 10 月 29 日",
     appliesTo: "适用于",
     courtesy: {
       before: "本页是为方便阅读提供的译文。如有出入，以",
@@ -108,9 +108,9 @@ export const PAGES_COPY_ZH: TranslatedPagesCopy = {
     },
     paragraphs: [
       "本隐私政策适用于 daloyjs.dev 上的 DaloyJS 宣传与文档网站，不适用于你使用 @daloyjs/core 框架构建的应用：那些应用属于你，你是其用户数据的控制者。本网站是一个静态文档站点，没有用户账号、没有登录、没有付费结账，也没有存放访客信息的服务器端数据库。",
-      "当你加载页面时，我们会收到任何 HTTPS 服务器都能看到的请求元数据：IP 地址、用户代理、请求的 URL 和来源页面。网站托管和分发运行在 Vercel 上。Vercel 可能会处理这些元数据，用于运营服务、抵御滥用并生成汇总的流量统计。我们还加载了 Vercel Analytics 和 Vercel Speed Insights，用于衡量访问量和 Core Web Vitals，不会建立单独的广告画像。Google Analytics（媒体资源 G-DSBFBZT7RQ）用于汇总的流量报告。这些服务商作为本网站的数据处理者。我们不出售个人数据，不使用再营销像素，也不会把访客数据加入任何营销名单。",
+      "当你加载页面时，我们会收到任何 HTTPS 服务器都能看到的请求元数据：IP 地址、用户代理、请求的 URL 和来源页面。网站托管和分发运行在 Vercel 上。Vercel 可能会处理这些元数据，用于运营服务、抵御滥用并生成汇总的流量统计。我们还加载了 Vercel Analytics 和 Vercel Speed Insights，用于衡量访问量和 Core Web Vitals，不会建立单独的广告画像。Google Analytics（媒体资源 G-DSBFBZT7RQ）用于汇总的流量报告。位于 /mcp 的文档 MCP 服务器会在 Vercel Analytics 中统计有多少搜索使用了英语以外的语言，以及这些搜索是否找到了页面；它不会保存或发送搜索内容、你的 IP 地址或 cookie。这些服务商作为本网站的数据处理者。我们不出售个人数据，不使用再营销像素，也不会把访客数据加入任何营销名单。",
       "网站会通过 next-themes 在浏览器中保存一项主题偏好（浅色、深色或跟随系统），以免重新加载时界面闪烁。位于 /sw.js 的 service worker 可能会缓存你之前打开过的页面，供 /offline 离线页面使用。这两者都只保存在你的设备上。如果你给 daloyjs@gmail.com、GitHub 或 Open Collective 发送消息，该消息适用相应第三方的条款和保留规则；我们只在回复你或保留安全记录所需的期限内保存往来信件。",
-      "由于维护者常驻挪威，我们以欧洲数据保护规则作为自我要求的基准，尽管这只是一个小型开源项目。你可以发送邮件至 daloyjs@gmail.com，询问我们持有你的哪些信息、要求删除往来信件或反对分析统计。你也可以在浏览器中屏蔽分析脚本，或者通过 Markdown（Accept: text/markdown）或 /llms.txt 阅读本网站，而无需运行我们的 JavaScript。本政策最后更新于 2026 年 8 月 21 日。如有重大变更，我们会在此注明新版本的日期。",
+      "由于维护者常驻挪威，我们以欧洲数据保护规则作为自我要求的基准，尽管这只是一个小型开源项目。你可以发送邮件至 daloyjs@gmail.com，询问我们持有你的哪些信息、要求删除往来信件或反对分析统计。你也可以在浏览器中屏蔽分析脚本，或者通过 Markdown（Accept: text/markdown）或 /llms.txt 阅读本网站，而无需运行我们的 JavaScript。本政策最后更新于 2026 年 10 月 29 日。如有重大变更，我们会在此注明新版本的日期。",
     ],
     questions: "隐私问题：",
     otherContact: "。其他联系方式：",

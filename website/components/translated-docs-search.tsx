@@ -5,6 +5,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 
+import { englishSearchQuery, glossaryMatches } from "@/lib/docs-glossary";
 import { isUnspacedTerm, rankDocPages, tokenize, type RankablePage } from "@/lib/docs-ranking";
 import { useDocsSearchIndex } from "@/lib/docs-search-client";
 import type { TranslatedLocale } from "@/lib/i18n";
@@ -52,6 +53,8 @@ const SEARCH_COPY: Record<
  * Search box for a translated docs section. Ranks the translated pages
  * (passed in, already server-rendered) and, once the box is focused, the
  * English docs index, with the same ranker as the English search dialog.
+ * Chinese and Spanish technical terms are mapped to English keywords for the
+ * English index (lib/docs-glossary.ts).
  * English hits are plain `<a hreflang="en">` links marked as English:
  * crossing locales reloads the document (see lib/i18n.ts).
  *
@@ -78,9 +81,12 @@ export function TranslatedDocsSearch({
     () => (trimmed ? rankDocPages(pages, trimmed, MAX_RESULTS) : []),
     [pages, trimmed],
   );
+  // Glossary: "限流" / "pruebas" also search the English index for
+  // "rate limit" / "testing" (lib/docs-glossary.ts).
+  const englishQuery = React.useMemo(() => englishSearchQuery(trimmed, glossaryMatches(trimmed)), [trimmed]);
   const englishHits = React.useMemo(
-    () => (trimmed ? rankDocPages(english.items, trimmed, MAX_RESULTS) : []),
-    [english.items, trimmed],
+    () => (trimmed ? rankDocPages(english.items, englishQuery, MAX_RESULTS) : []),
+    [english.items, englishQuery, trimmed],
   );
   const queryIsUnspaced = tokenize(trimmed).some(isUnspacedTerm);
 

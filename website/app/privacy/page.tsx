@@ -23,7 +23,7 @@ export default function PrivacyPage() {
     <main className="flex-1">
       <section className="mx-auto max-w-3xl px-6 py-16 lg:py-20">
         <p className="text-sm text-muted-foreground">
-          Last updated 21 August 2026 · Applies to {SITE_URL}
+          Last updated 29 October 2026 · Applies to {SITE_URL}
         </p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight">
           DaloyJS privacy policy
