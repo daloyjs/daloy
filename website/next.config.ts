@@ -2,7 +2,22 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
+import { GIT_LASTMOD_ENV, readGitDates } from "./lib/git-log";
+
 const root = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * "Last updated" dates for docs and blog sources, read from git once while
+ * the config loads (during `next build` on Vercel, which has the full clone
+ * via VERCEL_DEEP_CLONE). Request-time functions have no `.git`, so these are
+ * embedded through `env` below and read back by lib/git-dates.ts.
+ */
+const gitDates = readGitDates(root);
+if (gitDates.status !== "ok") {
+  console.warn(
+    `[git-dates] Git history is ${gitDates.status}: docs "Last updated" dates and sitemap <lastmod> will be omitted. On Vercel, set VERCEL_DEEP_CLONE=true and redeploy.`,
+  );
+}
 
 /**
  * Security response headers applied to every route.
@@ -42,6 +57,8 @@ const serviceWorkerHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Inlined into the server bundle at build time (see gitDates above).
+  env: { [GIT_LASTMOD_ENV]: JSON.stringify(gitDates.dates) },
   cacheComponents: true,
   // Partial Prefetching: prefetch one reusable App Shell per route (cached per
   // session, since the root layout reads headers() for the CSP nonce) instead
