@@ -10,7 +10,7 @@ import { ReadingProgress } from "@/components/reading-progress";
 import { BackToTop } from "@/components/back-to-top";
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { cn } from "@/lib/utils";
-import { HTML_LANG, LOCALE_HEADER, parseLocaleHeader, type SiteLocale } from "@/lib/i18n";
+import { HTML_DIR, HTML_LANG, LOCALE_HEADER, parseLocaleHeader, type SiteLocale } from "@/lib/i18n";
 import {
   DEFAULT_KEYWORDS,
   HOME_DESCRIPTION,
@@ -37,6 +37,7 @@ const SKIP_LINK: Record<SiteLocale, string> = {
   zh: "跳到主要内容",
   fr: "Aller au contenu",
   pt: "Pular para o conteúdo",
+  ar: "انتقل إلى المحتوى",
 };
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 
@@ -156,6 +157,7 @@ export default async function RootLayout({
   return (
     <html
       lang={HTML_LANG[locale]}
+      dir={HTML_DIR[locale]}
       suppressHydrationWarning
       className={cn(
         "antialiased",

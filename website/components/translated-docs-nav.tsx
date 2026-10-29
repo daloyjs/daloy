@@ -3,7 +3,7 @@ import type { Route } from "next";
 import Link from "next/link";
 
 import { lastModifiedForRoute } from "@/lib/git-dates";
-import { HTML_LANG, translatedDocsIndex, type TranslatedLocale } from "@/lib/i18n";
+import { HTML_LANG, isRtl, translatedDocsIndex, type TranslatedLocale } from "@/lib/i18n";
 import { getOrderedTranslatedDocs } from "@/lib/mdx/content";
 
 /** Chrome strings of the translated docs section, per locale. */
@@ -68,6 +68,17 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "Próxima",
     lastUpdated: "Última atualização:",
   },
+  ar: {
+    indexTitle: "التوثيق بالعربية",
+    allDocs: "التوثيق الكامل (بالإنجليزية)",
+    allDocsBody: "الأمان والمحولات وقواعد البيانات والمصادقة والمرجع الكامل لواجهة البرمجة.",
+    tocLabel: "في هذه الصفحة",
+    breadcrumb: "مسار التنقل",
+    pager: "التنقل بين الصفحات",
+    previous: "السابق",
+    next: "التالي",
+    lastUpdated: "آخر تحديث:",
+  },
 };
 
 /**
@@ -92,7 +103,7 @@ export async function TranslatedDocsNav({ locale }: { locale: TranslatedLocale }
         hrefLang="en"
         className="mt-3 border-t px-2.5 pt-3 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
-        {copy.allDocs} →
+        {copy.allDocs} {isRtl(locale) ? "←" : "→"}
       </a>
     </nav>
   );
@@ -163,15 +174,19 @@ export async function TranslatedDocsPager({ locale, route }: { locale: Translate
     <nav data-md-skip aria-label={copy.pager} className="not-prose mt-12 grid gap-3 sm:grid-cols-2">
       {previous ? (
         <Link href={previous.route as Route} className={cell}>
-          <span className="text-muted-foreground">← {copy.previous}</span>
+          <span className="text-muted-foreground">
+            {isRtl(locale) ? "→" : "←"} {copy.previous}
+          </span>
           <span className="font-medium text-foreground">{previous.frontmatter.title}</span>
         </Link>
       ) : (
         <span />
       )}
       {next ? (
-        <Link href={next.route as Route} className={`${cell} sm:text-right`}>
-          <span className="text-muted-foreground">{copy.next} →</span>
+        <Link href={next.route as Route} className={`${cell} sm:text-end`}>
+          <span className="text-muted-foreground">
+            {copy.next} {isRtl(locale) ? "←" : "→"}
+          </span>
           <span className="font-medium text-foreground">{next.frontmatter.title}</span>
         </Link>
       ) : null}

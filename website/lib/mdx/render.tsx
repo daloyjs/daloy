@@ -113,6 +113,7 @@ const TRANSLATED_COMPONENTS: Record<TranslatedLocale, MDXComponents> = {
   zh: { ...mdxComponents, ...translatedMdxComponents("zh") },
   fr: { ...mdxComponents, ...translatedMdxComponents("fr") },
   pt: { ...mdxComponents, ...translatedMdxComponents("pt") },
+  ar: { ...mdxComponents, ...translatedMdxComponents("ar") },
 };
 
 /**

@@ -105,6 +105,20 @@ const NAV_COPY: Record<
     closeMenu: "Fechar o menu de navegação",
     otherLanguage: "Conteúdo em inglês",
   },
+  ar: {
+    home: "/ar" as Route,
+    items: [
+      { href: "/ar/docs" as Route, label: "التوثيق" },
+      { href: "/blog", label: "المدونة" },
+      { href: "/ar/docs/getting-started" as Route, label: "البدء السريع" },
+      { href: "/ar/docs/tutorials/bookstore" as Route, label: "دروس تعليمية" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/ar/docs/installation" as Route, label: "التثبيت" },
+    openMenu: "فتح قائمة التنقل",
+    closeMenu: "إغلاق قائمة التنقل",
+    otherLanguage: "محتوى بالإنجليزية",
+  },
 };
 
 const socialLinks = [
@@ -197,12 +211,12 @@ export function SiteHeader({ locale }: { locale: SiteLocale }) {
             <span className="truncate">
               Daloy<span className="text-sky-500 dark:text-sky-400">JS</span>
             </span>
-            <span className="ml-1 hidden font-mono text-xs text-muted-foreground sm:inline-block">
+            <span className="ms-1 hidden font-mono text-xs text-muted-foreground sm:inline-block">
               v{CORE_PACKAGE_VERSION}
             </span>
           </Link>
 
-          <nav className="ml-8 hidden items-center gap-5 text-sm xl:flex">
+          <nav className="ms-8 hidden items-center gap-5 text-sm xl:flex">
             {copy.items.map((item) =>
               isCrossLocale(item.href) ? (
                 <a
@@ -231,7 +245,7 @@ export function SiteHeader({ locale }: { locale: SiteLocale }) {
             )}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-2">
             <LanguageSwitcher locale={locale} />
             <ThemeSwitcher />
 
@@ -284,7 +298,7 @@ export function SiteHeader({ locale }: { locale: SiteLocale }) {
                 id="mobile-site-nav"
                 ref={mobileNavPanelRef}
                 className={
-                  "mobile-nav__panel absolute top-[calc(100%+0.5rem)] right-0 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur " +
+                  "mobile-nav__panel absolute top-[calc(100%+0.5rem)] end-0 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur " +
                   (mobileNavOpen
                     ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
                     : "pointer-events-none -translate-y-2 scale-[0.98] opacity-0")

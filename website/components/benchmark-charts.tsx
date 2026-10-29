@@ -466,7 +466,9 @@ export function BenchmarkCharts({
                     {copy.tabs[t.value].description}
                   </p>
                 </div>
-                {t.render(copy)}
+                {/* Charts stay left to right on RTL pages: axes, bar growth
+                    and tooltips are laid out in the chart's own coordinates. */}
+                <div dir="ltr">{t.render(copy)}</div>
                 <p className="text-sm leading-relaxed">
                   <span className="font-semibold text-foreground">
                     {copy.soWhatLabel}{" "}

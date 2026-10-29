@@ -1,3 +1,4 @@
+import { foldArabic, hasArabic } from "./arabic";
 import type { DocPage } from "./docs-content";
 
 /**
@@ -11,7 +12,9 @@ export type RankablePage = Pick<DocPage, "title" | "href" | "description" | "key
  * Zero-dependency relevance ranking for docs search (used by the MCP
  * `search_docs` tool in `app/mcp/route.ts`). Terms are letter/digit runs in
  * any script; Chinese and Japanese runs are split into overlapping bigrams
- * and matched as substrings, since those scripts have no word spaces.
+ * and matched as substrings, since those scripts have no word spaces. Arabic
+ * is folded (lib/arabic.ts) and matched as substrings too, because the
+ * article and prepositions attach to the word.
  *
  * Improvements over plain substring scoring:
  *
@@ -60,6 +63,18 @@ export function isUnspacedTerm(term: string): boolean {
 }
 
 /**
+ * Whether a term matches as a substring rather than on word boundaries:
+ * unspaced scripts (no boundaries exist) and Arabic, where the article and
+ * prepositions attach to the word ("التثبيت" must match "تثبيت").
+ *
+ * @param term - A lowercase, folded search term.
+ * @returns `true` for a CJK or Arabic term.
+ */
+export function isSubstringTerm(term: string): boolean {
+  return isUnspacedTerm(term) || hasArabic(term);
+}
+
+/**
  * Overlapping two-character slices of an unspaced run ("安装教程" → "安装",
  * "装教", "教程"), the standard way to search text without word breaks. Runs
  * of one or two characters are kept whole.
@@ -82,7 +97,7 @@ function bigrams(run: string): string[] {
  */
 export function tokenize(query: string): string[] {
   const terms: string[] = [];
-  for (const token of query.toLowerCase().match(TOKEN) ?? []) {
+  for (const token of foldArabic(query.toLowerCase()).match(TOKEN) ?? []) {
     for (const run of token.match(SCRIPT_RUNS) ?? []) {
       terms.push(...(isUnspacedTerm(run) ? bigrams(run) : [run]));
     }
@@ -150,11 +165,11 @@ export function stem(word: string): string {
  * "rout" finds "Routing", but "rate" no longer finds "Integrate".
  */
 function wordText(text: string): string {
-  return ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
+  return ` ${foldArabic(text.toLowerCase()).replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
 }
 
 function stemText(text: string): string {
-  const tokens = text.toLowerCase().match(TOKEN) ?? [];
+  const tokens = foldArabic(text.toLowerCase()).match(TOKEN) ?? [];
   return ` ${tokens.map(stem).join(" ")} `;
 }
 
@@ -260,13 +275,13 @@ export function rankDocPages<T extends RankablePage>(
 ): RankedDocPage<T>[] {
   const index = getIndex(pages);
   const phrase = wordText(query).trim();
-  const terms = tokenize(query).map((raw) => ({ raw, stem: stem(raw), unspaced: isUnspacedTerm(raw) }));
+  const terms = tokenize(query).map((raw) => ({ raw, stem: stem(raw), unspaced: isSubstringTerm(raw) }));
   if (terms.length === 0) return [];
 
   // Ordered (non-deduplicated) token sequence for adjacent-pair matching.
   // Unspaced-script terms are already bigrams, so they take no part in it.
-  const sequence = (query.toLowerCase().match(TOKEN) ?? [])
-    .filter((token) => !isUnspacedTerm(token))
+  const sequence = (foldArabic(query.toLowerCase()).match(TOKEN) ?? [])
+    .filter((token) => !isSubstringTerm(token))
     .slice(0, MAX_QUERY_TERMS)
     .map(stem);
 

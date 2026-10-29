@@ -141,6 +141,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     link: "versão em inglês",
     after: ".",
   },
+  ar: {
+    before: "هذه ترجمة للصفحة الأصلية بالإنجليزية. عند وجود أي اختلاف، تُعتمد ",
+    link: "النسخة الإنجليزية",
+    after: ".",
+  },
 };
 
 /**

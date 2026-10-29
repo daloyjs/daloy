@@ -16,6 +16,7 @@ const SUGGESTION_COPY: Record<SiteLocale, { nav: string; heading: string; englis
   zh: { nav: "推荐页面", heading: "你是否在找以下页面？", english: "英文" },
   fr: { nav: "Pages suggérées", heading: "Cherchiez-vous l’une de ces pages ?", english: "en anglais" },
   pt: { nav: "Páginas sugeridas", heading: "Você estava procurando uma destas páginas?", english: "em inglês" },
+  ar: { nav: "صفحات مقترحة", heading: "هل كنت تبحث عن إحدى هذه الصفحات؟", english: "بالإنجليزية" },
 };
 
 const LOCALE_SEGMENTS = new Set<string>(TRANSLATED_LOCALES);
@@ -78,7 +79,10 @@ export function NotFoundSuggestions() {
               </Link>
             ) : (
               <a href={page.href} hrefLang="en" className="font-medium underline underline-offset-4">
-                {page.title} <span className="text-xs text-muted-foreground">({copy.english})</span>
+                <span lang="en" dir="ltr">
+                  {page.title}
+                </span>{" "}
+                <span className="text-xs text-muted-foreground">({copy.english})</span>
               </a>
             )}
             <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{page.description}</p>

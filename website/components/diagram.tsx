@@ -105,7 +105,7 @@ function DiagramNode({
       data-diagram-node=""
       data-diagram-role={role}
       className={cn(
-        "relative flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm",
+        "relative flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3 text-start shadow-sm",
         TONE_NODE[tone],
         className,
       )}
@@ -275,7 +275,7 @@ export function FlowDiagram({
               className="md:flex-1"
             />
             {index < steps.length - 1 ? (
-              <ConnectorArrow className="mx-auto rotate-90 md:mx-0 md:rotate-0" />
+              <ConnectorArrow className="mx-auto rotate-90 md:mx-0 md:rotate-0 md:rtl:rotate-180" />
             ) : null}
           </li>
         ))}
@@ -570,7 +570,7 @@ export function SequenceDiagram({
               </span>
               <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-foreground">
                 <span data-diagram-from="">{step.from}</span>
-                <ConnectorArrow className="h-4 w-4" />
+                <ConnectorArrow className="h-4 w-4 rtl:rotate-180" />
                 <span data-diagram-to="">{step.to}</span>
               </span>
               <span data-diagram-label="" className="text-sm text-foreground/90">

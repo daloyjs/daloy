@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { LogoLockup } from "@/components/daloyjs-logo";
 import {
+  HTML_DIR,
   HTML_LANG,
   LOCALE_NATIVE_NAME,
   localeHome,
@@ -20,6 +21,7 @@ const CONTRIBUTORS: Record<SiteLocale, string> = {
   zh: "DaloyJS 贡献者",
   fr: "contributeurs de DaloyJS",
   pt: "colaboradores do DaloyJS",
+  ar: "المساهمون في DaloyJS",
 };
 
 /** One footer link. `crossLocale` links reload the document (see lib/i18n). */
@@ -30,6 +32,8 @@ type FooterLink = {
   hrefLang?: string;
   /** Set when the label itself is in another language (e.g. "Español"). */
   lang?: string;
+  /** Text direction of that label, so it lays out correctly on RTL pages. */
+  dir?: "ltr" | "rtl";
 };
 
 const FOOTER_COPY: Record<
@@ -111,11 +115,26 @@ const FOOTER_COPY: Record<
       { href: "/pt/about-the-name", label: "Sobre o nome" },
     ],
   },
+  ar: {
+    home: "/ar",
+    homeLabel: "الصفحة الرئيسية لـ DaloyJS",
+    license: "ترخيص MIT",
+    distributed: "يُوزَّع عبر",
+    links: [
+      { href: "/ar/docs", label: "التوثيق" },
+      { href: "/blog", label: "المدونة (بالإنجليزية)", crossLocale: true, hrefLang: HTML_LANG.en },
+      { href: "/ar/about", label: "حول" },
+      { href: "/ar/contact", label: "اتصل بنا" },
+      { href: "/ar/privacy", label: "الخصوصية" },
+      { href: "/ar/about-the-name", label: "عن الاسم" },
+    ],
+  },
 };
 
 /**
  * Links to the other promoted locales' home pages, each labelled in its own
- * language. French is offered only in the header language menu.
+ * language. French, Portuguese and Arabic are offered only in the header
+ * language menu.
  */
 function languageLinks(locale: SiteLocale): FooterLink[] {
   return PROMOTED_LOCALES.filter((other) => other !== locale).map((other) => ({
@@ -124,6 +143,7 @@ function languageLinks(locale: SiteLocale): FooterLink[] {
     crossLocale: true,
     hrefLang: HTML_LANG[other],
     lang: HTML_LANG[other],
+    dir: HTML_DIR[other],
   }));
 }
 
@@ -144,7 +164,7 @@ export function SiteFooter({ locale }: { locale: SiteLocale }) {
             <LogoLockup className="h-6 w-auto transition-opacity hover:opacity-80" />
           </Link>
           <span className="hidden text-border sm:inline-block">|</span>
-          <p className="text-center sm:text-left">
+          <p className="text-center sm:text-start">
             {copy.license} · {copy.distributed}{" "}
             <a
               className="underline"
@@ -163,6 +183,7 @@ export function SiteFooter({ locale }: { locale: SiteLocale }) {
                     href={link.href}
                     hrefLang={link.hrefLang}
                     lang={link.lang}
+                    dir={link.dir}
                   >
                     {link.label}
                   </a>
@@ -175,7 +196,7 @@ export function SiteFooter({ locale }: { locale: SiteLocale }) {
             ))}
           </p>
         </div>
-        <p className="text-center sm:text-right">
+        <p className="text-center sm:text-end">
           <a className={linkClass} href="mailto:daloyjs@gmail.com">
             daloyjs@gmail.com
           </a>{" "}

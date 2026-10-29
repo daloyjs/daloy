@@ -858,7 +858,7 @@
      more opaque background stands in for the frosted look at zero cost. */
   background: color-mix(in oklab, var(--background) 93%, transparent);
   padding: 1rem;
-  text-align: left;
+  text-align: start;
   box-shadow: 0 12px 34px color-mix(in oklab, var(--foreground) 7%, transparent);
   animation: flow-node-pop 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -930,4 +930,23 @@
    wins over the `font-sans` utility on <body>. */
 html:lang(zh-CN) body {
   font-family: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+}
+
+/* Arabic pages (<html lang="ar">): Inter has no Arabic glyphs, so name the
+   Arabic system fonts explicitly. Unlayered so it wins over `font-sans`. */
+html:lang(ar) body {
+  font-family: var(--font-sans), "SF Arabic", "Geeza Pro", "Segoe UI", "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+}
+
+/* Right-to-left pages: code, keyboard keys and code blocks stay left to right
+   (they are code, not prose), isolated so they do not reorder the Arabic
+   sentence around them. Scoped to dir="rtl", so LTR pages are unaffected. */
+[dir="rtl"] code,
+[dir="rtl"] kbd,
+[dir="rtl"] pre {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+[dir="rtl"] pre {
+  text-align: left;
 }

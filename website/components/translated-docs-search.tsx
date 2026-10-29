@@ -6,9 +6,9 @@ import Link from "next/link";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 
 import { englishSearchQuery, glossaryMatches } from "@/lib/docs-glossary";
-import { isUnspacedTerm, rankDocPages, tokenize, type RankablePage } from "@/lib/docs-ranking";
+import { isSubstringTerm, rankDocPages, tokenize, type RankablePage } from "@/lib/docs-ranking";
 import { useDocsSearchIndex } from "@/lib/docs-search-client";
-import { HTML_LANG, type TranslatedLocale } from "@/lib/i18n";
+import { HTML_DIR, HTML_LANG, type TranslatedLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /** Results shown per group. */
@@ -67,6 +67,16 @@ const SEARCH_COPY: Record<
     loading: "Carregando o índice em inglês…",
     englishHint: "Para pesquisar na documentação em inglês, tente palavras-chave em inglês.",
   },
+  ar: {
+    label: "البحث في التوثيق",
+    placeholder: "ابحث في التوثيق…",
+    translated: "بالعربية",
+    english: "التوثيق بالإنجليزية",
+    englishTag: "بالإنجليزية",
+    empty: "لا توجد نتائج.",
+    loading: "جارٍ تحميل الفهرس الإنجليزي…",
+    englishHint: "للبحث في التوثيق الإنجليزي، جرّب كلمات مفتاحية بالإنجليزية.",
+  },
 };
 
 /**
@@ -108,7 +118,8 @@ export function TranslatedDocsSearch({
     () => (trimmed ? rankDocPages(english.items, englishQuery, MAX_RESULTS) : []),
     [english.items, englishQuery, trimmed],
   );
-  const queryIsUnspaced = tokenize(trimmed).some(isUnspacedTerm);
+  // Chinese or Arabic: English pages will not match, so suggest English words.
+  const queryIsUnspaced = tokenize(trimmed).some(isSubstringTerm);
 
   const handleKeyDown = React.useEffectEvent((event: KeyboardEvent) => {
     if (event.key === "Escape") setOpen(false);
@@ -137,7 +148,7 @@ export function TranslatedDocsSearch({
         <span className="sr-only">{copy.label}</span>
         <MagnifyingGlassIcon
           aria-hidden
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <input
           type="search"
@@ -160,7 +171,7 @@ export function TranslatedDocsSearch({
       <div
         id={resultsId}
         hidden={!showPanel}
-        className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-35 max-h-[70vh] overflow-y-auto rounded-xl border bg-background/95 p-2 shadow-lg backdrop-blur"
+        className="absolute top-[calc(100%+0.5rem)] inset-x-0 z-35 max-h-[70vh] overflow-y-auto rounded-xl border bg-background/95 p-2 shadow-lg backdrop-blur"
       >
         <p aria-live="polite" className="sr-only">
           {showPanel ? `${translatedHits.length + englishHits.length}` : ""}
@@ -183,13 +194,13 @@ export function TranslatedDocsSearch({
         {englishHits.length > 0 ? (
           <section className={cn(translatedHits.length > 0 && "mt-2 border-t pt-2")}>
             <h2 className="px-3 pt-1 pb-1 text-xs font-semibold text-muted-foreground">{copy.english}</h2>
-            <ul lang="en">
+            <ul lang="en" dir="ltr">
               {englishHits.map(({ page }) => (
                 <li key={page.href}>
                   <a href={page.href} hrefLang="en" className={row}>
                     <span className="font-medium text-foreground">
                       {page.title}{" "}
-                      <span lang={HTML_LANG[locale]} className="text-xs font-normal text-muted-foreground">
+                      <span lang={HTML_LANG[locale]} dir={HTML_DIR[locale]} className="text-xs font-normal text-muted-foreground">
                         ({copy.englishTag})
                       </span>
                     </span>

@@ -9,7 +9,9 @@ mock.module("next/cache", {
 
 const { getAllDocPages } = await import("../../lib/docs-content");
 const { rankDocPages, MAX_QUERY_TERMS, tokenize } = await import("../../lib/docs-ranking");
+const { foldArabic } = await import("../../lib/arabic");
 const {
+  AR_GLOSSARY,
   englishSearchQuery,
   ES_GLOSSARY,
   FR_GLOSSARY,
@@ -26,7 +28,7 @@ test("every glossary mapping surfaces its expected English page", async () => {
   const pages = await getAllDocPages();
   const routes = new Set(pages.map((page) => page.href));
   const misses: string[] = [];
-  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY]) {
+  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY]) {
     assert.ok(routes.has(entry.expect as never), `${entry.term}: ${entry.expect} is not a docs page`);
     const top = rankDocPages(pages, entry.english, TOP).map((hit) => hit.page.href);
     if (!top.includes(entry.expect as never)) misses.push(`${entry.term} → "${entry.english}": ${top.join(", ")}`);
@@ -52,6 +54,10 @@ test("a glossary term in a full query reaches the English page end to end", asyn
     ["limite de requisições por IP", "/docs/security/rate-limit-redis"],
     ["validação com zod", "/docs/validation"],
     ["como fazer testes de contrato", "/docs/testing"],
+    ["كيف أضبط تحديد المعدل؟", "/docs/security/rate-limit-redis"],
+    ["البرمجيات الوسيطة", "/docs/api-reference/middleware"],
+    ["إعادة التوجيه الآمنة", "/docs/security/safe-redirect"],
+    ["سلسلة التوريد", "/docs/security/supply-chain"],
   ];
   for (const [query, expected] of cases) {
     const english = englishSearchQuery(query, glossaryMatches(query));
@@ -61,7 +67,7 @@ test("a glossary term in a full query reaches the English page end to end", asyn
 });
 
 test("terms are unique and well-formed", () => {
-  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY]] as const) {
+  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY]] as const) {
     const terms = list.map((entry) => entry.term);
     assert.equal(new Set(terms).size, terms.length, `${name} has duplicate terms`);
     for (const entry of list) {
@@ -133,4 +139,23 @@ test("the expected page ranks first for the end-to-end Spanish case", async () =
   const query = "pruebas de contrato";
   const top = rankDocPages(pages, englishSearchQuery(query, glossaryMatches(query)), 1);
   assert.equal(top[0]?.page.href, "/docs/testing");
+});
+
+test("Arabic terms are stored folded and match spelling variants", () => {
+  for (const entry of AR_GLOSSARY) {
+    assert.equal(entry.term, foldArabic(entry.term), `${entry.term} must be stored folded`);
+  }
+  // Diacritics, hamza on alef, ta marbuta and the article all still match.
+  assert.deepEqual(glossaryMatches("التَّوْجِيه").map((m) => m.english), ["routing"]);
+  assert.deepEqual(glossaryMatches("إعادة التوجيه").map((m) => m.english), ["safe redirect"]);
+  assert.deepEqual(glossaryMatches("بالمصادقة").map((m) => m.english), ["authentication"]);
+  // Longest first: "authentication" wins over the shorter "validation" inside it.
+  assert.deepEqual(glossaryMatches("التحقق من الهوية").map((m) => m.english), ["authentication"]);
+});
+
+test("Arabic folding normalizes only Arabic text", () => {
+  assert.equal(foldArabic("أإآٱ"), "اااا");
+  assert.equal(foldArabic("مستشفى مدرسة"), "مستشفي مدرسه");
+  assert.equal(foldArabic("تَـــثْبِيت"), "تثبيت");
+  assert.equal(foldArabic("rate limit"), "rate limit");
 });

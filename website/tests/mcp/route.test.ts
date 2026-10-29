@@ -711,3 +711,25 @@ test("search_docs maps Portuguese terms to English", async () => {
   assert.match(text, /Searched the English docs for: tracing \(from rastreamento\)/);
   assert.match(text, /1\. [^\n]*\(\/docs\/tracing\)/);
 });
+
+test("get_doc reads an Arabic route", async () => {
+  const { json } = await legacyRpc(86, "tools/call", {
+    name: "get_doc",
+    arguments: { path: "/ar/docs/installation" },
+  });
+
+  assert.notEqual(json.result.isError, true);
+  assert.match(toolText(json), /^# التثبيت/);
+  assert.match(toolText(json), /Language: ar \(translation of \/docs\/installation; the English page is authoritative/);
+});
+
+test("search_docs maps Arabic terms (with diacritics) to English", async () => {
+  const { json } = await legacyRpc(87, "tools/call", {
+    name: "search_docs",
+    arguments: { query: "كيف أضبط تَحديد المعدل؟" },
+  });
+
+  const text = toolText(json);
+  assert.match(text, /Searched the English docs for: rate limit \(from تحديد المعدل\)/);
+  assert.match(text, /1\. [^\n]*\(\/docs\/security\/rate-limit-redis\)/);
+});

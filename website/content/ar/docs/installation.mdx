@@ -1,0 +1,126 @@
+---
+title: التثبيت
+description: ثبّت DaloyJS باستخدام pnpm أو npm أو yarn أو bun، ثم جهّز الإطار على Node.js أو Bun أو Deno أو Cloudflare Workers أو Vercel خلال دقائق.
+keywords:
+  - تثبيت DaloyJS
+  - pnpm add daloyjs
+  - إعداد DaloyJS
+  - تثبيت إطار TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# التثبيت
+
+يستهدف DaloyJS **إصدار Node.js 24 LTS أو Node.js 26 وما بعده** (`engines.node`: `^24.0.0 || >=26.0.0`)، ويُوزَّع في سجل npm العام باسم `@daloyjs/core`. الحزمة **ليس لها اعتماديات peer**، لذا يستطيع كل من `npm` و`yarn` و`pnpm` و`bun` تثبيتها مباشرةً. *نوصي* باستخدام [pnpm](https://pnpm.io/motivation) مع إعدادات `.npmrc` المعزَّزة أدناه لأسباب تتعلق بسلسلة التوريد، لكن ذلك ليس إلزاميًا. حقل `engines.pnpm` في `package.json` بيانات وصفية إرشادية، أما `engines.node` فيحدد بيئة التشغيل المدعومة، وقد يُصدر تحذيرًا أو يفشل بحسب مدير الحزم لديك وإعداد engine-strict.
+
+<FlowDiagram numbered title="طريقتان للبدء" steps={[
+          {
+            eyebrow: "الأسرع",
+            label: "إنشاء المشروع",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "أو",
+            label: "التثبيت في مشروع قائم",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "تعزيز",
+            label: "إضافة إعدادات .npmrc",
+            detail: "strict-peer-dependencies، lockfile مجمّد",
+            tone: "muted",
+          },
+          {
+            eyebrow: "تأكيد",
+            label: "التحقق من الاستيراد",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]} caption="أنشئ مشروعًا معزَّزًا بأمر واحد، أو أضف الحزمة الخالية من الاعتماديات إلى مشروع قائم، ثم ضع ملف .npmrc المعزَّز وتأكد من أن الاستيراد يعمل." />
+
+## الطريقة الأسرع: أنشئ مشروعًا
+
+استخدم المولّد الرسمي: فهو يجهّز ملف `.npmrc` معزَّزًا، وTypeScript صارمًا، ومسارًا يعمل، كل ذلك بأمر واحد.
+
+روابط الحزم: [create-daloy على npm](https://www.npmjs.com/package/create-daloy) و[@daloyjs/core على npm](https://www.npmjs.com/package/@daloyjs/core).
+
+```bash
+# اختر مدير حزم واحدًا
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+راجع [Scaffold a project](/docs/scaffolder) (بالإنجليزية) لمعرفة القوالب والخيارات.
+
+## أو ثبّته في مشروع قائم
+
+### المتطلبات
+
+- **Node.js** 24 LTS، أو 26.0.0 وما بعده (Node.js 25 غير مدعوم).
+- مدير حزم. أيٌّ من هذه يفي بالغرض؛ يُوصى بـ pnpm 11.x أو أحدث لتعزيز سلسلة التوريد، لكن `npm` و`yarn` و`bun` تثبّت `@daloyjs/core` دون مشكلات لأن الحزمة ليس لها اعتماديات peer.
+
+لتفعيل pnpm عبر [Corepack](https://nodejs.org/api/corepack.html):
+
+```bash
+corepack enable
+corepack prepare pnpm@11.1.3 --activate
+pnpm --version
+```
+
+### ثبّت DaloyJS
+
+<PackageInstall packages="@daloyjs/core zod" />
+
+اختياري، فقط إن أردت توليد SDK مكتوب الأنواع:
+
+<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+
+حزمة الإطار المنشورة على npm هي [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core).
+
+## إعدادات التثبيت المعزَّزة [#hardened-npmrc]
+
+في pnpm 11+، ضع إعدادات سلسلة التوريد في ملف `pnpm-workspace.yaml` في جذر المشروع (المفاتيح بصيغة camelCase؛ يقرأ pnpm 11 هذا الملف حتى في مشروع من حزمة واحدة). يتجاهل pnpm 11 هذه الإعدادات في `.npmrc`، لذا فإن الاكتفاء بـ `.npmrc` يعني غياب فترة الانتظار وسياسة السكربتات.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
+```
+
+بالنسبة إلى npm والإصدارات الأقدم من pnpm، احتفظ بالقيم نفسها في `.npmrc` أيضًا:
+
+```ini title=".npmrc"
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+minimum-release-age=1440
+ignore-scripts=true
+```
+
+تقلّل فترة الانتظار و`ignoreScripts` مخاطر سلسلة التوريد في هذه التثبيتات، لكنها لا توقف كل الهجمات. يحظر `ignoreScripts` الحمولات الخبيثة في سكربتات التثبيت، لا الشيفرة التي تعمل عند استيراد الحزمة، ولا تحمي فترة الانتظار البالغة 24 ساعة إلا من الاختراقات التي تُكتشف خلال أقل من يوم.
+
+اقرأ الأسباب في [Security](/docs/security) (بالإنجليزية) وفي [دليل دوافع pnpm](https://pnpm.io/motivation).
+
+## تحقّق من التثبيت
+
+شغّل هذا الأمر من جذر المشروع بعد التثبيت؛ يعمل بالطريقة نفسها مع pnpm أو npm أو yarn أو bun لأنه يستدعي `node` مباشرةً:
+
+```bash
+node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
+```
+
+## الخطوة التالية
+
+<Cards>
+<Card title="البدء السريع" href="/ar/docs/getting-started">اكتب مسارك الأول، وتحقق منه، وقدّم توثيق OpenAPI.</Card>
+<Card title="Scaffold a project (بالإنجليزية)" href="/docs/scaffolder">دع <code>create-daloy</code> يجهّز لك مشروعًا معزَّزًا.</Card>
+</Cards>

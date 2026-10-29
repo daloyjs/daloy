@@ -1,5 +1,6 @@
 import type { TranslatedLocale } from "@/lib/i18n";
 
+import { PAGES_COPY_AR } from "./ar";
 import { PAGES_COPY_ES } from "./es";
 import { PAGES_COPY_FR } from "./fr";
 import { PAGES_COPY_PT } from "./pt";
@@ -14,4 +15,5 @@ export const PAGES_COPY: Record<TranslatedLocale, TranslatedPagesCopy> = {
   zh: PAGES_COPY_ZH,
   fr: PAGES_COPY_FR,
   pt: PAGES_COPY_PT,
+  ar: PAGES_COPY_AR,
 };

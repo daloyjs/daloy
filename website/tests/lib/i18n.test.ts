@@ -34,7 +34,7 @@ test("each translated prefix and the paths under it map to its locale", () => {
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
@@ -44,7 +44,8 @@ test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("zh"), "zh");
   assert.equal(parseLocaleHeader("fr"), "fr");
   assert.equal(parseLocaleHeader("pt"), "pt");
-  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "de", "es ", "constructor", "__proto__"]) {
+  assert.equal(parseLocaleHeader("ar"), "ar");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "de", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
   assert.equal(isTranslatedLocale("toString"), false);
@@ -78,6 +79,7 @@ test("hreflang alternates list every locale with English as x-default", () => {
     "zh-CN": "/zh/about",
     "fr-FR": "/fr/about",
     "pt-BR": "/pt/about",
+    ar: "/ar/about",
     "x-default": "/about",
   });
   assert.equal(HTML_LANG.zh, "zh-CN");
@@ -95,7 +97,7 @@ test("buildMetadata emits hreflang and every other og:locale for translated page
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
   assert.equal(og.locale, "zh_CN");
-  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR"]);
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -130,7 +132,7 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
@@ -158,7 +160,7 @@ function strings(value: unknown, out: string[] = []): string[] {
 }
 
 test("translated page copy uses no em dashes and sized meta descriptions", () => {
-  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160] } as const;
+  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160] } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     for (const text of strings(pages)) {
@@ -195,11 +197,11 @@ test("every translated home copy mirrors the English structure", async () => {
   }
 });
 
-test("home pages advertise the promoted locales; French and Portuguese are header-menu only", async () => {
+test("home pages advertise the promoted locales; French, Portuguese and Arabic are header-menu only", async () => {
   const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
   const { PROMOTED_LOCALES } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...PROMOTED_LOCALES].sort());
-  for (const locale of ["fr", "pt"]) {
+  for (const locale of ["fr", "pt", "ar"]) {
     assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes(locale), `no ${locale} hero pill or footer link`);
   }
   for (const notice of Object.values(LANGUAGE_NOTICES)) {
@@ -212,6 +214,9 @@ test("the header language menu offers every locale, French and Portuguese includ
   assert.deepEqual(Object.keys(LOCALE_NATIVE_NAME).sort(), [...SITE_LOCALES].sort());
   assert.equal(LOCALE_NATIVE_NAME.fr, "Français");
   assert.equal(LOCALE_NATIVE_NAME.pt, "Português");
+  assert.equal(LOCALE_NATIVE_NAME.ar, "العربية");
+  assert.equal(switchLocaleHref("/ar/about", "en"), "/about");
+  assert.equal(switchLocaleHref("/docs/installation", "ar"), "/ar/docs/installation");
   assert.equal(switchLocaleHref("/fr/privacy", "pt"), "/pt/privacy");
   assert.equal(switchLocaleHref("/pt/docs/tutorials/bookstore", "en"), "/docs/tutorials/bookstore");
   // Every page maps to its French counterpart when one exists.
@@ -257,4 +262,62 @@ test("a translated 404 path turns into search words without the locale segment",
   assert.equal(queryFromPath("/es/docs/routing"), "routing");
   // A word that merely equals a locale id later in the path is kept.
   assert.equal(queryFromPath("/docs/guides/es"), "guides es");
+});
+
+test("Arabic is the only right-to-left locale", async () => {
+  const { HTML_DIR, isRtl } = await import("../../lib/i18n");
+  for (const locale of SITE_LOCALES) {
+    assert.equal(HTML_DIR[locale], locale === "ar" ? "rtl" : "ltr", locale);
+    assert.equal(isRtl(locale), locale === "ar");
+  }
+});
+
+test("shared chrome uses logical direction utilities so RTL pages mirror", async () => {
+  const { readFileSync } = await import("node:fs");
+  // Physical left/right utilities do not flip under dir="rtl". The shared
+  // chrome every locale renders must use ms-/me-/ps-/pe-/start-/end-/
+  // text-start/text-end (or an explicit rtl: variant) instead.
+  const files = [
+    "components/site-header.tsx",
+    "components/language-switcher.tsx",
+    "components/site-footer.tsx",
+    "components/home/home-page.tsx",
+    "components/translated-docs-nav.tsx",
+    "components/translated-docs-nav-list.tsx",
+    "components/translated-docs-search.tsx",
+    "components/cards.tsx",
+    "components/reading-progress.tsx",
+    "app/[locale]/docs/layout.tsx",
+    "app/not-found.tsx",
+  ];
+  // Matches bare and variant-prefixed classes (sm:text-left, md:pl-4) but
+  // not prose such as "left-to-right" (position utilities need a value).
+  const physical =
+    /(?<![\w-])(?:-?m[lr]-|p[lr]-|(?:left|right)-(?:\d|\[|px\b|full\b|auto\b)|text-(?:left|right)\b|rounded-[lr](?:-|\b)|border-[lr](?:-|\b))/g;
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+    const hits = [...source.matchAll(physical)].map((m) => m[0]);
+    assert.deepEqual(hits, [], `${file} uses physical direction utilities`);
+  }
+});
+
+test("right-to-left pages keep code left to right", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("app/globals.css", "utf8");
+  assert.match(css, /\[dir="rtl"\] code,[\s\S]*?\[dir="rtl"\] pre \{[\s\S]*?direction: ltr;/);
+  assert.match(css, /html:lang\(ar\) body/);
+});
+
+test("text in another language carries its own direction", async () => {
+  const { readFileSync } = await import("node:fs");
+  // On an RTL page, an English pill without dir="ltr" renders its final
+  // period at the start ("…English."). Every lang= switch must set dir too.
+  for (const file of ["components/home/home-page.tsx", "components/language-switcher.tsx", "components/site-footer.tsx"]) {
+    const source = readFileSync(file, "utf8");
+    const langs = source.match(/\blang=\{HTML_LANG\[(\w+)\]\}/g) ?? [];
+    for (const attr of langs) {
+      const key = attr.match(/\[(\w+)\]/)![1];
+      assert.ok(source.includes(`dir={HTML_DIR[${key}]}`), `${file}: ${attr} needs a matching dir`);
+    }
+  }
 });

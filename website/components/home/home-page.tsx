@@ -29,7 +29,7 @@ import { ContractFlowVisual } from "@/components/contract-flow-visual";
 import { FlowHeroScene } from "@/components/flow-hero-scene";
 import { LocaleLink } from "@/components/locale-link";
 import { ScalarPreview } from "@/components/scalar-preview";
-import { HTML_LANG, localeHome, PROMOTED_LOCALES } from "@/lib/i18n";
+import { HTML_DIR, HTML_LANG, localeHome, PROMOTED_LOCALES } from "@/lib/i18n";
 import { serializeJsonLd } from "@/lib/seo";
 import { LANGUAGE_NOTICES } from "./language-notices";
 import {
@@ -132,6 +132,7 @@ export function HomePage({
                     href={localeHome(other)}
                     hrefLang={HTML_LANG[other]}
                     lang={HTML_LANG[other]}
+                    dir={HTML_DIR[other]}
                     className="float-up group inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-mist-200/80 bg-mist-50/85 px-3 py-1.5 text-sm text-mist-950 shadow-sm transition-colors hover:border-mist-300 hover:bg-mist-100/90 dark:border-mist-900/70 dark:bg-mist-950/30 dark:text-mist-100 dark:hover:bg-mist-950/50 dim:border-mist-900/60 dim:bg-mist-950/25 dim:text-mist-100"
                     style={{ animationDelay: `${40 + index * 20}ms` }}
                   >
@@ -142,9 +143,16 @@ export function HomePage({
                     <span>{notice.text}</span>
                     <span className="inline-flex items-center gap-1 font-medium underline underline-offset-4">
                       {notice.cta}
+                      {/* Follows the pill's own direction, not the page's:
+                          Tailwind's rtl: variant also matches dir="ltr"
+                          islands inside an RTL page. */}
                       <ArrowRightIcon
                         aria-hidden
-                        className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                        className={
+                          HTML_DIR[other] === "rtl"
+                            ? "size-3.5 -scale-x-100 transition-transform duration-200 group-hover:-translate-x-0.5"
+                            : "size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                        }
                       />
                     </span>
                   </a>
@@ -173,7 +181,7 @@ export function HomePage({
                 className={buttonVariants({ size: "lg" }) + " group"}
               >
                 {copy.hero.primaryCta}
-                <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" />
               </LocaleLink>
               <LocaleLink
                 locale={locale}
@@ -475,7 +483,10 @@ export function HomePage({
               {copy.scalar.body}
             </p>
           </div>
-          <ScalarPreview />
+          {/* A mockup of Scalar's own (English, LTR) UI: keep it as shown. */}
+          <div dir="ltr">
+            <ScalarPreview />
+          </div>
           <p className="mt-4 text-center text-sm leading-6 text-muted-foreground">
             {copy.scalar.footer}{" "}
             <LocaleLink
@@ -539,9 +550,9 @@ export function HomePage({
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="p-3 text-left">{copy.comparison.youWant}</th>
-                  <th className="p-3 text-left">{copy.comparison.todaysBest}</th>
-                  <th className="p-3 text-left">{copy.comparison.daloyGives}</th>
+                  <th className="p-3 text-start">{copy.comparison.youWant}</th>
+                  <th className="p-3 text-start">{copy.comparison.todaysBest}</th>
+                  <th className="p-3 text-start">{copy.comparison.daloyGives}</th>
                 </tr>
               </thead>
               <tbody>

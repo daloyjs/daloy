@@ -6,6 +6,7 @@ import { CheckIcon, TranslateIcon } from "@phosphor-icons/react/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { useClientPathname } from "@/hooks/use-client-pathname";
 import {
+  HTML_DIR,
   HTML_LANG,
   LOCALE_NATIVE_NAME,
   localeHome,
@@ -22,6 +23,7 @@ const SWITCH_COPY: Record<SiteLocale, { short: string; label: string }> = {
   zh: { short: "中文", label: "切换语言（当前：简体中文）" },
   fr: { short: "FR", label: "Changer de langue (actuelle : français)" },
   pt: { short: "PT", label: "Mudar de idioma (atual: português)" },
+  ar: { short: "عربي", label: "تغيير اللغة (الحالية: العربية)" },
 };
 
 function LanguageMenu({
@@ -71,7 +73,7 @@ function LanguageMenu({
       <ul
         id={menuId}
         hidden={!open}
-        className="absolute top-[calc(100%+0.5rem)] right-0 z-50 min-w-40 rounded-xl border bg-background/95 p-1 shadow-lg backdrop-blur"
+        className="absolute top-[calc(100%+0.5rem)] end-0 z-50 min-w-40 rounded-xl border bg-background/95 p-1 shadow-lg backdrop-blur"
       >
         {SITE_LOCALES.map((target) => {
           const current = target === locale;
@@ -88,6 +90,7 @@ function LanguageMenu({
                 href={href}
                 hrefLang={HTML_LANG[target]}
                 lang={HTML_LANG[target]}
+                dir={HTML_DIR[target]}
                 aria-current={current ? "true" : undefined}
                 onClick={() => setOpen(false)}
                 className={cn(

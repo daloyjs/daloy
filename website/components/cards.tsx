@@ -46,7 +46,7 @@ export function Card({ title, href, children, icon, locale }: CardProps) {
         <span className="min-w-0 flex-1">{title}</span>
         <Arrow
           aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+          className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5"
         />
       </span>
       {children ? <span className="leading-6 text-muted-foreground">{children}</span> : null}

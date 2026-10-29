@@ -1,3 +1,5 @@
+import { foldArabic } from "./arabic";
+
 /**
  * Cross-language search glossary: maps the technical terms Chinese and
  * Spanish developers actually type to the English keywords the docs use, so
@@ -9,6 +11,8 @@
  *   路由, 跨域…), and our own `/zh` pages use them, so the list is broad.
  * - French and Portuguese, like Spanish, get short lists of translations and
  *   cognates.
+ * - Arabic has established terms for many concepts (التوجيه، المصادقة،
+ *   تحديد المعدل), matched after folding spelling variants.
  * - Spanish mostly keeps the English term ("middleware", "token"), so the list
  *   only covers translations and cognates the ranker cannot link on its own
  *   ("validación" ≠ "validation" to a suffix stemmer).
@@ -270,11 +274,81 @@ export const PT_GLOSSARY: readonly GlossaryEntry[] = [
   { term: "verificacao de saude", english: "health check", expect: "/docs/security/lifecycle-health" },
 ];
 
+/**
+ * Modern Standard Arabic → English. Terms are stored folded (lib/arabic.ts:
+ * no diacritics, ا for every alef form, ي for ى, ه for ة) and match as
+ * substrings of the folded query, longest first, because the article and
+ * prepositions attach to the word ("التوجيه", "بالتوجيه"). Arabic developers
+ * also keep many English terms ("API", "middleware"), so this lists the
+ * established Arabic ones.
+ */
+export const AR_GLOSSARY: readonly GlossaryEntry[] = [
+  { term: "البرمجيات الوسيطه", english: "middleware", expect: "/docs/api-reference/middleware" },
+  { term: "وسيط", english: "middleware", expect: "/docs/api-reference/middleware" },
+  { term: "تحديد المعدل", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "تحديد معدل", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "معدل الطلبات", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "اعاده التوجيه", english: "safe redirect", expect: "/docs/security/safe-redirect" },
+  { term: "توجيه", english: "routing", expect: "/docs/routing" },
+  { term: "مسارات", english: "routing", expect: "/docs/routing" },
+  { term: "التحقق من الهويه", english: "authentication", expect: "/docs/auth" },
+  { term: "مصادقه", english: "authentication", expect: "/docs/auth" },
+  { term: "تحقق", english: "validation", expect: "/docs/validation" },
+  { term: "تفويض", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "صلاحيات", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "جلسات", english: "session", expect: "/docs/security/session" },
+  { term: "جلسه", english: "session", expect: "/docs/security/session" },
+  { term: "النشر", english: "deployment", expect: "/docs/deployment" },
+  { term: "تثبيت", english: "installation", expect: "/docs/installation" },
+  { term: "البدء السريع", english: "getting started", expect: "/docs/getting-started" },
+  { term: "بدء الاستخدام", english: "getting started", expect: "/docs/getting-started" },
+  { term: "اختبارات العقد", english: "contract tests", expect: "/docs/testing" },
+  { term: "اختبار", english: "testing", expect: "/docs/testing" },
+  { term: "سلسله التوريد", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "سلسله الامداد", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "تبعيات", english: "dependencies supply chain", expect: "/docs/security/supply-chain" },
+  { term: "السجلات", english: "logging", expect: "/docs/logging" },
+  { term: "تسجيل الاحداث", english: "logging", expect: "/docs/logging" },
+  { term: "التتبع", english: "tracing", expect: "/docs/tracing" },
+  { term: "مقاييس", english: "metrics", expect: "/docs/metrics" },
+  { term: "اخطاء", english: "errors", expect: "/docs/errors" },
+  { term: "ترقيم الصفحات", english: "pagination", expect: "/docs/pagination" },
+  { term: "قواعد البيانات", english: "databases", expect: "/docs/databases" },
+  { term: "قاعده البيانات", english: "databases", expect: "/docs/databases" },
+  { term: "قاعده بيانات", english: "databases", expect: "/docs/databases" },
+  { term: "البريد الالكتروني", english: "email", expect: "/docs/email" },
+  { term: "مدفوعات", english: "payment integrations", expect: "/docs/payments" },
+  { term: "بوابه الدفع", english: "payment integrations", expect: "/docs/payments" },
+  { term: "اضافات", english: "plugins", expect: "/docs/plugins" },
+  { term: "محولات", english: "adapters", expect: "/docs/adapters" },
+  { term: "التخزين المؤقت", english: "response cache", expect: "/docs/response-cache" },
+  { term: "رفع الملفات", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "المهام المجدوله", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "جدوله", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "مهام الخلفيه", english: "jobs", expect: "/docs/jobs" },
+  { term: "تعدد المستاجرين", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "حقن sql", english: "sql injection", expect: "/docs/security/sql-injection" },
+  { term: "حقن الاوامر", english: "command injection", expect: "/docs/security/command-injection" },
+  { term: "متغيرات البيئه", english: "environment variables config", expect: "/docs/config" },
+  { term: "الاعدادات", english: "config", expect: "/docs/config" },
+  { term: "اعاده المحاوله", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "قاطع الدائره", english: "circuit breaker", expect: "/docs/fetch-resilience" },
+  { term: "الضغط", english: "compression", expect: "/docs/security/compression" },
+  { term: "اداره الاصدارات", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "الايقاف الامن", english: "graceful shutdown", expect: "/docs/security/lifecycle-health" },
+  { term: "فحص الصحه", english: "health check", expect: "/docs/security/lifecycle-health" },
+  { term: "رؤوس الامان", english: "secure headers", expect: "/docs/security/secure-defaults" },
+  { term: "التزامن", english: "concurrency limit", expect: "/docs/concurrency-limit" },
+];
+
 /** Upper bound on glossary expansions applied to one query. */
 export const MAX_GLOSSARY_MATCHES = 8;
 
 /** One applied mapping, for transparency in tool output. */
 export type GlossaryMatch = { source: string; english: string };
+
+/** Longest first, so "اعاده التوجيه" (redirect) is consumed before "توجيه" (routing). */
+const AR_BY_LENGTH = [...AR_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
 
 /** Longest terms first, so "速率限制" wins over anything shorter inside it. */
 const ZH_BY_LENGTH = [...ZH_GLOSSARY].sort((a, b) => [...b.term].length - [...a.term].length);
@@ -295,8 +369,8 @@ function foldLatin(text: string): string {
 
 /**
  * Find glossary terms in a query and return the English keywords to search
- * for. Chinese terms match as substrings (longest first, each span used
- * once); Spanish, French and Portuguese terms match as accent-insensitive
+ * for. Chinese and Arabic terms match as substrings (longest first, each
+ * span used once; Arabic after folding); Spanish, French and Portuguese terms match as accent-insensitive
  * whole words or phrases.
  * At most {@link MAX_GLOSSARY_MATCHES} mappings apply.
  *
@@ -313,6 +387,16 @@ export function glossaryMatches(query: string): GlossaryMatch[] {
     if (zh.includes(entry.term)) {
       matches.push({ source: entry.term, english: entry.english });
       zh = zh.split(entry.term).join("\u0000");
+    }
+  }
+
+  // Arabic: fold spelling variants, keep single spaces (multi-word terms).
+  let ar = ` ${foldArabic(query.toLowerCase()).replace(/\s+/g, " ").trim()} `;
+  for (const entry of AR_BY_LENGTH) {
+    if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
+    if (ar.includes(entry.term)) {
+      matches.push({ source: entry.term, english: entry.english });
+      ar = ar.split(entry.term).join("\u0000");
     }
   }
 

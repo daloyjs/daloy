@@ -2,7 +2,8 @@
 
 import * as React from "react";
 
-import { useUiStrings } from "@/components/site-locale";
+import { useSiteLocale, useUiStrings } from "@/components/site-locale";
+import { isRtl } from "@/lib/i18n";
 
 import { PACKAGE_MANAGERS, type PackageManager } from "@/lib/package-managers";
 import { cn } from "@/lib/utils";
@@ -73,12 +74,16 @@ export interface PackageManagerTabsProps {
  */
 export function PackageManagerTabs({ panels }: PackageManagerTabsProps) {
   const strings = useUiStrings();
+  const locale = useSiteLocale();
   const [manager, setManager] = usePackageManager();
   const baseId = React.useId();
 
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     const index = PACKAGE_MANAGERS.indexOf(manager);
-    const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    // Arrow keys follow the visual order, which mirrors on right-to-left pages.
+    const forward = isRtl(locale) ? "ArrowLeft" : "ArrowRight";
+    const backward = isRtl(locale) ? "ArrowRight" : "ArrowLeft";
+    const delta = event.key === forward ? 1 : event.key === backward ? -1 : 0;
     if (delta === 0) return;
     event.preventDefault();
     const next = PACKAGE_MANAGERS[(index + delta + PACKAGE_MANAGERS.length) % PACKAGE_MANAGERS.length];

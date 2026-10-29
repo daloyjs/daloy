@@ -82,6 +82,14 @@ export const UI_STRINGS: Record<
     copiedAria: "Código copiado para a área de transferência",
     packageManager: "Gerenciador de pacotes",
   },
+  ar: {
+    copy: "نسخ",
+    copied: "تم النسخ",
+    retryCopy: "أعد المحاولة",
+    copyAria: "نسخ الشيفرة إلى الحافظة",
+    copiedAria: "تم نسخ الشيفرة إلى الحافظة",
+    packageManager: "مدير الحزم",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

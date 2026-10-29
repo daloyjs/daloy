@@ -1,0 +1,243 @@
+---
+title: البدء السريع
+description: "أنشئ أول تطبيق لك مع DaloyJS: عرّف مسارًا قائمًا على العقود، وتحقق من البيانات بـ Zod، وولّد OpenAPI، وأرسل الاستجابات على أي بيئة تشغيل مدعومة."
+keywords:
+  - البدء مع DaloyJS
+  - أول تطبيق DaloyJS
+  - درس واجهة برمجة TypeScript
+  - Swagger UI
+  - مرجع API مع Scalar
+  - واجهة توثيق OpenAPI
+sitemap:
+  priority: 0.8
+---
+
+# البدء السريع
+
+أنشئ خادم DaloyJS صغيرًا، واستدعِه بالعميل مكتوب الأنواع، وافحص مواصفة OpenAPI، كل ذلك في خمس دقائق.
+
+<FlowDiagram numbered title="خمس دقائق، خمس خطوات" steps={[
+          { label: "إنشاء المشروع", detail: "pnpm add @daloyjs/core zod" },
+          {
+            label: "كتابة مسار",
+            detail: "app.get(path, contract, handler)",
+            tone: "accent",
+          },
+          { label: "إضافة OpenAPI وواجهة التوثيق", detail: "docs: true" },
+          {
+            label: "استدعاء العميل مكتوب الأنواع",
+            detail: "createClient(app)",
+          },
+          {
+            label: "توليد SDK مع Hey API",
+            detail: "pnpm exec openapi-ts",
+            tone: "success",
+          },
+        ]} caption="ينتقل هذا الدليل من مجلد فارغ إلى SDK مكتوب الأنواع في خمس خطوات، وتبني كل خطوة على المسار الذي تعرّفه في الخطوة الثانية." />
+
+## 1. أنشئ المشروع
+
+```bash
+mkdir hello-daloy && cd hello-daloy
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node
+```
+
+```json
+// package.json، أضف ما يلي
+{
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  }
+}
+```
+
+يشغّل Node.js ملفات الدخول المكتوبة بـ TypeScript مباشرةً بفضل إزالة الأنواع المدمجة (مستقرة في Node 24+ ومتاحة منذ 22.18)، لذا لا يحتاج التطوير المحلي إلى مُحوِّل شيفرة ولا إلى خطوة بناء منفصلة.
+
+نستخدم هنا `src/index.ts` و`--watch` حتى تطابق البنية ما يولّده [create-daloy](/docs/scaffolder) (بالإنجليزية): يمكنك النسخ واللصق بين هذا الدليل ومشروع منشأ بالقالب دون إعادة تسمية الملفات.
+
+## 2. اكتب مسارك الأول
+
+```ts
+// src/index.ts
+import { z } from "zod";
+import { App, requestId, rateLimit } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+})
+  .use(requestId())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
+  .get(
+    "/greet/:name",
+    {
+      tags: ["Demo"],
+      request: { params: z.object({ name: z.string().min(1) }) },
+      responses: {
+        200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+      },
+    },
+    async ({ params }) => ({
+      status: 200,
+      body: { msg: `Hello, ${params.name}!` },
+    }),
+  );
+
+const { port } = serve(app, { port: 3000 });
+console.log(`listening on http://localhost:${port}`);
+```
+
+يطبّق `new App()` الدالة `secureHeaders()` تلقائيًا. سجّلها بنفسك فقط عندما تريد استبدال القيم الافتراضية.
+
+تفضّل لوحة الإقلاع الملوّنة الموجودة في قوالب `create-daloy`؟ استبدل `console.log` البسيط بالدالة `printStartupBanner()` من `@daloyjs/core/banner`: فهي ترسم إطارًا يتعرّف على الطرفية (مع بديل ASCII)، يعرض اسم تطبيقك والعنوان وأي روابط إضافية تريدها (توثيق الواجهة البرمجية، فحص الصحة، وغيرهما):
+
+```ts
+import { printStartupBanner } from "@daloyjs/core/banner";
+
+const { port } = serve(app, { port: 3000 });
+printStartupBanner({
+  name: "MyAPI",
+  version: "1.0.0",
+  url: `http://localhost:${port}`,
+  runtime: "Node.js",
+  links: [
+    { label: "API docs", url: `http://localhost:${port}/docs` },
+    { label: "OpenAPI JSON", url: `http://localhost:${port}/openapi.json` },
+    { label: "OpenAPI YAML", url: `http://localhost:${port}/openapi.yaml` },
+    { label: "Health", url: `http://localhost:${port}/healthz` },
+  ],
+});
+```
+
+```bash
+pnpm dev
+# في طرفية أخرى
+curl http://localhost:3000/greet/world
+# -> {"msg":"Hello, world!"}
+```
+
+لا تريد تشغيل خادم حقيقي؟ كل `App` يوفّر `app.request(input, init?)`، وهو عميل اختبار داخل العملية يقبل عنوانًا أو `Request` ويعيد `Response`: دون مكدّس شبكة، ودون منفذ، ودون طرفية ثانية. وهو نقطة الدخول نفسها التي يستخدمها العميل مكتوب الأنواع و[دليل الاختبار](/docs/testing) (بالإنجليزية):
+
+```ts
+const res = await app.request("/greet/world");
+console.log(res.status, await res.json());
+// -> 200 { msg: "Hello, world!" }
+```
+
+## 3. أضف OpenAPI وواجهة التوثيق [#3-add-openapi-and-docs-ui]
+
+بسطر واحد في منشئ `App`، يركّب DaloyJS تلقائيًا `GET /openapi.json` + `GET /openapi.yaml` (المواصفة الحية بالصيغتين) و`GET /docs` (مرجع API مع Scalar):
+
+```ts
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: "auto", // GET /docs و/openapi.json و/openapi.yaml خارج الإنتاج
+});
+```
+
+افتح `http://localhost:3000/docs` للمرجع التفاعلي في Scalar، أو `http://localhost:3000/openapi.json` للمواصفة بصيغة JSON، أو `http://localhost:3000/openapi.yaml` للمواصفة بصيغة YAML.
+
+في الخدمات الحقيقية، اضبط `openapi.info` (أو الحقول العليا `title` و`version` و`description`). إن لم تفعل، يستخدم DaloyJS القيم القابلة للنقل `DaloyJS API` / `0.0.0`. لا تقرأ النواة أبدًا ملف بيان من بيئة الاستضافة، لذا تعمل حزمة التوثيق نفسها على Node وBun وDeno وWorkers وVercel.
+
+تفضّل دالة مصنع؟ `createApp(options)` اسم بديل مُصدَّر لـ `new App(options)` بسلوك مطابق تمامًا:
+
+```ts
+import { createApp } from "@daloyjs/core";
+
+const app = createApp({
+  docs: "auto", // استخدم true لنشر التوثيق في الإنتاج أيضًا
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+});
+```
+
+### تفضّل Swagger UI الكلاسيكي؟
+
+Scalar هو الافتراضي لأنه أسرع وأجمل وأنسب للهاتف، لكن إن كان فريقك معتادًا على Swagger UI، أو لديك لقطات شاشة أو أدلة تشغيل أو عادات مبنية حوله، فإن DaloyJS يوفّره جاهزًا. غيّر الحقل `ui` في صيغة الكائن لـ `docs` لتعود إلى الواجهة الخضراء المألوفة:
+
+```ts
+const app = new App({
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: {
+    ui: "swagger", // "scalar" (الافتراضي) | "swagger" | "redoc"
+    path: "/docs", // اختياري، غيّره إن أردت /reference أو /api-docs وغيرهما
+  },
+});
+```
+
+العنوان نفسه (`GET /docs`)، ونقاط النهاية الحية نفسها `/openapi.json` و`/openapi.yaml`، والتعامل نفسه مع CSP؛ لا يتغير سوى HTML المعروض. ويمكنك الإبقاء على الاثنين: اترك المسار المركّب تلقائيًا على Scalar، واعرض مسارًا ثانيًا لـ Swagger بنفسك عبر `swaggerUiHtml()` (راجع الطريقة اليدوية في [دليل OpenAPI](/docs/openapi)، بالإنجليزية).
+
+تريد مسارًا مختلفًا؟ استخدم صيغة الكائن: `docs: { ui: "swagger", path: "/reference" }`. لا تُركَّب صيغة الكائن إلا خارج الإنتاج ما لم تضف `enabled: true` (منذ 1.5.5)، تمامًا مثل `docs: "auto"` الذي يتخطى التركيب عند `production: true`. تحتاج إلى تحكم كامل؟ اضبط `docs: false` وركّب مساراتك الخاصة باستخدام `generateOpenAPI()` و`swaggerUiHtml() / scalarHtml()`: راجع [دليل OpenAPI](/docs/openapi) (بالإنجليزية).
+
+تحمّل كل من `swaggerUiHtml()` و`scalarHtml()` مواردها الافتراضية من شبكة jsDelivr، لذا يجب أن تسمح سياسة Content-Security-Policy الصارمة بتلك الموارد، وإلا فقد تظهر واجهة التوثيق فارغة. يضيف المسار المركّب تلقائيًا و`htmlResponse()` سياسة CSP متوافقة تلقائيًا. وإن بنيت الاستجابة بنفسك، فاستورد `docsContentSecurityPolicy` من `@daloyjs/core/docs` ومرّر الناتج ترويسةً للاستجابة:
+
+```ts
+import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
+
+headers: { "content-security-policy": docsContentSecurityPolicy() }
+```
+
+## 4. استخدم العميل مكتوب الأنواع داخل العملية
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+
+const client = createInProcessClient(app);
+const r = await client.greet({ params: { name: "DaloyJS" } });
+//    ^? { status: 200; body: { msg: string } }
+console.log(r.status, r.body);
+```
+
+تُستنتج دوال العميل من صفّ (tuple) المسارات في التطبيق. اربط التسجيلات بالتسلسل، أو اجمع عقود `defineRoute()` المُصدَّرة باستخدام `registerRoutes([...])`. وتجنّب توسيع النتيجة بتعليق نوع `App` مجرد، لأنه يمحو ذلك الصف عمدًا.
+
+## 5. ولّد SDK مع Hey API
+
+للمستهلكين خارج المستودع الأحادي، ولّد SDK لـ fetch مكتوب الأنواع بالكامل:
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+أبقِ خادم التطوير من الخطوة الثانية قيد التشغيل، ثم احفظ مستند OpenAPI الحي على القرص قبل تشغيل مولّد SDK:
+
+```bash
+mkdir -p generated
+curl http://localhost:3000/openapi.json -o generated/openapi.json
+pnpm exec openapi-ts
+```
+
+## قبل النشر
+
+يفعّل `new App()` مسبقًا حدود حجم الجسم، ومهلات الطلبات، وتحليل JSON محميًا من تلويث النماذج الأولية، وإخفاء أخطاء 5xx في الإنتاج، و`secureHeaders()`. أما مفاتيح تحديد المعدل وحصصه فقرار يخص النشر، لذا يبقى `rateLimit()` صريحًا:
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// الافتراضي في الذاكرة: لكل عملية. نسختان تعنيان N * max.
+```
+
+عندما تشغّل أكثر من نسخة، اربط [مخزن Redis لتحديد المعدل](/docs/security/rate-limit-redis) (بالإنجليزية)، وإلا ستحتفظ كل نسخة بعدّادها الخاص.
+
+تثبت المصادقة هوية المستدعي، لكنها لا تثبت أن له الحق في قراءة هذا السجل. لا يستطيع DaloyJS توفير التفويض على مستوى الكائن افتراضيًا لأنه لا يعرف نموذج الملكية لديك. ضع الفحص في المعالج أو في الاستعلام، واتبع دليل [تفويض الموارد](/docs/security/resource-authorization) (بالإنجليزية)، بما في ذلك اختبارات Alice مقابل Bob.
+
+## الخطوات التالية
+
+- [التوجيه](/docs/routing) (بالإنجليزية)
+- [التحقق باستخدام Standard Schema](/docs/validation) (بالإنجليزية)
+- [ضوابط الأمان والبرمجيات الوسيطة](/docs/security) (بالإنجليزية)
+- [درس تعليمي: واجهة برمجة لمكتبة كتب](/ar/docs/tutorials/bookstore)
