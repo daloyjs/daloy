@@ -20,6 +20,12 @@ export type SitemapEntry = {
   priority: number;
   /** `hreflang` → site path, for pages that exist in every locale. */
   languages?: Record<string, string>;
+  /**
+   * Date to use as `lastModified` when git history is unavailable
+   * (`YYYY-MM-DD`). Blog posts carry their publication date; other pages have
+   * no trustworthy fallback and stay undated rather than claim a fake one.
+   */
+  fallbackDate?: string;
 };
 
 /**
@@ -100,6 +106,24 @@ export async function buildSitemapEntries(): Promise<SitemapEntry[]> {
     path: `/blog/${post.slug}`,
     changeFrequency: "monthly" as const,
     priority: 0.7,
+    fallbackDate: post.date,
   }));
   return [...localizedSitePages(), ...posts, ...docs];
+}
+
+/**
+ * The `lastModified` for one sitemap entry: the last git commit touching the
+ * page's source when known (it reflects later edits), otherwise the entry's
+ * {@link SitemapEntry.fallbackDate}, otherwise nothing. Never the build time,
+ * which would tell crawlers every page changed on every deploy.
+ *
+ * @param entry - The sitemap row.
+ * @param gitDate - Date from git history, or `undefined` when unavailable.
+ * @returns The date to publish, or `undefined` to omit `<lastmod>`.
+ */
+export function sitemapLastModified(entry: SitemapEntry, gitDate: Date | undefined): Date | undefined {
+  if (gitDate) return gitDate;
+  if (!entry.fallbackDate) return undefined;
+  const fallback = new Date(`${entry.fallbackDate}T00:00:00Z`);
+  return Number.isNaN(fallback.getTime()) ? undefined : fallback;
 }

@@ -44,6 +44,13 @@ export async function getLastModifiedMap(): Promise<Record<string, string>> {
 
   try {
     if ((await git(["rev-parse", "--is-shallow-repository"])).trim() !== "false") {
+      // A shallow production build silently drops every "Last updated" date
+      // and every docs <lastmod> in the sitemap. Say so in the build log.
+      if (process.env.VERCEL_ENV === "production") {
+        console.warn(
+          "[git-dates] Shallow clone: docs \"Last updated\" dates and sitemap <lastmod> are omitted. Set VERCEL_DEEP_CLONE=true in the Vercel project settings and redeploy.",
+        );
+      }
       return dates;
     }
 
