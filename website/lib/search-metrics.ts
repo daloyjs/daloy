@@ -6,7 +6,7 @@ import type { GlossaryMatch } from "@/lib/docs-glossary";
 export const NON_ENGLISH_SEARCH_EVENT = "mcp_search_non_english";
 
 /** Script family of a query; coarse on purpose (no query text is kept). */
-export type QueryScript = "han" | "latin" | "other";
+export type QueryScript = "kana" | "han" | "latin" | "other";
 
 /**
  * Aggregate-only facts about one non-English search. No query text, no
@@ -24,17 +24,20 @@ export type NonEnglishSearchSignal = {
   glossaryTerms: number;
 };
 
+const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 const HAN = /\p{Script=Han}/u;
 const NON_ASCII = /[^\x00-\x7f]/;
 
 /**
- * Coarse script of a query: Han (Chinese), Latin (incl. accented Spanish),
- * or other.
+ * Coarse script of a query: kana (Japanese, checked first because Japanese
+ * also writes kanji), Han (Chinese), Latin (incl. accented Spanish), or
+ * other.
  *
  * @param query - Raw query.
  * @returns The script family.
  */
 export function queryScript(query: string): QueryScript {
+  if (KANA.test(query)) return "kana";
   if (HAN.test(query)) return "han";
   if (/\p{Script=Latin}/u.test(query)) return "latin";
   return "other";

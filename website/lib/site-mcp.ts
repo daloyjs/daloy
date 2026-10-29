@@ -41,7 +41,7 @@ export const SITE_MCP_INSTRUCTIONS = [
   "Translations: getting started, installation, and the bookstore tutorial also exist in Castilian Spanish " +
     "(/es/docs/getting-started), Simplified Chinese (/zh/docs/getting-started), French (/fr/docs/getting-started), " +
     "Brazilian Portuguese (/pt/docs/getting-started), Modern Standard Arabic (/ar/docs/getting-started), " +
-    "Russian (/ru/docs/getting-started), and German (/de/docs/getting-started). " +
+    "Russian (/ru/docs/getting-started), German (/de/docs/getting-started), and Japanese (/ja/docs/getting-started). " +
     "`search_docs` accepts queries in those languages, `get_doc` reads those routes, and `list_docs` lists them. " +
     "Everything else is English, and the English pages are authoritative.",
   "",
@@ -93,7 +93,7 @@ export const SITE_MCP_INPUT_SCHEMAS = {
       .min(1)
       .max(MAX_QUERY_LENGTH)
       .describe(
-        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish, Chinese, French, Portuguese, Arabic, Russian, and German queries also match the translated pages.",
+        "Keywords to search for, e.g. 'rate limit' or 'openapi client'. Spanish, Chinese, French, Portuguese, Arabic, Russian, German, and Japanese queries also match the translated pages.",
       ),
     limit: z
       .number()

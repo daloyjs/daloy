@@ -10,6 +10,8 @@ import { foldCyrillic } from "./cyrillic";
  * Scope is deliberate:
  * - Chinese has established translations for most concepts (中间件, 限流,
  *   路由, 跨域…), and our own `/zh` pages use them, so the list is broad.
+ * - Japanese writes most concepts as katakana loanwords (ミドルウェア,
+ *   キャッシュ) and some in kanji (認証, 冪等); both are listed.
  * - French and Portuguese, like Spanish, get short lists of translations and
  *   cognates.
  * - Arabic has established terms for many concepts (التوجيه، المصادقة،
@@ -32,7 +34,7 @@ import { foldCyrillic } from "./cyrillic";
 
 /** One glossary entry. */
 export type GlossaryEntry = {
-  /** The term as written (Chinese) or accent-free lowercase (Spanish). */
+  /** The term as written (Chinese, Japanese) or accent-free lowercase (Spanish). */
   term: string;
   /** English keywords to search for. */
   english: string;
@@ -121,6 +123,100 @@ export const ZH_GLOSSARY: readonly GlossaryEntry[] = [
   { term: "模块化单体", english: "modular monolith", expect: "/docs/architecture/modular-monolith" },
   { term: "重试", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
   { term: "熔断", english: "circuit breaker", expect: "/docs/fetch-resilience" },
+];
+
+/**
+ * Japanese → English. Japanese developers write most concepts in katakana
+ * loanwords (ミドルウェア, レート制限) and some in kanji (認証, 認可, 冪等),
+ * so the list covers both. Terms match as substrings inside the shared
+ * CJK matcher, after NFKC (full-width ＳＱＬ and half-width ｷｬｯｼｭ fold to
+ * the usual forms). Loanwords whose final long vowel is optional are listed
+ * without it ("スケジューラ" also finds "スケジューラー"). Bare "ログ" is
+ * absent: it is a substring of "ログイン" (login). No term may also appear in
+ * {@link ZH_GLOSSARY}.
+ */
+export const JA_GLOSSARY: readonly GlossaryEntry[] = [
+  { term: "ミドルウェア", english: "middleware", expect: "/docs/api-reference/middleware" },
+  { term: "レート制限", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "レートリミット", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "流量制限", english: "rate limit", expect: "/docs/security/rate-limit-redis" },
+  { term: "ルーティング", english: "routing", expect: "/docs/routing" },
+  { term: "ルータ", english: "routing", expect: "/docs/routing" },
+  { term: "バリデーション", english: "validation", expect: "/docs/validation" },
+  { term: "入力チェック", english: "validation", expect: "/docs/validation" },
+  { term: "検証", english: "validation", expect: "/docs/validation" },
+  { term: "クロスオリジン", english: "cors middleware", expect: "/docs/api-reference/middleware" },
+  { term: "認証", english: "authentication", expect: "/docs/auth" },
+  { term: "認可", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "権限", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "アクセス制御", english: "authorization", expect: "/docs/security/resource-authorization" },
+  { term: "セッション", english: "session", expect: "/docs/security/session" },
+  { term: "sqlインジェクション", english: "sql injection", expect: "/docs/security/sql-injection" },
+  { term: "コマンドインジェクション", english: "command injection", expect: "/docs/security/command-injection" },
+  { term: "サプライチェーン", english: "supply chain", expect: "/docs/security/supply-chain" },
+  { term: "デプロイ", english: "deployment", expect: "/docs/deployment" },
+  { term: "インストール", english: "installation", expect: "/docs/installation" },
+  { term: "はじめに", english: "getting started", expect: "/docs/getting-started" },
+  { term: "入門", english: "getting started", expect: "/docs/getting-started" },
+  { term: "チュートリアル", english: "tutorial", expect: "/docs/tutorials/bookstore" },
+  { term: "スキャフォールド", english: "scaffold", expect: "/docs/scaffolder" },
+  { term: "コマンドライン", english: "cli", expect: "/docs/cli" },
+  { term: "環境変数", english: "environment variables config", expect: "/docs/config" },
+  { term: "設定", english: "config", expect: "/docs/config" },
+  { term: "ロギング", english: "logging", expect: "/docs/logging" },
+  { term: "ログ出力", english: "logging", expect: "/docs/logging" },
+  { term: "トレーシング", english: "tracing", expect: "/docs/tracing" },
+  { term: "トレース", english: "tracing", expect: "/docs/tracing" },
+  { term: "メトリクス", english: "metrics", expect: "/docs/metrics" },
+  { term: "監視", english: "metrics", expect: "/docs/metrics" },
+  { term: "エラー処理", english: "errors", expect: "/docs/errors" },
+  { term: "エラーハンドリング", english: "errors", expect: "/docs/errors" },
+  { term: "例外処理", english: "errors", expect: "/docs/errors" },
+  { term: "コントラクトテスト", english: "contract tests", expect: "/docs/testing" },
+  { term: "テスト", english: "testing", expect: "/docs/testing" },
+  { term: "型付きクライアント", english: "typed client", expect: "/docs/typed-client" },
+  { term: "クライアント", english: "typed client", expect: "/docs/typed-client" },
+  { term: "apiドキュメント", english: "openapi", expect: "/docs/openapi" },
+  { term: "ページネーション", english: "pagination", expect: "/docs/pagination" },
+  { term: "ページング", english: "pagination", expect: "/docs/pagination" },
+  { term: "冪等", english: "idempotency", expect: "/docs/idempotency" },
+  { term: "キャッシュ", english: "response cache", expect: "/docs/response-cache" },
+  { term: "アップロード", english: "multipart upload", expect: "/docs/multipart" },
+  { term: "ストリーミング", english: "streaming", expect: "/docs/streaming" },
+  { term: "スケジューラ", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "定期実行", english: "scheduler", expect: "/docs/scheduler" },
+  { term: "ジョブ", english: "jobs", expect: "/docs/jobs" },
+  { term: "データベース", english: "databases", expect: "/docs/databases" },
+  { term: "マルチテナント", english: "multitenancy", expect: "/docs/multitenancy" },
+  { term: "同時実行", english: "concurrency limit", expect: "/docs/concurrency-limit" },
+  { term: "決済", english: "payment integrations", expect: "/docs/payments" },
+  { term: "メール", english: "email", expect: "/docs/email" },
+  { term: "プラグイン", english: "plugins", expect: "/docs/plugins" },
+  { term: "アダプタ", english: "adapters", expect: "/docs/adapters" },
+  { term: "ファイアウォール", english: "waf", expect: "/docs/waf" },
+  { term: "ボット", english: "bot guard", expect: "/docs/bot-guard" },
+  { term: "クローラ", english: "bot guard", expect: "/docs/bot-guard" },
+  { term: "ジオブロック", english: "geo block", expect: "/docs/geo-block" },
+  { term: "地域ブロック", english: "geo block", expect: "/docs/geo-block" },
+  { term: "相互tls", english: "mtls", expect: "/docs/mtls" },
+  { term: "リクエスト署名", english: "http signatures", expect: "/docs/http-signatures" },
+  { term: "http署名", english: "http signatures", expect: "/docs/http-signatures" },
+  { term: "ハッシュ", english: "hashing", expect: "/docs/security/hashing" },
+  { term: "リダイレクト", english: "safe redirect", expect: "/docs/security/safe-redirect" },
+  { term: "ヘルスチェック", english: "health check", expect: "/docs/security/lifecycle-health" },
+  { term: "シャットダウン", english: "graceful shutdown", expect: "/docs/security/lifecycle-health" },
+  { term: "セキュリティヘッダ", english: "secure headers", expect: "/docs/security/secure-defaults" },
+  { term: "セキュアバイデフォルト", english: "secure defaults", expect: "/docs/security/secure-defaults" },
+  { term: "解凍", english: "decompression", expect: "/docs/request-decompression" },
+  { term: "圧縮", english: "compression", expect: "/docs/security/compression" },
+  { term: "ウェブフック", english: "webhook", expect: "/docs/webhook-delivery" },
+  { term: "バージョニング", english: "api versioning", expect: "/docs/api-versioning" },
+  { term: "ライフサイクル", english: "api lifecycle", expect: "/docs/api-lifecycle" },
+  { term: "エージェント", english: "agent", expect: "/docs/tutorials/agent-loop" },
+  { term: "モノリス", english: "modular monolith", expect: "/docs/architecture/modular-monolith" },
+  { term: "リトライ", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "再試行", english: "retry fetch resilience", expect: "/docs/fetch-resilience" },
+  { term: "サーキットブレーカ", english: "circuit breaker", expect: "/docs/fetch-resilience" },
 ];
 
 /** Spanish (accent-free, lowercase) → English. */
@@ -506,8 +602,13 @@ const RU_TERMS = [...RU_GLOSSARY]
 /** Longest first, so "اعاده التوجيه" (redirect) is consumed before "توجيه" (routing). */
 const AR_BY_LENGTH = [...AR_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
 
-/** Longest terms first, so "速率限制" wins over anything shorter inside it. */
-const ZH_BY_LENGTH = [...ZH_GLOSSARY].sort((a, b) => [...b.term].length - [...a.term].length);
+/**
+ * Chinese and Japanese share the substring matcher. Longest terms first, so
+ * "速率限制" and "コントラクトテスト" win over anything shorter inside them.
+ */
+const CJK_BY_LENGTH = [...ZH_GLOSSARY, ...JA_GLOSSARY].sort(
+  (a, b) => [...b.term].length - [...a.term].length,
+);
 /** Spanish, French and Portuguese share the accent-free whole-word matcher. */
 const LATIN_BY_LENGTH = [...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY].sort(
   (a, b) => b.term.length - a.term.length,
@@ -525,9 +626,10 @@ function foldLatin(text: string): string {
 
 /**
  * Find glossary terms in a query and return the English keywords to search
- * for. Chinese and Arabic terms match as substrings (longest first, each
- * span used once; Arabic after folding); Spanish, French and Portuguese terms match as accent-insensitive
- * whole words or phrases.
+ * for. Chinese, Japanese and Arabic terms match as substrings (longest first,
+ * each span used once; Japanese after NFKC, Arabic after folding); Spanish,
+ * French and Portuguese terms match as accent-insensitive whole words or
+ * phrases.
  * At most {@link MAX_GLOSSARY_MATCHES} mappings apply.
  *
  * @param query - Raw query (already length-capped by the caller).
@@ -536,9 +638,10 @@ function foldLatin(text: string): string {
 export function glossaryMatches(query: string): GlossaryMatch[] {
   const matches: GlossaryMatch[] = [];
 
-  // Chinese: drop spaces so "sql 注入" and "双向 TLS" still match.
-  let zh = query.toLowerCase().replace(/\s+/g, "");
-  for (const entry of ZH_BY_LENGTH) {
+  // Chinese and Japanese: NFKC folds full-width Latin and half-width
+  // katakana; dropping spaces lets "sql 注入" and "SQL インジェクション" match.
+  let zh = query.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+  for (const entry of CJK_BY_LENGTH) {
     if (matches.length >= MAX_GLOSSARY_MATCHES) return matches;
     if (zh.includes(entry.term)) {
       matches.push({ source: entry.term, english: entry.english });

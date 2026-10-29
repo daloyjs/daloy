@@ -147,6 +147,20 @@ const NAV_COPY: Record<
     closeMenu: "Navigationsmenü schließen",
     otherLanguage: "Inhalt auf Englisch",
   },
+  ja: {
+    home: "/ja" as Route,
+    items: [
+      { href: "/ja/docs" as Route, label: "ドキュメント" },
+      { href: "/blog", label: "ブログ" },
+      { href: "/ja/docs/getting-started" as Route, label: "はじめに" },
+      { href: "/ja/docs/tutorials/bookstore" as Route, label: "チュートリアル" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/ja/docs/installation" as Route, label: "インストール" },
+    openMenu: "ナビゲーションメニューを開く",
+    closeMenu: "ナビゲーションメニューを閉じる",
+    otherLanguage: "英語のコンテンツ",
+  },
 };
 
 const socialLinks = [

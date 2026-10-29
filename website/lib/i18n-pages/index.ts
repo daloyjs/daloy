@@ -4,6 +4,7 @@ import { PAGES_COPY_AR } from "./ar";
 import { PAGES_COPY_DE } from "./de";
 import { PAGES_COPY_ES } from "./es";
 import { PAGES_COPY_FR } from "./fr";
+import { PAGES_COPY_JA } from "./ja";
 import { PAGES_COPY_PT } from "./pt";
 import { PAGES_COPY_RU } from "./ru";
 import type { TranslatedPagesCopy } from "./types";
@@ -20,4 +21,5 @@ export const PAGES_COPY: Record<TranslatedLocale, TranslatedPagesCopy> = {
   ar: PAGES_COPY_AR,
   ru: PAGES_COPY_RU,
   de: PAGES_COPY_DE,
+  ja: PAGES_COPY_JA,
 };

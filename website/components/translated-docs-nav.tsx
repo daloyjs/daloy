@@ -101,6 +101,17 @@ export const TRANSLATED_DOCS_COPY: Record<
     next: "Weiter",
     lastUpdated: "Zuletzt aktualisiert:",
   },
+  ja: {
+    indexTitle: "日本語ドキュメント",
+    allDocs: "すべてのドキュメント（英語）",
+    allDocsBody: "セキュリティ、アダプター、データベース、認証、そして完全な API リファレンス。",
+    tocLabel: "このページの内容",
+    breadcrumb: "パンくずリスト",
+    pager: "ページナビゲーション",
+    previous: "前へ",
+    next: "次へ",
+    lastUpdated: "最終更新：",
+  },
 };
 
 /**

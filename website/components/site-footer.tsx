@@ -24,6 +24,7 @@ const CONTRIBUTORS: Record<SiteLocale, string> = {
   ar: "المساهمون في DaloyJS",
   ru: "участники DaloyJS",
   de: "DaloyJS-Mitwirkende",
+  ja: "DaloyJS コントリビューター",
 };
 
 /** One footer link. `crossLocale` links reload the document (see lib/i18n). */
@@ -157,6 +158,20 @@ const FOOTER_COPY: Record<
       { href: "/de/contact", label: "Kontakt" },
       { href: "/de/privacy", label: "Datenschutz" },
       { href: "/de/about-the-name", label: "Zum Namen" },
+    ],
+  },
+  ja: {
+    home: "/ja",
+    homeLabel: "DaloyJS ホーム",
+    license: "MIT ライセンス",
+    distributed: "配布元：",
+    links: [
+      { href: "/ja/docs", label: "ドキュメント" },
+      { href: "/blog", label: "ブログ（英語）", crossLocale: true, hrefLang: HTML_LANG.en },
+      { href: "/ja/about", label: "概要" },
+      { href: "/ja/contact", label: "お問い合わせ" },
+      { href: "/ja/privacy", label: "プライバシー" },
+      { href: "/ja/about-the-name", label: "名前の由来" },
     ],
   },
 };

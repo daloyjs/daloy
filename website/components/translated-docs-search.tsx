@@ -97,6 +97,16 @@ const SEARCH_COPY: Record<
     loading: "Englischer Index wird geladen…",
     englishHint: "Für die englische Dokumentation probieren Sie englische Suchbegriffe.",
   },
+  ja: {
+    label: "ドキュメントを検索",
+    placeholder: "ドキュメントを検索…",
+    translated: "日本語",
+    english: "英語のドキュメント",
+    englishTag: "英語",
+    empty: "結果が見つかりませんでした。",
+    loading: "英語のインデックスを読み込み中…",
+    englishHint: "英語のドキュメントを検索するには、英語のキーワードもお試しください。",
+  },
 };
 
 /**

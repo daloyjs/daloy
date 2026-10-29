@@ -80,6 +80,14 @@ const NOT_FOUND_COPY: Record<
     sitemap: "Sitemap",
     contact: "Kontakt",
   },
+  ja: {
+    title: "ページが見つかりません",
+    body: "このパスは daloyjs.dev に存在しません。古いリンクからお越しの場合は、サイトマップ、エージェント向けインデックス、またはドキュメントのトップページから目的のページを探せます。",
+    home: "ホーム",
+    docs: "日本語ドキュメント",
+    sitemap: "サイトマップ",
+    contact: "お問い合わせ",
+  },
 };
 
 /**

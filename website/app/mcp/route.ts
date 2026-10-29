@@ -201,7 +201,7 @@ const NON_ASCII = /[^\x00-\x7f]/;
 
 /** Steer agents back to the complete English corpus. */
 const ENGLISH_HINT =
-  "The English docs are the complete reference; only getting started, installation, and the bookstore tutorial are translated (Spanish /es/docs, Simplified Chinese /zh/docs, French /fr/docs, Brazilian Portuguese /pt/docs, Arabic /ar/docs, Russian /ru/docs, German /de/docs). Search again with English keywords for everything else.";
+  "The English docs are the complete reference; only getting started, installation, and the bookstore tutorial are translated (Spanish /es/docs, Simplified Chinese /zh/docs, French /fr/docs, Brazilian Portuguese /pt/docs, Arabic /ar/docs, Russian /ru/docs, German /de/docs, Japanese /ja/docs). Search again with English keywords for everything else.";
 
 /**
  * One translated search or list row: title, route, language, the English

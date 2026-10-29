@@ -58,6 +58,8 @@ const DESCRIPTION_RANGE: Record<TranslatedLocale, [number, number]> = {
   // Arabic packs more per character than Latin script; this fills the same snippet.
   ar: [100, 160],
   ru: [140, 160],
+  // Japanese, like Chinese, fits the snippet in fewer characters.
+  ja: [40, 90],
   de: [140, 160],
 };
 

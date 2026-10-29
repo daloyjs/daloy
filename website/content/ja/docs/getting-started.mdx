@@ -1,0 +1,243 @@
+---
+title: はじめに
+description: "最初の DaloyJS アプリを作りましょう。コントラクトファーストなルートを宣言し、Zod で検証し、OpenAPI を生成して、どのランタイムでも動かします。"
+keywords:
+  - DaloyJS はじめに
+  - 最初の DaloyJS アプリ
+  - TypeScript API チュートリアル
+  - Swagger UI
+  - Scalar API リファレンス
+  - OpenAPI ドキュメント UI
+sitemap:
+  priority: 0.8
+---
+
+# はじめに
+
+5 分で最小構成の DaloyJS サーバーを立ち上げ、型付きクライアントから呼び出し、OpenAPI 仕様を確認します。
+
+<FlowDiagram numbered title="5 分で 5 ステップ" steps={[
+          { label: "プロジェクトを作成", detail: "pnpm add @daloyjs/core zod" },
+          {
+            label: "ルートを書く",
+            detail: "app.get(path, contract, handler)",
+            tone: "accent",
+          },
+          { label: "OpenAPI とドキュメント UI を追加", detail: "docs: true" },
+          {
+            label: "型付きクライアントを呼び出す",
+            detail: "createClient(app)",
+          },
+          {
+            label: "Hey API SDK を生成",
+            detail: "pnpm exec openapi-ts",
+            tone: "success",
+          },
+        ]} caption="このガイドは空のフォルダーから型付き SDK まで 5 つのステップで進み、各ステップはステップ 2 で宣言したルートの上に積み重なります。" />
+
+## 1. プロジェクトを作成する
+
+```bash
+mkdir hello-daloy && cd hello-daloy
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node
+```
+
+```json
+// package.json に以下を追加
+{
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  }
+}
+```
+
+Node.js は組み込みの型ストリッピング機能（Node 24+ で安定版、22.18 から利用可能）によって TypeScript のエントリーファイルを直接実行するため、ローカル開発にトランスパイラーも別のビルドステップも必要ありません。
+
+ここで `src/index.ts` と `--watch` を使っているのは、[create-daloy](/docs/scaffolder)（英語）が生成する構成に合わせるためです。ファイル名を変えずに、このガイドとスキャフォールドしたプロジェクトの間でそのままコピー＆ペーストできます。
+
+## 2. 最初のルートを書く
+
+```ts
+// src/index.ts
+import { z } from "zod";
+import { App, requestId, rateLimit } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+})
+  .use(requestId())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
+  .get(
+    "/greet/:name",
+    {
+      tags: ["Demo"],
+      request: { params: z.object({ name: z.string().min(1) }) },
+      responses: {
+        200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+      },
+    },
+    async ({ params }) => ({
+      status: 200,
+      body: { msg: `Hello, ${params.name}!` },
+    }),
+  );
+
+const { port } = serve(app, { port: 3000 });
+console.log(`listening on http://localhost:${port}`);
+```
+
+`new App()` は `secureHeaders()` を自動で適用します。登録が必要なのは、デフォルト設定を置き換えたい場合だけです。
+
+`create-daloy` のテンプレートにあるカラフルな起動パネルが気に入りましたか？ 通常の `console.log` を `@daloyjs/core/banner` の `printStartupBanner()` に置き換えてください。TTY を認識する枠付きのバナー（非対応の環境では ASCII にフォールバック）を描画し、アプリ名、URL、追加したいリンク（API ドキュメント、ヘルスチェックなど）を表示します：
+
+```ts
+import { printStartupBanner } from "@daloyjs/core/banner";
+
+const { port } = serve(app, { port: 3000 });
+printStartupBanner({
+  name: "MyAPI",
+  version: "1.0.0",
+  url: `http://localhost:${port}`,
+  runtime: "Node.js",
+  links: [
+    { label: "API docs", url: `http://localhost:${port}/docs` },
+    { label: "OpenAPI JSON", url: `http://localhost:${port}/openapi.json` },
+    { label: "OpenAPI YAML", url: `http://localhost:${port}/openapi.yaml` },
+    { label: "Health", url: `http://localhost:${port}/healthz` },
+  ],
+});
+```
+
+```bash
+pnpm dev
+# 別のターミナルで
+curl http://localhost:3000/greet/world
+# -> {"msg":"Hello, world!"}
+```
+
+実際のサーバーを起動したくない場合は？ すべての `App` には `app.request(input, init?)` があります。これは URL または `Request` を受け取って `Response` を返すプロセス内のテストクライアントで、ネットワークスタックもポートも 2 つ目のターミナルも不要です。型付きクライアントと[テストガイド](/docs/testing)（英語）も同じ入口を使っています：
+
+```ts
+const res = await app.request("/greet/world");
+console.log(res.status, await res.json());
+// -> 200 { msg: "Hello, world!" }
+```
+
+## 3. OpenAPI とドキュメント UI を追加する [#3-add-openapi-and-docs-ui]
+
+`App` のコンストラクターに 1 行加えるだけで、DaloyJS は `GET /openapi.json` + `GET /openapi.yaml`（2 つの形式のライブ仕様）と `GET /docs`（Scalar API リファレンス UI）を自動でマウントします：
+
+```ts
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: "auto", // 本番環境以外で GET /docs、/openapi.json、/openapi.yaml をマウント
+});
+```
+
+対話的な Scalar リファレンスは `http://localhost:3000/docs`、JSON 形式の仕様は `http://localhost:3000/openapi.json`、YAML 形式の仕様は `http://localhost:3000/openapi.yaml` で確認できます。
+
+実際のサービスでは `openapi.info`（またはトップレベルの `title`、`version`、`description`）を設定してください。省略した場合、DaloyJS は移植可能なデフォルト値 `DaloyJS API` / `0.0.0` を使います。コアはホスト環境のマニフェストファイルを決して読まないため、同じドキュメントが Node、Bun、Deno、Workers、Vercel で動作します。
+
+ファクトリー関数のほうがお好みですか？ `createApp(options)` は `new App(options)` のエクスポートされた別名で、動作はまったく同じです：
+
+```ts
+import { createApp } from "@daloyjs/core";
+
+const app = createApp({
+  docs: "auto", // true にすると本番環境でもドキュメントを公開
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+});
+```
+
+### 従来の Swagger UI がお好みなら
+
+デフォルトが Scalar なのは、より速く、見た目がよく、スマートフォンでも使いやすいからです。しかしチームが Swagger UI に慣れていたり、それを前提としたスクリーンショット、運用手順書、使い方がすでにあったりする場合のために、DaloyJS には Swagger UI も組み込まれています。`docs` のオブジェクト形式で `ui` フィールドを変えるだけで、おなじみの緑の画面に戻れます：
+
+```ts
+const app = new App({
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: {
+    ui: "swagger", // "scalar"（デフォルト）| "swagger" | "redoc"
+    path: "/docs", // 省略可。/reference や /api-docs などを使いたい場合に変更
+  },
+});
+```
+
+URL（`GET /docs`）も、ライブの `/openapi.json` と `/openapi.yaml` エンドポイントも、CSP の扱いも同じで、違うのは描画される HTML だけです。両方を使うこともできます。自動マウントされたルートは Scalar のままにして、`swaggerUiHtml()` で 2 つ目の Swagger ルートを自分で公開します（手動の方法は [OpenAPI ガイド](/docs/openapi)（英語）を参照）。
+
+パスを変えたい場合は、オブジェクト形式を使います：`docs: { ui: "swagger", path: "/reference" }`。オブジェクト形式は、`enabled: true`（1.5.5 以降）を加えない限り本番環境以外でのみマウントされます。この点は `production: true` のときにマウントをスキップする `docs: "auto"` と同じです。完全に制御したい場合は、`docs: false` を設定し、`generateOpenAPI()` と `swaggerUiHtml() / scalarHtml()` で独自のルートをマウントしてください。[OpenAPI ガイド](/docs/openapi)（英語）を参照してください。
+
+`swaggerUiHtml()` と `scalarHtml()` はどちらもデフォルトで jsDelivr CDN からアセットを読み込むため、厳格な Content-Security-Policy ではこれらのアセットを許可する必要があります。許可しないと、ドキュメント UI が空白で表示されることがあります。自動マウントされたルートと `htmlResponse()` は、互換性のある CSP を自動で付与します。レスポンスを自分で組み立てる場合は、`@daloyjs/core/docs` から `docsContentSecurityPolicy` をインポートし、その結果をヘッダーとして渡してください：
+
+```ts
+import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
+
+headers: { "content-security-policy": docsContentSecurityPolicy() }
+```
+
+## 4. プロセス内の型付きクライアントを使う
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+
+const client = createInProcessClient(app);
+const r = await client.greet({ params: { name: "DaloyJS" } });
+//    ^? { status: 200; body: { msg: string } }
+console.log(r.status, r.body);
+```
+
+クライアントのメソッドは、アプリのルートのタプルから推論されます。ルートはチェーンで登録するか、`registerRoutes([...])` でエクスポートした `defineRoute()` のコントラクトを組み合わせてください。結果を単なる `App` 型の注釈に広げないでください。そうするとタプルが意図的に消されてしまいます。
+
+## 5. Hey API SDK を生成する
+
+モノレポの外にある呼び出し元のために、完全に型付けされた fetch SDK を生成します：
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+ステップ 2 の開発サーバーを動かしたまま、SDK ジェネレーターを実行する前に、ライブの OpenAPI ドキュメントをディスクに書き出します：
+
+```bash
+mkdir -p generated
+curl http://localhost:3000/openapi.json -o generated/openapi.json
+pnpm exec openapi-ts
+```
+
+## デプロイの前に
+
+`new App()` は、リクエストボディのサイズ上限、リクエストタイムアウト、プロトタイプ汚染に強い JSON パース、本番環境での 5xx の秘匿、`secureHeaders()` をすでに有効にしています。レート制限のキーと上限はデプロイ時に決めることなので、`rateLimit()` は引き続き明示的に設定する必要があります：
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// デフォルトのストアはメモリ上：プロセスごとにカウント。レプリカが 2 つなら N * max。
+```
+
+複数のインスタンスを動かす場合は [Redis ベースのレート制限ストア](/docs/security/rate-limit-redis)（英語）を接続してください。そうしないと、各レプリカが独自のカウンターを持つことになります。
+
+認証は呼び出し元が誰かを証明しますが、その相手がこの行を読む権限を持っていることまでは証明しません。DaloyJS はデータの所有モデルを知らないため、オブジェクトレベルの認可をデフォルトで提供することはできません。チェックはハンドラーやクエリの中に置き、[リソースの認可](/docs/security/resource-authorization)（英語）のガイドを参考にしてください。Alice と Bob を対比するテストも載っています。
+
+## 次のステップ
+
+- [ルーティング](/docs/routing)（英語）
+- [Standard Schema による検証](/docs/validation)（英語）
+- [セキュリティとミドルウェア](/docs/security)（英語）
+- [チュートリアル：書店 API](/ja/docs/tutorials/bookstore)

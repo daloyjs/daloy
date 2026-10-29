@@ -106,6 +106,14 @@ export const UI_STRINGS: Record<
     copiedAria: "Code in die Zwischenablage kopiert",
     packageManager: "Paketmanager",
   },
+  ja: {
+    copy: "コピー",
+    copied: "コピーしました",
+    retryCopy: "再試行",
+    copyAria: "コードをクリップボードにコピー",
+    copiedAria: "コードをクリップボードにコピーしました",
+    packageManager: "パッケージマネージャー",
+  },
 };
 
 /** {@link UI_STRINGS} for the current document. */

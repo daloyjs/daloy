@@ -1,0 +1,126 @@
+---
+title: インストール
+description: pnpm、npm、yarn、bun で DaloyJS をインストールし、Node.js、Bun、Deno、Cloudflare Workers、Vercel ですぐに始めます。
+keywords:
+  - DaloyJS インストール
+  - pnpm add daloyjs
+  - DaloyJS セットアップ
+  - TypeScript フレームワーク インストール
+sitemap:
+  priority: 0.7
+---
+
+# インストール
+
+DaloyJS の対象は **Node.js 24 LTS、または Node.js 26 以降**（`engines.node`：`^24.0.0 || >=26.0.0`）で、公開 npm レジストリで `@daloyjs/core` として配布されています。このパッケージには **peer 依存がない**ため、`npm`、`yarn`、`pnpm`、`bun` のいずれでもそのままインストールできます。サプライチェーンのセキュリティの観点から、[pnpm](https://pnpm.io/motivation) と、後述する強化済みの `.npmrc` のデフォルト設定を組み合わせることを*推奨*しますが、必須ではありません。`package.json` の `engines.pnpm` は参考情報のメタデータです。一方 `engines.node` はサポート対象のランタイムを宣言しており、警告になるかエラーになるかは、パッケージマネージャーと engine-strict の設定によって決まります。
+
+<FlowDiagram numbered title="2 つの方法" steps={[
+          {
+            eyebrow: "最速",
+            label: "プロジェクトを作成",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "または",
+            label: "既存のプロジェクトにインストール",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "強化",
+            label: ".npmrc のデフォルト設定を追加",
+            detail: "strict-peer-dependencies、lockfile の固定",
+            tone: "muted",
+          },
+          {
+            eyebrow: "確認",
+            label: "インポートを検証",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]} caption="1 つのコマンドで強化済みのプロジェクトを作成するか、依存ゼロのパッケージを既存のプロジェクトに追加します。そのあと強化済みの .npmrc を配置し、インポートが解決されることを確認します。" />
+
+## 最速の方法：プロジェクトを作成する
+
+公式のジェネレーターを使えば、強化済みの `.npmrc`、厳格な TypeScript、動作するルートが 1 つのコマンドで用意されます。
+
+パッケージのリンク：[npm の create-daloy](https://www.npmjs.com/package/create-daloy) と [npm の @daloyjs/core](https://www.npmjs.com/package/@daloyjs/core)。
+
+```bash
+# パッケージマネージャーを 1 つ選ぶ
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+テンプレートとオプションについては [Scaffold a project](/docs/scaffolder)（英語）をご覧ください。
+
+## または既存のプロジェクトにインストールする
+
+### 前提条件
+
+- **Node.js** 24 LTS、または 26.0.0 以降（Node.js 25 はサポートしていません）。
+- パッケージマネージャー。どれでも動作します。サプライチェーンの強化には pnpm 11.x 以降を推奨しますが、このパッケージには peer 依存がないため、`npm`、`yarn`、`bun` でも問題なく `@daloyjs/core` をインストールできます。
+
+[Corepack](https://nodejs.org/api/corepack.html) で pnpm を有効にするには：
+
+```bash
+corepack enable
+corepack prepare pnpm@11.1.3 --activate
+pnpm --version
+```
+
+### DaloyJS をインストールする
+
+<PackageInstall packages="@daloyjs/core zod" />
+
+オプション。型付き SDK を生成したい場合のみ：
+
+<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+
+npm で公開されているフレームワークのパッケージは [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core) です。
+
+## 強化済みのインストール設定 [#hardened-npmrc]
+
+pnpm 11+ では、サプライチェーンに関する設定をプロジェクトのルートにある `pnpm-workspace.yaml` に書きます（キーは camelCase。単一パッケージのプロジェクトでも pnpm 11 はこのファイルを読みます）。pnpm 11 は `.npmrc` に書かれたこれらの設定を無視するため、`.npmrc` だけの構成ではクールダウン期間もスクリプトのポリシーも効きません。
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
+```
+
+npm と古いバージョンの pnpm 向けには、同じ値を `.npmrc` にも残しておきます：
+
+```ini title=".npmrc"
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+minimum-release-age=1440
+ignore-scripts=true
+```
+
+クールダウン期間と `ignoreScripts` はこれらのインストールにおけるサプライチェーンのリスクを下げますが、すべての攻撃を止めるわけではありません。`ignoreScripts` が遮断するのはインストールスクリプトに潜む悪意あるペイロードであり、パッケージのインポート時に実行されるコードではありません。また 24 時間のクールダウン期間が守れるのは、1 日以内に発見された侵害だけです。
+
+背景については [Security](/docs/security)（英語）と [pnpm の設計思想](https://pnpm.io/motivation)をご覧ください。
+
+## インストールを確認する
+
+インストール後、プロジェクトのルートで次のコマンドを実行します。`node` を直接呼び出すので、pnpm、npm、yarn、bun のどれでも同じように動作します：
+
+```bash
+node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
+```
+
+## 次のステップ
+
+<Cards>
+<Card title="はじめに" href="/ja/docs/getting-started">最初のルートを書き、検証し、OpenAPI ドキュメントを提供します。</Card>
+<Card title="Scaffold a project（英語）" href="/docs/scaffolder"><code>create-daloy</code> で強化済みのプロジェクトを作成します。</Card>
+</Cards>

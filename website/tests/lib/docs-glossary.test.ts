@@ -19,6 +19,7 @@ const {
   FR_GLOSSARY,
   PT_GLOSSARY,
   glossaryMatches,
+  JA_GLOSSARY,
   MAX_GLOSSARY_MATCHES,
   ZH_GLOSSARY,
 } = await import("../../lib/docs-glossary");
@@ -30,7 +31,7 @@ test("every glossary mapping surfaces its expected English page", async () => {
   const pages = await getAllDocPages();
   const routes = new Set(pages.map((page) => page.href));
   const misses: string[] = [];
-  for (const entry of [...ZH_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY, ...RU_GLOSSARY, ...DE_GLOSSARY]) {
+  for (const entry of [...ZH_GLOSSARY, ...JA_GLOSSARY, ...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY, ...AR_GLOSSARY, ...RU_GLOSSARY, ...DE_GLOSSARY]) {
     assert.ok(routes.has(entry.expect as never), `${entry.term}: ${entry.expect} is not a docs page`);
     const top = rankDocPages(pages, entry.english, TOP).map((hit) => hit.page.href);
     if (!top.includes(entry.expect as never)) misses.push(`${entry.term} → "${entry.english}": ${top.join(", ")}`);
@@ -68,6 +69,12 @@ test("a glossary term in a full query reaches the English page end to end", asyn
     ["Lieferkettensicherheit", "/docs/security/supply-chain"],
     ["Datenbankverbindung", "/docs/databases"],
     ["Fehlerbehandlung", "/docs/errors"],
+    ["レート制限の設定方法", "/docs/security/rate-limit-redis"],
+    ["ミドルウェアの実行順序", "/docs/api-reference/middleware"],
+    ["ＳＱＬインジェクション対策", "/docs/security/sql-injection"],
+    ["ｷｬｯｼｭ", "/docs/response-cache"],
+    ["スケジューラーで定期実行", "/docs/scheduler"],
+    ["コントラクトテストの書き方", "/docs/testing"],
   ];
   for (const [query, expected] of cases) {
     const english = englishSearchQuery(query, glossaryMatches(query));
@@ -77,7 +84,7 @@ test("a glossary term in a full query reaches the English page end to end", asyn
 });
 
 test("terms are unique and well-formed", () => {
-  for (const [name, list] of [["zh", ZH_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY], ["ru", RU_GLOSSARY], ["de", DE_GLOSSARY]] as const) {
+  for (const [name, list] of [["zh", ZH_GLOSSARY], ["ja", JA_GLOSSARY], ["es", ES_GLOSSARY], ["fr", FR_GLOSSARY], ["pt", PT_GLOSSARY], ["ar", AR_GLOSSARY], ["ru", RU_GLOSSARY], ["de", DE_GLOSSARY]] as const) {
     const terms = list.map((entry) => entry.term);
     assert.equal(new Set(terms).size, terms.length, `${name} has duplicate terms`);
     for (const entry of list) {
@@ -94,6 +101,33 @@ test("terms are unique and well-formed", () => {
   const latinTerms = [...ES_GLOSSARY, ...FR_GLOSSARY, ...PT_GLOSSARY].map((entry) => entry.term);
   const dupes = latinTerms.filter((term, index) => latinTerms.indexOf(term) !== index);
   assert.deepEqual(dupes, [], "es/fr/pt term collision");
+  // Chinese and Japanese share the CJK matcher too.
+  const zhTerms = new Set(ZH_GLOSSARY.map((entry) => entry.term));
+  assert.deepEqual(JA_GLOSSARY.filter((entry) => zhTerms.has(entry.term)), [], "zh/ja term collision");
+  // Queries are NFKC-normalised before matching, so terms must be too.
+  for (const entry of [...ZH_GLOSSARY, ...JA_GLOSSARY]) {
+    assert.equal(entry.term, entry.term.normalize("NFKC"), `${entry.term} must be NFKC-normal`);
+  }
+});
+
+test("Japanese matches fold width, accept long-vowel variants and avoid false friends", () => {
+  // Full-width Latin and half-width katakana match their usual forms.
+  assert.deepEqual(glossaryMatches("ＳＱＬ インジェクション").map((m) => m.english), ["sql injection"]);
+  assert.deepEqual(glossaryMatches("ｷｬｯｼｭ").map((m) => m.english), ["response cache"]);
+  // The final long vowel is optional in either spelling.
+  assert.deepEqual(glossaryMatches("スケジューラー").map((m) => m.source), ["スケジューラ"]);
+  assert.deepEqual(glossaryMatches("サーキットブレーカー").map((m) => m.source), ["サーキットブレーカ"]);
+  // Longest first: the compound is consumed whole.
+  assert.deepEqual(glossaryMatches("コントラクトテスト").map((m) => m.source), ["コントラクトテスト"]);
+  assert.deepEqual(glossaryMatches("型付きクライアント").map((m) => m.source), ["型付きクライアント"]);
+  // "ログイン" (login) is not logging, and a Japanese query does not trip a
+  // Chinese term.
+  assert.deepEqual(glossaryMatches("ログイン"), []);
+  for (const entry of JA_GLOSSARY) {
+    for (const match of glossaryMatches(entry.term)) {
+      assert.ok(JA_GLOSSARY.some((ja) => ja.term === match.source), `${entry.term} matched ${match.source}`);
+    }
+  }
 });
 
 test("Chinese matches prefer the longest term and use each span once", () => {

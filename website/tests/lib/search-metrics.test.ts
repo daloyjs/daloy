@@ -20,6 +20,10 @@ const SIGNAL: NonEnglishSearchSignal = {
 
 test("queryScript classifies coarsely", () => {
   assert.equal(queryScript("限流"), "han");
+  // Japanese: any kana wins over the kanji it is written with.
+  assert.equal(queryScript("ミドルウェア"), "kana");
+  assert.equal(queryScript("認証の設定"), "kana");
+  assert.equal(queryScript("認証"), "han");
   assert.equal(queryScript("validación"), "latin");
   assert.equal(queryScript("rate limit"), "latin");
   assert.equal(queryScript("123 !!"), "other");

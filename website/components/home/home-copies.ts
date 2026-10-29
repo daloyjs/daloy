@@ -5,6 +5,7 @@ import { HOME_COPY_AR } from "./home-copy-ar";
 import { HOME_COPY_DE } from "./home-copy-de";
 import { HOME_COPY_ES } from "./home-copy-es";
 import { HOME_COPY_FR } from "./home-copy-fr";
+import { HOME_COPY_JA } from "./home-copy-ja";
 import { HOME_COPY_PT } from "./home-copy-pt";
 import { HOME_COPY_RU } from "./home-copy-ru";
 import { HOME_COPY_ZH } from "./home-copy-zh";
@@ -18,4 +19,5 @@ export const HOME_COPIES: Record<TranslatedLocale, HomeCopy> = {
   ar: HOME_COPY_AR,
   ru: HOME_COPY_RU,
   de: HOME_COPY_DE,
+  ja: HOME_COPY_JA,
 };

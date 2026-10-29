@@ -19,22 +19,22 @@
  */
 
 /** A locale the site renders. */
-export type SiteLocale = "en" | "es" | "zh" | "fr" | "pt" | "ar" | "ru" | "de";
+export type SiteLocale = "en" | "es" | "zh" | "fr" | "pt" | "ar" | "ru" | "de" | "ja";
 
 /** A locale other than the English default. */
 export type TranslatedLocale = Exclude<SiteLocale, "en">;
 
 /** Every locale, English first (the order of the language switcher). */
-export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr", "pt", "ar", "ru", "de"];
+export const SITE_LOCALES: readonly SiteLocale[] = ["en", "es", "zh", "fr", "pt", "ar", "ru", "de", "ja"];
 
 /** Every translated locale. */
-export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr", "pt", "ar", "ru", "de"];
+export const TRANSLATED_LOCALES: readonly TranslatedLocale[] = ["es", "zh", "fr", "pt", "ar", "ru", "de", "ja"];
 
 /**
  * Locales advertised outside the header language menu: the home-page hero
- * pills and the footer language links. French, Portuguese, Arabic, Russian
- * and German are deliberately absent: they are offered only through the
- * header menu.
+ * pills and the footer language links. French, Portuguese, Arabic, Russian,
+ * German and Japanese are deliberately absent: they are offered only through
+ * the header menu.
  */
 export const PROMOTED_LOCALES: readonly PromotedLocale[] = ["en", "es", "zh"];
 
@@ -53,6 +53,7 @@ export const LOCALE_PREFIX: Record<TranslatedLocale, string> = {
   ar: "/ar",
   ru: "/ru",
   de: "/de",
+  ja: "/ja",
 };
 
 /** BCP 47 tag for `<html lang>` and `hreflang`. */
@@ -65,6 +66,7 @@ export const HTML_LANG: Record<SiteLocale, string> = {
   ar: "ar",
   ru: "ru",
   de: "de",
+  ja: "ja",
 };
 
 /** OpenGraph `og:locale` value. */
@@ -77,6 +79,7 @@ export const OG_LOCALE: Record<SiteLocale, string> = {
   ar: "ar_AR",
   ru: "ru_RU",
   de: "de_DE",
+  ja: "ja_JP",
 };
 
 /** Each locale's name, written in that language (for the switcher). */
@@ -89,6 +92,7 @@ export const LOCALE_NATIVE_NAME: Record<SiteLocale, string> = {
   ar: "العربية",
   ru: "Русский",
   de: "Deutsch",
+  ja: "日本語",
 };
 
 /**
@@ -105,6 +109,7 @@ export const HTML_DIR: Record<SiteLocale, "ltr" | "rtl"> = {
   ar: "rtl",
   ru: "ltr",
   de: "ltr",
+  ja: "ltr",
 };
 
 /**
@@ -119,8 +124,8 @@ export function isRtl(locale: SiteLocale): boolean {
 
 /**
  * Whether social cards for a locale reuse the English card. The OG renderer
- * ships Latin fonts only, so a non-Latin script (Chinese, Arabic, Cyrillic)
- * would render as empty boxes.
+ * ships Latin fonts only, so a non-Latin script (Chinese, Japanese, Arabic,
+ * Cyrillic) would render as empty boxes.
  */
 export const OG_USES_ENGLISH_CARD: Record<SiteLocale, boolean> = {
   en: false,
@@ -131,6 +136,7 @@ export const OG_USES_ENGLISH_CARD: Record<SiteLocale, boolean> = {
   ar: true,
   ru: true,
   de: false,
+  ja: true,
 };
 
 /**

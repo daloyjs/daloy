@@ -156,6 +156,11 @@ const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: strin
     link: "englische Fassung",
     after: ".",
   },
+  ja: {
+    before: "このページは英語の原文を翻訳したものです。内容に相違がある場合は",
+    link: "英語版",
+    after: "が優先されます。",
+  },
 };
 
 /**

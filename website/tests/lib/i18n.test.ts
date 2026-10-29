@@ -8,6 +8,7 @@ import {
   localeFromPathname,
   localeHome,
   localizedPath,
+  OG_USES_ENGLISH_CARD,
   parseLocaleHeader,
   SITE_LOCALES,
   switchLocaleHref,
@@ -34,7 +35,7 @@ test("each translated prefix and the paths under it map to its locale", () => {
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/rus", "/ru-RU", "/deu", "/de-DE", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/docs/ru", "/docs/de", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/fra", "/fr-FR", "/ptx", "/pt-BR", "/ara", "/ar-SA", "/rus", "/ru-RU", "/deu", "/de-DE", "/jap", "/ja-JP", "/jp", "/docs/es", "/docs/zh", "/docs/fr", "/docs/pt", "/docs/ar", "/docs/ru", "/docs/de", "/docs/ja", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
@@ -47,7 +48,8 @@ test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("ar"), "ar");
   assert.equal(parseLocaleHeader("ru"), "ru");
   assert.equal(parseLocaleHeader("de"), "de");
-  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "RU", "ru-RU", "DE", "de-DE", "it", "es ", "constructor", "__proto__"]) {
+  assert.equal(parseLocaleHeader("ja"), "ja");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "FR", "fr-FR", "PT", "pt-BR", "pt-PT", "AR", "ar-SA", "RU", "ru-RU", "DE", "de-DE", "JA", "ja-JP", "jp", "it", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
   assert.equal(isTranslatedLocale("toString"), false);
@@ -84,6 +86,7 @@ test("hreflang alternates list every locale with English as x-default", () => {
     ar: "/ar/about",
     ru: "/ru/about",
     de: "/de/about",
+    ja: "/ja/about",
     "x-default": "/about",
   });
   assert.equal(HTML_LANG.zh, "zh-CN");
@@ -101,7 +104,7 @@ test("buildMetadata emits hreflang and every other og:locale for translated page
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
   assert.equal(og.locale, "zh_CN");
-  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR", "ru_RU", "de_DE"]);
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES", "fr_FR", "pt_BR", "ar_AR", "ru_RU", "de_DE", "ja_JP"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -136,7 +139,7 @@ test("sitemap lists every translated marketing page with shared alternates", () 
 });
 
 test("translated trust pages keep the English paragraph structure and facts", () => {
-  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026", ru: "29 октября 2026", de: "29. Oktober 2026" } as const;
+  const dates = { es: "29 de octubre de 2026", zh: "2026 年 10 月 29 日", fr: "29 octobre 2026", pt: "29 de outubro de 2026", ar: "29 أكتوبر 2026", ru: "29 октября 2026", de: "29. Oktober 2026", ja: "2026年10月29日" } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
@@ -164,7 +167,7 @@ function strings(value: unknown, out: string[] = []): string[] {
 }
 
 test("translated page copy uses no em dashes and sized meta descriptions", () => {
-  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160], ru: [140, 160], de: [140, 160] } as const;
+  const range = { es: [140, 160], zh: [40, 90], fr: [140, 160], pt: [140, 160], ar: [100, 160], ru: [140, 160], de: [140, 160], ja: [40, 90] } as const;
   for (const locale of TRANSLATED_LOCALES) {
     const pages = PAGES_COPY[locale];
     for (const text of strings(pages)) {
@@ -201,11 +204,11 @@ test("every translated home copy mirrors the English structure", async () => {
   }
 });
 
-test("home pages advertise the promoted locales; French, Portuguese, Arabic, Russian and German are header-menu only", async () => {
+test("home pages advertise the promoted locales; French, Portuguese, Arabic, Russian, German and Japanese are header-menu only", async () => {
   const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
   const { PROMOTED_LOCALES } = await import("../../lib/i18n");
   assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...PROMOTED_LOCALES].sort());
-  for (const locale of ["fr", "pt", "ar", "ru", "de"]) {
+  for (const locale of ["fr", "pt", "ar", "ru", "de", "ja"]) {
     assert.ok(!(PROMOTED_LOCALES as readonly string[]).includes(locale), `no ${locale} hero pill or footer link`);
   }
   for (const notice of Object.values(LANGUAGE_NOTICES)) {
@@ -221,6 +224,10 @@ test("the header language menu offers every locale, French and Portuguese includ
   assert.equal(LOCALE_NATIVE_NAME.ar, "العربية");
   assert.equal(LOCALE_NATIVE_NAME.ru, "Русский");
   assert.equal(LOCALE_NATIVE_NAME.de, "Deutsch");
+  assert.equal(LOCALE_NATIVE_NAME.ja, "日本語");
+  assert.equal(switchLocaleHref("/ja/docs/getting-started", "zh"), "/zh/docs/getting-started");
+  assert.equal(switchLocaleHref("/ja/contact", "en"), "/contact");
+  assert.equal(switchLocaleHref("/docs/routing", "ja"), "/ja");
   assert.equal(switchLocaleHref("/de/docs/installation", "fr"), "/fr/docs/installation");
   assert.equal(switchLocaleHref("/ru/privacy", "ar"), "/ar/privacy");
   assert.equal(switchLocaleHref("/ar/about", "en"), "/about");
@@ -356,4 +363,17 @@ test("Russian pages load Inter's Cyrillic subset without preloading it", async (
   const layout = readFileSync("app/layout.tsx", "utf8");
   assert.match(layout, /subsets: \["cyrillic"\][\s\S]*?preload: false/);
   assert.match(readFileSync("app/globals.css", "utf8"), /html:lang\(ru\) body \{\s*font-family: var\(--font-sans-cyrillic\)/);
+});
+
+test("Japanese pages name Japanese fonts so kanji never fall back to Chinese glyph forms", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("app/globals.css", "utf8");
+  const rule = /html:lang\(ja\) body \{\s*font-family: ([^;]+);/.exec(css)?.[1];
+  assert.ok(rule, "html:lang(ja) font rule");
+  assert.match(rule, /"Hiragino Sans"/);
+  assert.match(rule, /"Noto Sans JP"/);
+  // No Chinese face may come before the generic fallback.
+  assert.doesNotMatch(rule, /PingFang|YaHei|Noto Sans SC|Hiragino Sans GB/);
+  assert.equal(HTML_LANG.ja, "ja");
+  assert.equal(OG_USES_ENGLISH_CARD.ja, true, "the OG renderer has no Japanese glyphs");
 });

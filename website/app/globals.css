@@ -932,6 +932,14 @@ html:lang(zh-CN) body {
   font-family: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
 }
 
+/* Japanese pages (<html lang="ja">): Han characters share code points with
+   Chinese, so name the Japanese system fonts explicitly; a Chinese fallback
+   would draw kanji in Chinese glyph forms. Unlayered so it wins over
+   `font-sans`. */
+html:lang(ja) body {
+  font-family: var(--font-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+
 /* Arabic pages (<html lang="ar">): Inter has no Arabic glyphs, so name the
    Arabic system fonts explicitly. Unlayered so it wins over `font-sans`. */
 html:lang(ar) body {
