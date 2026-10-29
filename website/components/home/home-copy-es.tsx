@@ -126,13 +126,6 @@ export const HOME_COPY_ES: HomeCopy = {
     openapi: "/docs/openapi",
     blog: "/blog",
   },
-  languageNotice: {
-    badge: "English",
-    text: "This page is also available in English.",
-    cta: "Read in English",
-    href: "/",
-    lang: "en",
-  },
   hero: {
     title:
       "APIs REST en TypeScript basadas en contratos, seguras por defecto y pensadas para equipos que programan con IA",

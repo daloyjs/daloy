@@ -3,19 +3,18 @@ import assert from "node:assert/strict";
 
 import {
   HTML_LANG,
+  isTranslatedLocale,
   languageAlternates,
   localeFromPathname,
+  localeHome,
+  localizedPath,
   parseLocaleHeader,
-  spanishPath,
+  SITE_LOCALES,
   switchLocaleHref,
+  TRANSLATED_LOCALES,
   TRANSLATED_PATHS,
 } from "../../lib/i18n";
-import {
-  ABOUT_PARAGRAPHS_ES,
-  CONTACT_PARAGRAPHS_ES,
-  HOME_DESCRIPTION_ES,
-  PRIVACY_PARAGRAPHS_ES,
-} from "../../lib/i18n-es";
+import { PAGES_COPY } from "../../lib/i18n-pages";
 import {
   ABOUT_PARAGRAPHS,
   CONTACT_PARAGRAPHS,
@@ -24,67 +23,75 @@ import {
 import { buildMetadata } from "../../lib/seo";
 import { localizedSitePages } from "../../lib/sitemap-entries";
 
-test("/es and paths under /es/ are Spanish", () => {
+const MARKETING_PATHS = TRANSLATED_PATHS.filter((p) => !p.startsWith("/docs"));
+
+test("each translated prefix and the paths under it map to its locale", () => {
   assert.equal(localeFromPathname("/es"), "es");
   assert.equal(localeFromPathname("/es/about"), "es");
-  assert.equal(localeFromPathname("/es/"), "es");
+  assert.equal(localeFromPathname("/zh"), "zh");
+  assert.equal(localeFromPathname("/zh/docs/installation"), "zh");
+  assert.equal(localeFromPathname("/zh/"), "zh");
 });
 
 test("look-alike prefixes and other paths stay English", () => {
-  for (const path of ["/", "/esm", "/es-ES", "/escape", "/docs/es", "/blog"]) {
+  for (const path of ["/", "/esm", "/es-ES", "/zhx", "/zh-CN", "/docs/es", "/docs/zh", "/blog"]) {
     assert.equal(localeFromPathname(path), "en", path);
   }
 });
 
-test("locale header only accepts the exact value es", () => {
+test("locale header only accepts exact translated locale ids", () => {
   assert.equal(parseLocaleHeader("es"), "es");
-  for (const value of [null, "", "en", "ES", "es-ES", "fr", "es "]) {
+  assert.equal(parseLocaleHeader("zh"), "zh");
+  for (const value of [null, "", "en", "ES", "es-ES", "zh-CN", "fr", "es ", "constructor", "__proto__"]) {
     assert.equal(parseLocaleHeader(value), "en", String(value));
   }
+  assert.equal(isTranslatedLocale("toString"), false);
 });
 
-test("translated pages map to their counterpart in both directions", () => {
+test("translated pages map between every pair of locales", () => {
   for (const path of TRANSLATED_PATHS) {
-    const es = spanishPath(path);
-    assert.equal(switchLocaleHref(path, "es"), es);
-    assert.equal(switchLocaleHref(es, "en"), path);
+    for (const from of SITE_LOCALES) {
+      for (const to of SITE_LOCALES) {
+        assert.equal(switchLocaleHref(localizedPath(path, from), to), localizedPath(path, to), `${path} ${from}->${to}`);
+      }
+    }
   }
-  assert.equal(spanishPath("/"), "/es");
-  assert.equal(switchLocaleHref("/es/about/", "en"), "/about");
+  assert.equal(localizedPath("/", "zh"), "/zh");
+  assert.equal(switchLocaleHref("/zh/about/", "es"), "/es/about");
 });
 
-test("untranslated pages fall back to the other locale's home page", () => {
-  assert.equal(switchLocaleHref("/docs/routing", "es"), "/es");
+test("untranslated pages fall back to the target locale's home page", () => {
+  assert.equal(switchLocaleHref("/docs/routing", "zh"), "/zh");
   assert.equal(switchLocaleHref("/blog/some-post", "es"), "/es");
-  // A Spanish URL with no English twin (a typo, a stale link) goes home.
-  assert.equal(switchLocaleHref("/es/docs", "en"), "/");
-  // Switching to the current locale is a no-op.
+  assert.equal(switchLocaleHref("/zh/docs/routing", "es"), "/es");
+  assert.equal(switchLocaleHref("/es/nope", "en"), "/");
   assert.equal(switchLocaleHref("/docs", "en"), "/docs");
-  assert.equal(switchLocaleHref("/es/about", "es"), "/es/about");
+  assert.equal(localeHome("en"), "/");
 });
 
-test("hreflang alternates pair both locales with English as x-default", () => {
+test("hreflang alternates list every locale with English as x-default", () => {
   assert.deepEqual(languageAlternates("/about"), {
     en: "/about",
     "es-ES": "/es/about",
+    "zh-CN": "/zh/about",
     "x-default": "/about",
   });
-  assert.equal(HTML_LANG.es, "es-ES");
+  assert.equal(HTML_LANG.zh, "zh-CN");
 });
 
-test("buildMetadata emits hreflang and og:locale for translated pages", () => {
+test("buildMetadata emits hreflang and every other og:locale for translated pages", () => {
   const meta = buildMetadata({
-    title: "Acerca de",
+    title: "关于",
     description: "x",
-    path: "/es/about",
-    locale: "es",
+    path: "/zh/about",
+    locale: "zh",
     translatedPath: "/about",
   });
-  assert.equal(meta.alternates?.canonical, "/es/about");
+  assert.equal(meta.alternates?.canonical, "/zh/about");
   assert.deepEqual(meta.alternates?.languages, languageAlternates("/about"));
   const og = meta.openGraph as { locale?: string; alternateLocale?: string[] };
-  assert.equal(og.locale, "es_ES");
-  assert.deepEqual(og.alternateLocale, ["en_US"]);
+  assert.equal(og.locale, "zh_CN");
+  assert.deepEqual(og.alternateLocale, ["en_US", "es_ES"]);
 });
 
 test("buildMetadata stays English with no alternates by default", () => {
@@ -95,85 +102,99 @@ test("buildMetadata stays English with no alternates by default", () => {
   assert.equal(og.alternateLocale, undefined);
 });
 
-test("sitemap lists every Spanish page with reciprocal alternates", () => {
+test("sitemap lists every translated marketing page with shared alternates", () => {
   const entries = localizedSitePages();
   const byPath = new Map(entries.map((entry) => [entry.path, entry]));
   // Docs twins come from the docs tree (buildSitemapEntries), not SITE_PAGES.
-  for (const path of TRANSLATED_PATHS.filter((p) => !p.startsWith("/docs"))) {
+  for (const path of MARKETING_PATHS) {
     const en = byPath.get(path);
-    const es = byPath.get(spanishPath(path));
     assert.ok(en, `missing ${path}`);
-    assert.ok(es, `missing ${spanishPath(path)}`);
     assert.deepEqual(en.languages, languageAlternates(path));
-    assert.deepEqual(es.languages, en.languages);
+    for (const locale of TRANSLATED_LOCALES) {
+      const translated = byPath.get(localizedPath(path, locale));
+      assert.ok(translated, `missing ${localizedPath(path, locale)}`);
+      assert.deepEqual(translated.languages, en.languages);
+    }
   }
-  // The /es/docs index has no English twin, so no alternates; no docs page
-  // is hand-listed here.
-  assert.equal(byPath.get("/es/docs")?.languages, undefined);
-  assert.ok(!entries.some((entry) => entry.path.startsWith("/es/docs/")));
+  // Docs indexes have no English twin; no docs page is hand-listed here.
+  for (const locale of TRANSLATED_LOCALES) {
+    assert.equal(byPath.get(`/${locale}/docs`)?.languages, undefined);
+    assert.ok(byPath.has(`/${locale}/docs`), `missing /${locale}/docs`);
+    assert.ok(!entries.some((entry) => entry.path.startsWith(`/${locale}/docs/`)));
+  }
   assert.equal(byPath.get("/blog")?.languages, undefined);
 });
 
-test("Spanish trust pages keep the English paragraph structure", () => {
-  assert.equal(ABOUT_PARAGRAPHS_ES.length, ABOUT_PARAGRAPHS.length);
-  assert.equal(CONTACT_PARAGRAPHS_ES.length, CONTACT_PARAGRAPHS.length);
-  assert.equal(PRIVACY_PARAGRAPHS_ES.length, PRIVACY_PARAGRAPHS.length);
-  // The privacy translation must keep the facts a reader relies on.
-  const privacy = PRIVACY_PARAGRAPHS_ES.join(" ");
-  for (const fact of ["G-DSBFBZT7RQ", "Vercel", "daloyjs@gmail.com", "21 de agosto de 2026"]) {
-    assert.ok(privacy.includes(fact), fact);
-  }
-});
-
-test("Spanish copy uses no em dashes and fits the meta description limit", () => {
-  const all = [
-    HOME_DESCRIPTION_ES,
-    ...ABOUT_PARAGRAPHS_ES,
-    ...CONTACT_PARAGRAPHS_ES,
-    ...PRIVACY_PARAGRAPHS_ES,
-  ];
-  for (const text of all) {
-    assert.ok(!text.includes("—"), text.slice(0, 40));
-  }
-  assert.ok(HOME_DESCRIPTION_ES.length >= 140 && HOME_DESCRIPTION_ES.length <= 160);
-});
-
-test("Spanish home copy mirrors the English structure", async () => {
-  const { HOME_COPY_EN } = await import("../../components/home/home-copy-en");
-  const { HOME_COPY_ES } = await import("../../components/home/home-copy-es");
-  assert.equal(HOME_COPY_ES.locale, "es");
-  assert.equal(HOME_COPY_ES.hero.facts.length, HOME_COPY_EN.hero.facts.length);
-  assert.equal(HOME_COPY_ES.comparison.rows.length, HOME_COPY_EN.comparison.rows.length);
-  for (const key of Object.keys(HOME_COPY_EN.features) as Array<keyof typeof HOME_COPY_EN.features>) {
-    assert.equal(
-      HOME_COPY_ES.features[key].badges?.length,
-      HOME_COPY_EN.features[key].badges?.length,
-      key,
-    );
-  }
-  // Each home page advertises the other locale, crossing the boundary.
-  assert.equal(localeFromPathname(HOME_COPY_EN.languageNotice.href), "es");
-  assert.equal(localeFromPathname(HOME_COPY_ES.languageNotice.href), "en");
-  // Spanish internal links stay inside /es.
-  assert.equal(localeFromPathname(HOME_COPY_ES.hero.aboutHref), "es");
-  assert.equal(localeFromPathname(HOME_COPY_ES.hero.nameHref), "es");
-  // Docs are English-only, so the Spanish page must say so.
-  assert.ok(HOME_COPY_ES.hero.contentLanguageNote);
-});
-
-test("Spanish home copy strings contain no em dash", async () => {
-  const { HOME_COPY_ES } = await import("../../components/home/home-copy-es");
-  const strings: string[] = [];
-  const walk = (value: unknown) => {
-    if (typeof value === "string") strings.push(value);
-    else if (Array.isArray(value)) value.forEach(walk);
-    else if (value && typeof value === "object" && !("$$typeof" in value)) {
-      Object.values(value).forEach(walk);
+test("translated trust pages keep the English paragraph structure and facts", () => {
+  const dates = { es: "21 de agosto de 2026", zh: "2026 年 8 月 21 日" } as const;
+  for (const locale of TRANSLATED_LOCALES) {
+    const pages = PAGES_COPY[locale];
+    assert.equal(pages.about.paragraphs.length, ABOUT_PARAGRAPHS.length, locale);
+    assert.equal(pages.contact.paragraphs.length, CONTACT_PARAGRAPHS.length, locale);
+    assert.equal(pages.privacy.paragraphs.length, PRIVACY_PARAGRAPHS.length, locale);
+    const privacy = pages.privacy.paragraphs.join(" ");
+    for (const fact of ["G-DSBFBZT7RQ", "Vercel", "daloyjs@gmail.com", dates[locale]]) {
+      assert.ok(privacy.includes(fact), `${locale}: ${fact}`);
     }
-  };
-  walk(HOME_COPY_ES);
-  assert.ok(strings.length > 100);
-  for (const text of strings) {
-    assert.ok(!text.includes("—"), text.slice(0, 40));
+    // In-page links stay inside the locale.
+    for (const link of pages.about.more.links) {
+      assert.equal(localeFromPathname(link.href), locale, link.href);
+    }
+  }
+});
+
+/** Every string inside a value, skipping React elements. */
+function strings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => strings(item, out));
+  else if (value && typeof value === "object" && !("$$typeof" in value)) {
+    Object.values(value).forEach((item) => strings(item, out));
+  }
+  return out;
+}
+
+test("translated page copy uses no em dashes and sized meta descriptions", () => {
+  const range = { es: [140, 160], zh: [40, 90] } as const;
+  for (const locale of TRANSLATED_LOCALES) {
+    const pages = PAGES_COPY[locale];
+    for (const text of strings(pages)) {
+      assert.ok(!text.includes("—"), `${locale}: ${text.slice(0, 40)}`);
+    }
+    for (const key of ["home", "about", "aboutTheName", "contact", "privacy", "docsIndex"] as const) {
+      const len = pages[key].description.length;
+      const [min, max] = range[locale];
+      assert.ok(len >= min && len <= max, `${locale}.${key}.description is ${len} chars`);
+    }
+  }
+});
+
+test("every translated home copy mirrors the English structure", async () => {
+  const { HOME_COPY_EN } = await import("../../components/home/home-copy-en");
+  const { HOME_COPIES } = await import("../../components/home/home-copies");
+  for (const locale of TRANSLATED_LOCALES) {
+    const copy = HOME_COPIES[locale];
+    assert.equal(copy.locale, locale);
+    assert.equal(copy.hero.facts.length, HOME_COPY_EN.hero.facts.length, locale);
+    assert.equal(copy.comparison.rows.length, HOME_COPY_EN.comparison.rows.length, locale);
+    for (const key of Object.keys(HOME_COPY_EN.features) as Array<keyof typeof HOME_COPY_EN.features>) {
+      assert.equal(copy.features[key].badges?.length, HOME_COPY_EN.features[key].badges?.length, `${locale}.${key}`);
+    }
+    assert.equal(copy.benchmarks.charts?.notes.length, 5, locale);
+    // In-locale links stay inside the locale; the docs note is present.
+    assert.equal(localeFromPathname(copy.hero.aboutHref), locale);
+    assert.equal(localeFromPathname(copy.hero.nameHref), locale);
+    assert.equal(localeFromPathname(copy.links.gettingStarted), locale);
+    assert.ok(copy.hero.contentLanguageNote);
+    for (const text of strings(copy)) {
+      assert.ok(!text.includes("—"), `${locale}: ${text.slice(0, 40)}`);
+    }
+  }
+});
+
+test("every home page advertises every other locale", async () => {
+  const { LANGUAGE_NOTICES } = await import("../../components/home/language-notices");
+  assert.deepEqual(Object.keys(LANGUAGE_NOTICES).sort(), [...SITE_LOCALES].sort());
+  for (const notice of Object.values(LANGUAGE_NOTICES)) {
+    assert.ok(notice.badge && notice.text && notice.cta);
   }
 });

@@ -52,15 +52,6 @@ export type HomeCopy = {
     openapi: string;
     blog: string;
   };
-  /** Pill above the hero headline pointing at the other locale. */
-  languageNotice: {
-    badge: string;
-    text: string;
-    cta: string;
-    href: string;
-    /** BCP 47 tag of the notice text (the target locale's language). */
-    lang: string;
-  };
   hero: {
     title: string;
     subtitle: string;

@@ -9,7 +9,7 @@ import { ReadingProgress } from "@/components/reading-progress";
 import { BackToTop } from "@/components/back-to-top";
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { cn } from "@/lib/utils";
-import { HTML_LANG, LOCALE_HEADER, parseLocaleHeader } from "@/lib/i18n";
+import { HTML_LANG, LOCALE_HEADER, parseLocaleHeader, type SiteLocale } from "@/lib/i18n";
 import {
   DEFAULT_KEYWORDS,
   HOME_DESCRIPTION,
@@ -29,6 +29,12 @@ import { Analytics } from "@vercel/analytics/next";
 export const instant = false;
 
 const DEFAULT_TITLE = `${SITE_NAME} - ${HOME_TITLE}`;
+
+const SKIP_LINK: Record<SiteLocale, string> = {
+  en: "Skip to content",
+  es: "Saltar al contenido",
+  zh: "跳到主要内容",
+};
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 
 export const metadata: Metadata = {
@@ -161,7 +167,7 @@ export default async function RootLayout({
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:border focus:border-border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
           >
-            {locale === "es" ? "Saltar al contenido" : "Skip to content"}
+            {SKIP_LINK[locale]}
           </a>
           <ReadingProgress />
           <SiteHeader locale={locale} />

@@ -19,7 +19,7 @@ import { SiteApiReference } from "@/components/site-api-reference";
 import { Step, Steps } from "@/components/steps";
 import { TypeTable } from "@/components/type-table";
 import { UseCaseGuide } from "@/components/use-case-guide";
-import { HTML_LANG, localeFromPathname, type SiteLocale } from "@/lib/i18n";
+import { HTML_LANG, localeFromPathname, type SiteLocale, type TranslatedLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 import remarkDaloy from "./remark-daloy";
@@ -82,38 +82,45 @@ export const mdxComponents: MDXComponents = {
 };
 
 /**
- * Spanish-page overrides: a markdown link or `<Card>` into the English site
- * (most of `/docs`, the blog) must reload the document so the root layout
- * re-renders `<html lang>` and the chrome (see lib/i18n.ts); links inside
- * `/es` keep client navigation.
+ * Overrides for a page in a translated locale: a markdown link or `<Card>`
+ * into another locale (most of `/docs`, the blog) must reload the document so
+ * the root layout re-renders `<html lang>` and the chrome (see lib/i18n.ts);
+ * links within the page's own locale keep client navigation.
  */
-const spanishMdxComponents: MDXComponents = {
-  a: function SpanishMdxLink({ href = "", children, ...rest }: ComponentProps<"a">) {
-    if (href.startsWith("/")) {
-      const target = localeFromPathname(href.split(/[?#]/, 1)[0] ?? href);
-      if (target !== "es") {
-        return (
-          <a href={href} hrefLang={HTML_LANG[target]} {...rest}>
-            {children}
-          </a>
-        );
+function translatedMdxComponents(locale: TranslatedLocale): MDXComponents {
+  return {
+    a: function LocaleMdxLink({ href = "", children, ...rest }: ComponentProps<"a">) {
+      if (href.startsWith("/")) {
+        const target = localeFromPathname(href.split(/[?#]/, 1)[0] ?? href);
+        if (target !== locale) {
+          return (
+            <a href={href} hrefLang={HTML_LANG[target]} {...rest}>
+              {children}
+            </a>
+          );
+        }
       }
-    }
-    return <MdxLink href={href} {...rest}>{children}</MdxLink>;
-  },
-  Card: function SpanishCard(props: ComponentProps<typeof Card>) {
-    return <Card {...props} locale="es" />;
-  },
+      return <MdxLink href={href} {...rest}>{children}</MdxLink>;
+    },
+    Card: function LocaleCard(props: ComponentProps<typeof Card>) {
+      return <Card {...props} locale={locale} />;
+    },
+  };
+}
+
+const TRANSLATED_COMPONENTS: Record<TranslatedLocale, MDXComponents> = {
+  es: { ...mdxComponents, ...translatedMdxComponents("es") },
+  zh: { ...mdxComponents, ...translatedMdxComponents("zh") },
 };
 
 /**
  * The MDX component map for a page in `locale`.
  *
  * @param locale - Locale of the page being rendered.
- * @returns {@link mdxComponents}, with locale-aware links for Spanish pages.
+ * @returns {@link mdxComponents}, with locale-aware links for translated pages.
  */
 export function mdxComponentsFor(locale: SiteLocale): MDXComponents {
-  return locale === "es" ? { ...mdxComponents, ...spanishMdxComponents } : mdxComponents;
+  return locale === "en" ? mdxComponents : TRANSLATED_COMPONENTS[locale];
 }
 
 /**

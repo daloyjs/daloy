@@ -4,8 +4,10 @@ import { BLOG_POSTS } from "@/lib/blog-posts";
 import {
   isTranslatedPath,
   languageAlternates,
-  spanishPath,
+  localizedPath,
+  TRANSLATED_LOCALES,
   TRANSLATED_PATHS,
+  translatedDocsIndex,
   type TranslatedPath,
 } from "@/lib/i18n";
 import { getMdxDocs } from "@/lib/mdx/content";
@@ -32,38 +34,56 @@ const SITE_PAGES: SitemapEntry[] = [
   { path: "/contact", changeFrequency: "yearly", priority: 0.6 },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.6 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
-  // Index of the Spanish docs on-ramp. It has no English twin (/docs lists
-  // every page), so it carries no hreflang alternates.
-  { path: "/es/docs", changeFrequency: "monthly", priority: 0.6 },
 ];
+
+/**
+ * Index of each locale's translated docs (`/es/docs`, `/zh/docs`). They have
+ * no English twin (`/docs` lists every page), so they carry no hreflang
+ * alternates.
+ */
+const TRANSLATED_DOCS_INDEXES: SitemapEntry[] = TRANSLATED_LOCALES.map((locale) => ({
+  path: translatedDocsIndex(locale),
+  changeFrequency: "monthly",
+  priority: 0.6,
+}));
+
+/**
+ * One entry per locale for a translated page, all sharing the same
+ * `hreflang` map so crawlers pair them.
+ */
+function withTranslations(entry: SitemapEntry, path: TranslatedPath): SitemapEntry[] {
+  const languages = languageAlternates(path);
+  return [
+    { ...entry, languages },
+    ...TRANSLATED_LOCALES.map((locale) => ({ ...entry, path: localizedPath(path, locale), languages })),
+  ];
+}
 
 const TRANSLATED = new Set<string>(TRANSLATED_PATHS);
 
 /**
- * {@link SITE_PAGES} plus each translated page's Spanish twin, with `hreflang`
- * alternates on both sides so crawlers pair them.
+ * {@link SITE_PAGES} plus each translated page's versions in every locale,
+ * with `hreflang` alternates on all of them so crawlers pair them, plus the
+ * translated docs indexes.
  *
- * @returns The hand-maintained site entries, Spanish twins included.
+ * @returns The hand-maintained site entries, translations included.
  */
 export function localizedSitePages(): SitemapEntry[] {
-  return SITE_PAGES.flatMap((page) => {
-    if (!TRANSLATED.has(page.path)) return [page];
-    const path = page.path as TranslatedPath;
-    const languages = languageAlternates(path);
-    return [
-      { ...page, languages },
-      { ...page, path: spanishPath(path), languages },
-    ];
-  });
+  return [
+    ...SITE_PAGES.flatMap((page) =>
+      TRANSLATED.has(page.path) ? withTranslations(page, page.path as TranslatedPath) : [page],
+    ),
+    ...TRANSLATED_DOCS_INDEXES,
+  ];
 }
 
 /** Defaults for docs pages that do not set `sitemap` in their frontmatter. */
 const DOC_DEFAULTS = { changeFrequency: "monthly", priority: 0.7 } as const;
 
 /**
- * Every sitemap entry: the site pages above (and their Spanish versions),
- * every blog post, and every docs page (plus the Spanish twin of each
- * translated docs page).
+ * Every sitemap entry: the site pages above (and their translations), every
+ * blog post, and every docs page (plus the translations of each translated
+ * docs page).
  *
  * @returns Entries without `lastModified` (added by `app/sitemap.ts`).
  */
@@ -74,13 +94,7 @@ export async function buildSitemapEntries(): Promise<SitemapEntry[]> {
       changeFrequency: doc.frontmatter.sitemap?.changeFrequency ?? DOC_DEFAULTS.changeFrequency,
       priority: doc.frontmatter.sitemap?.priority ?? DOC_DEFAULTS.priority,
     };
-    if (!isTranslatedPath(doc.route)) return [entry];
-    // Translated docs page: list the Spanish twin and pair the two.
-    const languages = languageAlternates(doc.route);
-    return [
-      { ...entry, languages },
-      { ...entry, path: spanishPath(doc.route), languages },
-    ];
+    return isTranslatedPath(doc.route) ? withTranslations(entry, doc.route) : [entry];
   });
   const posts = BLOG_POSTS.map((post) => ({
     path: `/blog/${post.slug}`,

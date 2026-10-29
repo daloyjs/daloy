@@ -1,0 +1,243 @@
+---
+title: 快速开始
+description: "构建你的第一个 DaloyJS 应用：声明契约优先的路由，用 Zod 校验，生成 OpenAPI，并在任意受支持的运行时上返回响应。"
+keywords:
+  - DaloyJS 快速开始
+  - 第一个 DaloyJS 应用
+  - TypeScript API 教程
+  - Swagger UI
+  - Scalar API 参考
+  - OpenAPI 文档界面
+sitemap:
+  priority: 0.8
+---
+
+# 快速开始
+
+五分钟内搭建一个最小的 DaloyJS 服务器，用类型化客户端调用它，并查看 OpenAPI 规范。
+
+<FlowDiagram numbered title="五分钟，五个步骤" steps={[
+          { label: "创建项目", detail: "pnpm add @daloyjs/core zod" },
+          {
+            label: "编写路由",
+            detail: "app.get(path, contract, handler)",
+            tone: "accent",
+          },
+          { label: "添加 OpenAPI 和文档界面", detail: "docs: true" },
+          {
+            label: "调用类型化客户端",
+            detail: "createClient(app)",
+          },
+          {
+            label: "生成 Hey API SDK",
+            detail: "pnpm exec openapi-ts",
+            tone: "success",
+          },
+        ]} caption="本指南用五个步骤从一个空文件夹走到类型化 SDK，每一步都建立在第二步声明的路由之上。" />
+
+## 1. 创建项目
+
+```bash
+mkdir hello-daloy && cd hello-daloy
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node
+```
+
+```json
+// package.json，添加以下内容
+{
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  }
+}
+```
+
+Node.js 借助内置的类型剥离功能直接运行 TypeScript 入口文件（在 Node 24+ 中已稳定，自 22.18 起可用），因此本地开发既不需要转译器，也不需要单独的构建步骤。
+
+这里使用 `src/index.ts` 和 `--watch`，是为了让目录结构与 [create-daloy](/docs/scaffolder)（英文）生成的一致：你可以在本指南和脚手架项目之间直接复制粘贴，无需重命名文件。
+
+## 2. 编写你的第一条路由
+
+```ts
+// src/index.ts
+import { z } from "zod";
+import { App, requestId, rateLimit } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+})
+  .use(requestId())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
+  .get(
+    "/greet/:name",
+    {
+      tags: ["Demo"],
+      request: { params: z.object({ name: z.string().min(1) }) },
+      responses: {
+        200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+      },
+    },
+    async ({ params }) => ({
+      status: 200,
+      body: { msg: `Hello, ${params.name}!` },
+    }),
+  );
+
+const { port } = serve(app, { port: 3000 });
+console.log(`listening on http://localhost:${port}`);
+```
+
+`new App()` 已经自动应用了 `secureHeaders()`。只有在你想替换默认配置时才需要注册它。
+
+喜欢 `create-daloy` 模板里那个彩色的启动面板？把普通的 `console.log` 换成 `@daloyjs/core/banner` 中的 `printStartupBanner()` 即可：它会渲染一个能识别 TTY 的边框横幅（不支持时退回 ASCII），显示应用名称、URL 以及你想加的其他链接（API 文档、健康检查等）：
+
+```ts
+import { printStartupBanner } from "@daloyjs/core/banner";
+
+const { port } = serve(app, { port: 3000 });
+printStartupBanner({
+  name: "MyAPI",
+  version: "1.0.0",
+  url: `http://localhost:${port}`,
+  runtime: "Node.js",
+  links: [
+    { label: "API docs", url: `http://localhost:${port}/docs` },
+    { label: "OpenAPI JSON", url: `http://localhost:${port}/openapi.json` },
+    { label: "OpenAPI YAML", url: `http://localhost:${port}/openapi.yaml` },
+    { label: "Health", url: `http://localhost:${port}/healthz` },
+  ],
+});
+```
+
+```bash
+pnpm dev
+# 在另一个终端中
+curl http://localhost:3000/greet/world
+# -> {"msg":"Hello, world!"}
+```
+
+不想启动真正的服务器？每个 `App` 都提供 `app.request(input, init?)`，这是一个进程内测试客户端，接收 URL 或 `Request` 并返回 `Response`：没有网络栈、没有端口，也不需要第二个终端。类型化客户端和[测试指南](/docs/testing)（英文）用的也是这个入口：
+
+```ts
+const res = await app.request("/greet/world");
+console.log(res.status, await res.json());
+// -> 200 { msg: "Hello, world!" }
+```
+
+## 3. 添加 OpenAPI 和文档界面 [#3-add-openapi-and-docs-ui]
+
+只需在 `App` 构造函数中加一行，DaloyJS 就会自动挂载 `GET /openapi.json` + `GET /openapi.yaml`（两种格式的实时规范）以及 `GET /docs`（Scalar API 参考界面）：
+
+```ts
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 5_000,
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: "auto", // 在非生产环境挂载 GET /docs、/openapi.json 和 /openapi.yaml
+});
+```
+
+打开 `http://localhost:3000/docs` 查看交互式 Scalar 参考，打开 `http://localhost:3000/openapi.json` 查看 JSON 格式的规范，或打开 `http://localhost:3000/openapi.yaml` 查看 YAML 格式的规范。
+
+在真实服务中，请设置 `openapi.info`（或顶层的 `title`、`version` 和 `description`）。如果省略，DaloyJS 会使用可移植的默认值 `DaloyJS API` / `0.0.0`。核心从不读取宿主环境的清单文件，因此同一套文档能在 Node、Bun、Deno、Workers 和 Vercel 上运行。
+
+更喜欢工厂函数？`createApp(options)` 是 `new App(options)` 的导出别名，行为完全相同：
+
+```ts
+import { createApp } from "@daloyjs/core";
+
+const app = createApp({
+  docs: "auto", // 设为 true 可在生产环境中也发布文档
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+});
+```
+
+### 更喜欢经典的 Swagger UI？
+
+默认使用 Scalar，是因为它更快、更美观，在手机上也更友好。但如果你的团队习惯了 Swagger UI，或者已有围绕它的截图、运维手册和使用习惯，DaloyJS 也内置了它。只要修改 `docs` 对象形式中的 `ui` 字段，就能回到熟悉的绿色界面：
+
+```ts
+const app = new App({
+  openapi: { info: { title: "Hello", version: "1.0.0" } },
+  docs: {
+    ui: "swagger", // "scalar"（默认）| "swagger" | "redoc"
+    path: "/docs", // 可选，如果你想用 /reference、/api-docs 等路径，可以修改
+  },
+});
+```
+
+同样的 URL（`GET /docs`）、同样的实时 `/openapi.json` 和 `/openapi.yaml` 端点、同样的 CSP 处理，只有渲染出的 HTML 不同。你也可以两者兼得：让自动挂载的路由继续使用 Scalar，再用 `swaggerUiHtml()` 自己暴露第二个 Swagger 路由（手动做法见 [OpenAPI 指南](/docs/openapi)（英文））。
+
+想换个路径？使用对象形式：`docs: { ui: "swagger", path: "/reference" }`。对象形式只在非生产环境中挂载，除非你加上 `enabled: true`（自 1.5.5 起），这一点与 `docs: "auto"` 相同，后者在 `production: true` 时会跳过挂载。需要完全掌控？设置 `docs: false`，然后用 `generateOpenAPI()` 和 `swaggerUiHtml() / scalarHtml()` 挂载你自己的路由：参见 [OpenAPI 指南](/docs/openapi)（英文）。
+
+`swaggerUiHtml()` 和 `scalarHtml()` 默认都从 jsDelivr CDN 加载资源，因此严格的 Content-Security-Policy 必须允许这些资源，否则文档界面可能显示为空白。自动挂载的路由和 `htmlResponse()` 都会自动添加兼容的 CSP。如果你自己构建响应，请从 `@daloyjs/core/docs` 导入 `docsContentSecurityPolicy`，并把结果作为响应头传入：
+
+```ts
+import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
+
+headers: { "content-security-policy": docsContentSecurityPolicy() }
+```
+
+## 4. 使用进程内类型化客户端
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+
+const client = createInProcessClient(app);
+const r = await client.greet({ params: { name: "DaloyJS" } });
+//    ^? { status: 200; body: { msg: string } }
+console.log(r.status, r.body);
+```
+
+客户端的方法是从应用的路由元组推断出来的。请链式注册路由，或使用 `registerRoutes([...])` 组合导出的 `defineRoute()` 契约。不要把结果放宽为单纯的 `App` 类型注解，因为那会刻意抹掉这个元组。
+
+## 5. 生成 Hey API SDK
+
+为 monorepo 之外的调用方生成一个完全类型化的 fetch SDK：
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+保持第二步的开发服务器运行，在运行 SDK 生成器之前，先把实时的 OpenAPI 文档写入磁盘：
+
+```bash
+mkdir -p generated
+curl http://localhost:3000/openapi.json -o generated/openapi.json
+pnpm exec openapi-ts
+```
+
+## 部署之前
+
+`new App()` 已经开启了请求体大小限制、请求超时、防原型污染的 JSON 解析、生产环境 5xx 脱敏以及 `secureHeaders()`。限流的键和额度属于部署层面的决定，所以 `rateLimit()` 仍需显式配置：
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// 默认存储在内存中：按进程计数。两个副本意味着 N * max。
+```
+
+当你运行多个实例时，请接入[基于 Redis 的限流存储](/docs/security/rate-limit-redis)（英文），否则每个副本都会维护自己的计数器。
+
+身份认证能证明调用者是谁，但不能证明对方有权读取这一行数据。DaloyJS 无法默认提供对象级授权，因为它不知道你的数据归属模型。请把检查放在处理函数或查询中，并参考[资源授权](/docs/security/resource-authorization)（英文）指南，包括其中 Alice 与 Bob 的对照测试。
+
+## 下一步
+
+- [路由](/docs/routing)（英文）
+- [使用 Standard Schema 校验](/docs/validation)（英文）
+- [安全防护与中间件](/docs/security)（英文）
+- [教程：图书商店 API](/zh/docs/tutorials/bookstore)

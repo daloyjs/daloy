@@ -923,3 +923,11 @@
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
 }
+
+/* Simplified Chinese pages (<html lang="zh-CN">): Inter has no Han glyphs,
+   so name the Simplified Chinese system fonts explicitly instead of letting
+   the browser pick a fallback (which can be a Japanese face). Unlayered so it
+   wins over the `font-sans` utility on <body>. */
+html:lang(zh-CN) body {
+  font-family: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+}

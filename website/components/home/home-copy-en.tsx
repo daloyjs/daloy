@@ -54,13 +54,6 @@ export const HOME_COPY_EN: HomeCopy = {
     openapi: "/docs/openapi",
     blog: "/blog",
   },
-  languageNotice: {
-    badge: "Nuevo",
-    text: "DaloyJS ya está disponible en español de España.",
-    cta: "Leer en español",
-    href: "/es",
-    lang: "es-ES",
-  },
   hero: {
     title:
       "Contract-first TypeScript REST APIs with secure defaults, built for AI-assisted teams",

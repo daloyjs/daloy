@@ -45,6 +45,12 @@ const PROJECT_LINKS: ReadonlyArray<{
       "Castilian Spanish versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /es/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
   },
   {
+    title: "DaloyJS 简体中文版 (zh-CN)",
+    url: `${SITE_URL}/zh`,
+    description:
+      "Simplified Chinese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /zh/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+  },
+  {
     title: "Docs MCP server",
     url: `${SITE_URL}/mcp`,
     description:

@@ -1,0 +1,279 @@
+---
+title: "教程：构建图书商店 API"
+description: "DaloyJS 分步教程：用契约优先的路由、Zod 校验、OpenAPI 文档和自动生成的 TypeScript 客户端，构建一个类型化的图书商店 REST API。"
+keywords:
+  - DaloyJS 教程
+  - 图书商店 API 教程
+  - TypeScript REST API 教程
+  - OpenAPI 教程
+---
+
+# 教程：构建图书商店 API
+
+我们将从头到尾构建一个小型图书商店服务：路由、校验、安全、OpenAPI、Hey API 类型化 SDK 以及契约测试。完成后，你会得到一个接近生产形态的 DaloyJS 应用。
+
+<FlowDiagram
+  title="你将构建的内容"
+  numbered
+  steps={[
+    { label: "创建项目", detail: "pnpm add @daloyjs/core zod" },
+    {
+      label: "buildApp 工厂函数",
+      detail: "路由 · Zod · 安全 hook",
+      tone: "accent",
+    },
+    { label: "启动服务", detail: "在 Node 上 serve(app)" },
+    { label: "OpenAPI 规范", detail: "generateOpenAPI(app)" },
+    { label: "类型化 SDK", detail: "Hey API openapi-ts" },
+    {
+      label: "契约测试",
+      detail: "runContractTests(app)",
+      tone: "success",
+    },
+  ]}
+  caption="服务器、OpenAPI 导出和测试共用同一个 buildApp 工厂函数，因此规范、类型化客户端和契约测试永远不会彼此脱节。"
+/>
+
+## 1. 创建项目
+
+```bash
+mkdir bookstore && cd bookstore
+pnpm init
+pnpm add @daloyjs/core zod
+pnpm add -D typescript @types/node @hey-api/openapi-ts prettier
+```
+
+```json
+// package.json，替换为以下内容
+{
+  "name": "bookstore",
+  "type": "module",
+  "scripts": {
+    "dev":         "node --watch src/server.ts",
+    "test":        "node --test tests/**/*.test.ts",
+    "typecheck":   "tsc --noEmit",
+    "gen:openapi": "node scripts/dump-openapi.ts",
+    "gen:client":  "openapi-ts",
+    "gen":         "pnpm gen:openapi && pnpm gen:client"
+  }
+}
+```
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "openapi-ts.config.ts"]
+}
+```
+
+```ini
+# .npmrc
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+```
+
+## 2. 构建共享的 `buildApp` 工厂函数
+
+让服务器、代码生成和测试共用同一个 App，使规范、客户端和测试始终保持一致：
+
+```ts
+// src/build-app.ts
+import { z } from "zod";
+import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError, timingSafeEqual } from "@daloyjs/core";
+
+export const BookSchema = z.object({
+  id:    z.string(),
+  title: z.string(),
+  year:  z.number().int().optional(),
+});
+
+export function buildApp() {
+  const books = new Map<string, z.infer<typeof BookSchema>>([
+    ["1", { id: "1", title: "Foundation", year: 1951 }],
+    ["2", { id: "2", title: "Dune",       year: 1965 }],
+  ]);
+
+  const app = new App({ bodyLimitBytes: 64 * 1024, requestTimeoutMs: 5_000 });
+
+  app.use(requestId());
+  app.use(secureHeaders());
+  app.use(cors({ origin: ["http://localhost:5173"] }));
+  app.use(rateLimit({ windowMs: 60_000, max: 120 })); // 全局生效，除非你配置了 keyGenerator 或 trustProxyHeaders
+
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string() }) },
+      responses: {
+        200: {
+          description: "Found",
+          body: BookSchema,
+          examples: { default: { id: "1", title: "Foundation", year: 1951 } },
+        },
+        404: { description: "Not found" },
+      },
+    },
+    async ({ params }) => {
+      const book = books.get(params.id);
+      if (!book) throw new NotFoundError(`book ${params.id} not found`);
+      return { status: 200, body: book };
+    },
+  );
+
+  app.post(
+    "/books",
+    {
+      operationId: "createBook",
+      tags: ["Books"],
+      hooks: bearerAuth({ validate: (t) => timingSafeEqual(t, "demo-token") }),
+      request: { body: BookSchema.omit({ id: true }) },
+      responses: {
+        201: { description: "Created", body: BookSchema },
+        401: { description: "Unauthorized" },
+        422: { description: "Validation error" },
+      },
+    },
+    async ({ body }) => {
+      const id = String(books.size + 1);
+      const book = { id, ...body };
+      books.set(id, book);
+      return { status: 201, body: book };
+    },
+  );
+
+  return app;
+}
+```
+
+## 3. 启动服务器
+
+```ts
+// src/server.ts
+import { buildApp } from "./build-app.js";
+import { serve }    from "@daloyjs/core/node";
+
+const app = buildApp();
+const { port } = serve(app, { port: 3000 });
+console.log(`bookstore listening on http://localhost:${port}`);
+```
+
+```bash
+pnpm dev
+curl http://localhost:3000/books/1
+# {"id":"1","title":"Foundation","year":1951}
+
+curl -X POST http://localhost:3000/books \
+  -H "authorization: Bearer demo-token" \
+  -H "content-type: application/json" \
+  -d '{"title":"Hyperion","year":1989}'
+# {"id":"3","title":"Hyperion","year":1989}
+```
+
+## 4. 生成 OpenAPI 规范
+
+```ts
+// scripts/dump-openapi.ts
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname }          from "node:path";
+import { generateOpenAPI }  from "@daloyjs/core/openapi";
+import { buildApp }         from "../src/build-app.js";
+
+const app  = buildApp();
+const out  = "./generated/openapi.json";
+const doc  = generateOpenAPI(app, {
+  info: { title: "Bookstore API", version: "1.0.0" },
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+});
+
+await mkdir(dirname(out), { recursive: true });
+await writeFile(out, JSON.stringify(doc, null, 2));
+console.log(`wrote ${out}`);
+```
+
+```bash
+pnpm gen:openapi
+```
+
+## 5. 生成 Hey API 类型化 SDK
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```bash
+pnpm gen
+# generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## 6. 在任意 TS 调用方中使用 SDK
+
+```ts
+import { client } from "../generated/client/client.gen.js";
+import { getBookById } from "../generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "http://localhost:3000" });
+
+const { data } = await getBookById({ path: { id: "1" } });
+console.log(data?.title); // string | undefined，完全类型化
+```
+
+## 7. 添加测试
+
+```ts
+// tests/books.test.ts
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildApp } from "../src/build-app.js";
+import { runContractTests } from "@daloyjs/core/contract";
+
+test("contract is clean", async () => {
+  const report = await runContractTests(buildApp());
+  assert.equal(report.ok, true, JSON.stringify(report.issues, null, 2));
+});
+
+test("GET /books/:id returns 200", async () => {
+  const res = await buildApp().request("/books/1");
+  assert.equal(res.status, 200);
+});
+
+test("POST /books rejects without token", async () => {
+  const res = await buildApp().request("/books", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: "Hyperion" }),
+  });
+  assert.equal(res.status, 401);
+});
+```
+
+```bash
+pnpm test
+```
+
+## 你构建了什么
+
+- 一个类型化、经过校验并受到保护的 HTTP API。
+- 一份真实的 OpenAPI 3.1 文档和一个自动生成的类型化 SDK，两者始终同步。
+- 在 CI 中防止不一致的契约测试。
+- 一条使用 pnpm 和严格 `.npmrc` 加固的安装流程。
+
+接下来可以继续阅读[多用户授权教程](/docs/tutorials/multi-user-api)、[Security](/docs/security)、[Adapters](/docs/adapters) 或 [API 参考](/docs/api-reference)，这些页面均为英文。

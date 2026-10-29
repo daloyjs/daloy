@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { isTranslatedPath } from "@/lib/i18n";
+import { isTranslatedPath, type TranslatedLocale } from "@/lib/i18n";
 import { buildMetadata } from "@/lib/seo";
 
-import { getMdxDoc, getMdxDocs, getSpanishMdxDoc, getSpanishMdxDocs } from "./content";
+import { getMdxDoc, getMdxDocs, getTranslatedMdxDoc, getTranslatedMdxDocs } from "./content";
 import { MdxContent } from "./render";
 
 /**
@@ -24,7 +24,7 @@ export async function mdxDocParams(depth: 1 | 2): Promise<Array<{ slug: string; 
 /**
  * `generateMetadata` for an MDX docs page: frontmatter through `buildMetadata`
  * (canonical URL, OpenGraph image, markdown alternate, and `hreflang`
- * alternates when the page has a Spanish translation).
+ * alternates when the page has translations).
  *
  * @param segments - Route segments under `/docs` (empty for `/docs`).
  * @returns Page metadata, or `{}` when no page exists (the page then 404s).
@@ -55,9 +55,10 @@ export async function MdxDocPage({ segments }: { segments: string[] }) {
 }
 
 /**
- * English route a Spanish docs page translates: `/es/docs/a/b` → `/docs/a/b`.
+ * English route a translated docs page translates: `<prefix>/docs/a/b` →
+ * `/docs/a/b`.
  *
- * @param segments - Route segments under `/es/docs`.
+ * @param segments - Route segments under `<prefix>/docs`.
  * @returns The English docs route.
  */
 export function englishDocRoute(segments: string[]): string {
@@ -65,62 +66,94 @@ export function englishDocRoute(segments: string[]): string {
 }
 
 /**
- * Static params for the Spanish docs pages `depth` segments below `/es/docs`.
+ * Static params for a translated locale's docs pages `depth` segments below
+ * `<prefix>/docs`.
  *
- * @param depth - Number of route segments under `/es/docs`.
+ * @param locale - Translated locale.
+ * @param depth - Number of route segments under `<prefix>/docs`.
  * @returns One `{ slug }` / `{ slug, child }` entry per translated page.
  */
-export async function spanishDocParams(depth: 1 | 2): Promise<Array<{ slug: string; child?: string }>> {
-  const docs = await getSpanishMdxDocs();
+export async function translatedDocParams(
+  locale: TranslatedLocale,
+  depth: 1 | 2,
+): Promise<Array<{ slug: string; child?: string }>> {
+  const docs = await getTranslatedMdxDocs(locale);
   return docs
     .filter((doc) => doc.segments.length === depth)
     .map((doc) => (depth === 1 ? { slug: doc.segments[0]! } : { slug: doc.segments[0]!, child: doc.segments[1]! }));
 }
 
 /**
- * `generateMetadata` for a Spanish docs page: `es_ES` OpenGraph, `hreflang`
- * pairing with the English original, and the page's own OG image.
+ * `generateMetadata` for a translated docs page: localized OpenGraph,
+ * `hreflang` pairing with the English original and the other translations.
  *
- * @param segments - Route segments under `/es/docs`.
+ * @param locale - Translated locale.
+ * @param segments - Route segments under `<prefix>/docs`.
  * @returns Page metadata, or `{}` when the page does not exist (it then 404s).
  */
-export async function spanishDocMetadata(segments: string[]): Promise<Metadata> {
-  const doc = await getSpanishMdxDoc(segments);
+export async function translatedDocMetadata(
+  locale: TranslatedLocale,
+  segments: string[],
+): Promise<Metadata> {
+  const doc = await getTranslatedMdxDoc(locale, segments);
   const english = englishDocRoute(segments);
   if (!doc || !isTranslatedPath(english)) return {};
   return buildMetadata({
     ...doc.frontmatter,
     path: doc.route,
     type: "article",
-    locale: "es",
+    locale,
     translatedPath: english,
+    // The route's own opengraph-image file (Chinese renders the English card:
+    // the OG renderer ships Latin fonts only).
     image: `${doc.route}/opengraph-image`,
   });
 }
 
+const TRANSLATION_NOTICE: Record<TranslatedLocale, { before: string; link: string; after: string }> = {
+  es: {
+    before: "Traducción de la página original en inglés. Si algo no cuadra, prevalece la ",
+    link: "versión en inglés",
+    after: ".",
+  },
+  zh: {
+    before: "本页译自英文原文。如有出入，以",
+    link: "英文版本",
+    after: "为准。",
+  },
+};
+
 /**
- * Render a Spanish docs page with a link back to the English original, or a
- * real 404 for an untranslated path. Same `instant = false` contract as
+ * Render a translated docs page with a link back to the English original, or
+ * a real 404 for an untranslated path. Same `instant = false` contract as
  * {@link MdxDocPage}.
  *
- * @param segments - Route segments under `/es/docs`.
+ * @param props.locale - Translated locale.
+ * @param props.segments - Route segments under `<prefix>/docs`.
  * @returns The rendered page body.
  */
-export async function SpanishMdxDocPage({ segments }: { segments: string[] }) {
-  const doc = await getSpanishMdxDoc(segments);
+export async function TranslatedMdxDocPage({
+  locale,
+  segments,
+}: {
+  locale: TranslatedLocale;
+  segments: string[];
+}) {
+  const doc = await getTranslatedMdxDoc(locale, segments);
   if (!doc) notFound();
   const english = englishDocRoute(segments);
+  const notice = TRANSLATION_NOTICE[locale];
   return (
     <>
       <p className="not-prose mb-6 rounded-lg border bg-muted/40 px-4 py-3 text-sm leading-6 text-muted-foreground">
-        Traducción de la página original en inglés. Si algo no cuadra, prevalece la{" "}
+        {notice.before}
         {/* Cross-locale: a full document load (see lib/i18n.ts). */}
         <a className="underline underline-offset-4" href={english} hrefLang="en">
-          versión en inglés
+          {notice.link}
         </a>
-        .
+        {notice.after}
       </p>
-      <MdxContent source={doc.body} file={doc.file} locale="es" />
+      <MdxContent source={doc.body} file={doc.file} locale={locale} />
     </>
   );
 }

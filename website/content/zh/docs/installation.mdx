@@ -1,0 +1,126 @@
+---
+title: 安装
+description: 用 pnpm、npm、yarn 或 bun 安装 DaloyJS，并在 Node.js、Bun、Deno、Cloudflare Workers 或 Vercel 上快速完成配置。
+keywords:
+  - 安装 DaloyJS
+  - pnpm add daloyjs
+  - DaloyJS 配置
+  - 安装 TypeScript 框架
+sitemap:
+  priority: 0.7
+---
+
+# 安装
+
+DaloyJS 面向 **Node.js 24 LTS 或 Node.js 26 及更高版本**（`engines.node`：`^24.0.0 || >=26.0.0`），以 `@daloyjs/core` 的名称发布在公共 npm 仓库中。这个包**没有 peer 依赖**，所以 `npm`、`yarn`、`pnpm` 和 `bun` 都可以直接安装。出于供应链安全的考虑，我们*推荐*使用 [pnpm](https://pnpm.io/motivation) 并搭配下文中加固过的 `.npmrc` 默认配置，但这不是必需的。`package.json` 中的 `engines.pnpm` 只是参考性的元数据，而 `engines.node` 声明了受支持的运行时，具体是给出警告还是直接失败，取决于你的包管理器和 engine-strict 设置。
+
+<FlowDiagram numbered title="两种方式" steps={[
+          {
+            eyebrow: "最快",
+            label: "创建项目",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "或者",
+            label: "安装到现有项目",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "加固",
+            label: "添加 .npmrc 默认配置",
+            detail: "strict-peer-dependencies，冻结 lockfile",
+            tone: "muted",
+          },
+          {
+            eyebrow: "确认",
+            label: "验证导入",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]} caption="你可以用一条命令创建经过加固的项目，也可以把这个零依赖的包加入现有项目；然后放入加固的 .npmrc，并确认导入能够正常解析。" />
+
+## 最快的方式：创建项目
+
+使用官方生成器，一条命令就能配置好加固的 `.npmrc`、严格的 TypeScript 以及一条可运行的路由。
+
+软件包链接：[npm 上的 create-daloy](https://www.npmjs.com/package/create-daloy) 和 [npm 上的 @daloyjs/core](https://www.npmjs.com/package/@daloyjs/core)。
+
+```bash
+# 选择一个包管理器
+pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api
+```
+
+模板和参数说明见 [Scaffold a project](/docs/scaffolder)（英文）。
+
+## 或者安装到现有项目中
+
+### 前提条件
+
+- **Node.js** 24 LTS，或 26.0.0 及更高版本（不支持 Node.js 25）。
+- 一个包管理器。下列任何一个都可以；出于供应链加固的考虑，推荐使用 pnpm 11.x 或更高版本，但由于这个包没有 peer 依赖，`npm`、`yarn` 和 `bun` 也都能顺利安装 `@daloyjs/core`。
+
+通过 [Corepack](https://nodejs.org/api/corepack.html) 启用 pnpm：
+
+```bash
+corepack enable
+corepack prepare pnpm@11.1.3 --activate
+pnpm --version
+```
+
+### 安装 DaloyJS
+
+<PackageInstall packages="@daloyjs/core zod" />
+
+可选，仅在你想生成类型化 SDK 时安装：
+
+<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+
+发布到 npm 的框架包是 [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core)。
+
+## 加固的安装配置 [#hardened-npmrc]
+
+在 pnpm 11+ 中，请把供应链相关设置写进项目根目录的 `pnpm-workspace.yaml`（键名使用 camelCase；即使是单包项目，pnpm 11 也会读取这个文件）。pnpm 11 会忽略 `.npmrc` 中的这些设置，所以只配置 `.npmrc` 的话，既没有冷却期，也没有脚本策略。
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+ignoreScripts: true
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+autoInstallPeers: true
+```
+
+对于 npm 和较早版本的 pnpm，请在 `.npmrc` 中保留同样的配置：
+
+```ini title=".npmrc"
+auto-install-peers=true
+strict-peer-dependencies=true
+prefer-frozen-lockfile=true
+verify-store-integrity=true
+minimum-release-age=1440
+ignore-scripts=true
+```
+
+冷却期和 `ignoreScripts` 能降低这些安装过程中的供应链风险，但无法阻止所有攻击。`ignoreScripts` 拦截的是安装脚本中的恶意负载，而不是包被导入时执行的代码；24 小时的冷却期也只对一天之内被发现的入侵有效。
+
+背后的原因请阅读 [Security](/docs/security)（英文）和 [pnpm 的设计动机](https://pnpm.io/motivation)。
+
+## 验证安装
+
+安装完成后在项目根目录运行以下命令。它直接调用 `node`，所以在 pnpm、npm、yarn 或 bun 下效果都一样：
+
+```bash
+node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
+```
+
+## 下一步
+
+<Cards>
+<Card title="快速开始" href="/zh/docs/getting-started">编写你的第一条路由，进行校验，并提供 OpenAPI 文档。</Card>
+<Card title="Scaffold a project（英文）" href="/docs/scaffolder">让 <code>create-daloy</code> 为你创建一个经过加固的项目。</Card>
+</Cards>

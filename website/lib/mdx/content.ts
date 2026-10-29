@@ -4,6 +4,8 @@ import { cacheLife } from "next/cache";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
+import { translatedDocsIndex, type TranslatedLocale } from "@/lib/i18n";
+
 /** Root of the MDX content tree (`website/content`). */
 export const contentDir = path.join(process.cwd(), "content");
 
@@ -36,12 +38,20 @@ export const docFrontmatterSchema = z
 /** Parsed, validated docs frontmatter. */
 export type DocFrontmatter = z.infer<typeof docFrontmatterSchema>;
 
-/** Route prefix of the Castilian Spanish docs (`content/es/docs`). */
-export const SPANISH_DOCS_PREFIX = "/es/docs";
+/**
+ * Route prefix of a translated locale's docs (`content/<locale>/docs`), e.g.
+ * `/es/docs`.
+ *
+ * @param locale - Translated locale.
+ * @returns The docs route prefix.
+ */
+export function translatedDocsPrefix(locale: TranslatedLocale): string {
+  return translatedDocsIndex(locale);
+}
 
 /** One MDX docs page on disk. */
 export type MdxDoc = {
-  /** Canonical route, e.g. `/docs/tutorials/bookstore` or `/es/docs/installation`. */
+  /** Canonical route, e.g. `/docs/tutorials/bookstore` or `/zh/docs/installation`. */
   route: string;
   /** Route segments under `/docs`, e.g. `["tutorials", "bookstore"]`. */
   segments: string[];
@@ -127,30 +137,36 @@ export async function getMdxDocs(): Promise<MdxDoc[]> {
 }
 
 /**
- * Read every Castilian Spanish docs page under `content/es/docs`, routed at
- * `/es/docs/...`. Each file translates the English page with the same
+ * Read every translated docs page under `content/<locale>/docs`, routed at
+ * `<prefix>/docs/...`. Each file translates the English page with the same
  * segments; the English tree ({@link getMdxDocs}) never includes them, so
  * search, MCP, llms.txt and the docs sidebar stay English-only.
  *
- * @returns All Spanish MDX docs pages, sorted by route.
+ * @param locale - Translated locale.
+ * @returns All of that locale's MDX docs pages, sorted by route.
  * @throws {Error} When any page has invalid frontmatter.
  */
-export async function getSpanishMdxDocs(): Promise<MdxDoc[]> {
+export async function getTranslatedMdxDocs(locale: TranslatedLocale): Promise<MdxDoc[]> {
   "use cache";
   cacheLife("max");
 
-  return readDocsTree(path.join(contentDir, "es", "docs"), SPANISH_DOCS_PREFIX);
+  return readDocsTree(path.join(contentDir, locale, "docs"), translatedDocsPrefix(locale));
 }
 
 /**
- * Look up one Spanish docs page by its segments under `/es/docs`.
+ * Look up one translated docs page by its segments under `<prefix>/docs`.
  *
+ * @param locale - Translated locale.
  * @param segments - e.g. `["tutorials", "bookstore"]`.
  * @returns The page, or `null` when it has not been translated.
  */
-export async function getSpanishMdxDoc(segments: string[]): Promise<MdxDoc | null> {
-  const route = segments.length ? `${SPANISH_DOCS_PREFIX}/${segments.join("/")}` : SPANISH_DOCS_PREFIX;
-  return (await getSpanishMdxDocs()).find((doc) => doc.route === route) ?? null;
+export async function getTranslatedMdxDoc(
+  locale: TranslatedLocale,
+  segments: string[],
+): Promise<MdxDoc | null> {
+  const prefix = translatedDocsPrefix(locale);
+  const route = segments.length ? `${prefix}/${segments.join("/")}` : prefix;
+  return (await getTranslatedMdxDocs(locale)).find((doc) => doc.route === route) ?? null;
 }
 
 async function readDocsTree(root: string, prefix: string): Promise<MdxDoc[]> {

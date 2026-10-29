@@ -29,7 +29,9 @@ import { ContractFlowVisual } from "@/components/contract-flow-visual";
 import { FlowHeroScene } from "@/components/flow-hero-scene";
 import { LocaleLink } from "@/components/locale-link";
 import { ScalarPreview } from "@/components/scalar-preview";
+import { HTML_LANG, localeHome, SITE_LOCALES } from "@/lib/i18n";
 import { serializeJsonLd } from "@/lib/seo";
+import { LANGUAGE_NOTICES } from "./language-notices";
 import {
   FEATURE_KEYS,
   type FeatureKey,
@@ -118,27 +120,35 @@ export function HomePage({
         <FlowHeroScene />
         <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-16">
           <div className="flex flex-col items-center gap-5 text-center">
-            {/* Language notice: a plain <a> because it crosses locales. */}
-            <a
-              href={copy.languageNotice.href}
-              hrefLang={copy.languageNotice.lang}
-              lang={copy.languageNotice.lang}
-              className="float-up group inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-mist-200/80 bg-mist-50/85 px-3 py-1.5 text-sm text-mist-950 shadow-sm transition-colors hover:border-mist-300 hover:bg-mist-100/90 dark:border-mist-900/70 dark:bg-mist-950/30 dark:text-mist-100 dark:hover:bg-mist-950/50 dim:border-mist-900/60 dim:bg-mist-950/25 dim:text-mist-100"
-              style={{ animationDelay: "40ms" }}
-            >
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-mist-200/70 px-2 py-0.5 text-xs font-semibold dark:bg-mist-800/60 dim:bg-mist-800/50">
-                <TranslateIcon aria-hidden className="size-3.5" />
-                {copy.languageNotice.badge}
-              </span>
-              <span>{copy.languageNotice.text}</span>
-              <span className="inline-flex items-center gap-1 font-medium underline underline-offset-4">
-                {copy.languageNotice.cta}
-                <ArrowRightIcon
-                  aria-hidden
-                  className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-                />
-              </span>
-            </a>
+            {/* Language notices: plain <a> links because they cross locales. */}
+            <div className="flex flex-col items-center gap-2">
+              {SITE_LOCALES.filter((other) => other !== locale).map((other, index) => {
+                const notice = LANGUAGE_NOTICES[other];
+                return (
+                  <a
+                    key={other}
+                    href={localeHome(other)}
+                    hrefLang={HTML_LANG[other]}
+                    lang={HTML_LANG[other]}
+                    className="float-up group inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-mist-200/80 bg-mist-50/85 px-3 py-1.5 text-sm text-mist-950 shadow-sm transition-colors hover:border-mist-300 hover:bg-mist-100/90 dark:border-mist-900/70 dark:bg-mist-950/30 dark:text-mist-100 dark:hover:bg-mist-950/50 dim:border-mist-900/60 dim:bg-mist-950/25 dim:text-mist-100"
+                    style={{ animationDelay: `${40 + index * 20}ms` }}
+                  >
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-mist-200/70 px-2 py-0.5 text-xs font-semibold dark:bg-mist-800/60 dim:bg-mist-800/50">
+                      <TranslateIcon aria-hidden className="size-3.5" />
+                      {notice.badge}
+                    </span>
+                    <span>{notice.text}</span>
+                    <span className="inline-flex items-center gap-1 font-medium underline underline-offset-4">
+                      {notice.cta}
+                      <ArrowRightIcon
+                        aria-hidden
+                        className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                      />
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
             <h1
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}

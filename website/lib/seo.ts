@@ -4,6 +4,7 @@ import {
   HTML_LANG,
   languageAlternates,
   OG_LOCALE,
+  SITE_LOCALES,
   type SiteLocale,
   type TranslatedPath,
 } from "@/lib/i18n";
@@ -203,7 +204,11 @@ export function buildMetadata(input: PageSeoInput): Metadata {
       images: [{ url: image, width: 1200, height: 630, alt: fullTitle }],
       locale: OG_LOCALE[locale],
       ...(input.translatedPath
-        ? { alternateLocale: [OG_LOCALE[locale === "es" ? "en" : "es"]] }
+        ? {
+            alternateLocale: SITE_LOCALES.filter((other) => other !== locale).map(
+              (other) => OG_LOCALE[other],
+            ),
+          }
         : {}),
     },
     twitter: {
@@ -272,7 +277,7 @@ export function buildWebSiteJsonLd(): Record<string, unknown> {
     name: SITE_NAME,
     alternateName: [...BRAND_ALTERNATE_NAMES],
     url: SITE_URL,
-    inLanguage: [HTML_LANG.en, HTML_LANG.es],
+    inLanguage: SITE_LOCALES.map((locale) => HTML_LANG[locale]),
     publisher: { "@id": ORGANIZATION_ID },
   };
 }

@@ -68,10 +68,11 @@ const nextConfig: NextConfig = {
     "/docs": ["./content/**/*.mdx"],
     "/docs/[slug]": ["./content/**/*.mdx"],
     "/docs/[slug]/[child]": ["./content/**/*.mdx"],
-    // Castilian Spanish docs (content/es/docs) and the index that lists them.
-    "/es/docs": ["./content/es/docs/**/*.mdx"],
-    "/es/docs/[slug]": ["./content/es/docs/**/*.mdx"],
-    "/es/docs/[slug]/[child]": ["./content/es/docs/**/*.mdx"],
+    // Translated docs (content/<locale>/docs: es, zh) and the indexes that
+    // list them, served by app/[locale]/docs.
+    "/[locale]/docs": ["./content/*/docs/**/*.mdx"],
+    "/[locale]/docs/[slug]": ["./content/*/docs/**/*.mdx"],
+    "/[locale]/docs/[slug]/[child]": ["./content/*/docs/**/*.mdx"],
     "/blog": ["./content/blog/*.mdx"],
     "/blog/[slug]": ["./content/blog/*.mdx"],
     "/blog/rss.xml": ["./content/blog/*.mdx"],

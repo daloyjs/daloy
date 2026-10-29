@@ -63,6 +63,20 @@ const NAV_COPY: Record<
     closeMenu: "Cerrar el menú de navegación",
     otherLanguage: "Contenido en inglés",
   },
+  zh: {
+    home: "/zh" as Route,
+    items: [
+      { href: "/zh/docs" as Route, label: "文档" },
+      { href: "/blog", label: "博客" },
+      { href: "/zh/docs/getting-started" as Route, label: "快速开始" },
+      { href: "/zh/docs/tutorials/bookstore" as Route, label: "教程" },
+      { href: "/docs/api-reference" as Route, label: "API" },
+    ],
+    installation: { href: "/zh/docs/installation" as Route, label: "安装" },
+    openMenu: "打开导航菜单",
+    closeMenu: "关闭导航菜单",
+    otherLanguage: "英文内容",
+  },
 };
 
 const socialLinks = [
