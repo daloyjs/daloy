@@ -1,0 +1,170 @@
+---
+title: Errores y problem+json
+description: Lanza errores tipados en DaloyJS y obtén por defecto respuestas problem+json de la RFC 9457. Personaliza, amplía y documenta los errores en OpenAPI.
+keywords:
+  - problem+json
+  - RFC 9457
+  - errores DaloyJS
+  - respuestas de error HTTP
+  - errores tipados TypeScript
+---
+
+# Errores y problem+json
+
+En DaloyJS los errores son ciudadanos de primera clase. Cada `HttpError` lanzado se serializa como [problem+json de la RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) con una URI `type` estable, un id de petición y el Content-Type adecuado.
+
+<FlowDiagram title="Del error lanzado a problem+json" numbered steps={[
+          {
+            eyebrow: "handler",
+            label: "throw new NotFoundError(...)",
+            detail: "cualquier subclase de HttpError",
+            tone: "accent",
+          },
+          {
+            eyebrow: "framework",
+            label: "Mapear a los campos de la RFC 9457",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "producción",
+            label: "Ocultar el detalle de los 5xx",
+            detail: "solo se muestra si el entorno es development o test",
+            tone: "muted",
+          },
+          {
+            eyebrow: "salida",
+            label: "Respuesta serializada",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]} caption="Un HttpError lanzado se convierte automáticamente en un documento problem+json. Salvo que el entorno sea explícitamente development o test, el campo detail de las respuestas 5xx se oculta para que las trazas de pila y los fragmentos de SQL nunca lleguen al cliente, mientras que el error completo sigue llegando a tu hook onError." />
+
+## Clases de error integradas [#built-in-error-classes]
+
+```ts
+import {
+  HttpError,                         // clase base: cualquier status, type/title/headers personalizados
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401 + cache-control: no-store
+  ForbiddenError,                    // 403 + cache-control: no-store
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + cabecera Allow
+  RequestTimeoutError,               // 408 / 503 / 504 + cache-control: no-store
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After + cache-control: no-store
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500 (detail oculto fuera de dev/test)
+  ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
+} from "@daloyjs/core";
+```
+
+`TooManyRequestsError` y `ServiceUnavailableError` validan `retryAfterSeconds` de la misma forma: cualquier valor que no sea un entero seguro no negativo lanza un `RangeError` al construirlo, así que un `NaN` procedente de una variable de entorno ausente nunca se convierte en una cabecera `Retry-After` no válida. `RequestTimeoutError` (el plazo de `requestTimeoutMs`, consulta [`requestTimeoutStatus`](/docs/api-reference/app), en inglés) es `no-store` en todas sus variantes de estado desde la 1.16.0, así que una caché compartida nunca sigue sirviendo un `503`/`504` después de que el backend se recupere. Un `new HttpError(status, …)` a secas recibe un `type` de problem `https://httpstatuses.io/<status>`; las clases integradas llevan URIs estables `https://daloyjs.dev/errors/<slug>`.
+
+## Lanzar errores en un handler [#throwing-in-a-handler]
+
+```ts
+import { NotFoundError } from "@daloyjs/core";
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
+    const user = await db.find(params.id);
+    if (!user) throw new NotFoundError(`user ${params.id} not found`);
+    return { status: 200, body: user };
+  },
+);
+```
+
+## Formato en la red [#wire-format]
+
+El id de petición se devuelve al cliente en dos sitios: la cabecera de respuesta `x-request-id` y (según la [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail)) el campo `instance` del documento problem, como una URN `urn:request:<uuid>`. No hay una propiedad `requestId` de primer nivel: los clientes deben leer la cabecera o extraer la URN de `instance`.
+
+```json
+HTTP/1.1 404 Not Found
+content-type: application/problem+json
+x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
+
+{
+  "type": "https://daloyjs.dev/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user 42 not found",
+  "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
+}
+```
+
+## Ocultación en producción [#production-redaction]
+
+DaloyJS elimina el campo `detail` de cualquier respuesta 5xx salvo que el entorno sea **explícitamente** development o test, para que los mensajes de error internos y los fragmentos de SQL no lleguen a los clientes. El error completo se sigue enviando a tu logger y al hook `onError`.
+
+| Configuración | `detail` en 5xx |
+| --- | --- |
+| `env: "development"` o `env: "test"` | se muestra |
+| sin `env`, `NODE_ENV=development` o `test` | se muestra |
+| sin `env`, `NODE_ENV` sin definir, vacío o con cualquier otro valor | **se oculta** |
+| `env: "production"`, `production: true` o `NODE_ENV=production` | se oculta |
+| `production: false` con `NODE_ENV` sin definir | **se oculta** |
+
+Un entorno sin definir falla en modo cerrado a propósito. Los runtimes edge como Cloudflare Workers y Deno Deploy no tienen `NODE_ENV`, y tratar esa situación como desarrollo enviaría los mensajes de las excepciones a los clientes. `daloy dev` define `NODE_ENV=development` en su proceso hijo cuando no lo has definido tú, así que el desarrollo en local sigue mostrando el detalle. Los errores que serializas tú mismo (por ejemplo, un cuerpo de respuesta construido a partir de `err.message` en un bloque catch) no se ocultan. Lánzalos en su lugar, o lanza un `HttpError` con un `detail` seguro.
+
+## Clases de error personalizadas [#custom-error-classes]
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+export class QuotaExceededError extends HttpError {
+  constructor(resource: string) {
+    super(429, {
+      title: "Quota exceeded",
+      type: "https://api.example.com/errors/quota-exceeded",
+      detail: `Quota exceeded for ${resource}`,
+    });
+  }
+}
+```
+
+Todas las clases integradas de arriba definen un `type` `https://daloyjs.dev/errors/<slug>`. Un `HttpError` simple lanzado sin `type` recurre a `https://httpstatuses.io/<status>`. El middleware propio que responde `503` (`loadShedding()`, `concurrencyLimit()`, `requestTimeoutStatus: 503`) define su propio type de `daloyjs.dev`, así que la alternativa solo se aplica a los errores que construyes tú. Define `type` cuando los clientes dependan de él, o usa una clase integrada:
+
+```ts
+throw new HttpError(503, { title: "Service Unavailable" });
+// "type": "https://httpstatuses.io/503"
+
+throw new HttpError(503, {
+  title: "Service Unavailable",
+  type: "https://api.example.com/errors/service-unavailable",
+});
+```
+
+## Servicio no disponible [#service-unavailable]
+
+Para el modo de mantenimiento, la caída de una dependencia o una instancia que se está vaciando, lanza `ServiceUnavailableError`. Responde `503` con un type estable `https://daloyjs.dev/errors/service-unavailable`, un `Retry-After` opcional y `cache-control: no-store`, para que una CDN nunca siga sirviendo la caída después de que te recuperes.
+
+```ts
+import { ServiceUnavailableError } from "@daloyjs/core";
+
+if (await maintenance.isOn()) {
+  // Retry-After: 120. El detail se oculta fuera de development/test,
+  // así que la cabecera es lo que el cliente puede usar de verdad.
+  throw new ServiceUnavailableError(120, "scheduled database maintenance");
+}
+```
+
+`retryAfterSeconds` debe ser un entero no negativo. Cualquier otra cosa (`NaN` por una variable de entorno ausente, `-1`, `1.5`) lanza un `RangeError` en lugar de enviar una cabecera `Retry-After` mal formada.
+
+## `onError` personalizado [#custom-onerror]
+
+```ts
+app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.state.requestId }, "request failed");
+    // devuelve una Response para sustituirla; si no, DaloyJS serializa problem+json
+  },
+});
+```

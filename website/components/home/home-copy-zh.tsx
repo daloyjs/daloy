@@ -123,7 +123,7 @@ export const HOME_COPY_ZH: HomeCopy = {
     installation: "/zh/docs/installation",
     tutorial: "/zh/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/zh/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -133,7 +133,7 @@ export const HOME_COPY_ZH: HomeCopy = {
     primaryCta: "开始使用：安装 Daloy",
     secondaryCta: "阅读文档",
     contentLanguageNote:
-      "快速开始、安装和教程已有中文版；其余文档和博客目前只有英文版。",
+      "入门、教程及路由、校验、错误、OpenAPI、类型化客户端、安全等核心指南已有中文版；其余文档和博客仍为英文。",
     factsLabel: "项目概况",
     facts: [
       "3000 多个框架测试全部通过",

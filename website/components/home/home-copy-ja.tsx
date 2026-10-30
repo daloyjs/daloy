@@ -123,7 +123,7 @@ export const HOME_COPY_JA: HomeCopy = {
     installation: "/ja/docs/installation",
     tutorial: "/ja/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/ja/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -133,7 +133,7 @@ export const HOME_COPY_JA: HomeCopy = {
     primaryCta: "はじめる：Daloy をインストール",
     secondaryCta: "ドキュメントを読む",
     contentLanguageNote:
-      "はじめに、インストール、チュートリアルは日本語でお読みいただけます。その他のドキュメントとブログは現在英語のみです。",
+      "はじめに、インストール、チュートリアルと主要ガイド（ルーティング、検証、エラー、OpenAPI、型付きクライアント、セキュリティ）は日本語で読めます。その他のドキュメントとブログは英語のみです。",
     factsLabel: "プロジェクトの概要",
     facts: [
       "3,000 件以上のフレームワークテストがすべて成功",

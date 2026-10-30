@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-Тот же URL (`GET /docs`), те же живые эндпоинты `/openapi.json` и `/openapi.yaml`, та же обработка CSP; меняется только отрисованный HTML. Можно оставить и оба варианта: пусть автоматически смонтированный маршрут работает на Scalar, а второй маршрут со Swagger вы откроете сами через `swaggerUiHtml()` (ручной способ описан в [руководстве по OpenAPI](/docs/openapi), на английском).
+Тот же URL (`GET /docs`), те же живые эндпоинты `/openapi.json` и `/openapi.yaml`, та же обработка CSP; меняется только отрисованный HTML. Можно оставить и оба варианта: пусть автоматически смонтированный маршрут работает на Scalar, а второй маршрут со Swagger вы откроете сами через `swaggerUiHtml()` (ручной способ описан в [руководстве по OpenAPI](/ru/docs/openapi)).
 
-Нужен другой путь? Используйте объектную форму: `docs: { ui: "swagger", path: "/reference" }`. Объектная форма монтируется только вне продакшена, если не добавить `enabled: true` (начиная с 1.5.5), как и `docs: "auto"`, который пропускает монтирование при `production: true`. Нужен полный контроль? Задайте `docs: false` и смонтируйте собственные маршруты через `generateOpenAPI()` и `swaggerUiHtml() / scalarHtml()`: см. [руководство по OpenAPI](/docs/openapi) (на английском).
+Нужен другой путь? Используйте объектную форму: `docs: { ui: "swagger", path: "/reference" }`. Объектная форма монтируется только вне продакшена, если не добавить `enabled: true` (начиная с 1.5.5), как и `docs: "auto"`, который пропускает монтирование при `production: true`. Нужен полный контроль? Задайте `docs: false` и смонтируйте собственные маршруты через `generateOpenAPI()` и `swaggerUiHtml() / scalarHtml()`: см. [руководство по OpenAPI](/ru/docs/openapi).
 
 И `swaggerUiHtml()`, и `scalarHtml()` загружают свои ресурсы по умолчанию с CDN jsDelivr, поэтому строгая Content-Security-Policy должна их разрешать, иначе интерфейс документации может оказаться пустым. Автоматически смонтированный маршрут и `htmlResponse()` сами добавляют совместимую CSP. Если вы собираете ответ самостоятельно, импортируйте `docsContentSecurityPolicy` из `@daloyjs/core/docs` и передайте результат как заголовок ответа:
 
@@ -237,7 +237,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 ## Что дальше
 
-- [Маршрутизация](/docs/routing) (на английском)
-- [Валидация со Standard Schema](/docs/validation) (на английском)
-- [Механизмы безопасности и middleware](/docs/security) (на английском)
+- [Маршрутизация](/ru/docs/routing)
+- [Валидация со Standard Schema](/ru/docs/validation)
+- [Механизмы безопасности и middleware](/ru/docs/security)
 - [Руководство: API книжного магазина](/ru/docs/tutorials/bookstore)

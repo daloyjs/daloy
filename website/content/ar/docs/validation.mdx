@@ -1,0 +1,234 @@
+---
+title: التحقق في DaloyJS
+description: يتحقق DaloyJS من الطلبات والاستجابات عبر Standard Schema. استخدم Zod أو Valibot أو ArkType أو TypeBox، واختر أداة التحقق المناسبة لمشروعك.
+keywords:
+  - التحقق في DaloyJS
+  - Standard Schema
+  - التحقق من الطلبات في TypeScript
+  - Zod مع DaloyJS
+  - Valibot مع DaloyJS
+  - ArkType
+  - TypeBox
+sitemap:
+  priority: 0.7
+---
+
+# التحقق
+
+يتحقق DaloyJS من المدخلات عبر [Standard Schema](https://github.com/standard-schema/standard-schema)، وهي واجهة صغيرة تعرضها أدوات تحقق مثل **Zod** و**Valibot** و**ArkType**، وكذلك TypeBox عبر محوّل Standard Schema. اختر أداة التحقق التي تناسب مشروعك؛ فعقد DaloyJS واحد في كل الحالات.
+
+<BranchDiagram title="واجهة واحدة وأربع أدوات تحقق" source={{
+          eyebrow: "عقد الإطار",
+          label: "Standard Schema",
+          detail: "الخاصية ~standard",
+        }} branches={[
+          { eyebrow: "الافتراضي", label: "Zod", detail: "z.object({ ... })" },
+          {
+            eyebrow: "قابل لإزالة الشيفرة غير المستخدمة",
+            label: "Valibot",
+            detail: "v.object({ ... })",
+          },
+          { label: "ArkType", detail: "type({ ... })" },
+          { label: "TypeBox", detail: "عبر محوّل" },
+        ]} caption="تعرض كل أداة تحقق الخاصية ~standard نفسها، لذا يستنتج DaloyJS أنواع المعالج، ويولّد OpenAPI، ويعيد أخطاء problem+json عبر مسار واحد في الإطار." />
+
+## ما الذي يُتحقق منه [#what-gets-validated]
+
+يمكنك لكل مسار التصريح بمخططات لما يلي:
+
+- `request.params`: معاملات المسار المفكوكة الترميز. تبدأ كنصوص؛ حوّلها في مخططك إن أردت أرقامًا أو UUID أو قيمًا تعدادية.
+- `request.query`: قيم سلسلة الاستعلام. تصبح المفاتيح المكررة مصفوفات قبل التحقق.
+- `request.headers`: ترويسات الطلب بأسماء بأحرف صغيرة.
+- `request.body`: أجسام الطلبات المحللة. لا يُقرأ الجسم إلا عندما يصرّح المسار بمخطط للجسم.
+- `responses[status].body`: أجسام استجابة مكتوبة الأنواع ومتحقق منها.
+
+تُسقط سلاسل الاستعلام وحقول النماذج وحقول multipart مفاتيح تلويث النماذج الأولية مثل `__proto__` و`constructor` و`prototype` قبل التحقق.
+
+## قيّد الحقول الرقمية (المال والكميات والمعرّفات) [#bound-numeric-fields]
+
+يقبل `z.number()` المجرد القيمة `1e308`، و`-Infinity` بعد أخطاء التحويل، وقيمًا أخرى سليمة لأعداد IEEE العشرية لكنها كارثية للمال أو المخزون أو ترقيم الصفحات. ضع دائمًا حدودًا خاصة بالمجال على حقول الطلب الرقمية:
+
+```ts
+import { z } from "zod";
+
+// المال: قيمة منتهية وموجبة ومحدودة بسقف تجاري.
+const Money = z.number().finite().positive().max(1_000_000);
+
+// الكميات: أعداد صحيحة في نطاق معقول.
+const Qty = z.number().int().positive().max(10_000);
+
+// استخدم coerce فقط عندما تصل القيمة نصًا (استعلام أو نموذج).
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// الأجسام الصارمة ترفض الحقول الإضافية في الإسناد الجماعي.
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();
+```
+
+يرفض Zod 4 بالفعل `NaN` والأرقام غير المنتهية في `z.number()` في حالات كثيرة، لكن السقف (`.max()`) وقيد الإشارة (`.positive()` / `.nonnegative()`) يظلان خط دفاعك الأخير ضد احتيال المبالغ المستردة والفيض العددي. اقرن ذلك بمخططات الاستجابة حتى لا تتسرب الحقول الحساسة إلى الخارج أبدًا.
+
+## مثال متكامل [#end-to-end-example]
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateLineItem = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const LineItem = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
+  },
+  async ({ params, query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: `${params.orderId}:li_1`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+## اختر أداة التحقق [#pick-your-validator]
+
+- [Zod](/docs/validation/zod) (بالإنجليزية): الخيار الافتراضي لمعظم الفرق. واجهة قابلة للتسلسل، ومنظومة كبيرة، وسهلة التعلم.
+- [Valibot](/docs/validation/valibot) (بالإنجليزية): معيارية وقابلة لإزالة الشيفرة غير المستخدمة. ممتازة لبيئات الحافة (edge) وللعقود التي تُشحن إلى المتصفح.
+
+تعمل أيضًا المخططات المتوافقة مع ArkType وTypeBox عندما تعرض الخاصية `~standard` نفسها، لكن DaloyJS لا يوفّر توثيقًا وقوالب رسمية إلا لـ Zod وValibot.
+
+## مقارنة جنبًا إلى جنب [#side-by-side]
+
+```ts
+// Zod
+import { z } from "zod";
+const Body = z.object({
+  sku: z.string(),
+  qty: z.number().int().positive(),
+});
+
+// Valibot
+import * as v from "valibot";
+const Body = v.object({
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+// ArkType
+import { type } from "arktype";
+const Body = type({ sku: "string", qty: "1<=number.integer" });
+
+// TypeBox
+import { Type } from "@sinclair/typebox";
+const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 }) });
+// غلّفه بمحوّل Standard Schema الخاص بمشروعك قبل تمريره إلى DaloyJS.
+```
+
+بمجرد أن يعرض المخطط `~standard`، يستنتج DaloyJS أنواع المعالج، ويولّد OpenAPI، ويعيد أخطاء problem+json بالطريقة نفسها أيًا كانت أداة التحقق التي أنتجته.
+
+## الأخطاء [#errors]
+
+<FlowDiagram title="حلّل، ثم تفرّع حسب النتيجة" steps={[
+          {
+            eyebrow: "غير موثوق",
+            label: "الطلب الخام",
+            detail: "params · query · headers · body",
+            tone: "muted",
+          },
+          {
+            eyebrow: "standard schema",
+            label: "تحليل المخطط",
+            detail: "validate(schema, input)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "عند الفشل",
+            label: "422 problem+json",
+            detail: "errors: [{ path, message }]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "عند النجاح",
+            label: "معالج مكتوب الأنواع",
+            detail: "ctx.body / params / query / headers",
+            tone: "success",
+          },
+        ]} caption="يعمل كل مخطط مصرّح به قبل معالجك. المدخلات غير الصالحة لا تصل أبدًا إلى شيفرة المعالج، بل تنتهي مبكرًا باستجابة 422 وفق RFC 9457. أما المدخلات الصالحة فتصل مكتوبة الأنواع بالكامل." />
+
+عند المدخلات غير الصالحة، يعيد DaloyJS **422 Unprocessable Entity** بصيغة problem+json وفق RFC 9457، مع مصفوفة `errors` تحتوي على سجلات `path` و`message` لكل مشكلة. لا تكتب معالج أخطاء لهذا، فهو مدمج. راجع [الأخطاء وproblem+json](/ar/docs/errors).
+
+## التحقق من الاستجابات [#response-validation]
+
+عند التصريح بمخطط استجابة، يتحقق DaloyJS من القيمة التي يعيدها المعالج قبل تسلسلها. والقيمة المتحقق منها هي ما يُرسل عبر الشبكة، لذا فإن مخططات الكائنات التي تحذف المفاتيح غير المعروفة تمنع أيضًا تسرب الحقول غير المصرّح بها إلى العملاء. إذا فشل التحقق، يتلقى العميل في الإنتاج استجابة مشكلة 500 منقّحة.
+
+## حدود الجسم وأنواع المحتوى [#body-limits-and-content-types]
+
+يحدّ خيار التطبيق `bodyLimitBytes` (الافتراضي 1 MiB) من قيمة Content-Length المعلنة ومن الحجم المتدفق لكل جسم طلب -\> **413**. ومنذ 1.5.4 ينطبق هذا على كل مسار، بما في ذلك الأجسام التي يقرؤها المعالج بنفسه من `ctx.request`؛ ويُفحص الحد بشكل كسول، عند قراءة الجسم.
+
+عندما يصرّح المسار بـ `request.body`، يفرض DaloyJS أيضًا ما يلي:
+
+- مطابقة Content-Type لقائمة `accepts` الخاصة بالمسار، أو لـ `allowedContentTypes` العامة إن ضُبطت -\> **415**.
+- أنواع الأجسام المقبولة افتراضيًا: `application/json` و`application/x-www-form-urlencoded` و`multipart/form-data`.
+- تحليل آمن من تلويث النماذج الأولية لـ JSON وسلاسل الاستعلام ونماذج urlencoded ونماذج multipart.
+
+تُحلَّل أجسام JSON إلى كائنات، وأجسام urlencoded عبر `URLSearchParams`، وأجسام multipart عبر واجهة المنصة `Request.formData()`. وإذا فعّلت لمسار ما نوع وسائط نصيًا مخصصًا، يمرر DaloyJS النص المفكوك إلى مخطط الجسم لديك.
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## المزج بين أدوات التحقق [#mixing-validators]
+
+يمكنك المزج بينها لكل مسار. مخطط Zod في ملف ومخطط Valibot في ملف آخر كلاهما صالح، وهذا مفيد عند ترحيل قاعدة شيفرة قائمة أو عند استهلاك مخططات من حزمة مشتركة.

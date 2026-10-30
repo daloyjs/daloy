@@ -1,0 +1,333 @@
+---
+title: التوجيه
+description: "عرّف مسارات HTTP آمنة الأنواع في DaloyJS عبر واجهة قائمة على العقود: معاملات المسار والاستعلام والجسم ومخططات الاستجابة تُستنتج من تصريح واحد."
+keywords:
+  - التوجيه في DaloyJS
+  - مسارات آمنة الأنواع
+  - توجيه قائم على العقود
+  - موجّه HTTP بلغة TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# التوجيه
+
+يستخدم DaloyJS شجرة مقاطع (segment trie) مع مسار سريع للمسارات الثابتة. بعد فحوص أمان المسار، تُحَل المسارات الثابتة المطابقة تمامًا باستدعاء واحد لـ `Map.get`. وتفضّل عمليات البحث الديناميكية المقاطع الحرفية، ثم المعاملات، ثم أحرف البدل (wildcards). البحث الذي لا يحتاج إلى تراجع (backtracking) خطي بالنسبة لطول المسار؛ أما المسارات المتداخلة فقد تتطلب زيارة فروع إضافية في الشجرة.
+
+لا تُحتسب مطابقةً إلا المسارات الكاملة. فمثلًا، تسجيل `/users/me/details/:field` لا يمنع `/users/:id` من مطابقة `/users/me`. وداخل الشجرة الديناميكية، يفوز المسار الكامل ذو الأولوية الأعلى حتى لو لم يكن لديه معالج للطريقة المطلوبة. ويفوز المسار الثابت المطابق تمامًا في الطرق المسجّلة له؛ أما الطرق الأخرى فقد تظل تطابق الشجرة الديناميكية.
+
+## الاختصارات التدريجية [#progressive-shorthands]
+
+تقلّل اختصارات الطرق من التكلف دون إزالة العقد. يشتق DaloyJS معرّف عملية ثابتًا من الطريقة والمسار، مثل `getRoot` أو `postBookItemsByItemId`. ويبقى `operationId` الصريح هو الغالب.
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+تحتفظ الاختصارات بسلوك التحقق وOpenAPI والأمان والعميل مكتوب الأنواع نفسه الموجود في `route()`. لا توجد صيغة بمعاملين تتخطى عقد الاستجابة بصمت. وللجسم المعتم عمدًا، مرّر `acknowledgeNoResponseBodySchema: true` صراحةً. وتتطلب الاستجابات الخام الناجحة التي يعيدها `preBody` أو `beforeHandle` الإقرار نفسه. أما رفض الخطافات العادي بـ `4xx`/`5xx` فلا يتطلبه. وتبقى أوصاف الاستجابات اختيارية؛ فالقيم المحذوفة تصبح وصفًا ثابتًا `HTTP <status> response` في OpenAPI.
+
+## تعريف المسارات [#defining-routes]
+
+تصريح المسار هو المصدر الوحيد للحقيقة في المطابقة، والتحقق من الطلب، والتحقق من الاستجابة، ومخرجات OpenAPI، والعملاء مكتوبي الأنواع. وفّر `operationId` عند استخدام `route()` لمسار عام تريده في العميل مكتوب الأنواع أو في SDK المولَّد. أما اختصارات HTTP فتشتقه تلقائيًا. ويرفض DaloyJS قيم `operationId` المكررة عند التسجيل.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // تُستنتج أنواع params وquery وheaders من المخططات أعلاه.
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## استنتاج الأنواع عبر ملفات متعددة [#multi-file-type-inference]
+
+صدّر كل مسار باستخدام `defineRoute()`، ثم اجمع العقود المستوردة عبر `registerRoutes()`. يبقى الصف (tuple) الحرفي سليمًا عبر حدود الملفات والوحدات، لذا يحتفظ العميل الذي لا يحتاج إلى توليد شيفرة بكل معرّف عملية وكل مخطط.
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+تتراكم استدعاءات `route()` المتسلسلة بشكل صحيح أيضًا. تجنّب تعليق النوع المجرد `const app: App` على التطبيق النهائي المُركَّب، لأنه يوسّع النوع صراحةً فيمحو صف المسارات.
+
+لا يزال `group()` بأسلوب الاستدعاء الراجع و`register()` الخاص بالإضافات يوفّران نطاقًا في وقت التشغيل، لكن TypeScript لا يستطيع توسيع متغير الأب من داخل تلك الاستدعاءات. للحصول على عميل مكتوب الأنواع بالكامل دون توليد شيفرة عبر وحدات كبيرة، صدّر صفوف مسارات حرفية واجعل `registerRoutes()` حدّ التركيب النهائي.
+
+## طرق HTTP [#http-methods]
+
+تشمل الطرق المدعومة `GET` و`POST` و`PUT` و`PATCH` و`DELETE` و`HEAD` و`OPTIONS`. وتُرفض الطرق المخصصة مثل `TRACE` و`CONNECT` وأفعال WebDAV عند التسجيل.
+
+يعود `HEAD` إلى مسار `GET` المطابق عندما لا يوجد مسار `HEAD` صريح، فيعيد الترويسات نفسها بجسم فارغ. ويعيد `OPTIONS` استجابة فحص مسبق (preflight) بالرمز 204 مع ترويسة `Allow` عندما يكون المسار موجودًا دون تسجيل مسار `OPTIONS` صريح.
+
+تتوفر طرق مختصرة لـ `GET` و`POST` و`PUT` و`PATCH` و`DELETE` و`HEAD`. سجّل مسار `OPTIONS` صريحًا باستخدام `route()`، وإلا فإن DaloyJS يوفّر معالجة تلقائية للفحص المسبق.
+
+## معاملات المسار [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+تُفك قيم المسار قبل التحقق. إذا حذفت مخطط `request.params`، يُستنتج `ctx.params` من المسار كنصوص خام. وأسماء المعاملات المتعارضة في الموضع نفسه من الشجرة، مثل `/a/:x` و`/a/:y`، ترمي خطأً عند التسجيل.
+
+يجب أن تكون أسماء الالتقاط غير فارغة وفريدة داخل المسار. وتُرفض الأسماء `__proto__` و`constructor` و`prototype` حتى تبقى كائنات المعاملات آمنة للاستخدام لاحقًا. والتسجيل المرفوض لا يحجز `operationId` الخاص به.
+
+### التقاطات أحرف البدل [#wildcard-captures]
+
+يلتقط المقطع الأخير `*name` بقية المسار في نص واحد مفكوك الترميز، ويتطلب مقطعًا واحدًا متبقيًا على الأقل. ويستخدم `*` المجرد الاسم `wildcard`. يجب أن تكون أحرف البدل في النهاية: يرمي `/assets/*path/private` خطأً أثناء التسجيل بدلًا من مطابقة مسار أوسع بصمت. ويمكن لطرق متعددة مشاركة مسار بحرف بدل عندما يتفق اسم الالتقاط. أما الطرق المكررة وأسماء أحرف البدل المتعارضة فترمي خطأً.
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+مقاطع اجتياز المسار الخام (`..`)، والمقاطع الفارغة `//`، وتسلسلات الترميز بالنسبة المئوية المشوّهة في الالتقاطات لا تطابق شيئًا بشكل نظيف. ويطبّق اكتشاف الطرق الفحوص نفسها، فلا تُعلن المسارات المرفوضة عن ترويسة `Allow`. ومنذ 1.3.7، لا يربط مقطع المعامل أو حرف البدل أبدًا `.` أو `..`، بما في ذلك صيغتاهما المرمّزتان `%2e` و`%2e%2e`. فمحلل URL يحل هذه كخطوات بين المجلدات، والسماح بربطها سيعطي المعالج مسارًا مختلفًا عن المسار الذي رأته البرمجيات الوسيطة. ويرفض الالتقاط أيضًا قيمة مفكوكة تحتوي على مكوّن `.` أو `..` خلف فاصل مرمّز (`..%2F..%2Fsecret`، `..%5C`)، أو أي محرف تحكم (`%00`، `%0A`، `%09`، `%7F`). وتحصل هذه الطلبات على `404`.
+
+ويُرفض افتراضيًا بالرمز `404` أيضًا الالتقاط الذي يفك `/` أو `\` مرمّزًا (`%2F`، `%5C`)، لأن قيمة ملتقطة واحدة ستمتد حينها عبر عدة مقاطع مسار لدى أي مستهلك لاحق من نظام ملفات أو URL أو وكيل. إذا كان مسار ما يستخدم فعلًا معرّفات تحتوي على شرطة مائلة، ففعّل ذلك لكل مسار على حدة:
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+التفعيل لا يعيد أبدًا قبول مكوّنات `..` أو محارف التحكم. وتبقى المعاملات المفكوكة بيانات غير موثوقة وليست مسارات نظام ملفات منقّاة، لذا تحقق من الوصول إلى نظام الملفات بشكل منفصل.
+
+وتحافظ المحوّلات (adapters) أيضًا على رؤية واحدة للمسار بين الموجّه والبرمجيات الوسيطة (منذ 1.3.7). يوحّد محوّل Node أهداف الطلب التي تحتوي على `\` أو مقاطع النقطة أو صيغها `%2e` كما يفعل `new URL()` قبل التوجيه. ويرفض محوّلا Node وAWS Lambda كلاهما بالرمز `400` أي ترويسة `Host` ليست بالصيغة البسيطة `host[:port]` (مثل تلك التي تحتوي على `\ / ? # @ %` أو مسافات بيضاء). لذا فإن الحمايات القائمة على المسار مثل `except()` تطابق بالضبط المسار الذي يُنفَّذ. راجع [محوّل Node](/docs/adapters/node) (بالإنجليزية) للتفاصيل.
+
+## المجموعات [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// المسار النهائي: /api/v1/health
+```
+
+تدمج المجموعات البادئات والوسوم والخطافات وافتراضيات المصادقة في المسارات المسجّلة داخل الاستدعاء الراجع. والتطبيق الابن مغلّف: البرمجيات الوسيطة المضافة داخل مجموعة لا تتسرب إلى المسارات خارجها. والمسارات المجمّعة مرئية للتوجيه في وقت التشغيل ولـ OpenAPI. للعقود المتوازية `/api/v1` و`/api/v2`، وسياسة الترحيل، وحزم SDK المولَّدة بشكل منفصل، اقرأ [دليل إصدارات الواجهة البرمجية](/docs/api-versioning) (بالإنجليزية).
+
+## خيارات المسار [#route-options]
+
+- `request`: مخططات لـ `params` و`query` و`headers` و`body`.
+- `responses`: رموز الحالة المصرّح بها ومخططات اختيارية لجسم الاستجابة وترويساتها.
+- `accepts`: قائمة سماح لـ `Content-Type` لكل مسار، للمسارات التي لها مخططات جسم طلب.
+- `auth`: متطلب الأمان في OpenAPI للمسار. قرنه بخطاف مصادقة مثل `bearerAuth()`.
+- `internal`: يخفي المسار عن المحوّلات العامة مع السماح باستدعاءات `app.inject()` داخل العملية.
+- `deprecated` و`sunset`: يعلّمان نقطة النهاية كمهملة ويُصدران ترويسات الاستجابة المطابقة.
+- `callbacks` و`meta`: يضيفان استدعاءات OpenAPI الراجعة، والأمثلة، وبيانات وصفية للمسار مناسبة للذكاء الاصطناعي.
+
+## الخطافات [#hooks]
+
+تربط الخطافات سلوكًا بنقاط ثابتة في دورة الحياة:
+
+- `onRequest`: الأبكر، قبل التحليل.
+- `preBody`: بعد مطابقة المسار، وقبل التحقق من المخطط أو قراءة الجسم. تعمل هنا المصادقة المدمجة عبر الترويسات وJWT وbasic وmTLS.
+- `beforeHandle`: بعد التحقق، وقبل معالجك. أعد `Response` لإنهاء المعالجة مبكرًا.
+- `afterHandle`: يغلّف نتيجة المعالج أو يحوّلها قبل تسلسل الاستجابة.
+- `onError`: يراقب استجابة الخطأ أو يستبدلها.
+- `onSend`: يعدّل الترويسات الصادرة في مكانها أو يعيد `Response` جديدة. يعمل في مسارات النجاح والخطأ والفحص المسبق `OPTIONS`.
+- `onResponse`: المراقب الأخير. استخدمه للتسجيل والمقاييس، ولا تعدّل الاستجابة هنا.
+
+<FlowDiagram title="دورة حياة الطلب" numbered caption="تُطلق الخطافات في نقاط ثابتة حول معالجك. يمكن للمصادقة الرخيصة أن ترفض في preBody قبل قراءة جسم الطلب. وتبقى البرمجيات الوسيطة التي تحتاج إلى الجسم في beforeHandle بعد التحقق. إذا رمى أي شيء خطأً، ينتقل التحكم إلى onError، ثم يظل onSend وonResponse يعملان." steps={[
+          { label: "onRequest", eyebrow: "الأبكر", detail: "قبل التحليل" },
+          {
+            label: "preBody",
+            eyebrow: "أرخص رفض",
+            detail: "المسار مطابَق · الجسم لم يُمس",
+          },
+          {
+            label: "validate",
+            eyebrow: "الإطار",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "أعد Response لإنهاء المعالجة مبكرًا",
+          },
+          { label: "handler", detail: "منطق مسارك", tone: "accent" },
+          { label: "afterHandle", detail: "تغليف النتيجة أو تحويلها" },
+          { label: "onSend", detail: "تعديل الـ Response أو استبدالها" },
+          {
+            label: "onResponse",
+            eyebrow: "دائمًا",
+            detail: "للمراقبة فقط",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## تحويل الاستجابات باستخدام `onSend` [#transforming-responses-with-onsend]
+
+استخدم `onSend` عندما تحتاج إلى إعادة كتابة الاستجابة الصادرة، مثلًا لإرفاق ترويسة، أو حذف ترويسة داخلية، أو استبدال الاستجابة بالكامل. إعادة `void` تُبقي الاستجابة الحالية. وتتركّب خطافات `onSend` المتعددة على نمط خط المعالجة (عام -\> مجموعة -\> مسار).
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // أعلن دائمًا عن إصدار الواجهة البرمجية في كل استجابة صادرة،
+      // بما في ذلك استجابات الأخطاء والفحوص المسبقة OPTIONS.
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // احذف تفاصيل التنفيذ الداخلية قبل أن تغادر الاستجابة.
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+يعمل `onSend` *بعد* التحقق من الاستجابة وبعد دمج الترويسات الخاصة بنطاق الطلب، بما فيها `x-request-id`. ويعمل *قبل* `onResponse`، الذي يبقى المكان الصحيح للتسجيل والمقاييس.
+
+## 405 الطريقة غير مسموح بها [#405-method-not-allowed]
+
+إذا سُجّل مسار لطريقة واحدة ثم استُدعي بطريقة أخرى، يعيد الموجّه **405** مع ترويسة `Allow` صحيحة، وليس 404 مضللًا أبدًا. وتُستبعد المسارات المعلّمة بـ `internal: true` من استجابات 405 و`Allow` العامة حتى لا تتسرب نقاط النهاية الإدارية أو المجدولة المخفية عبر استكشاف الطرق.
+
+يشمل اكتشاف الطرق كلًا من المسار الثابت المطابق تمامًا والمسار الديناميكي المختار. فمع `GET /users/me` و`POST /users/:id`، يُعلن المسار `/users/me` عن الطريقتين المسجّلتين كلتيهما. وتسرد الترويسة التسجيلات الصريحة؛ أما معالجة HEAD وOPTIONS المركّبة تلقائيًا فلا تضيف إدخالات.
+
+## الأداء [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

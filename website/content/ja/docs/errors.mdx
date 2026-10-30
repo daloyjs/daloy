@@ -1,0 +1,170 @@
+---
+title: エラーと problem+json
+description: DaloyJS で型付きのエラーをスローすると、デフォルトで RFC 9457 の problem+json としてシリアライズされます。
+keywords:
+  - problem+json
+  - RFC 9457
+  - DaloyJS エラー
+  - HTTP エラーレスポンス
+  - TypeScript 型付きエラー
+---
+
+# エラーと problem+json
+
+DaloyJS のエラーは第一級の機能です。スローされたすべての `HttpError` は、安定した `type` URI、リクエスト ID、適切な Content-Type を持つ [RFC 9457 problem+json](https://www.rfc-editor.org/rfc/rfc9457) にシリアライズされます。
+
+<FlowDiagram title="スローされたエラーから problem+json へ" numbered steps={[
+          {
+            eyebrow: "ハンドラー",
+            label: "throw new NotFoundError(...)",
+            detail: "任意の HttpError サブクラス",
+            tone: "accent",
+          },
+          {
+            eyebrow: "フレームワーク",
+            label: "RFC 9457 のフィールドに対応付け",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "本番環境",
+            label: "5xx の detail を秘匿",
+            detail: "env が development か test のときだけ表示",
+            tone: "muted",
+          },
+          {
+            eyebrow: "送信",
+            label: "シリアライズされたレスポンス",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]} caption="スローされた HttpError は自動で problem+json ドキュメントになります。環境が明示的に development か test でない限り、5xx レスポンスの detail フィールドは秘匿されるため、スタックトレースや SQL の断片がクライアントに届くことはありません。一方、完全なエラーは onError フックに渡されます。" />
+
+## 組み込みのエラークラス [#built-in-error-classes]
+
+```ts
+import {
+  HttpError,                         // 基底クラス：任意のステータス、独自の type/title/headers
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401 + cache-control: no-store
+  ForbiddenError,                    // 403 + cache-control: no-store
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + Allow ヘッダー
+  RequestTimeoutError,               // 408 / 503 / 504 + cache-control: no-store
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After + cache-control: no-store
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500（dev/test 以外では detail を秘匿）
+  ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
+} from "@daloyjs/core";
+```
+
+`TooManyRequestsError` と `ServiceUnavailableError` は `retryAfterSeconds` を同じ方法で検証します。負でない安全な整数以外の値はコンストラクト時に `RangeError` をスローするため、環境変数の設定漏れによる `NaN` が不正な `Retry-After` ヘッダーになることはありません。`RequestTimeoutError`（`requestTimeoutMs` の期限。[`requestTimeoutStatus`](/docs/api-reference/app)（英語）を参照）は、1.16.0 以降すべてのステータスで `no-store` になるため、バックエンドが復旧したあとも共有キャッシュが `503`/`504` を返し続けることはありません。素の `new HttpError(status, …)` には `https://httpstatuses.io/<status>` という problem の `type` が付き、組み込みのクラスには安定した `https://daloyjs.dev/errors/<slug>` の URI が付きます。
+
+## ハンドラーでスローする [#throwing-in-a-handler]
+
+```ts
+import { NotFoundError } from "@daloyjs/core";
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
+    const user = await db.find(params.id);
+    if (!user) throw new NotFoundError(`user ${params.id} not found`);
+    return { status: 200, body: user };
+  },
+);
+```
+
+## 送信される形式 [#wire-format]
+
+リクエスト ID は 2 か所でクライアントに返されます。`x-request-id` レスポンスヘッダーと、（[RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail) に従い）problem ドキュメントの `instance` フィールドにある `urn:request:<uuid>` 形式の URN です。トップレベルの `requestId` プロパティはないため、クライアントはヘッダーを読むか、`instance` から URN をパースしてください。
+
+```json
+HTTP/1.1 404 Not Found
+content-type: application/problem+json
+x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
+
+{
+  "type": "https://daloyjs.dev/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user 42 not found",
+  "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
+}
+```
+
+## 本番環境での秘匿 [#production-redaction]
+
+DaloyJS は、環境が**明確に** development か test である場合を除き、すべての 5xx レスポンスから `detail` フィールドを取り除きます。そのため、内部のエラーメッセージや SQL の断片がクライアントに漏れることはありません。完全なエラーは引き続きロガーと `onError` フックに渡されます。
+
+| 設定 | 5xx の `detail` |
+| --- | --- |
+| `env: "development"` または `env: "test"` | 表示 |
+| `env` なし、`NODE_ENV=development` または `test` | 表示 |
+| `env` なし、`NODE_ENV` が未設定、空、またはそれ以外 | **秘匿** |
+| `env: "production"`、`production: true`、または `NODE_ENV=production` | 秘匿 |
+| `production: false` で `NODE_ENV` が未設定 | **秘匿** |
+
+環境が未設定のときに安全側に倒れるのは意図的です。Cloudflare Workers や Deno Deploy などのエッジランタイムには `NODE_ENV` がなく、それを development とみなすと例外メッセージがクライアントに送られてしまいます。`daloy dev` は、`NODE_ENV` を設定していない場合、子プロセスに `NODE_ENV=development` を設定するため、ローカル開発では引き続き detail が表示されます。自分でシリアライズしたエラー（たとえば catch ブロックで `err.message` から組み立てたレスポンスボディ）は秘匿されません。代わりにスローするか、安全な `detail` を持つ `HttpError` をスローしてください。
+
+## 独自のエラークラス [#custom-error-classes]
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+export class QuotaExceededError extends HttpError {
+  constructor(resource: string) {
+    super(429, {
+      title: "Quota exceeded",
+      type: "https://api.example.com/errors/quota-exceeded",
+      detail: `Quota exceeded for ${resource}`,
+    });
+  }
+}
+```
+
+上記の組み込みクラスはすべて `https://daloyjs.dev/errors/<slug>` という `type` を設定します。`type` を指定せずにスローした素の `HttpError` は、`https://httpstatuses.io/<status>` にフォールバックします。`503` を返す公式のミドルウェア（`loadShedding()`、`concurrencyLimit()`、`requestTimeoutStatus: 503`）は独自の `daloyjs.dev` の type を設定するため、フォールバックが適用されるのは自分で構築したエラーだけです。クライアントが `type` で判別する場合は `type` を設定するか、組み込みのクラスを使ってください：
+
+```ts
+throw new HttpError(503, { title: "Service Unavailable" });
+// "type": "https://httpstatuses.io/503"
+
+throw new HttpError(503, {
+  title: "Service Unavailable",
+  type: "https://api.example.com/errors/service-unavailable",
+});
+```
+
+## サービス利用不可 [#service-unavailable]
+
+メンテナンスモード、依存先の障害、ドレイン中のインスタンスには、`ServiceUnavailableError` をスローします。これは安定した `https://daloyjs.dev/errors/service-unavailable` の type、省略可能な `Retry-After`、`cache-control: no-store` を付けて `503` を返すため、復旧したあとも CDN が障害の応答を返し続けることはありません。
+
+```ts
+import { ServiceUnavailableError } from "@daloyjs/core";
+
+if (await maintenance.isOn()) {
+  // Retry-After: 120。detail は development/test 以外では秘匿されるため、
+  // クライアントが実際に判断に使えるのはヘッダーです。
+  throw new ServiceUnavailableError(120, "scheduled database maintenance");
+}
+```
+
+`retryAfterSeconds` は負でない整数でなければなりません。それ以外の値（環境変数の設定漏れによる `NaN`、`-1`、`1.5`）は、不正な `Retry-After` ヘッダーを送る代わりに `RangeError` をスローします。
+
+## 独自の `onError` [#custom-onerror]
+
+```ts
+app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.state.requestId }, "request failed");
+    // Response を返すと上書きされます。返さなければ DaloyJS が problem+json をシリアライズします
+  },
+});
+```

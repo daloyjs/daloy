@@ -7,8 +7,8 @@
  * Portuguese, `/ar` for Modern Standard Arabic, `/ru` for Russian, `/de` for
  * standard German) and covers
  * exactly the pages listed in
- * {@link TRANSLATED_PATHS}: the marketing pages plus the docs on-ramp
- * (`content/<locale>/docs`). Every other docs page and the blog stay
+ * {@link TRANSLATED_PATHS}: the marketing pages, the docs on-ramp and the
+ * core guides (`content/<locale>/docs`). Every other docs page and the blog stay
  * English-only.
  *
  * Crossing locales is always a full document load (plain `<a>`, never
@@ -154,6 +154,12 @@ export const TRANSLATED_PATHS = [
   "/docs/getting-started",
   "/docs/installation",
   "/docs/tutorials/bookstore",
+  "/docs/routing",
+  "/docs/validation",
+  "/docs/errors",
+  "/docs/openapi",
+  "/docs/typed-client",
+  "/docs/security",
 ] as const;
 
 /** An English path with translations. */

@@ -160,8 +160,10 @@ test("the language switcher maps translated docs and falls back otherwise", () =
   assert.equal(switchLocaleHref("/docs/installation", "zh"), "/zh/docs/installation");
   assert.equal(switchLocaleHref("/zh/docs/tutorials/bookstore", "es"), "/es/docs/tutorials/bookstore");
   assert.equal(switchLocaleHref("/es/docs/tutorials/bookstore", "en"), "/docs/tutorials/bookstore");
-  assert.equal(switchLocaleHref("/docs/routing", "zh"), "/zh");
-  assert.equal(switchLocaleHref("/zh/docs/routing", "en"), "/");
+  assert.equal(switchLocaleHref("/docs/routing", "ja"), "/ja/docs/routing");
+  assert.equal(switchLocaleHref("/ar/docs/security", "de"), "/de/docs/security");
+  assert.equal(switchLocaleHref("/docs/adapters", "zh"), "/zh");
+  assert.equal(switchLocaleHref("/zh/docs/adapters", "en"), "/");
   assert.equal(switchLocaleHref("/zh/docs", "en"), "/");
 });
 
@@ -170,7 +172,7 @@ type Element = { type: unknown; props: Record<string, unknown> };
 test("translated MDX links into another locale reload the document", () => {
   for (const locale of TRANSLATED_LOCALES) {
     const LocaleLink = mdxComponentsFor(locale).a as (props: { href: string; children: string }) => Element;
-    const toEnglish = LocaleLink({ href: "/docs/routing#x", children: "x" });
+    const toEnglish = LocaleLink({ href: "/docs/adapters#x", children: "x" });
     assert.equal(toEnglish.type, "a", locale);
     assert.equal(toEnglish.props.hrefLang, "en");
 

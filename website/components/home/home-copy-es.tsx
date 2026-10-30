@@ -123,7 +123,7 @@ export const HOME_COPY_ES: HomeCopy = {
     installation: "/es/docs/installation",
     tutorial: "/es/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/es/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -134,7 +134,7 @@ export const HOME_COPY_ES: HomeCopy = {
     primaryCta: "Empieza: instala Daloy",
     secondaryCta: "Leer la documentación",
     contentLanguageNote:
-      "Los primeros pasos, la instalación y el tutorial están en español; el resto de la documentación y el blog, de momento, solo en inglés.",
+      "Los primeros pasos, la instalación, el tutorial y las guías básicas (enrutado, validación, errores, OpenAPI, cliente tipado y seguridad) están en español; el resto de la documentación y el blog, de momento, solo en inglés.",
     factsLabel: "Datos del proyecto",
     facts: [
       "Más de 3000 pruebas del framework en verde",

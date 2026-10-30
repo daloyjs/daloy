@@ -1,0 +1,333 @@
+---
+title: Routing
+description: "Typsichere HTTP-Routen in DaloyJS nach dem Contract-first-Prinzip: Pfadparameter, Query, Body und Antwortschemas aus einer einzigen Deklaration abgeleitet."
+keywords:
+  - DaloyJS Routing
+  - typsichere Routen
+  - Contract-first-Routing
+  - HTTP-Router TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# Routing
+
+DaloyJS verwendet einen Segment-Trie mit einem schnellen Pfad für statische Routen. Nach den Sicherheitsprüfungen des Pfads werden exakte statische Routen mit einem einzigen `Map.get` aufgelöst. Dynamische Lookups bevorzugen literale Segmente, dann Parameter, dann Wildcards. Ein Lookup ohne Backtracking ist linear in der Pfadlänge; überlappende Routen können den Besuch zusätzlicher Trie-Zweige erfordern.
+
+Nur vollständige Routen zählen als Treffer. Wenn Sie zum Beispiel `/users/me/details/:field` registrieren, hindert das `/users/:id` nicht daran, auf `/users/me` zu passen. Innerhalb des dynamischen Tries gewinnt ein vollständiger Pfad mit höherer Priorität auch dann, wenn er für die angefragte Methode keinen Handler hat. Eine exakte statische Route gewinnt für ihre registrierten Methoden; andere Methoden können weiterhin auf den dynamischen Trie passen.
+
+## Schrittweise Kurzformen [#progressive-shorthands]
+
+Methoden-Kurzformen reduzieren den Aufwand, ohne den Vertrag zu entfernen. DaloyJS leitet aus Methode und Pfad eine stabile Operation-ID ab, etwa `getRoot` oder `postBookItemsByItemId`. Eine explizite `operationId` hat weiterhin Vorrang.
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+Kurzformen behalten dasselbe Verhalten bei Validierung, OpenAPI, Sicherheit und typisiertem Client wie `route()`. Es gibt keine Form mit zwei Argumenten, die stillschweigend einen Antwortvertrag überspringt. Für einen absichtlich undurchsichtigen Body übergeben Sie explizit `acknowledgeNoResponseBodySchema: true`. Erfolgreiche rohe Antworten, die `preBody` oder `beforeHandle` zurückgeben, erfordern dieselbe Bestätigung. Gewöhnliche `4xx`/`5xx`-Ablehnungen aus Hooks nicht. Antwortbeschreibungen bleiben optional. Fehlende Werte werden in OpenAPI zur stabilen Beschreibung `HTTP <status> response`.
+
+## Routen definieren [#defining-routes]
+
+Eine Routendeklaration ist die einzige Quelle der Wahrheit für Matching, Request-Validierung, Response-Validierung, OpenAPI-Ausgabe und typisierte Clients. Geben Sie eine `operationId` an, wenn Sie `route()` für eine öffentliche Route verwenden, die im typisierten Client oder im generierten SDK erscheinen soll. HTTP-Kurzformen leiten sie automatisch ab. DaloyJS lehnt doppelte `operationId`-Werte bei der Registrierung ab.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // params, query und headers werden aus den Schemas oben abgeleitet.
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## Typinferenz über mehrere Dateien [#multi-file-type-inference]
+
+Exportieren Sie jede Route mit `defineRoute()` und setzen Sie die importierten Verträge dann über `registerRoutes()` zusammen. Das literale Tupel übersteht Datei- und Modulgrenzen, sodass der Client ohne Codegenerierung jede Operation-ID und jedes Schema behält.
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+Verkettete `route()`-Aufrufe sammeln die Typen ebenfalls korrekt. Vermeiden Sie eine bloße Annotation `const app: App` an der fertig zusammengesetzten Anwendung, denn sie verbreitert das Routen-Tupel ausdrücklich weg.
+
+`group()` im Callback-Stil und `register()` für Plugins bieten weiterhin Scoping zur Laufzeit, aber TypeScript kann die übergeordnete Variable nicht aus ihren Callbacks heraus erweitern. Für einen vollständig typisierten Client ohne Codegenerierung über große Module hinweg exportieren Sie literale Routen-Tupel und machen `registerRoutes()` zur letzten Kompositionsgrenze.
+
+## HTTP-Methoden [#http-methods]
+
+Unterstützt werden unter anderem `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` und `OPTIONS`. Eigene Methoden wie `TRACE`, `CONNECT` und WebDAV-Verben werden bei der Registrierung abgelehnt.
+
+`HEAD` greift auf die passende `GET`-Route zurück, wenn keine explizite `HEAD`-Route existiert, und liefert dieselben Header mit leerem Body. `OPTIONS` liefert eine 204-Preflight-Antwort mit einem `Allow`-Header, wenn ein Pfad existiert, aber keine explizite `OPTIONS`-Route registriert ist.
+
+Kurzformen gibt es für `GET`, `POST`, `PUT`, `PATCH`, `DELETE` und `HEAD`. Registrieren Sie eine explizite `OPTIONS`-Route mit `route()`. Andernfalls übernimmt DaloyJS die Preflight-Behandlung automatisch.
+
+## Pfadparameter [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+Pfadwerte werden vor der Validierung dekodiert. Lassen Sie das Schema `request.params` weg, wird `ctx.params` aus dem Pfad als rohe Strings abgeleitet. Widersprüchliche Parameternamen an derselben Trie-Position, etwa `/a/:x` und `/a/:y`, lösen bei der Registrierung einen Fehler aus.
+
+Capture-Namen dürfen nicht leer sein und müssen innerhalb einer Route eindeutig sein. Die Namen `__proto__`, `constructor` und `prototype` werden abgelehnt, damit Parameterobjekte für die weitere Verwendung sicher bleiben. Eine abgelehnte Registrierung reserviert ihre `operationId` nicht.
+
+### Wildcard-Captures [#wildcard-captures]
+
+Ein abschließendes Segment `*name` erfasst den Rest des Pfads als einen dekodierten String und verlangt mindestens ein verbleibendes Segment. Ein bloßes `*` verwendet den Namen `wildcard`. Wildcards müssen am Ende stehen: `/assets/*path/private` löst bei der Registrierung einen Fehler aus, statt stillschweigend auf einen breiteren Pfad zu passen. Mehrere Methoden können sich eine Wildcard-Route teilen, wenn der Capture-Name übereinstimmt. Doppelte Methoden und widersprüchliche Wildcard-Namen lösen einen Fehler aus.
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+Rohe Traversal-Segmente (`..`), leere Segmente `//` und fehlerhafte Prozent-Escapes in Captures führen sauber zu keinem Treffer. Die Methodenermittlung wendet dieselben Prüfungen an, daher bewerben abgelehnte Pfade keinen `Allow`-Header. Seit 1.3.7 bindet ein Parameter- oder Wildcard-Segment niemals `.` oder `..`, auch nicht in den kodierten Schreibweisen `%2e` und `%2e%2e`. Ein URL-Parser würde diese als Verzeichnisschritte auflösen, und ließe man sie binden, bekäme der Handler einen anderen Pfad als den, den die Middleware gesehen hat. Ein Capture verweigert außerdem einen dekodierten Wert mit einer `.`- oder `..`-Komponente hinter einem kodierten Trennzeichen (`..%2F..%2Fsecret`, `..%5C`) oder mit einem Steuerzeichen (`%00`, `%0A`, `%09`, `%7F`). Solche Requests erhalten `404`.
+
+Ein Capture, das ein kodiertes `/` oder `\` (`%2F`, `%5C`) dekodiert, wird standardmäßig ebenfalls mit `404` abgelehnt, denn ein einzelner erfasster Wert würde sonst für jeden nachgelagerten Consumer wie Dateisystem, URL oder Proxy mehrere Pfadsegmente überspannen. Verwendet eine Route tatsächlich IDs mit einem Schrägstrich, aktivieren Sie das pro Route:
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+Die Aktivierung lässt niemals `..`-Komponenten oder Steuerzeichen wieder zu. Dekodierte Parameter bleiben nicht vertrauenswürdige Daten und sind keine bereinigten Dateisystempfade, validieren Sie den Dateisystemzugriff also separat.
+
+Die Adapter halten Router und Middleware außerdem auf derselben Sicht des Pfads (seit 1.3.7). Der Node-Adapter kanonisiert Request-Targets mit `\`, Punktsegmenten oder deren `%2e`-Formen vor dem Routing so, wie `new URL()` es tun würde. Die Adapter für Node und AWS Lambda lehnen beide einen `Host`-Header, der kein schlichtes `host[:port]` ist (zum Beispiel einer mit `\ / ? # @ %` oder Leerraum), mit `400` ab. Pfadbasierte Guards wie `except()` passen daher genau auf die Route, die ausgeführt wird. Details finden Sie beim [Node-Adapter](/docs/adapters/node) (auf Englisch).
+
+## Gruppen [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// endgültiger Pfad: /api/v1/health
+```
+
+Gruppen führen Präfixe, Tags, Hooks und Auth-Standardwerte in die Routen zusammen, die im Callback registriert werden. Die Kind-Anwendung ist gekapselt: Middleware, die innerhalb einer Gruppe hinzugefügt wird, wirkt nicht auf Routen außerhalb dieser Gruppe. Gruppierte Routen sind für das Routing zur Laufzeit und für OpenAPI sichtbar. Für parallele Verträge unter `/api/v1` und `/api/v2`, Migrationsrichtlinien und separat generierte SDKs lesen Sie den [Leitfaden zur API-Versionierung](/docs/api-versioning) (auf Englisch).
+
+## Routenoptionen [#route-options]
+
+- `request`: Schemas für `params`, `query`, `headers` und `body`.
+- `responses`: deklarierte Statuscodes und optionale Schemas für Body und Header der Antwort.
+- `accepts`: Allowlist für `Content-Type` pro Route, für Routen mit Request-Body-Schemas.
+- `auth`: OpenAPI-Sicherheitsanforderung der Route. Kombinieren Sie sie mit einem Auth-Hook wie `bearerAuth()`.
+- `internal`: verbirgt eine Route vor öffentlichen Adaptern, erlaubt aber weiterhin In-Process-Aufrufe über `app.inject()`.
+- `deprecated` und `sunset`: markieren einen Endpunkt als veraltet und setzen die passenden Response-Header.
+- `callbacks` und `meta`: fügen OpenAPI-Callbacks, Beispiele und KI-freundliche Routen-Metadaten hinzu.
+
+## Hooks [#hooks]
+
+Hooks hängen Verhalten an feste Punkte im Lebenszyklus:
+
+- `onRequest`: am frühesten, vor dem Parsen.
+- `preBody`: nach dem Routen-Matching, vor Schema-Validierung und Body-I/O. Die eingebaute Authentifizierung per Header, JWT, Basic und mTLS läuft hier.
+- `beforeHandle`: nach der Validierung, vor Ihrem Handler. Geben Sie eine `Response` zurück, um abzukürzen.
+- `afterHandle`: umhüllt oder transformiert das Ergebnis des Handlers vor der Serialisierung der Antwort.
+- `onError`: beobachtet oder ersetzt die Fehlerantwort.
+- `onSend`: ändert ausgehende Header direkt oder gibt eine neue `Response` zurück. Läuft auf Erfolgs-, Fehler- und `OPTIONS`-Preflight-Pfaden.
+- `onResponse`: letzter Beobachter. Nutzen Sie ihn für Logging und Metriken. Ändern Sie hier die Antwort nicht.
+
+<FlowDiagram title="Lebenszyklus eines Requests" numbered caption="Hooks feuern an festen Punkten rund um Ihren Handler. Günstige Authentifizierung kann in preBody ablehnen, bevor Body-I/O stattfindet. Middleware, die den Body braucht, bleibt in beforeHandle nach der Validierung. Wirft irgendetwas einen Fehler, springt die Kontrolle zu onError, danach laufen onSend und onResponse trotzdem." steps={[
+          { label: "onRequest", eyebrow: "am frühesten", detail: "vor dem Parsen" },
+          {
+            label: "preBody",
+            eyebrow: "günstigste Ablehnung",
+            detail: "Route gefunden · Body unberührt",
+          },
+          {
+            label: "validate",
+            eyebrow: "Framework",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "Response zurückgeben, um abzukürzen",
+          },
+          { label: "handler", detail: "Ihre Routenlogik", tone: "accent" },
+          { label: "afterHandle", detail: "Ergebnis umhüllen / transformieren" },
+          { label: "onSend", detail: "Response ändern oder ersetzen" },
+          {
+            label: "onResponse",
+            eyebrow: "immer",
+            detail: "nur Beobachtung",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## Antworten mit `onSend` transformieren [#transforming-responses-with-onsend]
+
+Verwenden Sie `onSend`, wenn Sie die ausgehende Antwort umschreiben müssen, zum Beispiel um einen Header anzuhängen, einen internen Header zu entfernen oder die Antwort komplett zu ersetzen. Die Rückgabe von `void` behält die aktuelle Antwort. Mehrere `onSend`-Hooks werden wie eine Pipeline zusammengesetzt (global -\> Gruppe -\> Route).
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // Die API-Version immer auf jeder ausgehenden Antwort angeben,
+      // auch auf Fehlerantworten und OPTIONS-Preflights.
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // Internes Implementierungsdetail entfernen, bevor die Antwort rausgeht.
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+`onSend` läuft *nach* der Response-Validierung und nachdem Request-bezogene Header, einschließlich `x-request-id`, zusammengeführt wurden. Es läuft *vor* `onResponse`, das weiterhin der richtige Ort für Logging und Metriken ist.
+
+## 405 Method Not Allowed [#405-method-not-allowed]
+
+Ist ein Pfad für eine Methode registriert, wird aber mit einer anderen aufgerufen, liefert der Router **405** mit korrektem `Allow`-Header, niemals ein irreführendes 404. Routen mit `internal: true` werden aus öffentlichen 405- und `Allow`-Antworten herausgefiltert, damit versteckte Admin- oder Cron-Endpunkte nicht durch das Abtasten von Methoden sichtbar werden.
+
+Die Methodenermittlung berücksichtigt sowohl eine exakte statische Route als auch die gewählte dynamische Route. Mit `GET /users/me` und `POST /users/:id` bewirbt der Pfad `/users/me` beide registrierten Methoden. Der Header listet explizite Registrierungen; die synthetisierte Behandlung von HEAD und OPTIONS fügt keine Einträge hinzu.
+
+## Performance [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

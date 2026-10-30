@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-La misma URL (`GET /docs`), los mismos endpoints en vivo `/openapi.json` y `/openapi.yaml` y el mismo tratamiento de la CSP; solo cambia el HTML que se renderiza. También puedes tener los dos: deja la ruta montada automáticamente con Scalar y expón una segunda ruta con Swagger tú mismo mediante `swaggerUiHtml()` (consulta la receta manual en la [guía de OpenAPI](/docs/openapi)).
+La misma URL (`GET /docs`), los mismos endpoints en vivo `/openapi.json` y `/openapi.yaml` y el mismo tratamiento de la CSP; solo cambia el HTML que se renderiza. También puedes tener los dos: deja la ruta montada automáticamente con Scalar y expón una segunda ruta con Swagger tú mismo mediante `swaggerUiHtml()` (consulta la receta manual en la [guía de OpenAPI](/es/docs/openapi)).
 
-¿Quieres otra ruta? Usa la forma de objeto: `docs: { ui: "swagger", path: "/reference" }`. La forma de objeto solo se monta fuera de producción salvo que añadas `enabled: true` (desde la 1.5.5), igual que `docs: "auto"`, que omite el montaje cuando `production: true`. ¿Necesitas control total? Configura `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml() / scalarHtml()`: consulta la [guía de OpenAPI](/docs/openapi).
+¿Quieres otra ruta? Usa la forma de objeto: `docs: { ui: "swagger", path: "/reference" }`. La forma de objeto solo se monta fuera de producción salvo que añadas `enabled: true` (desde la 1.5.5), igual que `docs: "auto"`, que omite el montaje cuando `production: true`. ¿Necesitas control total? Configura `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml() / scalarHtml()`: consulta la [guía de OpenAPI](/es/docs/openapi).
 
 Tanto `swaggerUiHtml()` como `scalarHtml()` cargan sus recursos por defecto desde la CDN de jsDelivr, así que una Content-Security-Policy estricta tiene que permitirlos o la interfaz de documentación puede quedarse en blanco. La ruta montada automáticamente y `htmlResponse()` añaden una CSP compatible por sí solas. Si construyes tu propia respuesta, importa `docsContentSecurityPolicy` de `@daloyjs/core/docs` y pasa el resultado como cabecera de la respuesta:
 
@@ -237,7 +237,7 @@ La autenticación demuestra quién llama. No demuestra que pueda leer esta fila.
 
 ## Siguientes pasos
 
-- [Enrutado](/docs/routing) (en inglés)
-- [Validación con Standard Schema](/docs/validation) (en inglés)
-- [Barreras de seguridad y middleware](/docs/security) (en inglés)
+- [Enrutado](/es/docs/routing)
+- [Validación con Standard Schema](/es/docs/validation)
+- [Barreras de seguridad y middleware](/es/docs/security)
 - [Tutorial: la API de una librería](/es/docs/tutorials/bookstore)

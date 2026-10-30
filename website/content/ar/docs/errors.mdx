@@ -1,0 +1,170 @@
+---
+title: الأخطاء وproblem+json
+description: ارمِ أخطاء مكتوبة الأنواع في DaloyJS لتُسلسل افتراضيًا كاستجابات problem+json وفق RFC 9457، ثم خصّصها ووسّعها ووثّقها في OpenAPI.
+keywords:
+  - problem+json
+  - RFC 9457
+  - الأخطاء في DaloyJS
+  - استجابات أخطاء HTTP
+  - أخطاء مكتوبة الأنواع في TypeScript
+---
+
+# الأخطاء وproblem+json
+
+الأخطاء في DaloyJS مواطن من الدرجة الأولى. كل `HttpError` يُرمى يُسلسل إلى [problem+json وفق RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) مع URI ثابت في `type`، ومعرّف طلب، وترويسة Content-Type المناسبة.
+
+<FlowDiagram title="من الخطأ المرمي إلى problem+json" numbered steps={[
+          {
+            eyebrow: "المعالج",
+            label: "throw new NotFoundError(...)",
+            detail: "أي صنف فرعي من HttpError",
+            tone: "accent",
+          },
+          {
+            eyebrow: "الإطار",
+            label: "التحويل إلى حقول RFC 9457",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "الإنتاج",
+            label: "تنقيح detail في 5xx",
+            detail: "يظهر فقط عندما تكون البيئة development أو test",
+            tone: "muted",
+          },
+          {
+            eyebrow: "الشبكة",
+            label: "الاستجابة المُسلسلة",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]} caption="يصبح HttpError المرمي مستند problem+json تلقائيًا. وما لم تكن البيئة development أو test صراحةً، يُنقَّح الحقل detail في استجابات 5xx حتى لا تصل تتبعات المكدس ومقاطع SQL إلى العميل أبدًا، بينما يظل الخطأ الكامل يصل إلى خطاف onError لديك." />
+
+## أصناف الأخطاء المدمجة [#built-in-error-classes]
+
+```ts
+import {
+  HttpError,                         // الصنف الأساسي: أي حالة، مع type/title/headers مخصصة
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401 + cache-control: no-store
+  ForbiddenError,                    // 403 + cache-control: no-store
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + ترويسة Allow
+  RequestTimeoutError,               // 408 / 503 / 504 + cache-control: no-store
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After + cache-control: no-store
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500 (يُنقَّح detail خارج dev/test)
+  ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
+} from "@daloyjs/core";
+```
+
+يتحقق `TooManyRequestsError` و`ServiceUnavailableError` من `retryAfterSeconds` بالطريقة نفسها: أي قيمة ليست عددًا صحيحًا آمنًا غير سالب ترمي `RangeError` عند الإنشاء، فلا تتحول قيمة `NaN` الناتجة عن متغير بيئة مفقود أبدًا إلى ترويسة `Retry-After` غير صالحة. ومنذ 1.16.0 يكون `RequestTimeoutError` (مهلة `requestTimeoutMs`، راجع [`requestTimeoutStatus`](/docs/api-reference/app) (بالإنجليزية)) بالقيمة `no-store` في كل صيغ الحالة، حتى لا تستمر ذاكرة تخزين مؤقت مشتركة في تقديم `503`/`504` بعد تعافي الخادم الخلفي. ويحصل `new HttpError(status, …)` المجرد على `type` للمشكلة بالصيغة `https://httpstatuses.io/<status>`؛ أما الأصناف المدمجة فتحمل عناوين URI ثابتة بالصيغة `https://daloyjs.dev/errors/<slug>`.
+
+## الرمي داخل معالج [#throwing-in-a-handler]
+
+```ts
+import { NotFoundError } from "@daloyjs/core";
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
+    const user = await db.find(params.id);
+    if (!user) throw new NotFoundError(`user ${params.id} not found`);
+    return { status: 200, body: user };
+  },
+);
+```
+
+## صيغة الإرسال [#wire-format]
+
+يُعاد معرّف الطلب إلى العميل في موضعين: ترويسة الاستجابة `x-request-id`، والحقل `instance` في مستند المشكلة (وفق [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail)) على هيئة URN بالصيغة `urn:request:<uuid>`. لا توجد خاصية `requestId` في المستوى الأعلى، لذا ينبغي للعملاء قراءة الترويسة أو تحليل الـ URN من `instance`.
+
+```json
+HTTP/1.1 404 Not Found
+content-type: application/problem+json
+x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
+
+{
+  "type": "https://daloyjs.dev/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user 42 not found",
+  "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
+}
+```
+
+## التنقيح في الإنتاج [#production-redaction]
+
+يحذف DaloyJS الحقل `detail` من أي استجابة 5xx ما لم تكن البيئة development أو test **بشكل مؤكد**، حتى لا تتسرب رسائل الأخطاء الداخلية ومقاطع SQL إلى العملاء. ويظل الخطأ الكامل يُرسل إلى أداة التسجيل لديك وإلى خطاف `onError`.
+
+| الإعداد | `detail` في 5xx |
+| --- | --- |
+| `env: "development"` أو `env: "test"` | ظاهر |
+| دون `env`، و`NODE_ENV=development` أو `test` | ظاهر |
+| دون `env`، و`NODE_ENV` غير مضبوط أو فارغ أو أي قيمة أخرى | **منقّح** |
+| `env: "production"` أو `production: true` أو `NODE_ENV=production` | منقّح |
+| `production: false` مع `NODE_ENV` غير مضبوط | **منقّح** |
+
+البيئة غير المضبوطة تفشل بشكل مغلق عن قصد. فبيئات الحافة مثل Cloudflare Workers وDeno Deploy لا تملك `NODE_ENV`، ومعاملة ذلك كبيئة تطوير سترسل رسائل الاستثناءات إلى العملاء. يضبط `daloy dev` القيمة `NODE_ENV=development` لعمليته الفرعية إن لم تضبطها أنت، لذا يظل التطوير المحلي يعرض التفاصيل. أما الأخطاء التي تسلسلها بنفسك (مثل جسم استجابة مبني من `err.message` داخل كتلة catch) فلا تُنقَّح. ارمِها بدلًا من ذلك، أو ارمِ `HttpError` مع `detail` آمن.
+
+## أصناف أخطاء مخصصة [#custom-error-classes]
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+export class QuotaExceededError extends HttpError {
+  constructor(resource: string) {
+    super(429, {
+      title: "Quota exceeded",
+      type: "https://api.example.com/errors/quota-exceeded",
+      detail: `Quota exceeded for ${resource}`,
+    });
+  }
+}
+```
+
+تضبط كل الأصناف المدمجة أعلاه `type` بالصيغة `https://daloyjs.dev/errors/<slug>`. أما `HttpError` العادي المرمي دون `type` فيعود إلى `https://httpstatuses.io/<status>`. والبرمجيات الوسيطة الرسمية التي تجيب بـ `503` (`loadShedding()` و`concurrencyLimit()` و`requestTimeoutStatus: 503`) تضبط `type` خاصًا بها على `daloyjs.dev`، لذا لا تنطبق القيمة البديلة إلا على الأخطاء التي تنشئها بنفسك. اضبط `type` عندما يعتمد عليه العملاء، أو استخدم صنفًا مدمجًا:
+
+```ts
+throw new HttpError(503, { title: "Service Unavailable" });
+// "type": "https://httpstatuses.io/503"
+
+throw new HttpError(503, {
+  title: "Service Unavailable",
+  type: "https://api.example.com/errors/service-unavailable",
+});
+```
+
+## الخدمة غير متاحة [#service-unavailable]
+
+لوضع الصيانة، أو تعطل اعتمادية، أو نسخة قيد التصريف، ارمِ `ServiceUnavailableError`. فهو يجيب بـ `503` مع `type` ثابت هو `https://daloyjs.dev/errors/service-unavailable`، و`Retry-After` اختياري، و`cache-control: no-store`، حتى لا تستمر شبكة CDN في تقديم صفحة التعطل بعد تعافيك.
+
+```ts
+import { ServiceUnavailableError } from "@daloyjs/core";
+
+if (await maintenance.isOn()) {
+  // Retry-After: 120. يُنقَّح detail خارج development/test،
+  // لذا فالترويسة هي ما يستطيع العميل فعلًا التصرف بناءً عليه.
+  throw new ServiceUnavailableError(120, "scheduled database maintenance");
+}
+```
+
+يجب أن يكون `retryAfterSeconds` عددًا صحيحًا غير سالب. أي قيمة أخرى (`NaN` من متغير بيئة مفقود، أو `-1`، أو `1.5`) ترمي `RangeError` بدلًا من إرسال ترويسة `Retry-After` مشوّهة.
+
+## `onError` مخصص [#custom-onerror]
+
+```ts
+app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.state.requestId }, "request failed");
+    // أعد Response للاستبدال؛ وإلا يسلسل DaloyJS استجابة problem+json
+  },
+});
+```

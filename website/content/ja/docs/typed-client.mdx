@@ -1,0 +1,148 @@
+---
+title: 型付き API クライアント
+description: Hey API で DaloyJS の OpenAPI 仕様から完全に型付けされたクライアントを生成し、サーバーとの型のずれをなくします。
+keywords:
+  - 型付き API クライアント
+  - TypeScript OpenAPI クライアント
+  - Hey API クライアント
+  - エンドツーエンドの型安全性
+  - ts-rest の代替
+  - ts-rest と DaloyJS の比較
+sitemap:
+  priority: 0.7
+---
+
+# 型付きクライアント
+
+DaloyJS には、完全な型安全性を保ったまま API を呼び出す方法が **2 つ** あります。利用者に合ったほうを使ってください。
+
+## 1. プロセス内の型付きクライアント（コード生成なし） [#1-in-process-typed-client-zero-codegen]
+
+同じモノレポ内の TypeScript の利用者（テスト、社内ツール、Next.js のサーバーアクション）向けです：
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string、完全に型付け
+}
+```
+
+クライアントは `operationId` をキーとし、`{status, body, headers}` の判別共用体を返し、すべてをルートの定義そのものから推論します。ビルドステップはありません。
+
+### パスパラメーター [#path-parameters]
+
+パスパラメーターはセグメント単位で置き換えられるため、`:id` が `:idx` の中に一致することはなく、各値はそれぞれのセグメントにパーセントエンコードされます。1.3.7 以降、パラメーターが欠けている、空である、`.` または `..` である場合、生成されたメソッドはリクエストを送る前に `TypeError` をスローします。URL のパースはドットセグメントを（`%2E%2E` であっても）解決し、呼び出し先を黙って変えてしまうからです。たとえば `DELETE /orgs/:org/members/..` が `DELETE /orgs/:org` になってしまいます。ワイルドカードのルート（`*path`、または `wildcard` という名前になる素の `*`）は `/` 区切りの値を受け付け、各セグメントは同じ方法でエンコードされ、チェックされます。
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="App の型を広げるのではなく、ルートのタプルを組み合わせましょう。">
+<p>ルートのファイルを <code>defineRoute()</code> でエクスポートし、<code>app.registerRoutes(\[...\])</code> でリテラルのタプルを登録してください。<code>route()</code> のチェーン呼び出しでも動作します。次の 2 つは推論を意図的に消してしまい、クライアントを緩い型にしてしまいます：</p>
+<ul>
+<li>インスタンスに素の <code>const app: App = ...</code> という型注釈を付けること（またはファクトリーから <code>: App</code> を返すこと）。型を広げる注釈は蓄積されたルートを捨ててしまうため、型は推論に任せてください。</li>
+<li>チェーンした結果を返したり <code>registerRoutes()</code> を使ったりせず、先に宣言した変数に対して別々の文でルートを登録すること。</li>
+</ul>
+<p>モジュラーモノリスのガイドでは、複数の境界づけられたコンテキストのルートタプルを使った、複数ファイルにまたがる組み立てを紹介しています。コールバック形式の <code>group()</code> やプラグインの <code>register()</code> も実行時のカプセル化は提供しますが、そのコールバックから親の変数の TypeScript ジェネリクスを広げることはできません。型付きクライアントの組み立ての境界には、ルートのタプルを使ってください。</p>
+</Callout>
+
+## 2. Hey API SDK（言語やリポジトリをまたぐ、ビルド時） [#2-hey-api-sdk-cross-language-cross-repo-build-time]
+
+モノレポの外にいる利用者や他の言語の利用者向けには、[@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started) で完全に型付けされた fetch SDK を生成します。
+
+<FlowDiagram title="コード生成のパイプライン" numbered caption="pnpm gen は一連の処理をすべて実行します。ルートから仕様を書き出し、Hey API がそれを型付きの fetch SDK に変換します。ルートを変更するたびに再実行すれば、クライアントはコントラクトと常に足並みをそろえます。" steps={[
+          { label: "ルート", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "ディスク上の OpenAPI 3.1 仕様" },
+          { label: "openapi-ts", detail: "Hey API ジェネレーター" },
+          { label: "型付き SDK", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "利用者",
+            detail: "完全に型付けされた fetch 呼び出し",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# 書き出されるファイル：
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## 生成された SDK を使う [#using-the-generated-sdk]
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## どちらを使うべきか [#which-one-should-i-use]
+
+| ユースケース | 選択 |
+| --- | --- |
+| 同じリポジトリの TypeScript の呼び出し元（テスト、社内ツール） | `createInProcessClient` |
+| 別リポジトリの Web アプリ / React Native のモバイルバンドル | Hey API SDK |
+| TypeScript 以外の利用者（Python、Swift、Kotlin） | OpenAPI ドキュメント + 利用者が好むジェネレーター |
+| サードパーティ向けの公開 SDK | Hey API SDK を独立したパッケージとして公開 |
+
+## ts-rest から移行する場合 [#coming-from-ts-rest]
+
+[ts-rest](https://ts-rest.com/) は人気のあるコントラクトファーストのライブラリで、アダプターベースのサーバー（Express、Fastify、NestJS、Next.js）と fetch クライアント（`initClient`）の間でコントラクト（`initContract`）を共有することで、**コード生成なしで**エンドツーエンドの TypeScript の型を提供します。そのモデルが気に入っているなら、DaloyJS にもなじみやすいはずです。違いは 2 つあります。
+
+1 つ目に、DaloyJS では**ルートの定義そのものがコントラクト**であり、同期を保つべき別のコントラクトオブジェクトはありません。上で紹介したプロセス内の `createClient` は、同じリポジトリの TypeScript の呼び出し元に対して、コード生成なしで型を共有する同じ体験を提供します。
+
+2 つ目に、ts-rest の型安全性は TypeScript 専用で、クライアントがコントラクトをインポートする必要があります。DaloyJS は同じルートから第一級の **OpenAPI 3.1** 仕様と Hey API SDK を出力するため、型をインポートできない利用者（別のリポジトリ、他の言語、公開 SDK）もカバーできます。ts-rest では OpenAPI はオプションのアドオン（`@ts-rest/open-api`）です。また DaloyJS は、別のフレームワークの上に載せる型付けのレイヤーではなく、サーバーとランタイムそのものであり、Node、Bun、Deno、Cloudflare、Vercel の間で移植できます。
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| コントラクトの情報源 | 別の `initContract` オブジェクト | ルートの定義そのもの |
+| コード生成なしの型付きクライアント | あり（`initClient`、TypeScript のみ） | あり（`createClient`、TypeScript のみ） |
+| 言語やリポジトリをまたぐクライアント | OpenAPI のアドオン（`@ts-rest/open-api`） | OpenAPI 3.1 + Hey API SDK を標準で提供 |
+| サーバー | Express / Fastify / NestJS / Next.js 上のアダプター | 組み込み、ランタイム間で移植可能 |
+| 実行時の検証 | Standard Schema（Zod / Valibot / ArkType） | Standard Schema（Zod / Valibot / ArkType / TypeBox） |
+| セキュリティのデフォルト | 自分で用意 | ヘッダーとボディの上限はデフォルトで有効。CSRF とレート制限は 1 行で追加 |
+
+生成結果を検証するために、もっと大きなコントラクトが必要ですか？ 最小構成のチュートリアルアプリではなく、[大規模なフェイク REST デモ](/docs/tutorials/fake-rest-api)（英語）を負荷テストのケースとして使ってください。

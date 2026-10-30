@@ -1,0 +1,336 @@
+---
+title: セキュリティ
+description: DaloyJS はコアで強制するセキュリティのガードレールと、ヘッダー、レート制限、CORS、CSRF などの公式ミドルウェアを備えています。
+keywords:
+  - DaloyJS セキュリティ
+  - 安全な HTTP のデフォルト
+  - レート制限
+  - セキュアヘッダー
+  - OWASP TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# セキュリティ
+
+悪いデフォルトはバグです。DaloyJS は、コアで強制するガードレールと公式のセキュリティミドルウェアを分けています。危険なものはデフォルトでブロックし、デプロイごとに異なるものは明示的な設定のままにするためです。
+
+<blockquote>コアのガードレールは、デフォルトですべてのアプリを保護します。公式のミドルウェアは、ルート、ユーザー、デプロイに応じたポリシーを追加します。</blockquote>
+
+<LayerStack title="2 層の防御" flow="down" layers={[
+          {
+            title: "コアで強制するガードレール",
+            detail: "デフォルトで有効、ミドルウェアの呼び出しは不要",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "パストラバーサルの拒否",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "本番環境での 5xx の秘匿",
+            ],
+          },
+          {
+            title: "公式のセキュリティミドルウェア",
+            detail: "ポリシーはデプロイ時の判断なので明示的に設定",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]} caption="危険なものは、何も設定しなくてもコアでブロックされます。デプロイごとに異なるもの（CSP、CORS のオリジン、セッションのシークレット、CSRF の導入）は、自分で有効にする明示的なミドルウェアのままです。" />
+
+## コアが強制するもの [#what-the-core-enforces]
+
+これらのチェックは `App` またはランタイムアダプター自体で行われます。アプリケーションはミドルウェアを呼び出さなくてもこれらの保護を受けられます。
+
+<FlowDiagram title="すべてのリクエストが関門を通過する" numbered steps={[
+          {
+            eyebrow: "受信",
+            label: "受信したリクエスト",
+            detail: "メソッド、パス、ヘッダー、ボディ",
+          },
+          {
+            eyebrow: "サイズ上限",
+            label: "ボディサイズの制限",
+            detail: "Content-Length が上限超過なら 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "パース",
+            label: "強化された JSON パース",
+            detail: "__proto__ / constructor を除去",
+          },
+          {
+            eyebrow: "ルート",
+            label: "ルーターとメソッドのチェック",
+            detail: ".. は正規のパスに解決。不正なメソッドは 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "ハンドラー",
+            label: "型付きハンドラー",
+            detail: "requestTimeoutMs の下で実行",
+            tone: "success",
+          },
+        ]} caption="リクエストがハンドラーに届くのは、ボディの上限、プロトタイプ汚染に強いパーサー、パスとメソッドのガードをすべて通過したあとだけです。ガードに引っかかったものは、コードが実行される前にコアが拒否します。" />
+
+| 脅威 | 組み込みの動作 |
+| --- | --- |
+| ボディサイズによる DoS | ストリーミングで読み込み、厳格な上限（デフォルト 1 MiB）を設け、先に Content-Length をチェックして超過なら 413。1.5.4 以降、上限は `ctx.request` を直接読むハンドラーを含むすべてのルートに適用されます。それ以前はボディのスキーマを持つルートだけでした。上限はボディを読み込む時点で適用されるため、ボディを無視するルートがそのために拒否されることはありません。 |
+| プロトタイプ汚染 | `safeJsonParse` が reviver で `__proto__`、`constructor`、`prototype` を取り除きます。 |
+| ボディ内の不正な UTF-8 | 1.16.0 以降、JSON、urlencoded、テキストのボディパーサーは厳格にデコードします。不正または冗長な UTF-8 シーケンスを含むボディは、`U+FFFD` に置き換えて検証されるのではなく `400` になります（RFC 8259 §8.1）。正しい形式の非 ASCII 文字と先頭の BOM は引き続きパースされます。ハンドラーが自分で `ctx.request.text()` を読む場合は、プラットフォームの寛容なデコードのままです。 |
+| ヘッダー / レスポンス分割 | `sanitizeHeaderName` / `sanitizeHeaderValue` が CRLF と NUL を拒否します。 |
+| パストラバーサル | 2 層で防ぎます。まずリクエスト URL を正規化します。WHATWG の URL パースが `.` / `..`（およびその `%2e` 表記）を解決し、Node アダプターは生のリクエストターゲットにも同じ処理を適用します。次にコアのルーターが、残ったドットセグメントや空の `//` セグメントを拒否し、エンコードされたトラバーサル（`%2e%2e`、`..%2F`）をパラメーターに束縛することはありません。ルートは文字列の完全一致で照合されるため、抜け出す先のディレクトリが存在しません。 |
+| Slow-loris / 応答しないハンドラー | `requestTimeoutMs`（デフォルト 30 秒）が `408` を返し、協調的な後片付けのために `ctx.request.signal` を発火します。1.5.4 以降はフック、ボディの読み込み、ハンドラーが対象です（それ以前はハンドラーのみ）。Node アダプターはソケットのタイムアウトも設定します。 |
+| 不正な値による制限の無効化 | 1.5.4 以降、`bodyLimitBytes`、`requestTimeoutMs`、`maxHeaderCount`、`jsonMaxKeys`、`jsonMaxDepth` は有限の負でない整数でなければなりません。`NaN`（たとえば `Number(process.env.UNSET)`）などの不正な値は、どの環境でもコンストラクト時に例外をスローします。 |
+| サポートされないコンテンツタイプ | ボディのスキーマを持つルートは、許可されていないコンテンツタイプを 415 で拒否します。 |
+| メソッドの混同 | 誤解を招く 404 ではなく、`Allow` ヘッダー付きの本物の **405** を返します。 |
+| 情報漏えい（5xx） | 環境が明示的に development か test でない限り、5xx の problem+json の `detail` は秘匿されます。`NODE_ENV` が未設定の場合も秘匿されます。 |
+
+## 公式のセキュリティミドルウェア [#first-party-security-middleware]
+
+これらは DaloyJS の一部であり、まとめてドキュメント化されていますが、CSP、CORS、レート制限のキー、セッションのシークレット、CSRF の導入はデプロイ時の判断なので、明示的に設定する形のままにしています。
+
+```ts
+import {
+  requestId,
+  secureHeaders,
+  cors,
+  rateLimit,
+  bearerAuth,
+  timing,
+} from "@daloyjs/core";
+
+app.use(requestId());           // x-request-id の伝播
+app.use(secureHeaders());       // CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff など
+app.use(cors({                  // 明示的な許可リスト。credentials と * は決して併用しない
+  origin: ["https://app.example.com"],
+  credentials: true,
+  methods: ["GET", "POST"],
+}));
+app.use(rateLimit({             // デフォルトでは TCP ピアごと。プロキシの背後では trustedProxies を設定
+  windowMs: 60_000,
+  max: 120,
+}));
+app.use(timing());              // 可観測性のための Server-Timing ヘッダー
+```
+
+失敗した認証情報も数える必要がある場合は、`rateLimit()` や `loginThrottle()` を Bearer、Basic、JWK、mTLS の認証より前に置いてください。認証が `preBody` で拒否しても、リミッターは試行を消費し、上限を超えると `429` を返します。そのために DaloyJS が宣言されたリクエストボディを読むことはありません。この経路で独自のキー生成関数を使う場合は、生のリクエストデータか、それより前の `preBody` フックが設定した状態を使ってください。
+
+公式のスターターはこれらを最初から組み込んでいます。Node、Bun、Deno では `secureHeaders()`、`requestId()`、`rateLimit()` が有効です。Cloudflare Worker と Vercel では `secureHeaders()` と `requestId()` に加えて、エッジに適したより厳しいボディとタイムアウトの制限が有効です。
+
+## デプロイ先ごとの推奨設定 [#recommended-by-deployment-target]
+
+変更する具体的な理由がない限り、次のミドルウェアから始めてください。リスクのある選択を明示的かつ一貫したものに保てます。
+
+| デプロイ先 | 推奨するベースライン |
+| --- | --- |
+| Node / Bun / Deno の API | `requestId()`、`secureHeaders()`、`rateLimit()`、API がクロスオリジンの場合は `cors()`。 |
+| Cloudflare Workers | デフォルトで `requestId()` と `secureHeaders()`。`cors()` は必要な場合にだけ使い、トラフィックが多数の isolate にまたがる場合は、メモリ上のデフォルトよりも外部 / 共有のリミッターを優先してください。 |
+| Vercel | デフォルトで `requestId()` と `secureHeaders()`。`cors()` は必要な場合にだけ追加し、リージョンをまたいで永続的なカウンターが必要なら共有のリミッターを使ってください。 |
+| Cookie で認証するアプリ | ベースラインに `session()` と `csrf()` を加え、状態を変更するルートをクロスサイトのフォームや fetch による攻撃から保護します。 |
+| 信頼できるリバースプロキシの背後 | ベースラインはそのままにし、`rateLimit()` に明示的な `keyGenerator` を設定するか、プロキシが転送ヘッダーを取り除いて書き換えるようにしてから `trustProxyHeaders: true` を設定してください。 |
+
+## 状態を変更するルートのための `csrf()` [#csrf-for-state-changing-routes]
+
+状態を変更するエンドポイントを保護するには [`csrf()`](/docs/security/csrf)（英語）を使います。2 つの戦略をサポートしています：
+
+- ダブルサブミット Cookie（デフォルト）：安全なリクエストでトークンの Cookie を設定し、安全でないメソッドでは `x-csrf-token` ヘッダーに同じ値を要求し、一致しなければタイミングセーフな **403** で拒否します。
+- Fetch Metadata（`strategy: "fetch-metadata"`）：最新の `Sec-Fetch-Site` ヘッダーに依存する、トークン不要の保護です。Cookie の往復も、HTML の描画との結合もありません。ブラウザ向けの新しいアプリに推奨します。
+
+```ts
+import { csrf } from "@daloyjs/core";
+
+// 従来のダブルサブミット Cookie（デフォルト）。
+app.use(csrf());
+
+// トークン不要の Fetch Metadata による保護（ブラウザ向けのアプリに推奨）。
+app.use(csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+## `secureHeaders()` のデフォルト [#secureheaders-defaults]
+
+```text
+content-security-policy: default-src 'self'; frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+permissions-policy: camera=(), microphone=(), geolocation=(), clipboard-write=()
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+```
+
+別の CSP が必要な場合、ローカル開発で HSTS を無効にしたい場合、より緩い permissions policy が必要な場合は、`secureHeaders()` に明示的にオプションを渡してください。古いブラウザの XSS フィルターを明示的に無効にしたいデプロイ向けに、従来の `X-XSS-Protection: 0` ヘッダーを `xssProtection: true` でオプトインできます。
+
+### リクエストごとの nonce と Trusted Types を使った CSP [#csp-with-per-request-nonces-and-trusted-types]
+
+`secureHeaders()` はディレクティブのマップから CSP を組み立て、`script-src`、`script-src-elem`、`style-src`、`style-src-elem` に新しい**リクエストごとの nonce** を挿入できます。さらに、実行時の DOM XSS 対策として `require-trusted-types-for 'script'` を出力できます。nonce は `ctx.state.cspNonce` で公開されるため、ハンドラーはそれを `<script nonce="...">` タグに埋め込めます。
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'self'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+}));
+
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
+  // secureHeaders の nonce 付き CSP が送信されるよう、HTML は自分で返します。
+  async ({ state }) => ({
+    status: 200,
+    body: `<!doctype html>
+<script nonce="${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
+);
+```
+
+このページを `@daloyjs/core/docs` の `htmlResponse()` で描画**しないでください**。このヘルパーは独自の Content-Security-Policy（Swagger / Scalar のドキュメント UI 向けに調整され、`'unsafe-inline'` を含むもの）を付けるため、上記の厳格な nonce 付き CSP を上書きしてしまい、インラインスクリプトを制御するのが nonce ではなくなってしまいます。`htmlResponse()` は API ドキュメントのルートに使い、nonce で保護するページでは独自の `Response` ボディを返してください。
+
+## 認証 [#auth]
+
+```ts
+import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Bearer（不透明なトークン、または独自の `validate` で検証する JWT）。
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+
+// Basic 認証（RFC 7617）。
+app.use(basicAuth({
+  realm: "books-api",
+  verify: (user, pass) =>
+    timingSafeEqual(user, "admin") &&
+    timingSafeEqual(pass, process.env.ADMIN_PASSWORD ?? ""),
+}));
+```
+
+## SQL インジェクション [#sql-injection]
+
+Daloy はデータベースドライバーを提供していませんが、Daloy が*担う* HTTP の境界（厳格な Zod スキーマ、強化された JSON パーサー、ボディサイズの上限）によって、リポジトリ層に届く攻撃対象領域は小さくなります。ORM ごと（Prisma、Drizzle、Kysely、生のドライバー）の安全なパターンと安全でないパターン、動的な `ORDER BY` のための許可リストのレシピ、メンテナーがリグレッションを見つけるために使う grep のルールについては、[SQL injection](/docs/security/sql-injection)（英語）をご覧ください。
+
+## コマンドインジェクション [#command-injection]
+
+DaloyJS のランタイムは CI のゲートによって `child_process` を使わないことが保証されているため、フレームワーク自体がシェルを呼び出すことはできません。外部プログラムを実行する必要があるハンドラーの安全な形（`execFile` と argv の配列。`` exec(`cmd $${input}`) `` は決して使わない）、Windows の *BatBadBut* の落とし穴、PR の段階で新しいバグを防ぐための grep のルールについては、[Command injection](/docs/security/command-injection)（英語）をご覧ください。
+
+## 管理画面 [#admin-panels]
+
+DaloyJS の上に管理画面やカスタマーサクセス向けの画面を構築していますか？ 推奨パターンについては [Secure admin panels](/docs/security/admin-panels)（英語）をご覧ください。`internal: true` のルート、`ipRestriction()`、リクエストごとの nonce を使った厳格な CSP、管理者ごとの認証、ログインを抑制する `rateLimit()` のグループ、構造化された監査ログを、Aikido が公開している「secure admin panel」のチェックリストに 1 対 1 で対応させて説明しています。
+
+## サプライチェーン [#supply-chain]
+
+DaloyJS は、より厳格なインストールモデルのために [pnpm](https://pnpm.io/motivation) で配布されています。スキャフォールドした pnpm アプリはインストール時の制御を引き継ぎます。また DaloyJS 自身のリポジトリとオプションの GitHub Actions バンドルは、最近の npm のインシデントで見られたキャッシュポイズニング、メンテナーへのフィッシング、OIDC トークンの悪用といったパターンに対する CI/CD の制御を追加します。
+
+- 厳格な分離：パッケージがファントム依存に到達することはできません。
+- コンテンツアドレス可能なストア：すべてのバイトがハッシュ化され、検証されます。
+- CI での `--ignore-scripts` 付きの固定された lockfile：推移的なライフサイクルスクリプトを実行しない、再現可能なインストール。
+- `verifyStoreIntegrity`：破損を検出する読み込み。
+- `strictPeerDependencies`：peer の不一致を見逃しません。
+- `pnpm-workspace.yaml` の `minimumReleaseAge: 1440`：新しいリリースをインストールする前に 24 時間待ちます（pnpm 11 は `.npmrc` の表記を無視します。[インストールの強化](#install-hardening)を参照）。
+- スキャフォールドでは `ignoreScripts: true`、DaloyJS のリポジトリでは `strictDepBuilds` と `allowBuilds` の許可リスト：レビュー済みのもの以外、依存関係のインストールスクリプトは実行されません。これが止めるのはインストールスクリプトのワームであり、インポート時に実行されるペイロードではありません。
+- SHA で固定した GitHub Actions：オプションで生成される GitHub のワークフローは、サードパーティのアクションを変更可能なタグではなく、不変のコミットに固定します。
+- 保護された DaloyJS の npm 公開：フレームワーク自身のパッケージは、タグのみのリリースワークフロー、保護された環境での承認、OIDC による信頼された公開、`--provenance` を使います。
+
+生成したアプリが GitHub 以外にある場合は、移植できる部分をそのまま持ち込み、GitHub のワークフローのルールを使っている CI ホストに合わせて置き換えてください。プライベートな GitLab、Bitbucket、Azure DevOps、オンプレミスの環境では、フレームワークがブランチ保護やランナーの外向き通信を強制することはできません。
+
+## 信頼できるプロキシとレート制限 [#trusted-proxies-and-rate-limiting]
+
+DaloyJS は、レート制限のキーを導き出すときに、デフォルトでは `X-Forwarded-For` や `X-Real-IP` を信頼しなくなりました。これらのヘッダーは、リバースプロキシが取り除いて書き換えない限り、クライアントが偽装できます。そのためデフォルトのリミッターは、明示的な `keyGenerator` を指定するか、信頼できるプロキシの背後で `trustProxyHeaders: true` / `trustedProxies` にオプトインするまで、偽装できない TCP ピアをキーにします（1.3.7 以降。ピアを公開しないランタイムでのみ、1 つの共有バケットになります）。プロキシのヘッダーを信頼する場合、キーは `X-Forwarded-For` の**最も右**のエントリ（プロキシが追加したもの）であり、攻撃者が左側に追加したエントリが使われることはありません。複数段のチェーンでは、`trustedHops` で段数を宣言します。オリジン自体に直接到達できる場合は、転送ヘッダーを信頼する前にピアのソケットが CIDR の許可リストと照合されるよう `trustedProxies` を設定してください（[autoBan の注記](/docs/auto-ban#verify-the-peer-trustedproxies)（英語）を参照）。
+
+App で `behindProxy` を使ってトポロジーをすでに宣言している場合は、繰り返す必要はありません。`keyGenerator`、`trustProxyHeaders`、`trustedHops`、`trustedProxies` のどれも設定していない `rateLimit()` や `loginThrottle()` は App の `behindProxy` に従うため、プロキシの背後にいる（あるいはピアのソケットがない Vercel や Cloudflare Workers 上の）各クライアントは、全員で 1 つを共有するのではなく、それぞれ独自のバケットを持ちます。リミッターの明示的なオプションが常に優先され、`trustProxyHeaders: false` でオプトアウトできます。`behindProxy` は実際の構成と一致させてください。`{ hops }` はアプリに直接到達できる誰からの右端の転送エントリも信頼してしまうため、プロキシのアドレスがわかっている場合は `{ cidrs }` を優先してください。
+
+```ts
+const app = new App({ behindProxy: { hops: 1 } }); // 前段に信頼できるプロキシが 1 つ
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // 実際のクライアント IP をキーにする
+```
+
+認証情報を入力するルートでは、`/login`、OTP、パスワードリセットのルートにまたがって [`loginThrottle()`](/docs/security/websocket-login-throttle)（英語）を使い、関連する WebSocket のアップグレードには `wsRateLimit()` を使ってください。どちらのヘルパーも同じ `groupId` のバケットから消費できます。
+
+## ドキュメントのアセットをセルフホストする [#self-hosted-docs-assets]
+
+組み込みのドキュメント用ヘルパーは、もはや jsDelivr 向けの CSP を強制しません。Swagger UI や Scalar のアセットをセルフホストし、起動スクリプトに nonce を付け、ドキュメントのルートに同一オリジンの CSP を出力できます。
+
+```ts
+import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});
+```
+
+## インストールの強化 [#install-hardening]
+
+pnpm 11+ では、インストール時の設定は camelCase のキーで `pnpm-workspace.yaml` に書きます。pnpm 11 はこれらの設定の `.npmrc` での表記を無視するため、`.npmrc` だけの構成ではクールダウン期間とスクリプトのポリシーが黙って失われます。`.npmrc` の複製は、npm と古いツールのためだけに残してください。
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440    # skip versions published in the last 24 hours
+blockExoticSubdeps: true   # transitive deps must come from the registry
+ignoreScripts: true        # no dependency lifecycle scripts
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+```
+
+これらの設定は、それを使うインストールを保護します。`ignoreScripts` はインストールスクリプトのワーム（Shai-Hulud のようなもの）を止めますが、コードがパッケージをインポートしたときに実行されるペイロードを軽減できるのは、クールダウン期間とコミット済みの lockfile だけです。`create-daloy` は pnpm のスキャフォールドにこのファイルを書き出します。
+
+CI/CD とメンテナー向けの完全な手引きについては、[Supply-chain security](/docs/security/supply-chain)（英語）をお読みください。CI とリリース前には `pnpm audit --prod` を実行してください。
+
+## OWASP API Security Top 10 との対応 [#owasp-api-security-top-10-mapping]
+
+Daloy が [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) の各項目と、横断的なベストプラクティス（暗号化、検証、レート制限、ログ、インベントリ、サードパーティ API の安全性）にどう対処しているかを項目ごとに確認するには、[OWASP API Top 10 mapping](/docs/security/owasp-api-top-10)（英語）をお読みください。
+
+## 脆弱性の報告 [#reporting-a-vulnerability]
+
+GitHub の非公開の脆弱性報告 [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) から、再現手順を添えて報告してください。エクスプロイトの詳細を含む公開 issue は作成しないでください。

@@ -1,0 +1,148 @@
+---
+title: Clients d’API typés
+description: "Générez des clients TypeScript entièrement typés depuis la spec OpenAPI de DaloyJS avec Hey API : une sûreté de typage de bout en bout, sans dérive."
+keywords:
+  - client d’API typé
+  - client OpenAPI TypeScript
+  - client Hey API
+  - sûreté de typage de bout en bout
+  - alternative à ts-rest
+  - ts-rest vs DaloyJS
+sitemap:
+  priority: 0.7
+---
+
+# Clients typés
+
+DaloyJS propose **deux** façons d’appeler votre API avec une sûreté de typage complète. Utilisez celle qui convient à votre consommateur.
+
+## 1. Client typé en processus (sans génération de code) [#1-in-process-typed-client-zero-codegen]
+
+Pour les consommateurs TypeScript du même monorepo (tests, outils internes, server actions Next.js) :
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string, entièrement typé
+}
+```
+
+Le client est indexé par `operationId`, renvoie une union discriminée de `{status, body, headers}` et infère tout à partir de la définition de route elle-même. Aucune étape de build.
+
+### Paramètres de chemin [#path-parameters]
+
+Les paramètres de chemin sont substitués segment entier par segment entier : `:id` ne correspond donc jamais à l’intérieur de `:idx`, et chaque valeur est encodée en pourcentage dans son propre segment. Depuis la 1.3.7, une méthode générée lève une `TypeError`, avant l’envoi de toute requête, lorsqu’un paramètre est manquant, vide, `.` ou `..`. L’analyse d’URL résoudrait un segment point (même sous la forme `%2E%2E`) et redirigerait silencieusement l’appel, par exemple en transformant `DELETE /orgs/:org/members/..` en `DELETE /orgs/:org`. Les routes joker (`*path`, ou un `*` seul nommé `wildcard`) acceptent une valeur séparée par des `/` ; chaque segment est encodé et vérifié de la même façon.
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="Composez des tuples de routes au lieu d’élargir l’App.">
+<p>Exportez des fichiers de routes avec <code>defineRoute()</code> et enregistrez un tuple littéral avec <code>app.registerRoutes(\[...\])</code>{". "}Les appels <code>route()</code> chaînés fonctionnent aussi. Deux choses effacent délibérément l’inférence et réduisent le client à une surface peu typée :</p>
+<ul>
+<li>Annoter l’instance avec un simple{" "}<code>const app: App = ...</code> (ou renvoyer <code>: App</code>{" "}depuis une fabrique). L’annotation élargit le type et efface les routes accumulées : laissez plutôt le type être inféré.</li>
+<li>Enregistrer les routes par des instructions séparées sur une variable déjà déclarée, au lieu de renvoyer le résultat chaîné ou d’utiliser{" "}<code>registerRoutes()</code>.</li>
+</ul>
+<p>Le guide du monolithe modulaire montre une composition sur plusieurs fichiers avec des tuples de routes issus de plusieurs contextes délimités. <code>group()</code> en style callback et <code>register()</code> des plugins assurent toujours l’encapsulation à l’exécution, mais leurs callbacks ne peuvent pas élargir le générique TypeScript de la variable parente. Utilisez les tuples de routes comme frontière de composition du client typé.</p>
+</Callout>
+
+## 2. SDK Hey API (multilangage, multidépôt, au build) [#2-hey-api-sdk-cross-language-cross-repo-build-time]
+
+Pour les consommateurs situés hors du monorepo ou écrits dans d’autres langages, générez un SDK fetch entièrement typé avec [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
+
+<FlowDiagram title="Chaîne de génération de code" numbered caption="pnpm gen exécute toute la chaîne : extraire la spécification de vos routes, puis laisser Hey API la transformer en SDK fetch typé. Relancez-la à chaque modification de route et le client reste en phase avec le contrat." steps={[
+          { label: "Routes", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "spécification OpenAPI 3.1 sur disque" },
+          { label: "openapi-ts", detail: "générateur Hey API" },
+          { label: "SDK typé", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "Consommateur",
+            detail: "appels fetch entièrement typés",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# écrit :
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## Utiliser le SDK généré [#using-the-generated-sdk]
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## Lequel choisir ? [#which-one-should-i-use]
+
+| Cas d’usage | Choix |
+| --- | --- |
+| Appelant TypeScript dans le même dépôt (tests, outils internes) | `createInProcessClient` |
+| Application web / bundle mobile React Native dans un dépôt séparé | SDK Hey API |
+| Consommateur non TypeScript (Python, Swift, Kotlin) | Document OpenAPI + son générateur préféré |
+| SDK public pour des tiers | SDK Hey API, publié comme paquet à part |
+
+## Vous venez de ts-rest ? [#coming-from-ts-rest]
+
+[ts-rest](https://ts-rest.com/) est une bibliothèque orientée contrat populaire qui fournit des types TypeScript de bout en bout **sans génération de code** en partageant un contrat (`initContract`) entre un serveur à base d’adaptateurs (Express, Fastify, NestJS, Next.js) et un client fetch (`initClient`). Si ce modèle vous plaît, DaloyJS vous semblera familier, à deux différences près.
+
+D’abord, dans DaloyJS, **la définition de route est le contrat** : il n’y a pas d’objet de contrat séparé à garder synchronisé. Le `createClient` en processus présenté plus haut offre la même expérience sans génération de code, avec des types partagés, pour les appelants TypeScript du même dépôt.
+
+Ensuite, la sûreté de typage de ts-rest est limitée à TypeScript et exige que le client importe le contrat. DaloyJS produit une spécification **OpenAPI 3.1** de premier plan et un SDK Hey API à partir des mêmes routes : les consommateurs qui ne peuvent pas importer vos types (autres dépôts, autres langages, SDK publics) sont donc couverts aussi. Dans ts-rest, OpenAPI est un module complémentaire facultatif (`@ts-rest/open-api`). DaloyJS est aussi le serveur et le runtime lui-même, portable sur Node, Bun, Deno, Cloudflare et Vercel, plutôt qu’une couche de typage montée sur un framework séparé.
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| Source du contrat | Objet `initContract` séparé | La définition de route elle-même |
+| Client typé sans génération de code | Oui (`initClient`, TypeScript uniquement) | Oui (`createClient`, TypeScript uniquement) |
+| Clients multilangages / multidépôts | Module OpenAPI (`@ts-rest/open-api`) | OpenAPI 3.1 + SDK Hey API, de premier plan |
+| Serveur | Adaptateur sur Express / Fastify / NestJS / Next.js | Intégré, portable entre runtimes |
+| Validation à l’exécution | Standard Schema (Zod / Valibot / ArkType) | Standard Schema (Zod / Valibot / ArkType / TypeBox) |
+| Sécurité par défaut | À vous de la fournir | En-têtes et limites de corps actifs par défaut ; CSRF et limitation de débit à une ligne près |
+
+Besoin d’un contrat plus volumineux pour valider la sortie de votre générateur ? Utilisez la [grande démo REST factice](/docs/tutorials/fake-rest-api) (en anglais) comme cas de stress plutôt qu’une application de tutoriel minimale.

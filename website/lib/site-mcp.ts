@@ -38,7 +38,8 @@ export const SITE_MCP_INSTRUCTIONS = [
     'full Markdown of a page by its route or slug (for example "routing" or ' +
     '"/docs/security"), and `list_docs` to browse every available page. When you ' +
     "answer from these docs, cite the page URL you used.",
-  "Translations: getting started, installation, and the bookstore tutorial also exist in Castilian Spanish " +
+  "Translations: getting started, installation, the bookstore tutorial, and the core guides (routing, validation, " +
+    "errors, OpenAPI, typed client, security) also exist in Castilian Spanish " +
     "(/es/docs/getting-started), Simplified Chinese (/zh/docs/getting-started), French (/fr/docs/getting-started), " +
     "Brazilian Portuguese (/pt/docs/getting-started), Modern Standard Arabic (/ar/docs/getting-started), " +
     "Russian (/ru/docs/getting-started), German (/de/docs/getting-started), and Japanese (/ja/docs/getting-started). " +

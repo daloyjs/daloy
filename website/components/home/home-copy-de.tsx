@@ -123,7 +123,7 @@ export const HOME_COPY_DE: HomeCopy = {
     installation: "/de/docs/installation",
     tutorial: "/de/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/de/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -133,7 +133,7 @@ export const HOME_COPY_DE: HomeCopy = {
     primaryCta: "Loslegen: Daloy installieren",
     secondaryCta: "Dokumentation lesen",
     contentLanguageNote:
-      "Erste Schritte, Installation und Tutorial gibt es auf Deutsch; die übrige Dokumentation und der Blog sind vorerst auf Englisch.",
+      "Die Einstiegsseiten und Kernleitfäden (Routing, Validierung, Fehler, OpenAPI, typisierter Client, Sicherheit) gibt es auf Deutsch; der Rest der Doku und der Blog sind auf Englisch.",
     factsLabel: "Das Projekt in Zahlen",
     facts: [
       "Über 3.000 bestandene Framework-Tests",

@@ -1,0 +1,234 @@
+---
+title: DaloyJS 中的校验
+description: "DaloyJS 通过 Standard Schema 校验请求和响应。Zod、Valibot、ArkType 或 TypeBox 均可，选择适合你项目的校验器。"
+keywords:
+  - DaloyJS 校验
+  - Standard Schema
+  - TypeScript 请求校验
+  - Zod DaloyJS
+  - Valibot DaloyJS
+  - ArkType
+  - TypeBox
+sitemap:
+  priority: 0.7
+---
+
+# 校验
+
+DaloyJS 通过 [Standard Schema](https://github.com/standard-schema/standard-schema) 校验输入。这是一个很小的接口，**Zod**、**Valibot**、**ArkType** 等校验器都提供了它，TypeBox 则可以通过 Standard Schema 适配器接入。选择适合你项目的校验器即可，DaloyJS 的契约都是一样的。
+
+<BranchDiagram title="一个接口，四种校验器" source={{
+          eyebrow: "框架契约",
+          label: "Standard Schema",
+          detail: "~standard 属性",
+        }} branches={[
+          { eyebrow: "默认", label: "Zod", detail: "z.object({ ... })" },
+          {
+            eyebrow: "可摇树优化",
+            label: "Valibot",
+            detail: "v.object({ ... })",
+          },
+          { label: "ArkType", detail: "type({ ... })" },
+          { label: "TypeBox", detail: "通过适配器" },
+        ]} caption="每种校验器都提供相同的 ~standard 属性，因此 DaloyJS 通过同一条框架路径推断处理函数类型、生成 OpenAPI 并返回 problem+json 错误。" />
+
+## 校验哪些内容 [#what-gets-validated]
+
+每条路由都可以为以下内容声明 schema：
+
+- `request.params`：解码后的路径参数。它们一开始都是字符串。如果需要数字、UUID 或枚举，请在 schema 中做类型转换。
+- `request.query`：查询字符串的值。重复的键会在校验前变成数组。
+- `request.headers`：以小写名称表示的请求头。
+- `request.body`：解析后的请求体。只有路由声明了请求体 schema 时才会读取请求体。
+- `responses[status].body`：带类型并经过校验的响应体。
+
+查询字符串、表单字段和 multipart 字段会在校验前丢弃 `__proto__`、`constructor` 和 `prototype` 等原型污染键。
+
+## 约束数值字段（金额、数量、ID） [#bound-numeric-fields]
+
+单纯的 `z.number()` 会接受 `1e308`、类型转换出错后的 `-Infinity`，以及其他对 IEEE 浮点数没有问题、但对金额、库存或分页来说是灾难的值。请始终为数值类型的请求字段加上业务范围约束：
+
+```ts
+import { z } from "zod";
+
+// 金额：有限、为正，并以业务上限封顶。
+const Money = z.number().finite().positive().max(1_000_000);
+
+// 数量：合理范围内的整数。
+const Qty = z.number().int().positive().max(10_000);
+
+// 仅当值以字符串形式传入时（查询 / 表单）才使用 coerce。
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// 严格的请求体会拒绝批量赋值带来的多余字段。
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();
+```
+
+Zod 4 在很多情况下已经会让 `z.number()` 拒绝 `NaN` 和非有限数，但上限（`.max()`）和符号约束（`.positive()` / `.nonnegative()`）仍是你防范退款欺诈和溢出的最后一道防线。再配合响应 schema，敏感字段就永远不会被带出去。
+
+## 端到端示例 [#end-to-end-example]
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateLineItem = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const LineItem = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
+  },
+  async ({ params, query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: `${params.orderId}:li_1`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+## 选择你的校验器 [#pick-your-validator]
+
+- [Zod](/docs/validation/zod)（英文）：大多数团队的默认选择。链式 API、庞大的生态，容易上手。
+- [Valibot](/docs/validation/valibot)（英文）：模块化且可摇树优化。非常适合边缘运行时以及随浏览器分发的契约。
+
+只要 ArkType 和兼容 TypeBox 的 schema 提供同样的 `~standard` 属性，它们也能工作，但 DaloyJS 只为 Zod 和 Valibot 提供官方文档和脚手架。
+
+## 并排对比 [#side-by-side]
+
+```ts
+// Zod
+import { z } from "zod";
+const Body = z.object({
+  sku: z.string(),
+  qty: z.number().int().positive(),
+});
+
+// Valibot
+import * as v from "valibot";
+const Body = v.object({
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+// ArkType
+import { type } from "arktype";
+const Body = type({ sku: "string", qty: "1<=number.integer" });
+
+// TypeBox
+import { Type } from "@sinclair/typebox";
+const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 }) });
+// 传给 DaloyJS 之前，先用你项目中的 Standard Schema 适配器包装一下。
+```
+
+只要 schema 提供了 `~standard`，无论它来自哪个校验器，DaloyJS 都会以同样的方式推断处理函数类型、生成 OpenAPI 并返回 problem+json 错误。
+
+## 错误 [#errors]
+
+<FlowDiagram title="先解析，再按结果分支" steps={[
+          {
+            eyebrow: "不可信",
+            label: "原始请求",
+            detail: "params · query · headers · body",
+            tone: "muted",
+          },
+          {
+            eyebrow: "standard schema",
+            label: "Schema 解析",
+            detail: "validate(schema, input)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "失败时",
+            label: "422 problem+json",
+            detail: "errors: [{ path, message }]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "成功时",
+            label: "类型化处理函数",
+            detail: "ctx.body / params / query / headers",
+            tone: "success",
+          },
+        ]} caption="每个声明的 schema 都在处理函数之前运行。无效输入永远不会进入处理函数代码，而是直接短路为 422 RFC 9457 响应。有效输入到达时已带完整类型。" />
+
+遇到无效输入时，DaloyJS 会以 RFC 9457 problem+json 格式返回 **422 Unprocessable Entity**，其中的 `errors` 数组按问题列出 `path` 和 `message` 记录。你不需要为此编写错误处理函数，这是内置的。参见[错误与 problem+json](/zh/docs/errors)。
+
+## 响应校验 [#response-validation]
+
+声明了响应 schema 时，DaloyJS 会在序列化之前校验处理函数的返回值。实际发送出去的是校验后的值，因此会剥离未知键的对象 schema 也能防止未声明的字段泄露给客户端。如果校验失败，生产环境中的客户端会收到一个脱敏的 500 problem 响应。
+
+## 请求体限制与内容类型 [#body-limits-and-content-types]
+
+`App` 的 `bodyLimitBytes` 选项（默认 1 MiB）同时限制声明的 Content-Length 和每个请求体的流式大小 -\> **413**。自 1.5.4 起，这一限制适用于每条路由，包括处理函数自己从 `ctx.request` 读取的请求体；限制在读取请求体时惰性检查。
+
+当路由声明了 `request.body` 时，DaloyJS 还会强制执行：
+
+- 根据路由的 `accepts` 列表（如果设置了全局 `allowedContentTypes` 则用它）检查 Content-Type -\> **415**。
+- 默认接受的请求体类型：`application/json`、`application/x-www-form-urlencoded` 和 `multipart/form-data`。
+- 对 JSON、查询字符串、urlencoded 表单和 multipart 表单进行防原型污染的解析。
+
+JSON 请求体解析为对象，urlencoded 请求体通过 `URLSearchParams` 解析，multipart 请求体通过平台的 `Request.formData()` API 解析。如果你让某条路由接受自定义的文本媒体类型，DaloyJS 会把解码后的文本传给你的请求体 schema。
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## 混用校验器 [#mixing-validators]
+
+你可以按路由混合搭配。一个文件里用 Zod schema，另一个文件里用 Valibot schema，两者都有效，这在迁移现有代码库或使用共享包中的 schema 时很有用。

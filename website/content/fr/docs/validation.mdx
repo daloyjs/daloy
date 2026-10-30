@@ -1,0 +1,234 @@
+---
+title: Validation dans DaloyJS
+description: "DaloyJS valide requêtes et réponses via Standard Schema. Utilisez Zod, Valibot, ArkType ou TypeBox : choisissez le validateur adapté à votre projet."
+keywords:
+  - validation DaloyJS
+  - Standard Schema
+  - validation de requêtes TypeScript
+  - Zod DaloyJS
+  - Valibot DaloyJS
+  - ArkType
+  - TypeBox
+sitemap:
+  priority: 0.7
+---
+
+# Validation
+
+DaloyJS valide les entrées via [Standard Schema](https://github.com/standard-schema/standard-schema), une petite interface exposée par des validateurs comme **Zod**, **Valibot**, **ArkType**, et TypeBox via un adaptateur Standard Schema. Choisissez le validateur adapté à votre projet. Le contrat DaloyJS reste le même.
+
+<BranchDiagram title="Une interface, quatre validateurs" source={{
+          eyebrow: "contrat du framework",
+          label: "Standard Schema",
+          detail: "la propriété ~standard",
+        }} branches={[
+          { eyebrow: "par défaut", label: "Zod", detail: "z.object({ ... })" },
+          {
+            eyebrow: "tree-shakeable",
+            label: "Valibot",
+            detail: "v.object({ ... })",
+          },
+          { label: "ArkType", detail: "type({ ... })" },
+          { label: "TypeBox", detail: "via un adaptateur" },
+        ]} caption="Chaque validateur expose la même propriété ~standard : DaloyJS infère donc les types des handlers, génère OpenAPI et renvoie des erreurs problem+json par un seul et même chemin du framework." />
+
+## Ce qui est validé [#what-gets-validated]
+
+Pour chaque route, vous pouvez déclarer des schémas pour :
+
+- `request.params` : les paramètres de chemin décodés. Ce sont d’abord des chaînes. Convertissez-les dans votre schéma si vous voulez des nombres, des UUID ou des enums.
+- `request.query` : les valeurs de la query string. Les clés répétées deviennent des tableaux avant la validation.
+- `request.headers` : les en-têtes de requête, avec des noms en minuscules.
+- `request.body` : les corps de requête analysés. Le corps n’est lu que si la route déclare un schéma de corps.
+- `responses[status].body` : des corps de réponse typés et validés.
+
+Les query strings, les champs de formulaire et les champs multipart suppriment avant la validation les clés de pollution de prototype comme `__proto__`, `constructor` et `prototype`.
+
+## Bornez les champs numériques (montants, quantités, identifiants) [#bound-numeric-fields]
+
+Un simple `z.number()` accepte `1e308`, `-Infinity` après une erreur de conversion, et d’autres valeurs acceptables pour des flottants IEEE mais désastreuses pour de l’argent, un inventaire ou une pagination. Placez toujours des bornes métier sur les champs numériques des requêtes :
+
+```ts
+import { z } from "zod";
+
+// Montants : finis, positifs, plafonnés à une limite métier.
+const Money = z.number().finite().positive().max(1_000_000);
+
+// Quantités : entiers dans une plage raisonnable.
+const Qty = z.number().int().positive().max(10_000);
+
+// Ne préférez coerce que lorsque la valeur arrive sous forme de chaîne (query / formulaire).
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// Les corps stricts rejettent les champs en trop (mass assignment).
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();
+```
+
+Zod 4 rejette déjà dans bien des cas les nombres `NaN` ou non finis pour `z.number()`, mais un plafond (`.max()`) et une contrainte de signe (`.positive()` / `.nonnegative()`) restent votre dernier rempart contre la fraude aux remboursements et les débordements. Associez cela à des schémas de réponse pour que les champs sensibles ne fuient jamais vers l’extérieur.
+
+## Exemple de bout en bout [#end-to-end-example]
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateLineItem = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const LineItem = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
+  },
+  async ({ params, query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: `${params.orderId}:li_1`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+## Choisissez votre validateur [#pick-your-validator]
+
+- [Zod](/docs/validation/zod) (en anglais) : le choix par défaut pour la plupart des équipes. API chaînable, vaste écosystème, facile à apprendre.
+- [Valibot](/docs/validation/valibot) (en anglais) : modulaire et tree-shakeable. Idéal pour les runtimes edge et les contrats livrés au navigateur.
+
+Les schémas ArkType et compatibles TypeBox fonctionnent aussi s’ils exposent la même propriété `~standard`, mais DaloyJS ne fournit de documentation et de modèles officiels que pour Zod et Valibot.
+
+## Côte à côte [#side-by-side]
+
+```ts
+// Zod
+import { z } from "zod";
+const Body = z.object({
+  sku: z.string(),
+  qty: z.number().int().positive(),
+});
+
+// Valibot
+import * as v from "valibot";
+const Body = v.object({
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+// ArkType
+import { type } from "arktype";
+const Body = type({ sku: "string", qty: "1<=number.integer" });
+
+// TypeBox
+import { Type } from "@sinclair/typebox";
+const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 }) });
+// Enveloppez-le avec l’adaptateur Standard Schema de votre projet avant de le passer à DaloyJS.
+```
+
+Dès qu’un schéma expose `~standard`, DaloyJS infère les types des handlers, génère OpenAPI et renvoie des erreurs problem+json de la même façon, quel que soit le validateur qui l’a produit.
+
+## Erreurs [#errors]
+
+<FlowDiagram title="Analyser, puis bifurquer selon le résultat" steps={[
+          {
+            eyebrow: "non fiable",
+            label: "Requête brute",
+            detail: "params · query · headers · body",
+            tone: "muted",
+          },
+          {
+            eyebrow: "standard schema",
+            label: "Analyse du schéma",
+            detail: "validate(schema, input)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "en cas d’échec",
+            label: "422 problem+json",
+            detail: "errors: [{ path, message }]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "en cas de succès",
+            label: "Handler typé",
+            detail: "ctx.body / params / query / headers",
+            tone: "success",
+          },
+        ]} caption="Chaque schéma déclaré s’exécute avant votre handler. Une entrée invalide n’atteint jamais le code du handler : elle aboutit directement à une réponse 422 RFC 9457. Une entrée valide arrive entièrement typée." />
+
+Sur une entrée invalide, DaloyJS renvoie **422 Unprocessable Entity** au format RFC 9457 problem+json, avec un tableau `errors` d’enregistrements `path` et `message` par problème. Vous n’écrivez pas de gestionnaire d’erreurs pour cela : c’est intégré. Voir [Erreurs et problem+json](/fr/docs/errors).
+
+## Validation des réponses [#response-validation]
+
+Lorsqu’un schéma de réponse est déclaré, DaloyJS valide la valeur renvoyée par le handler avant de la sérialiser. C’est la valeur validée qui part sur le réseau : les schémas d’objet qui retirent les clés inconnues empêchent donc aussi des champs non déclarés de fuiter vers les clients. Si la validation échoue, le client reçoit en production une réponse problem 500 masquée.
+
+## Limites de corps et types de contenu [#body-limits-and-content-types]
+
+L’option d’App `bodyLimitBytes` (1 Mio par défaut) plafonne le Content-Length déclaré et la taille transmise en flux de chaque corps de requête -\> **413**. Depuis la 1.5.4, cela s’applique à toutes les routes, y compris aux corps qu’un handler lit lui-même depuis `ctx.request` ; le plafond est vérifié de manière paresseuse, au moment de la lecture du corps.
+
+Lorsqu’une route déclare `request.body`, DaloyJS impose aussi :
+
+- Le Content-Type par rapport à la liste `accepts` de la route, ou à `allowedContentTypes` global s’il est défini -\> **415**.
+- Les types de corps acceptés par défaut : `application/json`, `application/x-www-form-urlencoded` et `multipart/form-data`.
+- Une analyse protégée contre la pollution de prototype pour le JSON, les query strings, les formulaires urlencoded et les formulaires multipart.
+
+Les corps JSON sont analysés en objets, les corps urlencoded via `URLSearchParams` et les corps multipart via l’API `Request.formData()` de la plateforme. Si vous autorisez sur une route un type de média texte personnalisé, DaloyJS transmet le texte décodé à votre schéma de corps.
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## Mélanger les validateurs [#mixing-validators]
+
+Vous pouvez combiner les validateurs route par route. Un schéma Zod dans un fichier et un schéma Valibot dans un autre sont tous deux valides, ce qui est utile pour migrer une base de code existante ou consommer des schémas issus d’un paquet partagé.

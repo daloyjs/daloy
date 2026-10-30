@@ -43,49 +43,49 @@ const PROJECT_LINKS: ReadonlyArray<{
     title: "DaloyJS en español (es-ES)",
     url: `${SITE_URL}/es`,
     description:
-      "Castilian Spanish versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /es/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Castilian Spanish versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /es/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS 简体中文版 (zh-CN)",
     url: `${SITE_URL}/zh`,
     description:
-      "Simplified Chinese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /zh/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Simplified Chinese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /zh/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS en français (fr-FR)",
     url: `${SITE_URL}/fr`,
     description:
-      "French versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /fr/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "French versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /fr/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS em português (pt-BR)",
     url: `${SITE_URL}/pt`,
     description:
-      "Brazilian Portuguese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /pt/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Brazilian Portuguese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /pt/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS بالعربية (ar)",
     url: `${SITE_URL}/ar`,
     description:
-      "Modern Standard Arabic (right-to-left) versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /ar/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Modern Standard Arabic (right-to-left) versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /ar/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS на русском (ru)",
     url: `${SITE_URL}/ru`,
     description:
-      "Russian versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /ru/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Russian versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /ru/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS auf Deutsch (de)",
     url: `${SITE_URL}/de`,
     description:
-      "Standard German versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /de/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Standard German versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /de/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "DaloyJS 日本語版 (ja)",
     url: `${SITE_URL}/ja`,
     description:
-      "Japanese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp at /ja/docs (getting started, installation, bookstore tutorial). The rest of the docs and the blog are English-only.",
+      "Japanese versions of the homepage, about, contact, privacy, and name pages, plus the docs on-ramp and core guides at /ja/docs (getting started, installation, bookstore tutorial, routing, validation, errors, OpenAPI, typed client, security). The rest of the docs and the blog are English-only.",
   },
   {
     title: "Docs MCP server",
@@ -208,7 +208,7 @@ export async function GET(request: Request) {
   if (translated.length > 0) {
     lines.push("## Translations", "");
     lines.push(
-      "Castilian Spanish, Simplified Chinese, French, Brazilian Portuguese, Modern Standard Arabic, Russian, German, and Japanese versions of the docs on-ramp. The English pages are authoritative.",
+      "Castilian Spanish, Simplified Chinese, French, Brazilian Portuguese, Modern Standard Arabic, Russian, German, and Japanese versions of the docs on-ramp and core guides. The English pages are authoritative.",
       "",
     );
     for (const page of translated) {

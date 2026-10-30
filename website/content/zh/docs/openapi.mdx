@@ -1,0 +1,355 @@
+---
+title: DaloyJS OpenAPI 规范
+description: "DaloyJS 从路由生成 OpenAPI 3.1 规范。借助 Hey API，规范始终与契约保持同步，并驱动类型化客户端。"
+keywords:
+  - DaloyJS OpenAPI 规范
+  - OpenAPI 3.1
+  - TypeScript OpenAPI 生成器
+  - Hey API
+  - DaloyJS OpenAPI
+  - 自动 API 文档
+  - Swagger UI
+  - Scalar API 参考
+  - Redoc
+  - 文档界面切换
+sitemap:
+  priority: 0.7
+---
+
+# DaloyJS OpenAPI 规范
+
+DaloyJS 直接从你的路由定义生成干净的 **OpenAPI 3.1** 文档，无需插件，也无需额外的装饰器。校验、类型和规范共享同一个事实来源。
+
+<BranchDiagram title="一份契约，四种产物" source={{
+          eyebrow: "唯一事实来源",
+          label: "路由定义",
+          detail: "app.get(path, { request, responses }, handler)",
+        }} branches={[
+          {
+            eyebrow: "运行时",
+            label: "请求与响应校验",
+            detail: "Zod · Valibot · ArkType",
+          },
+          {
+            eyebrow: "规范",
+            label: "OpenAPI 3.1 文档",
+            detail: "GET /openapi.json · /openapi.yaml",
+          },
+          {
+            eyebrow: "给人看",
+            label: "文档界面",
+            detail: "Scalar · Swagger UI · Redoc",
+          },
+          {
+            eyebrow: "调用方",
+            label: "类型化客户端 SDK",
+            detail: "Hey API 代码生成",
+          },
+        ]} caption="路由只需编写一次。校验、OpenAPI 规范、交互式文档和类型化客户端都从它派生，因此它们永远不会彼此脱节。" />
+
+## 一行代码：自动挂载 /docs、/openapi.json、/openapi.yaml [#one-line-auto-mount-docs-openapi-json-openapi-yaml]
+
+FastAPI 风格。向 `App` 构造函数传入 `docs: "auto"`（或 `docs: true`），DaloyJS 就会为你注册 `GET /openapi.json` + `GET /openapi.yaml`（两种格式的实时规范）以及 `GET /docs`（Scalar API 参考界面）。
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    servers: [{ url: "https://api.example.com" }],
+    securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+  },
+  docs: "auto", // 在非生产环境挂载 GET /docs、GET /openapi.json、GET /openapi.yaml
+});
+```
+
+`docs: "auto"` 只在应用不处于生产环境时挂载（`create-daloy` 模板默认使用它，因此部署后的 API 不会公开自己的 schema）；你也可以不设置它（默认），然后用下面的辅助函数手动挂载。通过对象形式可以自定义路径、界面和标签。自 1.5.5 起，除非你设置 `enabled`，否则对象形式的行为与 `"auto"` 相同，因此自定义界面永远不会意外地在生产环境中公开你的路由地图；对于应当在生产环境中提供文档的公开 API，请设置 `enabled: true`（或 `docs: true`）：
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    path: "/reference",              // 默认："/docs"
+    openapiPath: "/spec.json",       // 默认："/openapi.json"
+    openapiYamlPath: "/spec.yaml",   // 默认："/openapi.yaml"；设为 false 可禁用
+    ui: "scalar",                     // "scalar"（默认）| "swagger" | "redoc"
+    scalar: {
+      theme: "kepler",
+      customCss: ":root { --scalar-color-accent: #2563eb; }",
+      hideTestRequestButton: true,
+    },
+    tags: ["Docs"],                   // 默认：["Docs"]，传入 [] 可省略
+    enabled: "auto",                  // 默认 "auto"（生产环境中关闭）；true | false
+  },
+});
+```
+
+<blockquote><strong>安全：</strong>公开的规范就是一份完整的攻击面地图：每个路径、参数、认证方案和错误结构都在其中。在生产环境中使用 <code>docs: true</code> 或 <code>enabled: true</code> 时，DaloyJS 会记录 <code>docs.public_in_production</code>，并把规范提供给任何能访问到它的人。这对公开 API 是正确的。其他情况请保留 <code>"auto"</code>，或者把文档放在认证之后（应用级的 <code>bearerAuth()</code>，只要没有为 <code>/docs</code> 和 <code>/openapi.json</code> 设置 <code>except()</code>，就能覆盖它们）。把管理、定时任务和调试路由标记为 <code>internal: true</code>。这样它们会被排除在生成的文档之外，并对网络流量返回 <code>404</code>，而 <code>app.inject()</code> 仍然可以调用它们。参见<a href="/docs/security/admin-panels">保护管理面板</a>（英文）。</blockquote>
+
+## 选择界面：Scalar、Swagger UI 或 Redoc [#pick-a-ui-scalar-swagger-ui-or-redoc]
+
+把 `ui` 设为 `"scalar"`（默认）、`"swagger"` 或 `"redoc"`。三者渲染同一份实时规范，挂载在相同的路径上，并带有同样严格的 CSP 和托管在 CDN 上的资源，因此切换只需改一个词。Scalar 和 Swagger UI 为受保护的路由提供开发者请求控制台。Redoc 是只读的参考界面：它会显示安全要求，但没有内置的 *Try it* 控制台。
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    ui: "swagger",
+    swagger: {
+      docExpansion: "none",
+      displayRequestDuration: true,
+    },
+  },
+});
+```
+
+Swagger UI 默认会在页面重新加载后保留 *Authorize* 对话框中的授权信息。它的做法是把粘贴的令牌存进浏览器的 `localStorage`，Scalar 在 `persistAuth: true` 时也是如此。文档源上运行的任何脚本都能读取它，而且关闭标签页后它依然存在。请只粘贴短期有效、权限最小的测试令牌，绝不要粘贴生产或管理员凭据，并且让文档与任何自有 Web 应用使用不同的源。传入 `swagger: { persistAuthorization: false }` 可以只在内存中保存令牌。Scalar 会自动选择第一个配置的 OpenAPI 安全方案，因此认证表单已经准备好，开发者可以直接粘贴 bearer 令牌或 API key。如果你希望 Scalar 使用不同的默认值，请显式设置：
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+    },
+  },
+  docs: {
+    scalar: {
+      persistAuth: true,
+      authentication: { preferredSecurityScheme: "bearer" },
+    },
+  },
+});
+```
+
+如果文档需要一个显眼的登录入口，请添加 `docs.auth`。Scalar、Swagger UI 和 Redoc 都会渲染同样的按钮。把它指向本地登录表单、Better Auth 路由、Clerk 登录 URL，或者来自 Auth0、Okta、Microsoft Entra ID、Cognito、Keycloak 等提供方的 OIDC 授权 URL：
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      oidc: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://login.example.com/oauth2/v2.0/authorize",
+            tokenUrl: "https://login.example.com/oauth2/v2.0/token",
+            scopes: { "api.read": "Read API data" },
+          },
+        },
+      },
+    },
+  },
+  docs: {
+    ui: "redoc", // 同样适用于 "scalar" 和 "swagger"
+    auth: {
+      loginUrl: "/login", // 或者你的提供方的授权/登录 URL
+      label: "Sign in",
+      target: "popup",
+    },
+  },
+});
+```
+
+`redoc` 对象会原样转发给 `Redoc.init(specUrl, configuration, element)`。由于 Redoc 在 `blob:` Web Worker 中构建搜索索引，自动挂载的 `/docs` 路由只会在 `ui: "redoc"` 时自动为该页面的 CSP 放宽 `worker-src 'self' blob:`。Scalar 和 Swagger UI 保持更严格的策略。除非 `ui` 是 `"scalar"`，否则 `scalar` 选项会被忽略，`swagger` 和 `redoc` 同理。
+
+`scalar` 对象会作为 JSON 配置转发给 Scalar 的 HTML API，而 Daloy 仍把实时的 `openapiPath` 作为数据源。用它来设置主题、自定义 CSS、布局、认证默认值和客户端可见性，无需复制文档 HTML。
+
+## 进阶：手动生成规范 [#advanced-generate-the-spec-manually]
+
+需要原始的规范对象（用于代码生成、契约测试或自定义路由）？直接调用 `generateOpenAPI(app, options)`：
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+});
+
+console.log(JSON.stringify(doc, null, 2));
+```
+
+## 进阶：用你自己的路由提供文档 [#advanced-serve-docs-from-your-own-route]
+
+手写的文档路由就是一条普通路由，因此 `docs: "auto"` 的开关对它不起作用。它是否应该在生产环境中存在、是否需要认证，都要你自己决定。用 `generateOpenAPI()` 手动提供的任何 `/openapi.json` 路由也是如此：
+
+```ts
+import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+// 不受 `docs: "auto"` 控制，所以要自己加开关。
+if (process.env.NODE_ENV !== "production") {
+  app.get(
+    "/docs",
+    {
+      operationId: "docs",
+      responses: { 200: { description: "API reference" } },
+    },
+    async () => {
+      const html = scalarHtml({
+        specUrl: "/openapi.json",
+        title: "My API",
+        configuration: { theme: "kepler" },
+      });
+      const res = htmlResponse(html);
+      return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
+    },
+  );
+}
+```
+
+`swaggerUiHtml`、`scalarHtml` 和 `redocHtml` 都返回自包含的 HTML 页面，它们从 jsDelivr 加载资源，并使用只允许该源的严格 CSP。用 `redocHtml` 手写路由时，请向 `htmlResponse`（或 `docsContentSecurityPolicy`）传入 `allowBlobWorkers: true`，让 CSP 允许 Redoc 的 `blob:` 搜索 worker：
+
+```ts
+import { redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+const res = htmlResponse(
+  redocHtml({ specUrl: "/openapi.json", title: "My API", configuration: { hideDownloadButtons: true } }),
+  { allowBlobWorkers: true },
+);
+```
+
+如果你想用一个大得多的契约测试文档的使用体验，请参见[大型模拟 REST 演示](/docs/tutorials/fake-rest-api)（英文）。当你需要验证搜索、分组和渲染性能时，它比玩具级的 CRUD 示例更适合做基准。
+
+## 导出到磁盘用于代码生成 [#dump-to-disk-for-codegen]
+
+```ts
+// scripts/dump-openapi.ts
+import { writeFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { buildApp } from "../src/build-app.js";
+
+const app = buildApp();
+const out = "./generated/openapi.json";
+await mkdir(dirname(out), { recursive: true });
+await writeFile(out, JSON.stringify(generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+}), null, 2));
+console.log(`wrote ${out}`);
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts"
+}
+```
+
+## 生成哪些内容 [#what-gets-emitted]
+
+- 每条路由一个 `operationId`，重复的会在注册时抛出错误。
+- 路径参数 `:id` 规范化为 `{id}`。
+- 在支持时通过 `schema.toJSONSchema?.()` 转换 schema 请求体，否则使用结构化的回退方案。
+- 为 RFC 9457 错误提供可复用的 `components.schemas.Problem`。
+- `tags`、`summary`、`description` 以及按状态码的 `description`。
+- 标记为 `internal: true` 的路由会被省略，除非你传入 `includeInternal: true`（例如为你自己的工具生成仅供内部使用的契约）。绝不要公开那份文档。
+
+## Webhooks [#webhooks]
+
+OpenAPI 3.1 允许生产方发布**顶层 webhooks**，即期望调用方实现的操作。向 `generateOpenAPI` 传入 `webhooks`，DaloyJS 就会把它们输出到文档顶层的 `webhooks` 映射中。
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "Books", version: "1.0.0" },
+  webhooks: {
+    bookCreated: {
+      method: "POST",
+      operationId: "onBookCreated",
+      summary: "Fires when a book is created",
+      tags: ["Webhooks"],
+      request: { body: z.object({ id: z.string(), title: z.string() }) },
+      responses: { 200: { description: "Acknowledged" } },
+      auth: { scheme: "bearer", scopes: ["webhook:receive"] },
+    },
+  },
+});
+```
+
+`webhooks` 映射只是*描述*操作，并不负责投递或保护任何东西。真正投递时，请对每个负载签名，让接收方能够同时验证来源和完整性，并附带时间戳，让接收方能拒绝重放。单靠一个静态 bearer 令牌两者都证明不了。[`createWebhookSender()`](/docs/webhook-delivery)（英文）会签名、加时间戳、重试，并让每个出站请求都经过 `fetchGuard()`。接收方用 `verifyWebhookSignature()` 验证。请在 webhook 的 `description` 中记录签名相关的请求头。
+
+## 回调 [#callbacks]
+
+**回调**描述某个操作可能在调用方一侧触发的带外请求（例如一个订阅端点，之后会向调用者提供的 URL 发送 POST）。直接在路由或 webhook 上附加 `callbacks` 映射即可。
+
+```ts
+import { fetchGuard } from "@daloyjs/core";
+
+// 每个发往调用者提供的 URL 的请求都要经过 SSRF 防护。
+const safeFetch = fetchGuard();
+
+app.post(
+  "/subscribe",
+  {
+    operationId: "subscribe",
+    request: {
+      body: z
+        .object({
+          // 仅限 https：拒绝 file:、gopher:、javascript: 和普通 http:
+          callbackUrl: z.url({ protocol: /^https$/ }),
+        })
+        .strict(),
+    },
+    responses: { 201: { description: "Subscribed" } },
+    callbacks: {
+      onEvent: {
+        "{$request.body#/callbackUrl}": {
+          method: "POST",
+          operationId: "onEventCallback",
+          request: { body: z.object({ id: z.string() }) },
+          responses: {
+            200: { description: "ack" },
+            410: { description: "gone" },
+          },
+        },
+      },
+    },
+  },
+  async () => ({ status: 201, body: undefined }),
+);
+```
+
+<blockquote><strong>安全：</strong>调用者提供的回调 URL 是服务端请求伪造（SSRF）的汇聚点。仅靠 schema 校验是不够的。单独的 <code>z.url()</code> 会接受 <code>http://169.254.169.254/</code>（云元数据）、<code>http://localhost:6379/</code> 以及 <code>file:</code>/<code>gopher:</code> URL，即使是 <code>{"z.url({ protocol: /^https$/ })"}</code> 也仍会接受 <code>https://169.254.169.254/</code> 或解析到私有地址的主机名。请让每个回调都通过 <a href="/docs/security/fetch-guard"><code>fetchGuard()</code></a>（英文）提供的 <code>safeFetch</code> 发送，它会检查解析后的地址和每一次重定向。更好的做法是用 <a href="/docs/webhook-delivery"><code>createWebhookSender()</code></a>（英文）投递，它还会对负载签名。在保存 URL 之前，可以考虑验证对方对该 URL 的所有权，例如通过一次挑战请求。</blockquote>
+
+每个回调名称映射到一个或多个运行时表达式键（例如 `"{$request.body#/callbackUrl}"`），每个键再映射到一个或多个以 HTTP 方法为键的操作。空映射和空数组会被跳过，传入空回调永远不会产生格式错误的规范。
+
+## 可辨识联合 [#discriminated-unions]
+
+OpenAPI 3.1 的 `discriminator` 是描述带标签联合类型的标准方式。DaloyJS 在 `@daloyjs/core/openapi`（以及根包）中提供了两个辅助函数：
+
+- `discriminator(propertyName, mapping?)`：最基础的规范构建器。当你已有手写的 JSON Schema，并想干净地附加这个字段时使用它。
+- `discriminatedUnion(propertyName, variants, opts?)`：一个兼容 Standard Schema 的包装器，*既*在运行时校验（根据辨识值分派），*又*提供 `.toJSONSchema()`，让 OpenAPI 生成器自动输出 `{ oneOf, discriminator }`。
+
+```ts
+import { z } from "zod";
+import { discriminatedUnion } from "@daloyjs/core";
+
+// .strict() 会以 422 拒绝未知键（例如被注入的 `isAdmin`），
+// 而不是悄悄把它们剥离掉。
+const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() }).strict();
+const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() }).strict();
+
+const Animal = discriminatedUnion(
+  "kind",
+  { cat: Cat, dog: Dog },
+  { mapping: { cat: "#/components/schemas/Cat", dog: "#/components/schemas/Dog" } },
+);
+
+app.post(
+  "/animals",
+  {
+    operationId: "createAnimal",
+    request: { body: Animal },
+    responses: { 201: { description: "ok", body: Animal } },
+  },
+  async ({ body }) => ({ status: 201, body }),
+);
+```
+
+在运行时，这个包装器会以清晰的 Standard Schema 问题拒绝非对象、缺失或非字符串的辨识字段，以及未知的辨识值（包括 `__proto__`、`constructor` 和 `toString` 等继承来的名称），其余的一切都交给匹配变体的校验器处理。

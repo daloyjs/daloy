@@ -1,0 +1,234 @@
+---
+title: DaloyJS の検証
+description: DaloyJS は Standard Schema でリクエストとレスポンスを検証します。Zod、Valibot、ArkType、TypeBox から選べます。
+keywords:
+  - DaloyJS 検証
+  - Standard Schema
+  - TypeScript リクエスト検証
+  - Zod DaloyJS
+  - Valibot DaloyJS
+  - ArkType
+  - TypeBox
+sitemap:
+  priority: 0.7
+---
+
+# 検証
+
+DaloyJS は [Standard Schema](https://github.com/standard-schema/standard-schema) を通じて入力を検証します。これは **Zod**、**Valibot**、**ArkType** などのバリデーターが公開している小さなインターフェースで、TypeBox も Standard Schema アダプター経由で使えます。プロジェクトに合ったバリデーターを選んでください。DaloyJS のコントラクトはどれを選んでも同じです。
+
+<BranchDiagram title="1 つのインターフェース、4 つのバリデーター" source={{
+          eyebrow: "フレームワークのコントラクト",
+          label: "Standard Schema",
+          detail: "~standard プロパティ",
+        }} branches={[
+          { eyebrow: "デフォルト", label: "Zod", detail: "z.object({ ... })" },
+          {
+            eyebrow: "ツリーシェイク可能",
+            label: "Valibot",
+            detail: "v.object({ ... })",
+          },
+          { label: "ArkType", detail: "type({ ... })" },
+          { label: "TypeBox", detail: "アダプター経由" },
+        ]} caption="どのバリデーターも同じ ~standard プロパティを公開しているため、DaloyJS は 1 つの経路でハンドラーの型を推論し、OpenAPI を生成し、problem+json のエラーを返します。" />
+
+## 検証の対象 [#what-gets-validated]
+
+ルートごとに、次のスキーマを宣言できます：
+
+- `request.params`：デコード済みのパスパラメーター。最初は文字列です。数値、UUID、列挙型が必要ならスキーマで変換してください。
+- `request.query`：クエリ文字列の値。同じキーが繰り返されると、検証の前に配列になります。
+- `request.headers`：小文字の名前で表したリクエストヘッダー。
+- `request.body`：パース済みのリクエストボディ。ボディが読み込まれるのは、ルートがボディのスキーマを宣言している場合だけです。
+- `responses[status].body`：型付けされ、検証されるレスポンスボディ。
+
+クエリ文字列、フォームのフィールド、multipart のフィールドからは、検証の前に `__proto__`、`constructor`、`prototype` などのプロトタイプ汚染につながるキーが取り除かれます。
+
+## 数値フィールドに範囲を設ける（金額、数量、ID） [#bound-numeric-fields]
+
+素の `z.number()` は `1e308` や、変換のミスによる `-Infinity` など、IEEE の浮動小数点数としては問題なくても、金額、在庫、ページネーションにとっては致命的な値を受け入れてしまいます。リクエストの数値フィールドには、必ずドメインに合った範囲を設定してください：
+
+```ts
+import { z } from "zod";
+
+// 金額：有限の正の値で、業務上の上限を設ける。
+const Money = z.number().finite().positive().max(1_000_000);
+
+// 数量：妥当な範囲の整数。
+const Qty = z.number().int().positive().max(10_000);
+
+// coerce は値が文字列で届く場合（クエリ / フォーム）にだけ使う。
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// strict なボディは一括代入の余分なフィールドを拒否する。
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();
+```
+
+Zod 4 は多くの場合 `z.number()` で `NaN` や有限でない数値をすでに拒否しますが、上限（`.max()`）と符号の制約（`.positive()` / `.nonnegative()`）は、返金詐欺やオーバーフローに対する最後の防波堤として引き続き必要です。レスポンスのスキーマと組み合わせて、機密性の高いフィールドが外部に漏れないようにしてください。
+
+## エンドツーエンドの例 [#end-to-end-example]
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateLineItem = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const LineItem = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
+  },
+  async ({ params, query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: `${params.orderId}:li_1`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+## バリデーターを選ぶ [#pick-your-validator]
+
+- [Zod](/docs/validation/zod)（英語）：多くのチームにとってのデフォルトです。チェーン可能な API、大きなエコシステムがあり、習得も簡単です。
+- [Valibot](/docs/validation/valibot)（英語）：モジュール式でツリーシェイク可能です。エッジランタイムや、ブラウザに配布するコントラクトに最適です。
+
+ArkType や TypeBox 互換のスキーマも、同じ `~standard` プロパティを公開していれば動作します。ただし DaloyJS が公式のドキュメントとスキャフォールドを提供しているのは Zod と Valibot だけです。
+
+## 並べて比較 [#side-by-side]
+
+```ts
+// Zod
+import { z } from "zod";
+const Body = z.object({
+  sku: z.string(),
+  qty: z.number().int().positive(),
+});
+
+// Valibot
+import * as v from "valibot";
+const Body = v.object({
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+// ArkType
+import { type } from "arktype";
+const Body = type({ sku: "string", qty: "1<=number.integer" });
+
+// TypeBox
+import { Type } from "@sinclair/typebox";
+const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 }) });
+// DaloyJS に渡す前に、プロジェクトの Standard Schema アダプターでラップします。
+```
+
+スキーマが `~standard` を公開していれば、どのバリデーターで作られたものでも、DaloyJS は同じようにハンドラーの型を推論し、OpenAPI を生成し、problem+json のエラーを返します。
+
+## エラー [#errors]
+
+<FlowDiagram title="パースして、結果で分岐する" steps={[
+          {
+            eyebrow: "信頼できない",
+            label: "生のリクエスト",
+            detail: "params · query · headers · body",
+            tone: "muted",
+          },
+          {
+            eyebrow: "standard schema",
+            label: "スキーマのパース",
+            detail: "validate(schema, input)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "失敗時",
+            label: "422 problem+json",
+            detail: "errors: [{ path, message }]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "成功時",
+            label: "型付きハンドラー",
+            detail: "ctx.body / params / query / headers",
+            tone: "success",
+          },
+        ]} caption="宣言したスキーマはすべてハンドラーの前に実行されます。不正な入力がハンドラーのコードに届くことはなく、RFC 9457 の 422 レスポンスで処理が打ち切られます。正しい入力は完全に型付けされた状態で届きます。" />
+
+不正な入力に対して、DaloyJS は **422 Unprocessable Entity** を RFC 9457 の problem+json として返します。その中には、問題ごとの `path` と `message` を持つ `errors` 配列が含まれます。このためのエラーハンドラーを書く必要はなく、最初から組み込まれています。[エラーと problem+json](/ja/docs/errors) をご覧ください。
+
+## レスポンスの検証 [#response-validation]
+
+レスポンスのスキーマが宣言されている場合、DaloyJS はハンドラーの戻り値をシリアライズする前に検証します。実際に送信されるのは検証済みの値なので、未知のキーを取り除くオブジェクトスキーマは、宣言していないフィールドがクライアントに漏れることも防ぎます。検証に失敗した場合、本番環境ではクライアントに秘匿化された 500 の problem レスポンスが返ります。
+
+## ボディの上限とコンテンツタイプ [#body-limits-and-content-types]
+
+App の `bodyLimitBytes` オプション（デフォルト 1 MiB）は、宣言された Content-Length と、すべてのリクエストボディのストリーミング時のサイズを制限し、超えると **413** になります。1.5.4 以降はハンドラーが `ctx.request` から自分で読み込むボディも含め、すべてのルートに適用されます。上限はボディが読み込まれる時点で遅延的にチェックされます。
+
+ルートが `request.body` を宣言している場合、DaloyJS は次の点も強制します：
+
+- Content-Type をルートの `accepts` リスト（設定されていればグローバルの `allowedContentTypes`）と照合し、一致しなければ **415** になります。
+- デフォルトで受け付けるボディの型：`application/json`、`application/x-www-form-urlencoded`、`multipart/form-data`。
+- JSON、クエリ文字列、urlencoded フォーム、multipart フォームのプロトタイプ汚染に強いパース。
+
+JSON のボディはオブジェクトにパースされ、urlencoded のボディは `URLSearchParams` で、multipart のボディはプラットフォームの `Request.formData()` API でパースされます。ルートで独自のテキスト系メディアタイプを許可した場合、DaloyJS はデコード済みのテキストをボディのスキーマに渡します。
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## バリデーターを混在させる [#mixing-validators]
+
+ルートごとにバリデーターを自由に組み合わせられます。あるファイルでは Zod のスキーマ、別のファイルでは Valibot のスキーマを使っても問題ありません。既存のコードベースを移行するときや、共有パッケージのスキーマを利用するときに便利です。

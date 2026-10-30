@@ -1,0 +1,333 @@
+---
+title: Roteamento
+description: "Defina rotas HTTP com tipagem segura no DaloyJS usando uma API orientada a contrato: parâmetros, query, corpo e respostas inferidos de uma só declaração."
+keywords:
+  - roteamento DaloyJS
+  - rotas com tipagem segura
+  - roteamento orientado a contrato
+  - roteador HTTP TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# Roteamento
+
+O DaloyJS usa uma trie de segmentos com um caminho rápido para rotas estáticas. Depois das verificações de segurança do caminho, as rotas estáticas exatas são resolvidas com um único `Map.get`. As buscas dinâmicas preferem segmentos literais, depois parâmetros e por fim curingas. Uma busca sem backtracking é linear no tamanho do caminho; rotas sobrepostas podem exigir a visita a ramos adicionais da trie.
+
+Só rotas completas contam como correspondência. Por exemplo, registrar `/users/me/details/:field` não impede que `/users/:id` corresponda a `/users/me`. Dentro da trie dinâmica, um caminho completo de prioridade mais alta vence mesmo quando não tem handler para o método requisitado. Uma rota estática exata vence para os métodos registrados nela; os outros métodos ainda podem corresponder à trie dinâmica.
+
+## Atalhos progressivos [#progressive-shorthands]
+
+Os atalhos de método reduzem a cerimônia sem remover o contrato. O DaloyJS deriva um operation id estável a partir do método e do caminho, como `getRoot` ou `postBookItemsByItemId`. Um `operationId` explícito continua tendo prioridade.
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+Os atalhos mantêm o mesmo comportamento de validação, OpenAPI, segurança e cliente tipado de `route()`. Não existe uma forma com dois argumentos que pule silenciosamente o contrato de resposta. Para um corpo intencionalmente opaco, passe `acknowledgeNoResponseBodySchema: true` de forma explícita. Respostas brutas de sucesso devolvidas por `preBody` ou `beforeHandle` exigem o mesmo reconhecimento. Negações comuns `4xx`/`5xx` de hooks não exigem. As descrições de resposta continuam opcionais. Valores omitidos viram uma descrição estável `HTTP <status> response` no OpenAPI.
+
+## Definindo rotas [#defining-routes]
+
+A declaração de uma rota é a fonte da verdade para correspondência, validação da requisição, validação da resposta, saída OpenAPI e clientes tipados. Informe um `operationId` ao usar `route()` em uma rota pública que você quer no cliente tipado ou no SDK gerado. Os atalhos HTTP derivam um automaticamente. O DaloyJS rejeita valores de `operationId` duplicados no registro.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // params, query e headers são inferidos dos schemas acima.
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## Inferência de tipos em vários arquivos [#multi-file-type-inference]
+
+Exporte cada rota com `defineRoute()` e depois componha os contratos importados com `registerRoutes()`. A tupla literal sobrevive às fronteiras de arquivos e módulos, então o cliente sem geração de código mantém todos os operation ids e schemas.
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+Chamadas encadeadas de `route()` também acumulam corretamente. Evite uma anotação pura `const app: App` no aplicativo composto final, porque ela alarga explicitamente o tipo e descarta a tupla de rotas.
+
+`group()` no estilo callback e `register()` de plugins continuam oferecendo escopo em tempo de execução, mas o TypeScript não consegue alargar a variável pai de dentro desses callbacks. Para um cliente totalmente tipado sem geração de código em módulos grandes, exporte tuplas literais de rotas e faça de `registerRoutes()` a fronteira final de composição.
+
+## Métodos HTTP [#http-methods]
+
+Os métodos suportados incluem `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` e `OPTIONS`. Métodos personalizados como `TRACE`, `CONNECT` e verbos WebDAV são rejeitados no registro.
+
+`HEAD` recorre à rota `GET` correspondente quando não existe uma rota `HEAD` explícita, devolvendo os mesmos cabeçalhos com o corpo vazio. `OPTIONS` devolve um preflight 204 com cabeçalho `Allow` quando o caminho existe, mas nenhuma rota `OPTIONS` explícita foi registrada.
+
+Há atalhos de método para `GET`, `POST`, `PUT`, `PATCH`, `DELETE` e `HEAD`. Registre uma rota `OPTIONS` explícita com `route()`. Caso contrário, o DaloyJS cuida do preflight automaticamente.
+
+## Parâmetros de caminho [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+Os valores do caminho são decodificados antes da validação. Se você omitir o schema `request.params`, `ctx.params` é inferido do caminho como strings brutas. Nomes de parâmetro conflitantes na mesma posição da trie, como `/a/:x` e `/a/:y`, lançam erro no registro.
+
+Os nomes de captura precisam ser não vazios e únicos dentro de uma rota. Os nomes `__proto__`, `constructor` e `prototype` são rejeitados para manter os objetos de parâmetros seguros para uso posterior. Um registro rejeitado não reserva seu `operationId`.
+
+### Capturas curinga [#wildcard-captures]
+
+Um segmento final `*name` captura o restante do caminho em uma única string decodificada e exige pelo menos um segmento restante. Um `*` sozinho usa o nome `wildcard`. Curingas precisam ser terminais: `/assets/*path/private` lança erro no registro em vez de corresponder silenciosamente a um caminho mais amplo. Vários métodos podem compartilhar uma rota curinga quando o nome da captura é o mesmo. Métodos duplicados e nomes de curinga conflitantes lançam erro.
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+Segmentos brutos de travessia de diretório (`..`), segmentos vazios `//` e escapes percentuais malformados em capturas simplesmente não correspondem. A descoberta de métodos aplica as mesmas verificações, então caminhos rejeitados não anunciam um cabeçalho `Allow`. Desde a 1.3.7, um segmento de parâmetro ou curinga nunca recebe `.` ou `..`, incluindo as grafias codificadas `%2e` e `%2e%2e`. Um parser de URL resolveria esses valores como passos de diretório, então deixá-los passar daria ao handler um caminho diferente daquele que o middleware viu. Uma captura também recusa um valor decodificado com um componente `.` ou `..` atrás de um separador codificado (`..%2F..%2Fsecret`, `..%5C`) ou com qualquer caractere de controle (`%00`, `%0A`, `%09`, `%7F`). Essas requisições recebem `404`.
+
+Uma captura que decodifica um `/` ou `\` codificado (`%2F`, `%5C`) também é recusada com `404` por padrão, porque um único valor capturado passaria a abranger vários segmentos de caminho para qualquer consumidor posterior de sistema de arquivos, URL ou proxy. Se uma rota realmente usa ids com barra, ative por rota:
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+Ativar essa opção nunca readmite componentes `..` nem caracteres de controle. Os parâmetros decodificados continuam sendo dados não confiáveis e não são caminhos de sistema de arquivos sanitizados, então valide o acesso ao sistema de arquivos separadamente.
+
+Os adaptadores também mantêm o roteador e o middleware com a mesma visão do caminho (desde a 1.3.7). O adaptador Node canoniza request-targets que contêm `\`, segmentos de ponto ou suas formas `%2e` do mesmo jeito que `new URL()` faria, antes do roteamento. Os adaptadores Node e AWS Lambda recusam com `400` um cabeçalho `Host` que não seja um simples `host[:port]` (por exemplo, um que contenha `\ / ? # @ %` ou espaços em branco). Assim, proteções baseadas em caminho, como `except()`, correspondem exatamente à rota que é executada. Veja o [adaptador Node](/docs/adapters/node) (em inglês) para os detalhes.
+
+## Grupos [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// caminho final: /api/v1/health
+```
+
+Os grupos mesclam prefixos, tags, hooks e padrões de autenticação nas rotas registradas dentro do callback. O aplicativo filho é encapsulado: o middleware adicionado dentro de um grupo não vaza para rotas fora dele. As rotas agrupadas ficam visíveis para o roteamento em tempo de execução e para o OpenAPI. Para contratos paralelos `/api/v1` e `/api/v2`, política de migração e SDKs gerados separadamente, leia o [guia de versionamento de API](/docs/api-versioning) (em inglês).
+
+## Opções de rota [#route-options]
+
+- `request`: schemas para `params`, `query`, `headers` e `body`.
+- `responses`: códigos de status declarados e schemas opcionais de corpo/cabeçalhos da resposta.
+- `accepts`: lista de `Content-Type` permitidos por rota, para rotas com schema de corpo de requisição.
+- `auth`: requisito de segurança OpenAPI da rota. Combine com um hook de autenticação como `bearerAuth()`.
+- `internal`: esconde uma rota dos adaptadores públicos, mas ainda permite chamadas em processo com `app.inject()`.
+- `deprecated` e `sunset`: marcam um endpoint como obsoleto e emitem os cabeçalhos de resposta correspondentes.
+- `callbacks` e `meta`: adicionam callbacks OpenAPI, exemplos e metadados de rota amigáveis para IA.
+
+## Hooks [#hooks]
+
+Os hooks acrescentam comportamento em pontos fixos do ciclo de vida:
+
+- `onRequest`: o primeiro, antes do parsing.
+- `preBody`: depois da correspondência da rota, antes da validação do schema ou de qualquer I/O do corpo. A autenticação embutida por cabeçalho/JWT/basic/mTLS roda aqui.
+- `beforeHandle`: depois da validação, antes do seu handler. Devolva uma `Response` para interromper o fluxo.
+- `afterHandle`: envolve ou transforma o resultado do handler antes da serialização da resposta.
+- `onError`: observa ou substitui a resposta de erro.
+- `onSend`: altera os cabeçalhos de saída no lugar ou devolve uma nova `Response`. Roda nos caminhos de sucesso, de erro e de preflight `OPTIONS`.
+- `onResponse`: observador final. Use para logs e métricas. Não altere a resposta aqui.
+
+<FlowDiagram title="Ciclo de vida da requisição" numbered caption="Os hooks disparam em pontos fixos ao redor do seu handler. Uma autenticação barata pode rejeitar em preBody antes do I/O do corpo da requisição. O middleware que depende do corpo fica em beforeHandle, depois da validação. Se algo lançar erro, o controle salta para onError, e onSend e onResponse ainda rodam." steps={[
+          { label: "onRequest", eyebrow: "o primeiro", detail: "antes do parsing" },
+          {
+            label: "preBody",
+            eyebrow: "rejeição mais barata",
+            detail: "rota encontrada · corpo intocado",
+          },
+          {
+            label: "validate",
+            eyebrow: "framework",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "devolva uma Response para interromper",
+          },
+          { label: "handler", detail: "a lógica da sua rota", tone: "accent" },
+          { label: "afterHandle", detail: "envolver / transformar o resultado" },
+          { label: "onSend", detail: "alterar ou substituir a Response" },
+          {
+            label: "onResponse",
+            eyebrow: "sempre",
+            detail: "só observabilidade",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## Transformando respostas com `onSend` [#transforming-responses-with-onsend]
+
+Use `onSend` quando precisar reescrever a resposta de saída, por exemplo, para anexar um cabeçalho, remover um cabeçalho interno ou substituir a resposta inteira. Devolver `void` mantém a resposta atual. Vários hooks `onSend` se compõem em pipeline (global -\> grupo -\> rota).
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // Sempre anuncie a versão da API em toda resposta de saída,
+      // incluindo respostas de erro e preflights OPTIONS.
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // Remova detalhes internos de implementação antes de a resposta sair.
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+`onSend` roda *depois* da validação da resposta e depois que os cabeçalhos do escopo da requisição, incluindo `x-request-id`, foram mesclados. Ele roda *antes* de `onResponse`, que continua sendo o lugar certo para logs e métricas.
+
+## 405 Method Not Allowed [#405-method-not-allowed]
+
+Se um caminho está registrado para um método, mas é chamado com outro, o roteador devolve **405** com um cabeçalho `Allow` correto, nunca um 404 enganoso. Rotas marcadas com `internal: true` são filtradas das respostas públicas 405 e do `Allow`, para que endpoints ocultos de administração ou cron não vazem por sondagem de métodos.
+
+A descoberta de métodos inclui tanto uma rota estática exata quanto a rota dinâmica selecionada. Com `GET /users/me` e `POST /users/:id`, o caminho `/users/me` anuncia os dois métodos registrados. O cabeçalho lista os registros explícitos; o tratamento sintetizado de HEAD e OPTIONS não acrescenta entradas.
+
+## Desempenho [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

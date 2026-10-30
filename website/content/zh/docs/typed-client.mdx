@@ -1,0 +1,148 @@
+---
+title: 类型化 API 客户端
+description: "用 Hey API 从 DaloyJS 的 OpenAPI 规范生成完全类型化的 TypeScript 客户端，服务端与客户端端到端类型安全、永不脱节。"
+keywords:
+  - 类型化 API 客户端
+  - TypeScript OpenAPI 客户端
+  - Hey API 客户端
+  - 端到端类型安全
+  - ts-rest 替代方案
+  - ts-rest 与 DaloyJS 对比
+sitemap:
+  priority: 0.7
+---
+
+# 类型化客户端
+
+DaloyJS 提供**两种**方式，以完全类型安全的方式调用你的 API。根据调用方的情况选择合适的一种。
+
+## 1. 进程内类型化客户端（零代码生成） [#1-in-process-typed-client-zero-codegen]
+
+适用于同一 monorepo 中的 TypeScript 调用方（测试、内部工具、Next.js server actions）：
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string，完全类型化
+}
+```
+
+客户端以 `operationId` 为键，返回 `{status, body, headers}` 的可辨识联合，并且一切都从路由定义本身推断而来。不需要构建步骤。
+
+### 路径参数 [#path-parameters]
+
+路径参数按整个分段替换，因此 `:id` 永远不会匹配到 `:idx` 内部，并且每个值都会被百分号编码到它自己的分段中。自 1.3.7 起，当参数缺失、为空、为 `.` 或 `..` 时，生成的方法会在发出任何请求之前抛出 `TypeError`。URL 解析会解析点分段（即使写成 `%2E%2E`），从而悄悄改变调用目标，例如把 `DELETE /orgs/:org/members/..` 变成 `DELETE /orgs/:org`。通配符路由（`*path`，或名为 `wildcard` 的单独 `*`）接受以 `/` 分隔的值；每个分段都会以同样的方式编码和检查。
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="组合路由元组，而不是放宽 App 的类型。">
+<p>用 <code>defineRoute()</code> 导出路由文件，并用 <code>app.registerRoutes(\[...\])</code> 注册一个字面量元组{"。"}链式调用 <code>route()</code> 同样可行。有两种做法会刻意抹掉类型推断，让客户端退化为一个宽松的接口：</p>
+<ul>
+<li>给实例加上单纯的{" "}<code>const app: App = ...</code> 注解（或者让工厂函数返回 <code>: App</code>{" "}类型）。这种放宽类型的注解会丢弃累积的路由，所以请让类型自动推断。</li>
+<li>在一个预先声明的变量上用多条独立语句注册路由，而不是返回链式调用的结果或使用{" "}<code>registerRoutes()</code>。</li>
+</ul>
+<p>模块化单体指南展示了一个跨文件的组合示例，其中的路由元组来自多个限界上下文。回调形式的{" "}<code>group()</code> 和插件的 <code>register()</code> 仍然提供运行时封装，但它们的回调无法放宽父级变量的 TypeScript 泛型。请把路由元组作为类型化客户端的组合边界。</p>
+</Callout>
+
+## 2. Hey API SDK（跨语言、跨仓库、构建时生成） [#2-hey-api-sdk-cross-language-cross-repo-build-time]
+
+对于 monorepo 之外或使用其他语言的调用方，请用 [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started) 生成一个完全类型化的 fetch SDK。
+
+<FlowDiagram title="代码生成流水线" numbered caption="pnpm gen 会运行整条链路：先从路由导出规范，再让 Hey API 把它转换成类型化的 fetch SDK。每当路由变化时重新运行，客户端就会与契约保持同步。" steps={[
+          { label: "路由", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "磁盘上的 OpenAPI 3.1 规范" },
+          { label: "openapi-ts", detail: "Hey API 生成器" },
+          { label: "类型化 SDK", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "调用方",
+            detail: "完全类型化的 fetch 调用",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# 写入：
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## 使用生成的 SDK [#using-the-generated-sdk]
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## 我该用哪一种？ [#which-one-should-i-use]
+
+| 使用场景 | 选择 |
+| --- | --- |
+| 同一仓库中的 TypeScript 调用方（测试、内部工具） | `createInProcessClient` |
+| 位于其他仓库的 Web 应用 / React Native 移动端包 | Hey API SDK |
+| 非 TypeScript 调用方（Python、Swift、Kotlin） | OpenAPI 文档 + 他们偏好的生成器 |
+| 面向第三方的公开 SDK | Hey API SDK，作为独立的包发布 |
+
+## 从 ts-rest 迁移过来？ [#coming-from-ts-rest]
+
+[ts-rest](https://ts-rest.com/) 是一个流行的契约优先库，它通过在基于适配器的服务端（Express、Fastify、NestJS、Next.js）和 fetch 客户端（`initClient`）之间共享一份契约（`initContract`），提供**无需代码生成**的端到端 TypeScript 类型。如果你喜欢这种模式，DaloyJS 会让你感到熟悉，只有两点不同。
+
+第一，在 DaloyJS 中，**路由定义就是契约**，没有需要额外保持同步的独立契约对象。上面展示的进程内 `createClient` 为同一仓库中的 TypeScript 调用方提供了同样零代码生成、共享类型的体验。
+
+第二，ts-rest 的类型安全仅限 TypeScript，并且要求客户端导入契约。DaloyJS 会从同一组路由生成一等公民的 **OpenAPI 3.1** 规范和 Hey API SDK，因此无法导入你的类型的调用方（其他仓库、其他语言、公开 SDK）也能覆盖到。在 ts-rest 中，OpenAPI 是一个可选的附加组件（`@ts-rest/open-api`）。DaloyJS 本身也是服务端和运行时，可在 Node、Bun、Deno、Cloudflare 和 Vercel 之间移植，而不是挂载在另一个框架之上的类型层。
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| 契约来源 | 独立的 `initContract` 对象 | 路由定义本身 |
+| 零代码生成的类型化客户端 | 有（`initClient`，仅限 TypeScript） | 有（`createClient`，仅限 TypeScript） |
+| 跨语言 / 跨仓库客户端 | OpenAPI 附加组件（`@ts-rest/open-api`） | OpenAPI 3.1 + Hey API SDK，一等支持 |
+| 服务端 | 基于 Express / Fastify / NestJS / Next.js 的适配器 | 内置，可跨运行时移植 |
+| 运行时校验 | Standard Schema（Zod / Valibot / ArkType） | Standard Schema（Zod / Valibot / ArkType / TypeBox） |
+| 安全默认值 | 自行解决 | 响应头和请求体限制默认开启；CSRF 和限流只需一行代码 |
+
+需要一个更大的契约来验证生成器的输出？请把[大型模拟 REST 演示](/docs/tutorials/fake-rest-api)（英文）作为压力测试场景，而不是使用最小化的教程应用。

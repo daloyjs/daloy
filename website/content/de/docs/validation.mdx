@@ -1,0 +1,234 @@
+---
+title: Validierung in DaloyJS
+description: "DaloyJS validiert Requests und Antworten über Standard Schema. Nutzen Sie Zod, Valibot, ArkType oder TypeBox, je nachdem, was zu Ihrem Projekt passt."
+keywords:
+  - DaloyJS Validierung
+  - Standard Schema
+  - Request-Validierung TypeScript
+  - Zod DaloyJS
+  - Valibot DaloyJS
+  - ArkType
+  - TypeBox
+sitemap:
+  priority: 0.7
+---
+
+# Validierung
+
+DaloyJS validiert Eingaben über [Standard Schema](https://github.com/standard-schema/standard-schema), eine kleine Schnittstelle, die Validatoren wie **Zod**, **Valibot**, **ArkType** und TypeBox (über einen Standard-Schema-Adapter) bereitstellen. Wählen Sie den Validator, der zu Ihrem Projekt passt. Der DaloyJS-Vertrag bleibt derselbe.
+
+<BranchDiagram title="Eine Schnittstelle, vier Validatoren" source={{
+          eyebrow: "Framework-Vertrag",
+          label: "Standard Schema",
+          detail: "die Eigenschaft ~standard",
+        }} branches={[
+          { eyebrow: "Standard", label: "Zod", detail: "z.object({ ... })" },
+          {
+            eyebrow: "tree-shakeable",
+            label: "Valibot",
+            detail: "v.object({ ... })",
+          },
+          { label: "ArkType", detail: "type({ ... })" },
+          { label: "TypeBox", detail: "über Adapter" },
+        ]} caption="Jeder Validator stellt dieselbe Eigenschaft ~standard bereit, daher leitet DaloyJS Handler-Typen ab, erzeugt OpenAPI und liefert problem+json-Fehler über einen einzigen Pfad im Framework." />
+
+## Was validiert wird [#what-gets-validated]
+
+Für jede Route können Sie Schemas deklarieren für:
+
+- `request.params`: dekodierte Pfadparameter. Sie beginnen als Strings. Konvertieren Sie im Schema, wenn Sie Zahlen, UUIDs oder Enums möchten.
+- `request.query`: Werte des Query-Strings. Wiederholte Schlüssel werden vor der Validierung zu Arrays.
+- `request.headers`: Request-Header mit kleingeschriebenen Namen.
+- `request.body`: geparste Request-Bodys. Der Body wird nur gelesen, wenn eine Route ein Body-Schema deklariert.
+- `responses[status].body`: typisierte und validierte Response-Bodys.
+
+Query-Strings, Formularfelder und Multipart-Felder verwerfen Schlüssel für Prototype Pollution wie `__proto__`, `constructor` und `prototype` vor der Validierung.
+
+## Numerische Felder begrenzen (Geld, Mengen, IDs) [#bound-numeric-fields]
+
+Ein bloßes `z.number()` akzeptiert `1e308`, nach Konvertierungsfehlern auch `-Infinity`, und andere Werte, die für IEEE-Gleitkommazahlen in Ordnung, für Geld, Lagerbestand oder Paginierung aber verheerend sind. Setzen Sie für numerische Request-Felder immer fachliche Grenzen:
+
+```ts
+import { z } from "zod";
+
+// Geld: endlich, positiv, durch eine fachliche Obergrenze gedeckelt.
+const Money = z.number().finite().positive().max(1_000_000);
+
+// Mengen: Ganzzahlen in einem vernünftigen Bereich.
+const Qty = z.number().int().positive().max(10_000);
+
+// coerce nur verwenden, wenn der Wert als String ankommt (Query / Formular).
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// Strikte Bodys lehnen zusätzliche Felder (Mass Assignment) ab.
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();
+```
+
+Zod 4 lehnt `NaN` und nicht endliche Zahlen bei `z.number()` in vielen Fällen bereits ab, aber eine Obergrenze (`.max()`) und eine Vorzeichenbedingung (`.positive()` / `.nonnegative()`) bleiben Ihr Schutz gegen Erstattungsbetrug und Überläufe. Kombinieren Sie das mit Antwortschemas, damit sensible Felder nie nach außen gelangen.
+
+## Durchgängiges Beispiel [#end-to-end-example]
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateLineItem = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive().max(10_000),
+});
+
+const LineItem = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sku: z.string(),
+  qty: z.number().int().positive(),
+  dryRun: z.boolean(),
+});
+
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
+  },
+  async ({ params, query, headers, body }) => {
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: `${params.orderId}:li_1`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
+  },
+);
+```
+
+## Validator wählen [#pick-your-validator]
+
+- [Zod](/docs/validation/zod) (auf Englisch): der Standard für die meisten Teams. Verkettbare API, großes Ökosystem, leicht zu lernen.
+- [Valibot](/docs/validation/valibot) (auf Englisch): modular und tree-shakeable. Ideal für Edge-Laufzeiten und Verträge, die im Browser ausgeliefert werden.
+
+Mit ArkType und TypeBox kompatible Schemas funktionieren ebenfalls, wenn sie dieselbe Eigenschaft `~standard` bereitstellen, aber DaloyJS liefert eigene Doku und Projektvorlagen nur für Zod und Valibot.
+
+## Im direkten Vergleich [#side-by-side]
+
+```ts
+// Zod
+import { z } from "zod";
+const Body = z.object({
+  sku: z.string(),
+  qty: z.number().int().positive(),
+});
+
+// Valibot
+import * as v from "valibot";
+const Body = v.object({
+  sku: v.string(),
+  qty: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+// ArkType
+import { type } from "arktype";
+const Body = type({ sku: "string", qty: "1<=number.integer" });
+
+// TypeBox
+import { Type } from "@sinclair/typebox";
+const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 }) });
+// Vor der Übergabe an DaloyJS mit dem Standard-Schema-Adapter Ihres Projekts umhüllen.
+```
+
+Sobald ein Schema `~standard` bereitstellt, leitet DaloyJS Handler-Typen ab, erzeugt OpenAPI und liefert problem+json-Fehler auf dieselbe Weise, unabhängig davon, welcher Validator es erzeugt hat.
+
+## Fehler [#errors]
+
+<FlowDiagram title="Parsen, dann nach Ergebnis verzweigen" steps={[
+          {
+            eyebrow: "nicht vertrauenswürdig",
+            label: "Roher Request",
+            detail: "params · query · headers · body",
+            tone: "muted",
+          },
+          {
+            eyebrow: "Standard Schema",
+            label: "Schema parsen",
+            detail: "validate(schema, input)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "bei Fehler",
+            label: "422 problem+json",
+            detail: "errors: [{ path, message }]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "bei Erfolg",
+            label: "Typisierter Handler",
+            detail: "ctx.body / params / query / headers",
+            tone: "success",
+          },
+        ]} caption="Jedes deklarierte Schema läuft vor Ihrem Handler. Ungültige Eingaben erreichen den Handler-Code nie. Sie enden direkt in einer 422-Antwort nach RFC 9457. Gültige Eingaben kommen vollständig typisiert an." />
+
+Bei ungültiger Eingabe liefert DaloyJS **422 Unprocessable Entity** als problem+json nach RFC 9457, mit einem Array `errors` aus Einträgen mit `path` und `message` pro Problem. Dafür schreiben Sie keinen Error-Handler, das ist eingebaut. Siehe [Fehler und problem+json](/de/docs/errors).
+
+## Response-Validierung [#response-validation]
+
+Ist ein Antwortschema deklariert, validiert DaloyJS den Rückgabewert des Handlers vor der Serialisierung. Nur der validierte Wert wird übertragen, daher verhindern Objektschemas, die unbekannte Schlüssel entfernen, auch, dass nicht deklarierte Felder an Clients gelangen. Schlägt die Validierung fehl, erhält der Client in Produktion eine geschwärzte 500-Problem-Antwort.
+
+## Body-Limits und Content-Types [#body-limits-and-content-types]
+
+Die App-Option `bodyLimitBytes` (Standard 1 MiB) begrenzt die deklarierte Content-Length und die gestreamte Größe jedes Request-Bodys -\> **413**. Seit 1.5.4 gilt das auf jeder Route, auch für Bodys, die ein Handler selbst aus `ctx.request` liest; die Grenze wird verzögert geprüft, wenn der Body gelesen wird.
+
+Deklariert eine Route `request.body`, erzwingt DaloyJS zusätzlich:
+
+- Content-Type gegen die `accepts`-Liste der Route, oder gegen das globale `allowedContentTypes`, falls gesetzt -\> **415**.
+- Standardmäßig akzeptierte Body-Typen: `application/json`, `application/x-www-form-urlencoded` und `multipart/form-data`.
+- Gegen Prototype Pollution abgesichertes Parsen für JSON, Query-Strings, urlencoded-Formulare und Multipart-Formulare.
+
+JSON-Bodys werden zu Objekten geparst, urlencoded-Bodys über `URLSearchParams` und Multipart-Bodys über die Plattform-API `Request.formData()`. Erlauben Sie für eine Route einen eigenen Text-Medientyp, übergibt DaloyJS den dekodierten Text an Ihr Body-Schema.
+
+```ts
+app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);
+```
+
+## Validatoren mischen [#mixing-validators]
+
+Sie können pro Route kombinieren. Ein Zod-Schema in einer Datei und ein Valibot-Schema in einer anderen sind beide gültig, was beim Migrieren einer bestehenden Codebasis oder beim Verwenden von Schemas aus einem gemeinsamen Paket nützlich ist.

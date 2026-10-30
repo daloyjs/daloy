@@ -68,9 +68,9 @@ test("translated pages map between every pair of locales", () => {
 });
 
 test("untranslated pages fall back to the target locale's home page", () => {
-  assert.equal(switchLocaleHref("/docs/routing", "zh"), "/zh");
+  assert.equal(switchLocaleHref("/docs/adapters", "zh"), "/zh");
   assert.equal(switchLocaleHref("/blog/some-post", "es"), "/es");
-  assert.equal(switchLocaleHref("/zh/docs/routing", "es"), "/es");
+  assert.equal(switchLocaleHref("/zh/docs/adapters", "es"), "/es");
   assert.equal(switchLocaleHref("/es/nope", "en"), "/");
   assert.equal(switchLocaleHref("/docs", "en"), "/docs");
   assert.equal(localeHome("en"), "/");
@@ -227,7 +227,7 @@ test("the header language menu offers every locale, French and Portuguese includ
   assert.equal(LOCALE_NATIVE_NAME.ja, "日本語");
   assert.equal(switchLocaleHref("/ja/docs/getting-started", "zh"), "/zh/docs/getting-started");
   assert.equal(switchLocaleHref("/ja/contact", "en"), "/contact");
-  assert.equal(switchLocaleHref("/docs/routing", "ja"), "/ja");
+  assert.equal(switchLocaleHref("/docs/adapters", "ja"), "/ja");
   assert.equal(switchLocaleHref("/de/docs/installation", "fr"), "/fr/docs/installation");
   assert.equal(switchLocaleHref("/ru/privacy", "ar"), "/ar/privacy");
   assert.equal(switchLocaleHref("/ar/about", "en"), "/about");
@@ -237,7 +237,7 @@ test("the header language menu offers every locale, French and Portuguese includ
   // Every page maps to its French counterpart when one exists.
   assert.equal(switchLocaleHref("/about", "fr"), "/fr/about");
   assert.equal(switchLocaleHref("/zh/docs/installation", "fr"), "/fr/docs/installation");
-  assert.equal(switchLocaleHref("/docs/routing", "fr"), "/fr");
+  assert.equal(switchLocaleHref("/docs/adapters", "fr"), "/fr");
 });
 
 test("translated docs pages advertise their markdown sibling like English docs", async () => {

@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-URL（`GET /docs`）も、ライブの `/openapi.json` と `/openapi.yaml` エンドポイントも、CSP の扱いも同じで、違うのは描画される HTML だけです。両方を使うこともできます。自動マウントされたルートは Scalar のままにして、`swaggerUiHtml()` で 2 つ目の Swagger ルートを自分で公開します（手動の方法は [OpenAPI ガイド](/docs/openapi)（英語）を参照）。
+URL（`GET /docs`）も、ライブの `/openapi.json` と `/openapi.yaml` エンドポイントも、CSP の扱いも同じで、違うのは描画される HTML だけです。両方を使うこともできます。自動マウントされたルートは Scalar のままにして、`swaggerUiHtml()` で 2 つ目の Swagger ルートを自分で公開します（手動の方法は [OpenAPI ガイド](/ja/docs/openapi)を参照）。
 
-パスを変えたい場合は、オブジェクト形式を使います：`docs: { ui: "swagger", path: "/reference" }`。オブジェクト形式は、`enabled: true`（1.5.5 以降）を加えない限り本番環境以外でのみマウントされます。この点は `production: true` のときにマウントをスキップする `docs: "auto"` と同じです。完全に制御したい場合は、`docs: false` を設定し、`generateOpenAPI()` と `swaggerUiHtml() / scalarHtml()` で独自のルートをマウントしてください。[OpenAPI ガイド](/docs/openapi)（英語）を参照してください。
+パスを変えたい場合は、オブジェクト形式を使います：`docs: { ui: "swagger", path: "/reference" }`。オブジェクト形式は、`enabled: true`（1.5.5 以降）を加えない限り本番環境以外でのみマウントされます。この点は `production: true` のときにマウントをスキップする `docs: "auto"` と同じです。完全に制御したい場合は、`docs: false` を設定し、`generateOpenAPI()` と `swaggerUiHtml() / scalarHtml()` で独自のルートをマウントしてください。[OpenAPI ガイド](/ja/docs/openapi)を参照してください。
 
 `swaggerUiHtml()` と `scalarHtml()` はどちらもデフォルトで jsDelivr CDN からアセットを読み込むため、厳格な Content-Security-Policy ではこれらのアセットを許可する必要があります。許可しないと、ドキュメント UI が空白で表示されることがあります。自動マウントされたルートと `htmlResponse()` は、互換性のある CSP を自動で付与します。レスポンスを自分で組み立てる場合は、`@daloyjs/core/docs` から `docsContentSecurityPolicy` をインポートし、その結果をヘッダーとして渡してください：
 
@@ -237,7 +237,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 ## 次のステップ
 
-- [ルーティング](/docs/routing)（英語）
-- [Standard Schema による検証](/docs/validation)（英語）
-- [セキュリティとミドルウェア](/docs/security)（英語）
+- [ルーティング](/ja/docs/routing)
+- [Standard Schema による検証](/ja/docs/validation)
+- [セキュリティとミドルウェア](/ja/docs/security)
 - [チュートリアル：書店 API](/ja/docs/tutorials/bookstore)

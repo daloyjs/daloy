@@ -1,0 +1,336 @@
+---
+title: 安全
+description: "DaloyJS 提供由核心强制执行的安全防护，以及安全响应头、限流、CORS、CSRF、会话和供应链加固等官方中间件。"
+keywords:
+  - DaloyJS 安全
+  - 安全的 HTTP 默认配置
+  - 限流
+  - 安全响应头
+  - OWASP TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# 安全
+
+糟糕的默认值就是 bug。DaloyJS 把由核心强制执行的防护与官方安全中间件区分开来，危险的操作默认就被拦截，而与部署相关的配置则保持显式。
+
+<blockquote>核心防护默认保护每一个应用。官方中间件则添加取决于你的路由、用户和部署方式的策略。</blockquote>
+
+<LayerStack title="两层防御" flow="down" layers={[
+          {
+            title: "核心强制执行的防护",
+            detail: "默认启用，无需调用任何中间件",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "拒绝路径穿越",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "生产环境 5xx 脱敏",
+            ],
+          },
+          {
+            title: "官方安全中间件",
+            detail: "保持显式，因为策略是部署层面的决定",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]} caption="危险的操作无需任何配置就会在核心中被拦截。与部署相关的配置（CSP、CORS 源、会话密钥、CSRF 推行）则作为你主动启用的显式中间件。" />
+
+## 核心强制执行的内容 [#what-the-core-enforces]
+
+这些检查发生在 `App` 或运行时适配器内部。应用无需调用任何中间件即可获得它们。
+
+<FlowDiagram title="每个请求都要闯过层层关卡" numbered steps={[
+          {
+            eyebrow: "入口",
+            label: "传入的请求",
+            detail: "方法、路径、请求头、请求体",
+          },
+          {
+            eyebrow: "大小上限",
+            label: "请求体大小限制",
+            detail: "Content-Length 超过上限即 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "解析",
+            label: "加固的 JSON 解析",
+            detail: "剥离 __proto__ / constructor",
+          },
+          {
+            eyebrow: "路由",
+            label: "路由器 + 方法检查",
+            detail: ".. 被解析为规范路径。错误的方法返回 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "处理函数",
+            label: "你的类型化处理函数",
+            detail: "在 requestTimeoutMs 限制下运行",
+            tone: "success",
+          },
+        ]} caption="请求只有通过请求体上限、防原型污染的解析器以及路径/方法守卫之后，才能到达你的处理函数。任何未通过守卫的请求都会在你的代码运行之前被核心拒绝。" />
+
+| 威胁 | 内置行为 |
+| --- | --- |
+| 请求体大小 DoS | 流式读取，硬性上限（默认 1 MiB），先检查 Content-Length -\> 413。自 1.5.4 起，上限覆盖每条路由，包括直接读取 `ctx.request` 的处理函数；在此之前只覆盖带请求体 schema 的路由。上限在读取请求体时生效，因此忽略请求体的路由不会因此被拒绝。 |
+| 原型污染 | `safeJsonParse` 通过 reviver 剥离 `__proto__`、`constructor`、`prototype`。 |
+| 请求体中格式错误的 UTF-8 | 自 1.16.0 起，JSON、urlencoded 和文本请求体解析器采用严格解码：含有无效或过长 UTF-8 序列的请求体会返回 `400`，而不是替换为 `U+FFFD` 后再校验（RFC 8259 §8.1）。格式正确的非 ASCII 字符和开头的 BOM 仍可正常解析。自己读取 `ctx.request.text()` 的处理函数仍使用平台宽松的解码方式。 |
+| 响应头 / 响应拆分 | `sanitizeHeaderName` / `sanitizeHeaderValue` 拒绝 CRLF + NUL。 |
+| 路径穿越 | 两层防护。首先规范化请求 URL：WHATWG URL 解析会解析 `.` / `..`（及其 `%2e` 写法），Node 适配器也对原始请求目标执行同样的步骤。然后核心路由器会拒绝残留的任何点分段或空的 `//` 分段，并且绝不会把编码后的穿越（`%2e%2e`、`..%2F`）绑定到参数中。路由按精确字符串匹配，因此没有可以逃逸出去的目录。 |
+| Slow-loris / 挂起的处理函数 | `requestTimeoutMs`（默认 30 秒）会返回 `408`，并触发 `ctx.request.signal` 以便协作式清理。自 1.5.4 起，它覆盖 hook、请求体读取和处理函数（之前只覆盖处理函数）。Node 适配器还会设置 socket 超时。 |
+| 因错误的值而失效的限制 | 自 1.5.4 起，`bodyLimitBytes`、`requestTimeoutMs`、`maxHeaderCount`、`jsonMaxKeys` 和 `jsonMaxDepth` 必须是有限的非负整数；`NaN`（例如 `Number(process.env.UNSET)`）和其他无效值在任何环境下都会在构造时抛出错误。 |
+| 不支持的内容类型 | 带请求体 schema 的路由会拒绝不在允许列表中的 content-type -\> 415。 |
+| 方法混淆 | 返回真正的 **405** 并带 `Allow` 响应头，绝不返回误导性的 404。 |
+| 信息泄露（5xx） | 除非环境被明确设为 development 或 test，否则 5xx problem+json 的 `detail` 都会被脱敏；未设置 `NODE_ENV` 时同样会脱敏。 |
+
+## 官方安全中间件 [#first-party-security-middleware]
+
+这些中间件是 DaloyJS 的一部分，并在一起编写文档，但它们保持显式，因为 CSP、CORS、限流键、会话密钥和 CSRF 推行都是部署层面的决定。
+
+```ts
+import {
+  requestId,
+  secureHeaders,
+  cors,
+  rateLimit,
+  bearerAuth,
+  timing,
+} from "@daloyjs/core";
+
+app.use(requestId());           // 传播 x-request-id
+app.use(secureHeaders());       // CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff ...
+app.use(cors({                  // 显式允许列表；带凭据时绝不使用 *
+  origin: ["https://app.example.com"],
+  credentials: true,
+  methods: ["GET", "POST"],
+}));
+app.use(rateLimit({             // 默认按 TCP 对端计数；位于代理之后时请配置 trustedProxies
+  windowMs: 60_000,
+  max: 120,
+}));
+app.use(timing());              // 用于可观测性的 Server-Timing 响应头
+```
+
+当需要统计失败的凭据时，请把 `rateLimit()` 或 `loginThrottle()` 放在 bearer/basic/JWK/mTLS 认证之前。即使认证在 `preBody` 中拒绝了请求，限流器仍会消耗这次尝试，并在超过上限后返回 `429`。DaloyJS 不会为此读取声明的请求体。这条路径上的自定义键生成器应使用原始请求数据，或由更早的 `preBody` hook 写入的 state。
+
+官方起步模板已经为你接好了这些中间件：Node、Bun 和 Deno 启用 `secureHeaders()`、`requestId()` 和 `rateLimit()`。Cloudflare Worker 和 Vercel 启用 `secureHeaders()` 和 `requestId()`，并使用更严格、适合边缘环境的请求体和超时限制。
+
+## 按部署目标推荐的配置 [#recommended-by-deployment-target]
+
+除非有具体的理由需要修改，否则请从下面的中间件开始。这能让有风险的选择保持显式且一致。
+
+| 目标 | 推荐的基线 |
+| --- | --- |
+| Node / Bun / Deno API | `requestId()`、`secureHeaders()`、`rateLimit()`，API 跨源时再加上 `cors()`。 |
+| Cloudflare Workers | 默认使用 `requestId()` 和 `secureHeaders()`。只在需要时使用 `cors()`；当流量分布在多个 isolate 上时，优先使用外部/共享的限流器，而不是默认的内存存储。 |
+| Vercel | 默认使用 `requestId()` 和 `secureHeaders()`。只在需要时添加 `cors()`；如果需要跨区域持久的计数器，请使用共享的限流器。 |
+| 基于 Cookie 认证的应用 | 在基线之上添加 `session()` 和 `csrf()`，让会修改数据的路由免受跨站表单和 fetch 攻击。 |
+| 位于可信反向代理之后 | 保留基线，然后为 `rateLimit()` 配置显式的 `keyGenerator`，或者只在代理会剥离并重写转发请求头之后才设置 `trustProxyHeaders: true`。 |
+
+## 用 `csrf()` 保护会改变状态的路由 [#csrf-for-state-changing-routes]
+
+使用 [`csrf()`](/docs/security/csrf)（英文）保护会修改数据的端点。支持两种策略：
+
+- 双重提交 Cookie（默认）：在安全请求上设置令牌 Cookie，要求非安全方法在 `x-csrf-token` 请求头中携带相同的值，并以时间安全的 **403** 拒绝不匹配的请求。
+- Fetch Metadata（`strategy: "fetch-metadata"`）：无令牌的防护，依赖现代的 `Sec-Fetch-Site` 请求头。无需 Cookie 往返，也不与 HTML 渲染耦合。推荐用于新的面向浏览器的应用。
+
+```ts
+import { csrf } from "@daloyjs/core";
+
+// 经典的双重提交 Cookie（默认）。
+app.use(csrf());
+
+// 无令牌的 Fetch-Metadata 防护（推荐用于面向浏览器的应用）。
+app.use(csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+## `secureHeaders()` 默认值 [#secureheaders-defaults]
+
+```text
+content-security-policy: default-src 'self'; frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+permissions-policy: camera=(), microphone=(), geolocation=(), clipboard-write=()
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+```
+
+如果你需要不同的 CSP、想在本地开发时禁用 HSTS，或者需要更宽松的权限策略，请显式地向 `secureHeaders()` 传入选项。旧式的 `X-XSS-Protection: 0` 响应头需通过 `xssProtection: true` 主动开启，适用于希望显式禁用旧浏览器 XSS 过滤器的部署。
+
+### 使用按请求 nonce 和 Trusted Types 的 CSP [#csp-with-per-request-nonces-and-trusted-types]
+
+`secureHeaders()` 可以根据指令映射构建 CSP，并把一个全新的**按请求 nonce** 注入 `script-src`、`script-src-elem`、`style-src` 和 `style-src-elem`，还可以输出 `require-trusted-types-for 'script'`，在运行时加固以防范 DOM XSS。nonce 通过 `ctx.state.cspNonce` 暴露，处理函数可以把它渲染到 `<script nonce="...">` 标签中。
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'self'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+}));
+
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
+  // 自己返回 HTML，这样实际下发的就是 secureHeaders 的 nonce CSP。
+  async ({ state }) => ({
+    status: 200,
+    body: `<!doctype html>
+<script nonce="${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
+);
+```
+
+**不要**用 `@daloyjs/core/docs` 中的 `htmlResponse()` 渲染这个页面：该辅助函数会下发它自己的 Content-Security-Policy（为 Swagger / Scalar 文档界面调整过，带有 `'unsafe-inline'`），并覆盖上面严格的 nonce CSP，这样控制内联脚本的就不再是 nonce 了。请把 `htmlResponse()` 留给你的 API 文档路由，而对受 nonce 保护的页面返回你自己的 `Response` 响应体。
+
+## 认证 [#auth]
+
+```ts
+import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Bearer（不透明令牌，或通过你自己的 `validate` 验证的 JWT）。
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+
+// Basic 认证（RFC 7617）。
+app.use(basicAuth({
+  realm: "books-api",
+  verify: (user, pass) =>
+    timingSafeEqual(user, "admin") &&
+    timingSafeEqual(pass, process.env.ADMIN_PASSWORD ?? ""),
+}));
+```
+
+## SQL 注入 [#sql-injection]
+
+Daloy 不提供数据库驱动，但它*确实*负责的 HTTP 边界（严格的 Zod schema、加固的 JSON 解析器、请求体大小上限）缩小了能到达你仓储层的攻击面。参见 [SQL 注入](/docs/security/sql-injection)（英文），了解各 ORM（Prisma、Drizzle、Kysely、原生驱动）安全与不安全的写法、动态 `ORDER BY` 的允许列表方案，以及维护者用来捕捉回归的 grep 规则。
+
+## 命令注入 [#command-injection]
+
+DaloyJS 的运行时经 CI 关卡保证不使用 `child_process`，因此框架本身无法调用 shell。参见[命令注入](/docs/security/command-injection)（英文），了解确实需要调用外部程序的处理函数应采用的安全写法（`execFile` + argv 数组，绝不使用 `` exec(`cmd $${input}`) ``）、Windows 上的 *BatBadBut* 陷阱，以及在 PR 阶段阻止新 bug 的 grep 规则。
+
+## 管理面板 [#admin-panels]
+
+要在 DaloyJS 之上构建管理后台或客户成功平台？参见[保护管理面板](/docs/security/admin-panels)（英文）中推荐的模式：`internal: true` 路由、`ipRestriction()`、使用按请求 nonce 的严格 CSP、按管理员的身份认证、登录限流的 `rateLimit()` 分组以及结构化审计日志，与 Aikido 公开的“安全管理面板”检查清单一一对应。
+
+## 供应链 [#supply-chain]
+
+DaloyJS 通过 [pnpm](https://pnpm.io/motivation) 分发，以获得更严格的安装模型。脚手架生成的 pnpm 应用会继承安装时的管控，而 DaloyJS 自己的仓库和可选的 GitHub Actions 套件则增加了 CI/CD 管控，用以对抗近期 npm 事件中出现的缓存投毒、维护者钓鱼和 OIDC 令牌滥用等模式。
+
+- 严格隔离：包无法访问幽灵依赖。
+- 内容寻址存储：每个字节都经过哈希和校验。
+- CI 中使用冻结的锁文件并加上 `--ignore-scripts`：可复现的安装，且不执行传递依赖的生命周期脚本。
+- `verifyStoreIntegrity`，读取时检测损坏。
+- `strictPeerDependencies`，不会悄悄出现 peer 依赖不匹配。
+- 在 `pnpm-workspace.yaml` 中设置 `minimumReleaseAge: 1440`，新发布的版本要等 24 小时才会安装（pnpm 11 会忽略 `.npmrc` 中的写法；参见[安装加固](#install-hardening)）。
+- 脚手架中设置 `ignoreScripts: true`，DaloyJS 仓库中则使用 `strictDepBuilds` 加 `allowBuilds` 允许列表：除了经过审查的脚本之外，不运行任何依赖的安装脚本。这能阻止安装脚本蠕虫，但挡不住在导入时运行的负载。
+- 用 SHA 固定的 GitHub Actions：可选生成的 GitHub 工作流会把第三方 action 固定到不可变的提交，而不是可变的标签。
+- 受保护的 DaloyJS npm 发布：框架自己的包使用仅由标签触发的发布工作流、受保护环境审批、OIDC 可信发布以及 `--provenance`。
+
+如果你生成的应用不在 GitHub 上，请直接沿用可移植的部分，并把 GitHub 工作流规则转换到你的 CI 平台上。框架无法在私有的 GitLab、Bitbucket、Azure DevOps 或本地部署环境中强制执行分支保护或 runner 出站限制。
+
+## 可信代理与限流 [#trusted-proxies-and-rate-limiting]
+
+在推导限流键时，DaloyJS 默认不再信任 `X-Forwarded-For` 或 `X-Real-IP`。除非你的反向代理会剥离并重写这些请求头，否则客户端可以伪造它们。因此，默认的限流器以无法伪造的 TCP 对端为键（自 1.3.7 起；只有在不暴露对端信息的运行时上才共用一个桶），直到你提供显式的 `keyGenerator`，或者在可信代理之后主动开启 `trustProxyHeaders: true` / `trustedProxies`。信任代理请求头时，键取 `X-Forwarded-For` **最右侧**的条目（即你的代理追加的那一项），绝不会取攻击者添加在左侧的条目。多跳链路用 `trustedHops` 声明跳数。当源站本身可被直接访问时，请设置 `trustedProxies`，在相信任何转发请求头之前，先用 CIDR 允许列表验证对端 socket（参见 [autoBan 的说明](/docs/auto-ban#verify-the-peer-trustedproxies)（英文））。
+
+如果你已经在 App 上用 `behindProxy` 声明了网络拓扑，就无需重复声明。没有设置 `keyGenerator`、`trustProxyHeaders`、`trustedHops` 或 `trustedProxies` 中任何一项的 `rateLimit()` 或 `loginThrottle()` 会沿用 App 的 `behindProxy`，因此位于你的代理之后（或者在没有对端 socket 的 Vercel 和 Cloudflare Workers 上）的每个客户端都会得到自己的桶，而不是所有人共用一个。显式的限流器选项始终优先，`trustProxyHeaders: false` 则可以退出。请让 `behindProxy` 与实际情况一致：如果你知道代理的地址，优先使用 `{ cidrs }`，因为 `{ hops }` 会信任任何能直接访问应用的人发来的最右侧转发条目。
+
+```ts
+const app = new App({ behindProxy: { hops: 1 } }); // 前面有一个可信代理
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // 以真实的客户端 IP 为键
+```
+
+对于输入凭据的路由，请在 `/login`、OTP 和密码重置路由上使用 [`loginThrottle()`](/docs/security/websocket-login-throttle)（英文），并在相关的 WebSocket 升级上使用 `wsRateLimit()`。这两个辅助函数可以从同一个 `groupId` 桶中扣减。
+
+## 自托管文档资源 [#self-hosted-docs-assets]
+
+内置的文档辅助函数不再强制使用以 jsDelivr 为准的 CSP。你可以自行托管 Swagger UI 或 Scalar 的资源，为引导脚本添加 nonce，并为你的文档路由输出同源的 CSP。
+
+```ts
+import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});
+```
+
+## 安装加固 [#install-hardening]
+
+在 pnpm 11+ 上，安装时的设置以 camelCase 键写在 `pnpm-workspace.yaml` 中。pnpm 11 会忽略 `.npmrc` 中这些设置的写法，因此只依赖 `.npmrc` 的配置会悄悄失去冷却期和脚本策略。`.npmrc` 镜像只为 npm 和较旧的工具保留。
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440    # skip versions published in the last 24 hours
+blockExoticSubdeps: true   # transitive deps must come from the registry
+ignoreScripts: true        # no dependency lifecycle scripts
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+```
+
+这些设置保护使用它们的安装过程。`ignoreScripts` 能阻止安装脚本蠕虫（Shai-Hulud 那一类）；而在你的代码导入包时才运行的负载，只能靠冷却期和提交到仓库的锁文件来缓解。`create-daloy` 会为 pnpm 脚手架写入这个文件。
+
+完整的 CI/CD 和维护者操作手册请阅读[供应链安全](/docs/security/supply-chain)（英文）。请在 CI 中以及发布之前运行 `pnpm audit --prod`。
+
+## OWASP API Security Top 10 对照 [#owasp-api-security-top-10-mapping]
+
+关于 Daloy 如何逐项应对 [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) 中的每个条目，以及各项通用最佳实践（加密、校验、限流、日志、资产清单、第三方 API 安全），请阅读 [OWASP API Top 10 对照](/docs/security/owasp-api-top-10)（英文）。
+
+## 报告漏洞 [#reporting-a-vulnerability]
+
+请通过 GitHub 的私密漏洞报告功能 [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) 提交，并附上复现步骤。不要公开提交包含漏洞利用细节的 issue。

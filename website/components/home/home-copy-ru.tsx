@@ -123,7 +123,7 @@ export const HOME_COPY_RU: HomeCopy = {
     installation: "/ru/docs/installation",
     tutorial: "/ru/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/ru/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -133,7 +133,7 @@ export const HOME_COPY_RU: HomeCopy = {
     primaryCta: "Начать: установить Daloy",
     secondaryCta: "Читать документацию",
     contentLanguageNote:
-      "Быстрый старт, установка и руководство доступны на русском; остальная документация и блог пока на английском.",
+      "На русском: быстрый старт, установка, руководство, маршрутизация, валидация, ошибки, OpenAPI, типизированный клиент и безопасность; остальная документация и блог пока на английском.",
     factsLabel: "Проект в цифрах",
     facts: [
       "Более 3000 пройденных тестов фреймворка",

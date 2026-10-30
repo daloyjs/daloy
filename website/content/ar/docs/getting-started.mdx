@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-العنوان نفسه (`GET /docs`)، ونقاط النهاية الحية نفسها `/openapi.json` و`/openapi.yaml`، والتعامل نفسه مع CSP؛ لا يتغير سوى HTML المعروض. ويمكنك الإبقاء على الاثنين: اترك المسار المركّب تلقائيًا على Scalar، واعرض مسارًا ثانيًا لـ Swagger بنفسك عبر `swaggerUiHtml()` (راجع الطريقة اليدوية في [دليل OpenAPI](/docs/openapi)، بالإنجليزية).
+العنوان نفسه (`GET /docs`)، ونقاط النهاية الحية نفسها `/openapi.json` و`/openapi.yaml`، والتعامل نفسه مع CSP؛ لا يتغير سوى HTML المعروض. ويمكنك الإبقاء على الاثنين: اترك المسار المركّب تلقائيًا على Scalar، واعرض مسارًا ثانيًا لـ Swagger بنفسك عبر `swaggerUiHtml()` (راجع الطريقة اليدوية في [دليل OpenAPI](/ar/docs/openapi)).
 
-تريد مسارًا مختلفًا؟ استخدم صيغة الكائن: `docs: { ui: "swagger", path: "/reference" }`. لا تُركَّب صيغة الكائن إلا خارج الإنتاج ما لم تضف `enabled: true` (منذ 1.5.5)، تمامًا مثل `docs: "auto"` الذي يتخطى التركيب عند `production: true`. تحتاج إلى تحكم كامل؟ اضبط `docs: false` وركّب مساراتك الخاصة باستخدام `generateOpenAPI()` و`swaggerUiHtml() / scalarHtml()`: راجع [دليل OpenAPI](/docs/openapi) (بالإنجليزية).
+تريد مسارًا مختلفًا؟ استخدم صيغة الكائن: `docs: { ui: "swagger", path: "/reference" }`. لا تُركَّب صيغة الكائن إلا خارج الإنتاج ما لم تضف `enabled: true` (منذ 1.5.5)، تمامًا مثل `docs: "auto"` الذي يتخطى التركيب عند `production: true`. تحتاج إلى تحكم كامل؟ اضبط `docs: false` وركّب مساراتك الخاصة باستخدام `generateOpenAPI()` و`swaggerUiHtml() / scalarHtml()`: راجع [دليل OpenAPI](/ar/docs/openapi).
 
 تحمّل كل من `swaggerUiHtml()` و`scalarHtml()` مواردها الافتراضية من شبكة jsDelivr، لذا يجب أن تسمح سياسة Content-Security-Policy الصارمة بتلك الموارد، وإلا فقد تظهر واجهة التوثيق فارغة. يضيف المسار المركّب تلقائيًا و`htmlResponse()` سياسة CSP متوافقة تلقائيًا. وإن بنيت الاستجابة بنفسك، فاستورد `docsContentSecurityPolicy` من `@daloyjs/core/docs` ومرّر الناتج ترويسةً للاستجابة:
 
@@ -237,7 +237,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 ## الخطوات التالية
 
-- [التوجيه](/docs/routing) (بالإنجليزية)
-- [التحقق باستخدام Standard Schema](/docs/validation) (بالإنجليزية)
-- [ضوابط الأمان والبرمجيات الوسيطة](/docs/security) (بالإنجليزية)
+- [التوجيه](/ar/docs/routing)
+- [التحقق باستخدام Standard Schema](/ar/docs/validation)
+- [ضوابط الأمان والبرمجيات الوسيطة](/ar/docs/security)
 - [درس تعليمي: واجهة برمجة لمكتبة كتب](/ar/docs/tutorials/bookstore)

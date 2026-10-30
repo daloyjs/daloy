@@ -1,0 +1,355 @@
+---
+title: مواصفة OpenAPI في DaloyJS
+description: "توليد مواصفة OpenAPI في DaloyJS: أصدر OpenAPI 3.1 من مساراتك. بدعم Hey API تبقى المواصفة متزامنة مع عقودك وتغذّي العميل مكتوب الأنواع."
+keywords:
+  - مواصفة OpenAPI في DaloyJS
+  - OpenAPI 3.1
+  - مولّد OpenAPI بلغة TypeScript
+  - Hey API
+  - DaloyJS OpenAPI
+  - توثيق تلقائي للواجهة البرمجية
+  - Swagger UI
+  - مرجع API مع Scalar
+  - Redoc
+  - تبديل واجهة التوثيق
+sitemap:
+  priority: 0.7
+---
+
+# مواصفة OpenAPI في DaloyJS
+
+يُصدر DaloyJS مستند **OpenAPI 3.1** نظيفًا مباشرةً من تعريفات مساراتك، دون إضافات ودون مُزخرِفات (decorators) منفصلة. يتشارك التحقق والأنواع والمواصفة مصدرًا واحدًا للحقيقة.
+
+<BranchDiagram title="عقد واحد وأربعة مخرجات" source={{
+          eyebrow: "مصدر واحد للحقيقة",
+          label: "تعريف المسار",
+          detail: "app.get(path, { request, responses }, handler)",
+        }} branches={[
+          {
+            eyebrow: "وقت التشغيل",
+            label: "التحقق من الطلب والاستجابة",
+            detail: "Zod · Valibot · ArkType",
+          },
+          {
+            eyebrow: "المواصفة",
+            label: "مستند OpenAPI 3.1",
+            detail: "GET /openapi.json · /openapi.yaml",
+          },
+          {
+            eyebrow: "للبشر",
+            label: "واجهة التوثيق",
+            detail: "Scalar · Swagger UI · Redoc",
+          },
+          {
+            eyebrow: "للمستهلكين",
+            label: "SDK عميل مكتوب الأنواع",
+            detail: "توليد الشيفرة مع Hey API",
+          },
+        ]} caption="تكتب المسار مرة واحدة. ثم يُشتق منه التحقق، ومواصفة OpenAPI، والتوثيق التفاعلي، والعميل مكتوب الأنواع، لذا لا يمكن أن تخرج عن التزامن أبدًا." />
+
+## سطر واحد: تركيب /docs و/openapi.json و/openapi.yaml تلقائيًا [#one-line-auto-mount-docs-openapi-json-openapi-yaml]
+
+على طريقة FastAPI. مرّر `docs: "auto"` (أو `docs: true`) إلى منشئ `App`، فيسجّل DaloyJS لك `GET /openapi.json` + `GET /openapi.yaml` (المواصفة الحية بالصيغتين) و`GET /docs` (واجهة مرجع API مع Scalar).
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    servers: [{ url: "https://api.example.com" }],
+    securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+  },
+  docs: "auto", // يركّب GET /docs وGET /openapi.json وGET /openapi.yaml خارج الإنتاج
+});
+```
+
+لا يركّب `docs: "auto"` المسارات إلا عندما لا يكون التطبيق في الإنتاج (وهذا هو الافتراضي في قوالب `create-daloy`، فلا تنشر الواجهة البرمجية المنشورة مخططها)، أو اتركه معطلًا (الافتراضي) وركّب المسارات يدويًا بالدوال المساعدة أدناه. خصّص المسارات والواجهة والوسوم عبر صيغة الكائن. ومنذ 1.5.5 تتصرف صيغة الكائن مثل `"auto"` ما لم تضبط `enabled`، لذا فإن تخصيص الواجهة لا ينشر خريطة مساراتك في الإنتاج عن طريق الخطأ أبدًا؛ اضبط `enabled: true` (أو `docs: true`) لواجهة برمجية عامة ينبغي أن تقدّم توثيقها في الإنتاج:
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    path: "/reference",              // الافتراضي: "/docs"
+    openapiPath: "/spec.json",       // الافتراضي: "/openapi.json"
+    openapiYamlPath: "/spec.yaml",   // الافتراضي: "/openapi.yaml"؛ وfalse يعطّله
+    ui: "scalar",                     // "scalar" (الافتراضي) | "swagger" | "redoc"
+    scalar: {
+      theme: "kepler",
+      customCss: ":root { --scalar-color-accent: #2563eb; }",
+      hideTestRequestButton: true,
+    },
+    tags: ["Docs"],                   // الافتراضي: ["Docs"]، مرّر [] للحذف
+    enabled: "auto",                  // الافتراضي "auto" (معطّل في الإنتاج)؛ true | false
+  },
+});
+```
+
+<blockquote><strong>الأمان:</strong> المواصفة المنشورة خريطة كاملة لسطح الهجوم لديك: كل مسار ومعامل ومخطط مصادقة وشكل خطأ. مع <code>docs: true</code> أو <code>enabled: true</code> في الإنتاج، يسجّل DaloyJS الحدث <code>docs.public_in_production</code> ويقدّم المواصفة لكل من يستطيع الوصول إليها. هذا صحيح لواجهة برمجية عامة. أما لغير ذلك، فأبقِ <code>"auto"</code>، أو ضع التوثيق خلف مصادقة (فـ <code>bearerAuth()</code> على مستوى التطبيق دون <code>except()</code> لـ <code>/docs</code> و<code>/openapi.json</code> يغطيهما). علّم مسارات الإدارة والمهام المجدولة وتصحيح الأخطاء بـ <code>internal: true</code>، فتُستبعد حينها من المستند المولَّد وتجيب بـ <code>404</code> على حركة الشبكة، بينما يظل بإمكان <code>app.inject()</code> استدعاؤها. راجع <a href="/docs/security/admin-panels">Secure admin panels</a> (بالإنجليزية).</blockquote>
+
+## اختر واجهة: Scalar أو Swagger UI أو Redoc [#pick-a-ui-scalar-swagger-ui-or-redoc]
+
+اضبط `ui` على `"scalar"` (الافتراضي) أو `"swagger"` أو `"redoc"`. تعرض الثلاث المواصفة الحية نفسها، وتُركَّب على المسارات نفسها، وتأتي بسياسة CSP الصارمة نفسها وبموارد مستضافة على CDN، لذا فالتبديل تغيير بكلمة واحدة. يتضمن Scalar وSwagger UI وحدة طلبات للمطورين للمسارات المحمية. أما Redoc فواجهة مرجعية للقراءة فقط: تعرض متطلبات الأمان، لكنها لا تأتي بوحدة *Try it* مدمجة.
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    ui: "swagger",
+    swagger: {
+      docExpansion: "none",
+      displayRequestDuration: true,
+    },
+  },
+});
+```
+
+يحتفظ Swagger UI افتراضيًا بالتفويضات المدخلة في نافذة *Authorize* عبر إعادة التحميل. ويفعل ذلك بتخزين الرمز الملصق في `localStorage` الخاص بالمتصفح، وكذلك يفعل Scalar مع `persistAuth: true`. يمكن لأي سكربت يعمل على أصل التوثيق قراءته، ويبقى حتى بعد إغلاق التبويب. الصق رموز اختبار قصيرة العمر وبأقل صلاحيات فقط، ولا تلصق أبدًا بيانات اعتماد الإنتاج أو الإدارة، وقدّم التوثيق من أصل منفصل عن أي تطبيق ويب خاص بك. مرّر `swagger: { persistAuthorization: false }` لإبقاء الرموز في الذاكرة فقط. يختار Scalar تلقائيًا أول مخطط أمان مُعرَّف في OpenAPI، فيكون نموذج المصادقة جاهزًا ليلصق المطورون رمز bearer أو مفتاح API. إن أردت افتراضيًا مختلفًا في Scalar، فاضبطه صراحةً:
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+    },
+  },
+  docs: {
+    scalar: {
+      persistAuth: true,
+      authentication: { preferredSecurityScheme: "bearer" },
+    },
+  },
+});
+```
+
+إذا احتاج توثيقك إلى نقطة دخول ظاهرة لتسجيل الدخول، فأضف `docs.auth`. يُعرض الزر نفسه في Scalar وSwagger UI وRedoc. وجّهه إلى نموذج تسجيل دخول محلي، أو مسار Better Auth، أو عنوان تسجيل دخول Clerk، أو عنوان تفويض OIDC من Auth0 أو Okta أو Microsoft Entra ID أو Cognito أو Keycloak أو أي مزوّد آخر:
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      oidc: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://login.example.com/oauth2/v2.0/authorize",
+            tokenUrl: "https://login.example.com/oauth2/v2.0/token",
+            scopes: { "api.read": "Read API data" },
+          },
+        },
+      },
+    },
+  },
+  docs: {
+    ui: "redoc", // يعمل أيضًا مع "scalar" و"swagger"
+    auth: {
+      loginUrl: "/login", // أو عنوان التفويض/تسجيل الدخول لدى مزوّدك
+      label: "Sign in",
+      target: "popup",
+    },
+  },
+});
+```
+
+يُمرَّر الكائن `redoc` كما هو إلى `Redoc.init(specUrl, configuration, element)`. ولأن Redoc يبني فهرس البحث في Web Worker من نوع `blob:`، فإن المسار `/docs` المركّب تلقائيًا يوسّع سياسة CSP لتلك الصفحة بـ `worker-src 'self' blob:` في حالة `ui: "redoc"` فقط. ويحتفظ Scalar وSwagger UI بالسياسة الأضيق. ويُتجاهل الخيار `scalar` ما لم يكن `ui` هو `"scalar"`، وكذلك الحال مع `swagger` و`redoc`.
+
+يُمرَّر الكائن `scalar` إلى واجهة HTML الخاصة بـ Scalar كإعدادات JSON، بينما يُبقي Daloy المسار الحي `openapiPath` مصدرًا. استخدمه للسمات، وCSS المخصص، والتخطيط، وافتراضيات المصادقة، وظهور العملاء، دون نسخ HTML الخاص بالتوثيق.
+
+## متقدم: توليد المواصفة يدويًا [#advanced-generate-the-spec-manually]
+
+تحتاج إلى كائن المواصفة الخام (لتوليد الشيفرة، أو اختبارات العقود، أو مسار مخصص)؟ استدعِ `generateOpenAPI(app, options)` مباشرةً:
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+});
+
+console.log(JSON.stringify(doc, null, 2));
+```
+
+## متقدم: تقديم التوثيق من مسارك الخاص [#advanced-serve-docs-from-your-own-route]
+
+مسار التوثيق المكتوب يدويًا مسار عادي، لذا لا ينطبق عليه تقييد `docs: "auto"`. قرّر بنفسك هل ينبغي أن يوجد في الإنتاج وهل يحتاج إلى مصادقة. وينطبق الأمر نفسه على أي مسار `/openapi.json` تقدّمه يدويًا باستخدام `generateOpenAPI()`:
+
+```ts
+import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+// لا يغطيه `docs: "auto"`، لذا قيّده بنفسك.
+if (process.env.NODE_ENV !== "production") {
+  app.get(
+    "/docs",
+    {
+      operationId: "docs",
+      responses: { 200: { description: "API reference" } },
+    },
+    async () => {
+      const html = scalarHtml({
+        specUrl: "/openapi.json",
+        title: "My API",
+        configuration: { theme: "kepler" },
+      });
+      const res = htmlResponse(html);
+      return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
+    },
+  );
+}
+```
+
+تعيد كل من `swaggerUiHtml` و`scalarHtml` و`redocHtml` صفحات HTML مكتفية ذاتيًا تحمّل مواردها من jsDelivr مع سياسة CSP صارمة لا تسمح إلا بذلك الأصل. عندما تكتب المسار يدويًا باستخدام `redocHtml`، مرّر `allowBlobWorkers: true` إلى `htmlResponse` (أو `docsContentSecurityPolicy`) حتى تسمح سياسة CSP بعامل البحث `blob:` الخاص بـ Redoc:
+
+```ts
+import { redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+const res = htmlResponse(
+  redocHtml({ specUrl: "/openapi.json", title: "My API", configuration: { hideDownloadButtons: true } }),
+  { allowBlobWorkers: true },
+);
+```
+
+إن أردت اختبار تجربة التوثيق مقابل عقد أكبر بكثير، فراجع [عرض REST الوهمي الكبير](/docs/tutorials/fake-rest-api) (بالإنجليزية). فهو مقياس أفضل من مثال CRUD بسيط عندما تحتاج إلى التحقق من البحث والتجميع وأداء العرض.
+
+## الحفظ على القرص لتوليد الشيفرة [#dump-to-disk-for-codegen]
+
+```ts
+// scripts/dump-openapi.ts
+import { writeFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { buildApp } from "../src/build-app.js";
+
+const app = buildApp();
+const out = "./generated/openapi.json";
+await mkdir(dirname(out), { recursive: true });
+await writeFile(out, JSON.stringify(generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+}), null, 2));
+console.log(`wrote ${out}`);
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts"
+}
+```
+
+## ما الذي يُصدَر [#what-gets-emitted]
+
+- `operationId` واحد لكل مسار، والمكررات ترمي خطأً عند التسجيل.
+- تُوحَّد معاملات المسار `:id` إلى `{id}`.
+- تُحوَّل أجسام المخططات عبر `schema.toJSONSchema?.()` عندما يكون مدعومًا، أو عبر بديل هيكلي.
+- مكوّن قابل لإعادة الاستخدام `components.schemas.Problem` لأخطاء RFC 9457.
+- `tags` و`summary` و`description`، و`description` لكل رمز حالة.
+- تُحذف المسارات المعلّمة بـ `internal: true` ما لم تمرّر `includeInternal: true` (مثلًا لعقد داخلي فقط لأدواتك الخاصة). لا تنشر ذلك المستند أبدًا.
+
+## Webhooks [#webhooks]
+
+يسمح OpenAPI 3.1 للمنتِج بنشر **webhooks في المستوى الأعلى**، وهي عمليات يُتوقع من المستهلك تنفيذها. مرّر `webhooks` إلى `generateOpenAPI` فيُصدرها DaloyJS تحت الخريطة `webhooks` في المستوى الأعلى من المستند.
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "Books", version: "1.0.0" },
+  webhooks: {
+    bookCreated: {
+      method: "POST",
+      operationId: "onBookCreated",
+      summary: "Fires when a book is created",
+      tags: ["Webhooks"],
+      request: { body: z.object({ id: z.string(), title: z.string() }) },
+      responses: { 200: { description: "Acknowledged" } },
+      auth: { scheme: "bearer", scopes: ["webhook:receive"] },
+    },
+  },
+});
+```
+
+الخريطة `webhooks` *تصف* العملية فقط؛ فهي لا تسلّم شيئًا ولا تؤمّنه. في عمليات التسليم الحقيقية، وقّع كل حمولة حتى يتمكن المستقبلون من التحقق من المصدر والسلامة معًا، وأضف طابعًا زمنيًا حتى يتمكنوا من رفض إعادة الإرسال. ورمز bearer ثابت وحده لا يثبت أيًا منهما. يوقّع [`createWebhookSender()`](/docs/webhook-delivery) (بالإنجليزية) كل طلب صادر ويضيف إليه طابعًا زمنيًا ويعيد محاولته ويمرره عبر `fetchGuard()`. ويتحقق المستقبلون باستخدام `verifyWebhookSignature()`. وثّق ترويسات التوقيع في `description` الخاص بالـ webhook.
+
+## الاستدعاءات الراجعة [#callbacks]
+
+تصف **الاستدعاءات الراجعة (callbacks)** طلبات خارج النطاق قد تُطلقها عملية ما نحو المستهلك (مثل نقطة نهاية اشتراك ترسل لاحقًا طلب POST إلى العنوان الذي قدّمه المستدعي). أرفق خريطة `callbacks` مباشرةً بمسار أو webhook.
+
+```ts
+import { fetchGuard } from "@daloyjs/core";
+
+// كل طلب إلى عنوان قدّمه المستدعي يمر عبر حارس SSRF.
+const safeFetch = fetchGuard();
+
+app.post(
+  "/subscribe",
+  {
+    operationId: "subscribe",
+    request: {
+      body: z
+        .object({
+          // https فقط: يرفض file: وgopher: وjavascript: وhttp: العادي
+          callbackUrl: z.url({ protocol: /^https$/ }),
+        })
+        .strict(),
+    },
+    responses: { 201: { description: "Subscribed" } },
+    callbacks: {
+      onEvent: {
+        "{$request.body#/callbackUrl}": {
+          method: "POST",
+          operationId: "onEventCallback",
+          request: { body: z.object({ id: z.string() }) },
+          responses: {
+            200: { description: "ack" },
+            410: { description: "gone" },
+          },
+        },
+      },
+    },
+  },
+  async () => ({ status: 201, body: undefined }),
+);
+```
+
+<blockquote><strong>الأمان:</strong> عنوان الاستدعاء الراجع الذي يقدّمه المستدعي نقطة تصريف لتزوير الطلبات من جهة الخادم (SSRF). التحقق من المخطط لا يكفي. فـ <code>z.url()</code> وحده يقبل <code>http://169.254.169.254/</code> (بيانات السحابة الوصفية)، و<code>http://localhost:6379/</code>، وعناوين <code>file:</code>/<code>gopher:</code>، وحتى <code>{"z.url({ protocol: /^https$/ })"}</code> يظل يقبل <code>https://169.254.169.254/</code> أو اسم مضيف يُحل إلى عنوان خاص. أرسل كل استدعاء راجع عبر <code>safeFetch</code> من <a href="/docs/security/fetch-guard"><code>fetchGuard()</code></a> (بالإنجليزية)، الذي يفحص العنوان المحلول وكل قفزة إعادة توجيه. والأفضل من ذلك، سلّم باستخدام <a href="/docs/webhook-delivery"><code>createWebhookSender()</code></a> (بالإنجليزية)، الذي يوقّع الحمولة أيضًا. وفكّر في التحقق من ملكية العنوان، مثلًا بطلب تحدٍّ، قبل تخزينه.</blockquote>
+
+يرتبط كل اسم استدعاء راجع بمفتاح تعبير وقت تشغيل واحد أو أكثر (مثل `"{$request.body#/callbackUrl}"`)، ويرتبط كل منها بعملية واحدة أو أكثر مفهرسة بطريقة HTTP. وتُتخطى الخرائط والمصفوفات الفارغة، فتمرير استدعاء راجع فارغ لا ينتج أبدًا مواصفة مشوّهة.
+
+## الاتحادات المميَّزة [#discriminated-unions]
+
+الحقل `discriminator` في OpenAPI 3.1 هو الطريقة المعتمدة لوصف الاتحادات الموسومة. يوفّر DaloyJS دالتين مساعدتين من `@daloyjs/core/openapi` (ومن الحزمة الجذرية):
+
+- `discriminator(propertyName, mapping?)`: باني المواصفة المجرد. استخدمه عندما يكون لديك JSON Schema مكتوب يدويًا وتريد إرفاق الحقل بشكل نظيف.
+- `discriminatedUnion(propertyName, variants, opts?)`: غلاف متوافق مع Standard Schema *يتحقق* في وقت التشغيل (موزّعًا حسب قيمة المميِّز) *ويعرض* أيضًا `.toJSONSchema()` حتى يُصدر مولّد OpenAPI البنية `{ oneOf, discriminator }` تلقائيًا.
+
+```ts
+import { z } from "zod";
+import { discriminatedUnion } from "@daloyjs/core";
+
+// يرفض .strict() المفاتيح غير المعروفة (مثل `isAdmin` محقون) بالرمز 422
+// بدلًا من حذفها بصمت.
+const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() }).strict();
+const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() }).strict();
+
+const Animal = discriminatedUnion(
+  "kind",
+  { cat: Cat, dog: Dog },
+  { mapping: { cat: "#/components/schemas/Cat", dog: "#/components/schemas/Dog" } },
+);
+
+app.post(
+  "/animals",
+  {
+    operationId: "createAnimal",
+    request: { body: Animal },
+    responses: { 201: { description: "ok", body: Animal } },
+  },
+  async ({ body }) => ({ status: 201, body }),
+);
+```
+
+في وقت التشغيل، يرفض الغلاف غير الكائنات، والمميِّزات المفقودة أو غير النصية، وقيم المميِّز غير المعروفة (بما فيها الأسماء الموروثة مثل `__proto__` و`constructor` و`toString`) مع مشكلة Standard Schema واضحة، ثم يُحيل كل ما عدا ذلك إلى أداة التحقق الخاصة بالمتغير المطابق.

@@ -1,0 +1,333 @@
+---
+title: ルーティング
+description: "DaloyJS のコントラクトファーストなルーティング。パスパラメーター、クエリ、ボディ、レスポンスのスキーマを 1 つの宣言からエンドツーエンドで推論します。"
+keywords:
+  - DaloyJS ルーティング
+  - 型安全なルート
+  - コントラクトファーストなルーティング
+  - TypeScript HTTP ルーター
+sitemap:
+  priority: 0.7
+---
+
+# ルーティング
+
+DaloyJS は、静的ルート用の高速パスを備えたセグメントトライを使います。パスの安全性チェックのあと、完全一致の静的ルートは 1 回の `Map.get` で解決されます。動的な検索では、リテラルのセグメント、パラメーター、ワイルドカードの順に優先されます。バックトラッキングのない検索はパスの長さに対して線形ですが、重なり合うルートがあると、トライの別の枝も調べる必要が出ることがあります。
+
+一致とみなされるのは完全なルートだけです。たとえば `/users/me/details/:field` を登録しても、`/users/:id` が `/users/me` に一致することは妨げられません。動的トライの中では、要求されたメソッドのハンドラーを持たない場合でも、優先度の高い完全なパスが勝ちます。完全一致の静的ルートは登録されたメソッドについて勝ちますが、それ以外のメソッドは動的トライに一致することがあります。
+
+## 段階的な省略記法 [#progressive-shorthands]
+
+メソッドの省略記法は、コントラクトをなくさずに記述の手間を減らします。DaloyJS はメソッドとパスから `getRoot` や `postBookItemsByItemId` のような安定した operation id を導き出します。明示的に指定した `operationId` が常に優先されます。
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+省略記法でも、検証、OpenAPI、セキュリティ、型付きクライアントの動作は `route()` と同じです。レスポンスのコントラクトを黙って省略する 2 引数の形式はありません。意図的に中身を定義しないボディにする場合は、`acknowledgeNoResponseBodySchema: true` を明示的に渡してください。`preBody` や `beforeHandle` が返す成功時の生のレスポンスにも、同じ明示が必要です。通常の `4xx`/`5xx` によるフックの拒否には必要ありません。レスポンスの説明は省略可能なままです。省略した場合、OpenAPI では安定した `HTTP <status> response` という説明になります。
+
+## ルートを定義する [#defining-routes]
+
+ルートの宣言は、マッチング、リクエストの検証、レスポンスの検証、OpenAPI の出力、型付きクライアントの唯一の情報源です。型付きクライアントや生成 SDK に含めたい公開ルートを `route()` で定義する場合は、`operationId` を指定してください。HTTP の省略記法では自動で導き出されます。DaloyJS は重複した `operationId` を登録時に拒否します。
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // params、query、headers は上のスキーマから推論されます。
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## 複数ファイルにまたがる型推論 [#multi-file-type-inference]
+
+各ルートを `defineRoute()` でエクスポートし、インポートしたコントラクトを `registerRoutes()` で組み合わせます。リテラルのタプルはファイルやモジュールの境界を越えても保たれるため、コード生成なしのクライアントがすべての operation id とスキーマを保持します。
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+`route()` をチェーンで呼び出しても、型は正しく蓄積されます。最終的に組み立てたアプリに単なる `const app: App` という型注釈を付けるのは避けてください。ルートのタプルが明示的に広げられて消えてしまいます。
+
+コールバック形式の `group()` やプラグインの `register()` も実行時のスコープは提供しますが、TypeScript はコールバックの内側から親の変数の型を広げることができません。大きなモジュールにまたがってコード生成なしのクライアントを完全に型付けしたい場合は、リテラルのルートタプルをエクスポートし、`registerRoutes()` を最後の組み立ての境界にしてください。
+
+## HTTP メソッド [#http-methods]
+
+サポートするメソッドは `GET`、`POST`、`PUT`、`PATCH`、`DELETE`、`HEAD`、`OPTIONS` です。`TRACE`、`CONNECT`、WebDAV の動詞などのカスタムメソッドは登録時に拒否されます。
+
+明示的な `HEAD` ルートがない場合、`HEAD` は一致する `GET` ルートにフォールバックし、同じヘッダーと空のボディを返します。パスは存在するのに明示的な `OPTIONS` ルートが登録されていない場合、`OPTIONS` は `Allow` ヘッダー付きの 204 プリフライトを返します。
+
+省略記法のメソッドは `GET`、`POST`、`PUT`、`PATCH`、`DELETE`、`HEAD` で使えます。明示的な `OPTIONS` ルートは `route()` で登録してください。登録しない場合は、DaloyJS が自動でプリフライトを処理します。
+
+## パスパラメーター [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+パスの値は検証の前にデコードされます。`request.params` のスキーマを省略すると、`ctx.params` はパスから生の文字列として推論されます。`/a/:x` と `/a/:y` のように、トライの同じ位置でパラメーター名が衝突すると、登録時に例外がスローされます。
+
+キャプチャ名は空でなく、ルート内で一意でなければなりません。パラメーターのオブジェクトを後段で安全に使えるよう、`__proto__`、`constructor`、`prototype` という名前は拒否されます。拒否された登録が `operationId` を予約することはありません。
+
+### ワイルドカードのキャプチャ [#wildcard-captures]
+
+末尾の `*name` セグメントは、パスの残りを 1 つのデコード済み文字列としてキャプチャし、少なくとも 1 つのセグメントが残っていることを要求します。名前のない `*` は `wildcard` という名前を使います。ワイルドカードは末尾に置く必要があります。`/assets/*path/private` は、より広いパスに黙って一致するのではなく、登録時に例外をスローします。キャプチャ名が一致していれば、複数のメソッドで 1 つのワイルドカードルートを共有できます。メソッドの重複やワイルドカード名の衝突は例外をスローします。
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+生のパストラバーサルのセグメント（`..`）、空のセグメント `//`、キャプチャ内の不正なパーセントエスケープは、きれいに不一致になります。メソッドの探索にも同じチェックが適用されるため、拒否されたパスが `Allow` ヘッダーを公開することはありません。1.3.7 以降、パラメーターやワイルドカードのセグメントは、エンコードされた表記 `%2e` や `%2e%2e` を含め、`.` や `..` に束縛されることはありません。URL パーサーはこれらをディレクトリの移動として解決するため、束縛を許すとハンドラーがミドルウェアの見たパスとは異なるパスを受け取ってしまいます。キャプチャは、エンコードされた区切り文字の後ろに `.` や `..` の要素を持つデコード済みの値（`..%2F..%2Fsecret`、`..%5C`）や、制御文字（`%00`、`%0A`、`%09`、`%7F`）も拒否します。そのようなリクエストは `404` になります。
+
+エンコードされた `/` や `\`（`%2F`、`%5C`）をデコードするキャプチャも、デフォルトでは `404` で拒否されます。後段のファイルシステム、URL、プロキシのどの利用者にとっても、1 つのキャプチャ値が複数のパスセグメントにまたがってしまうからです。ルートが本当にスラッシュを含む id を使う場合は、ルートごとにオプトインしてください：
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+オプトインしても、`..` の要素や制御文字が再び許可されることはありません。デコードされたパラメーターは引き続き信頼できないデータであり、サニタイズ済みのファイルシステムパスではないため、ファイルシステムへのアクセスは別途検証してください。
+
+アダプターも、ルーターとミドルウェアが同じパスの見え方を共有するようにしています（1.3.7 以降）。Node アダプターは、`\`、ドットセグメント、またはその `%2e` 形式を含むリクエストターゲットを、ルーティングの前に `new URL()` と同じ方法で正規化します。Node と AWS Lambda のアダプターはどちらも、単純な `host[:port]` ではない `Host` ヘッダー（たとえば `\ / ? # @ %` や空白を含むもの）を `400` で拒否します。そのため、`except()` のようなパスベースのガードは、実際に実行されるルートと正確に一致します。詳しくは [Node アダプター](/docs/adapters/node)（英語）をご覧ください。
+
+## グループ [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// 最終的なパス：/api/v1/health
+```
+
+グループは、プレフィックス、タグ、フック、認証のデフォルトを、コールバック内で登録したルートにマージします。子アプリはカプセル化されており、グループ内で追加したミドルウェアがグループ外のルートに漏れることはありません。グループ化されたルートは、実行時のルーティングと OpenAPI の両方から見えます。`/api/v1` と `/api/v2` のコントラクトを並行して運用する方法、移行ポリシー、別々に生成する SDK については、[API バージョニングのガイド](/docs/api-versioning)（英語）をお読みください。
+
+## ルートのオプション [#route-options]
+
+- `request`：`params`、`query`、`headers`、`body` のスキーマ。
+- `responses`：宣言するステータスコードと、省略可能なレスポンスのボディ・ヘッダーのスキーマ。
+- `accepts`：リクエストボディのスキーマを持つルート向けの、ルートごとの `Content-Type` 許可リスト。
+- `auth`：ルートの OpenAPI セキュリティ要件。`bearerAuth()` などの認証フックと組み合わせて使います。
+- `internal`：ルートを公開アダプターから隠しつつ、プロセス内の `app.inject()` 呼び出しは許可します。
+- `deprecated` と `sunset`：エンドポイントを非推奨としてマークし、対応するレスポンスヘッダーを出力します。
+- `callbacks` と `meta`：OpenAPI のコールバック、例、AI に扱いやすいルートのメタデータを追加します。
+
+## フック [#hooks]
+
+フックは、ライフサイクルの決まった時点に処理を差し込みます：
+
+- `onRequest`：最も早く、パースの前に実行されます。
+- `preBody`：ルートのマッチングのあと、スキーマ検証やボディの I/O の前に実行されます。組み込みのヘッダー、JWT、Basic、mTLS の認証はここで実行されます。
+- `beforeHandle`：検証のあと、ハンドラーの前に実行されます。`Response` を返すと処理を打ち切れます。
+- `afterHandle`：レスポンスのシリアライズの前に、ハンドラーの結果をラップしたり変換したりします。
+- `onError`：エラーレスポンスを監視したり置き換えたりします。
+- `onSend`：送信するヘッダーをその場で変更するか、新しい `Response` を返します。成功時、エラー時、`OPTIONS` プリフライトのいずれでも実行されます。
+- `onResponse`：最後の監視役です。ログやメトリクスに使ってください。ここでレスポンスを変更してはいけません。
+
+<FlowDiagram title="リクエストのライフサイクル" numbered caption="フックはハンドラーの前後の決まった時点で発火します。軽量な認証は、リクエストボディの I/O の前に preBody で拒否できます。ボディを扱うミドルウェアは、検証のあとの beforeHandle に置きます。どこかで例外がスローされると制御は onError に移り、そのあとも onSend と onResponse は実行されます。" steps={[
+          { label: "onRequest", eyebrow: "最初", detail: "パースの前" },
+          {
+            label: "preBody",
+            eyebrow: "最も安価な拒否",
+            detail: "ルート一致済み · ボディは未読",
+          },
+          {
+            label: "validate",
+            eyebrow: "フレームワーク",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "Response を返して打ち切り",
+          },
+          { label: "handler", detail: "ルートのロジック", tone: "accent" },
+          { label: "afterHandle", detail: "結果をラップ・変換" },
+          { label: "onSend", detail: "Response を変更・置換" },
+          {
+            label: "onResponse",
+            eyebrow: "常に実行",
+            detail: "監視専用",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## `onSend` でレスポンスを変換する [#transforming-responses-with-onsend]
+
+送信するレスポンスを書き換える必要があるとき、たとえばヘッダーを付ける、内部用のヘッダーを取り除く、レスポンス全体を置き換えるといった場合には `onSend` を使います。`void` を返すと現在のレスポンスがそのまま使われます。複数の `onSend` フックはパイプラインのように合成されます（グローバル → グループ → ルート）。
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // エラーレスポンスや OPTIONS プリフライトを含め、
+      // 送信するすべてのレスポンスで API バージョンを通知します。
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // レスポンスが出ていく前に内部の実装詳細を取り除きます。
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+`onSend` は、レスポンスの検証のあと、そして `x-request-id` を含むリクエストスコープのヘッダーがマージされた*あと*に実行されます。`onResponse` の*前*に実行され、ログやメトリクスには引き続き `onResponse` が適しています。
+
+## 405 Method Not Allowed [#405-method-not-allowed]
+
+あるメソッドで登録されたパスが別のメソッドで呼ばれた場合、ルーターは誤解を招く 404 ではなく、正しい `Allow` ヘッダー付きの **405** を返します。`internal: true` を付けたルートは公開の 405 と `Allow` のレスポンスから除外されるため、隠された管理用や cron 用のエンドポイントがメソッドの探りによって漏れることはありません。
+
+メソッドの探索には、完全一致の静的ルートと選ばれた動的ルートの両方が含まれます。`GET /users/me` と `POST /users/:id` がある場合、パス `/users/me` は登録された両方のメソッドを公開します。ヘッダーに並ぶのは明示的に登録したものだけで、自動で処理される HEAD と OPTIONS は追加されません。
+
+## パフォーマンス [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

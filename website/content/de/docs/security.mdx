@@ -1,0 +1,336 @@
+---
+title: Sicherheit
+description: "DaloyJS bringt vom Kern erzwungene Schutzmechanismen und eigene Middleware für Security-Header, Rate Limits, CORS, CSRF, Sessions und Lieferkettenschutz mit."
+keywords:
+  - DaloyJS Sicherheit
+  - sichere HTTP-Standards
+  - Rate Limiting
+  - Security-Header
+  - OWASP TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# Sicherheit
+
+Schlechte Standardwerte sind Bugs. DaloyJS trennt vom Kern erzwungene Schutzmechanismen von eigener Sicherheits-Middleware, damit die gefährlichen Dinge standardmäßig blockiert sind und die einsatzspezifischen Dinge explizit bleiben.
+
+<blockquote>Die Schutzmechanismen des Kerns schützen jede Anwendung standardmäßig. Die eigene Middleware ergänzt die Richtlinien, die von Ihren Routen, Nutzern und Ihrem Deployment abhängen.</blockquote>
+
+<LayerStack title="Zwei Verteidigungsebenen" flow="down" layers={[
+          {
+            title: "Vom Kern erzwungene Schutzmechanismen",
+            detail: "standardmäßig scharf, kein Middleware-Aufruf nötig",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "Path-Traversal-Ablehnung",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "5xx-Schwärzung in Produktion",
+            ],
+          },
+          {
+            title: "Eigene Sicherheits-Middleware",
+            detail: "explizit, weil Richtlinien eine Deployment-Entscheidung sind",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]} caption="Die gefährlichen Dinge blockiert der Kern ohne jede Einrichtung. Die einsatzspezifischen Dinge (CSP, CORS-Origins, Session-Secrets, CSRF-Einführung) bleiben explizite Middleware, die Sie bewusst aktivieren." />
+
+## Was der Kern erzwingt [#what-the-core-enforces]
+
+Diese Prüfungen finden in `App` oder im Laufzeit-Adapter selbst statt. Anwendungen erhalten sie, ohne eine Middleware aufzurufen.
+
+<FlowDiagram title="Jeder Request muss alle Kontrollen passieren" numbered steps={[
+          {
+            eyebrow: "Eingang",
+            label: "Eingehender Request",
+            detail: "Methode, Pfad, Header, Body",
+          },
+          {
+            eyebrow: "Größengrenze",
+            label: "Body-Größenlimit",
+            detail: "Content-Length über der Grenze führt zu 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "Parsen",
+            label: "Gehärtetes JSON-Parsen",
+            detail: "entfernt __proto__ / constructor",
+          },
+          {
+            eyebrow: "Route",
+            label: "Router + Methodenprüfung",
+            detail: ".. zum kanonischen Pfad aufgelöst. Falsche Methode 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "Handler",
+            label: "Ihr typisierter Handler",
+            detail: "läuft unter requestTimeoutMs",
+            tone: "success",
+          },
+        ]} caption="Ein Request erreicht Ihren Handler erst, nachdem er die Body-Grenze, den gegen Prototype Pollution abgesicherten Parser und die Pfad- und Methoden-Guards passiert hat. Alles, was an einem Guard scheitert, lehnt der Kern ab, bevor Ihr Code läuft." />
+
+| Bedrohung | Eingebautes Verhalten |
+| --- | --- |
+| DoS über Body-Größe | Gestreamtes Lesen, harte Grenze (Standard 1 MiB), Content-Length wird zuerst geprüft -\> 413. Ab 1.5.4 gilt die Grenze für jede Route, auch für Handler, die `ctx.request` direkt lesen; vorher nur für Routen mit Body-Schema. Die Grenze greift, wenn der Body gelesen wird, daher wird eine Route, die ihren Body ignoriert, deswegen nicht abgelehnt. |
+| Prototype Pollution | `safeJsonParse` entfernt `__proto__`, `constructor` und `prototype` per Reviver. |
+| Fehlerhaftes UTF-8 in Bodys | Ab 1.16.0 dekodieren die Body-Parser für JSON, urlencoded und Text strikt: Ein Body mit einer ungültigen oder überlangen UTF-8-Sequenz wird mit `400` beantwortet, statt mit ersetztem `U+FFFD` validiert zu werden (RFC 8259 §8.1). Wohlgeformtes Nicht-ASCII und ein führendes BOM werden weiterhin geparst. Ein Handler, der `ctx.request.text()` selbst liest, behält die nachsichtige Dekodierung der Plattform. |
+| Header- / Response-Splitting | `sanitizeHeaderName` / `sanitizeHeaderValue` lehnen CRLF + NUL ab. |
+| Path Traversal | Zwei Ebenen. Zuerst wird die Request-URL kanonisiert: Das WHATWG-URL-Parsing löst `.` / `..` (und ihre `%2e`-Schreibweisen) auf, und der Node-Adapter wendet denselben Schritt auf rohe Request-Targets an. Dann lehnt der Router des Kerns jedes verbleibende Punktsegment oder leere `//`-Segment ab und bindet niemals kodiertes Traversal (`%2e%2e`, `..%2F`) in Parameter. Routen passen auf exakte Strings, daher gibt es kein Verzeichnis, aus dem man ausbrechen könnte. |
+| Slow-Loris / hängende Handler | `requestTimeoutMs` (Standard 30 s) liefert `408` und löst `ctx.request.signal` für kooperatives Aufräumen aus. Ab 1.5.4 deckt es die Hooks, das Lesen des Bodys und den Handler ab (vorher nur den Handler). Der Node-Adapter setzt außerdem Socket-Timeouts. |
+| Durch einen falschen Wert deaktivierte Limits | Ab 1.5.4 müssen `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys` und `jsonMaxDepth` endliche, nicht negative Ganzzahlen sein; `NaN` (zum Beispiel `Number(process.env.UNSET)`) und andere ungültige Werte lösen in jeder Umgebung bei der Konstruktion einen Fehler aus. |
+| Nicht unterstützte Content-Types | Routen mit Body-Schemas lehnen nicht erlaubte Content-Types ab -\> 415. |
+| Methodenverwechslung | Echtes **405** mit `Allow`-Header, niemals ein irreführendes 404. |
+| Offenlegung von Informationen (5xx) | Das `detail` in 5xx-problem+json wird geschwärzt, sofern die Umgebung nicht ausdrücklich development oder test ist; auch ein nicht gesetztes `NODE_ENV` führt zur Schwärzung. |
+
+## Eigene Sicherheits-Middleware [#first-party-security-middleware]
+
+Diese Bausteine sind Teil von DaloyJS und gemeinsam dokumentiert, bleiben aber explizit, weil CSP, CORS, Schlüssel für Rate Limits, Session-Secrets und die Einführung von CSRF Deployment-Entscheidungen sind.
+
+```ts
+import {
+  requestId,
+  secureHeaders,
+  cors,
+  rateLimit,
+  bearerAuth,
+  timing,
+} from "@daloyjs/core";
+
+app.use(requestId());           // Weitergabe von x-request-id
+app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
+app.use(cors({                  // explizite Allowlist; niemals * mit Credentials
+  origin: ["https://app.example.com"],
+  credentials: true,
+  methods: ["GET", "POST"],
+}));
+app.use(rateLimit({             // standardmäßig pro TCP-Peer; hinter einem Proxy trustedProxies konfigurieren
+  windowMs: 60_000,
+  max: 120,
+}));
+app.use(timing());              // Server-Timing-Header für die Beobachtbarkeit
+```
+
+Setzen Sie `rateLimit()` oder `loginThrottle()` vor die Authentifizierung per Bearer, Basic, JWK oder mTLS, wenn fehlgeschlagene Zugangsdaten mitgezählt werden müssen. Der Limiter verbraucht den Versuch trotzdem und liefert nach Erreichen der Grenze `429`, auch wenn die Authentifizierung in `preBody` ablehnt. DaloyJS liest dafür keinen deklarierten Request-Body. Ein eigener Schlüsselgenerator auf diesem Pfad sollte rohe Request-Daten oder einen Zustand verwenden, den ein früherer `preBody`-Hook befüllt hat.
+
+Die offiziellen Starter binden das für Sie ein: Node, Bun und Deno aktivieren `secureHeaders()`, `requestId()` und `rateLimit()`. Cloudflare Worker und Vercel aktivieren `secureHeaders()` und `requestId()` sowie engere, Edge-taugliche Limits für Body und Timeout.
+
+## Empfehlungen nach Deployment-Ziel [#recommended-by-deployment-target]
+
+Beginnen Sie mit der Middleware unten, sofern Sie keinen konkreten Grund für eine Änderung haben. So bleiben riskante Entscheidungen explizit und einheitlich.
+
+| Ziel | Empfohlene Grundausstattung |
+| --- | --- |
+| API auf Node / Bun / Deno | `requestId()`, `secureHeaders()`, `rateLimit()` und `cors()`, wenn die API Cross-Origin genutzt wird. |
+| Cloudflare Workers | Standardmäßig `requestId()` und `secureHeaders()`. Verwenden Sie `cors()` nur bei Bedarf und ziehen Sie einen externen oder gemeinsamen Limiter dem Standard im Arbeitsspeicher vor, wenn sich der Verkehr auf viele Isolates verteilt. |
+| Vercel | Standardmäßig `requestId()` und `secureHeaders()`. Ergänzen Sie `cors()` nur bei Bedarf und verwenden Sie einen gemeinsamen Limiter, wenn Sie dauerhafte Zähler über Regionen hinweg brauchen. |
+| Anwendung mit Cookie-Authentifizierung | Ergänzen Sie `session()` und `csrf()` zur Grundausstattung, damit verändernde Routen gegen Cross-Site-Angriffe per Formular und fetch geschützt sind. |
+| Hinter einem vertrauenswürdigen Reverse Proxy | Behalten Sie die Grundausstattung und konfigurieren Sie dann `rateLimit()` mit einem expliziten `keyGenerator`, oder setzen Sie `trustProxyHeaders: true` erst, wenn der Proxy die Forwarding-Header entfernt und neu schreibt. |
+
+## `csrf()` für zustandsändernde Routen [#csrf-for-state-changing-routes]
+
+Verwenden Sie [`csrf()`](/docs/security/csrf) (auf Englisch), um verändernde Endpunkte zu schützen. Zwei Strategien werden unterstützt:
+
+- Double-Submit-Cookie (Standard): setzt bei sicheren Requests ein Token-Cookie, verlangt bei unsicheren Methoden denselben Wert im Header `x-csrf-token` und lehnt Abweichungen mit einem timing-sicheren **403** ab.
+- Fetch Metadata (`strategy: "fetch-metadata"`): tokenloser Schutz, der sich auf den modernen Header `Sec-Fetch-Site` stützt. Kein Cookie-Hin-und-Her. Keine Kopplung an das HTML-Rendering. Empfohlen für neue Anwendungen mit Browser-Frontend.
+
+```ts
+import { csrf } from "@daloyjs/core";
+
+// Klassisches Double-Submit-Cookie (Standard).
+app.use(csrf());
+
+// Tokenloser Schutz per Fetch Metadata (empfohlen für Anwendungen mit Browser-Frontend).
+app.use(csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+## Standardwerte von `secureHeaders()` [#secureheaders-defaults]
+
+```text
+content-security-policy: default-src 'self'; frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+permissions-policy: camera=(), microphone=(), geolocation=(), clipboard-write=()
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+```
+
+Brauchen Sie eine andere CSP, wollen HSTS in der lokalen Entwicklung abschalten oder benötigen eine lockerere Permissions-Policy, übergeben Sie `secureHeaders()` explizit Optionen. Der veraltete Header `X-XSS-Protection: 0` lässt sich über `xssProtection: true` aktivieren, für Deployments, die alte XSS-Filter von Browsern ausdrücklich abschalten wollen.
+
+### CSP mit Nonces pro Request und Trusted Types [#csp-with-per-request-nonces-and-trusted-types]
+
+`secureHeaders()` kann die CSP aus einer Map von Direktiven bauen und eine frische **Nonce pro Request** in `script-src`, `script-src-elem`, `style-src` und `style-src-elem` einfügen sowie `require-trusted-types-for 'script'` für die Härtung gegen DOM-XSS zur Laufzeit ausgeben. Die Nonce steht unter `ctx.state.cspNonce` bereit, damit Handler sie in `<script nonce="...">`-Tags rendern können.
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'self'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+}));
+
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
+  // Das HTML selbst zurückgeben, damit die Nonce-CSP von secureHeaders ausgeliefert wird.
+  async ({ state }) => ({
+    status: 200,
+    body: `<!doctype html>
+<script nonce="${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
+);
+```
+
+Rendern Sie diese Seite **nicht** mit `htmlResponse()` aus `@daloyjs/core/docs`: Dieser Helfer liefert seine eigene Content-Security-Policy (abgestimmt auf die Doku-Oberflächen von Swagger / Scalar, mit `'unsafe-inline'`) und würde die strikte Nonce-CSP oben überschreiben, sodass die Nonce nicht mehr das wäre, was Inline-Skripte steuert. Behalten Sie `htmlResponse()` für Ihre API-Doku-Route und geben Sie für Nonce-geschützte Seiten Ihren eigenen `Response`-Body zurück.
+
+## Authentifizierung [#auth]
+
+```ts
+import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Bearer (opake Tokens, JWT über Ihr eigenes `validate` geprüft).
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+
+// Basic Auth (RFC 7617).
+app.use(basicAuth({
+  realm: "books-api",
+  verify: (user, pass) =>
+    timingSafeEqual(user, "admin") &&
+    timingSafeEqual(pass, process.env.ADMIN_PASSWORD ?? ""),
+}));
+```
+
+## SQL-Injection [#sql-injection]
+
+Daloy liefert keinen Datenbanktreiber mit, aber die HTTP-Grenze, die es *sehr wohl* kontrolliert (strikte Zod-Schemas, gehärteter JSON-Parser, Body-Größengrenzen), verkleinert die Angriffsfläche, die Ihre Repository-Schicht erreicht. Unter [SQL injection](/docs/security/sql-injection) (auf Englisch) finden Sie sichere und unsichere Muster pro ORM (Prisma, Drizzle, Kysely, rohe Treiber), ein Allowlist-Rezept für dynamisches `ORDER BY` und die grep-Regeln, mit denen die Maintainer Regressionen aufspüren.
+
+## Command-Injection [#command-injection]
+
+Die Laufzeit von DaloyJS ist per CI-Gate frei von `child_process`, daher kann das Framework selbst keine Shell aufrufen. Unter [Command injection](/docs/security/command-injection) (auf Englisch) finden Sie die sichere Form eines Handlers, der doch ein externes Programm aufrufen muss (`execFile` + argv-Array, niemals `` exec(`cmd $${input}`) ``), die Windows-Falle *BatBadBut* und die grep-Regeln, mit denen neue Bugs schon im PR draußen bleiben.
+
+## Admin-Panels [#admin-panels]
+
+Sie bauen eine Admin- oder Customer-Success-Oberfläche auf DaloyJS? Unter [Secure admin panels](/docs/security/admin-panels) (auf Englisch) finden Sie das empfohlene Muster: Routen mit `internal: true`, `ipRestriction()`, strikte CSP mit Nonces pro Request, Authentifizierung pro Admin, `rateLimit()`-Gruppen zur Drosselung von Anmeldungen und strukturiertes Audit-Logging, eins zu eins abgebildet auf die öffentliche Checkliste „secure admin panel“ von Aikido.
+
+## Lieferkette [#supply-chain]
+
+DaloyJS wird über [pnpm](https://pnpm.io/motivation) verteilt, für ein strengeres Installationsmodell. Generierte pnpm-Anwendungen erben die Kontrollen zur Installationszeit, während das Repository von DaloyJS selbst und das optionale GitHub-Actions-Paket CI/CD-Kontrollen gegen Cache Poisoning, Phishing von Maintainern und den Missbrauch von OIDC-Tokens ergänzen, wie sie in jüngsten npm-Vorfällen zu sehen waren.
+
+- Strikte Isolation: Pakete erreichen keine Phantom-Abhängigkeiten.
+- Inhaltsadressierter Store: Jedes Byte wird gehasht und geprüft.
+- Eingefrorene Lockfile in CI mit `--ignore-scripts`: reproduzierbare Installationen ohne Ausführung transitiver Lifecycle-Skripte.
+- `verifyStoreIntegrity`: Lesezugriffe, die Beschädigungen erkennen.
+- `strictPeerDependencies`: keine stillen Peer-Abweichungen.
+- `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`: 24 Stunden warten, bevor frische Releases installiert werden (pnpm 11 ignoriert die Schreibweise in `.npmrc`; siehe [Installation härten](#install-hardening)).
+- `ignoreScripts: true` in generierten Projekten und `strictDepBuilds` mit einer `allowBuilds`-Allowlist im DaloyJS-Repo: keine Installationsskripte von Abhängigkeiten außer geprüften. Das stoppt Würmer in Installationsskripten, nicht aber Nutzlasten, die beim Import laufen.
+- Per SHA fixierte GitHub Actions: Die optional generierten GitHub-Workflows fixieren Actions von Drittanbietern auf unveränderliche Commits statt auf veränderliche Tags.
+- Geschütztes npm-Publishing von DaloyJS: Die eigenen Pakete des Frameworks nutzen einen Release-Workflow nur über Tags, eine Freigabe über eine geschützte Umgebung, OIDC Trusted Publishing und `--provenance`.
+
+Liegt Ihre generierte Anwendung außerhalb von GitHub, übernehmen Sie die portablen Teile direkt und übertragen die Regeln des GitHub-Workflows auf Ihren CI-Host. Das Framework kann Branch-Schutz oder ausgehenden Verkehr von Runnern in einem privaten GitLab, Bitbucket, Azure DevOps oder einer On-Premises-Installation nicht erzwingen.
+
+## Vertrauenswürdige Proxys und Rate Limiting [#trusted-proxies-and-rate-limiting]
+
+DaloyJS vertraut `X-Forwarded-For` oder `X-Real-IP` bei der Ableitung eines Rate-Limit-Schlüssels standardmäßig nicht mehr. Diese Header können Clients fälschen, sofern Ihr Reverse Proxy sie nicht entfernt und neu schreibt. Der Standard-Limiter verwendet daher den nicht fälschbaren TCP-Peer als Schlüssel (seit 1.3.7; ein einziger gemeinsamer Bucket nur auf Laufzeiten, die keinen Peer bereitstellen), bis Sie einen expliziten `keyGenerator` angeben oder hinter einem vertrauenswürdigen Proxy `trustProxyHeaders: true` / `trustedProxies` aktivieren. Wird Proxy-Headern vertraut, ist der Schlüssel der **rechteste** Eintrag in `X-Forwarded-For` (der, den Ihr Proxy angehängt hat), niemals ein von Angreifern vorangestellter linker Eintrag. Ketten über mehrere Hops geben ihre Anzahl mit `trustedHops` an. Ist der Origin selbst erreichbar, setzen Sie `trustedProxies`, damit der Peer-Socket gegen eine CIDR-Allowlist geprüft wird, bevor irgendeinem weitergeleiteten Header geglaubt wird (siehe [den Hinweis zu autoBan](/docs/auto-ban#verify-the-peer-trustedproxies), auf Englisch).
+
+Haben Sie Ihre Topologie bereits mit `behindProxy` an der App deklariert, müssen Sie sie nicht wiederholen. Ein `rateLimit()` oder `loginThrottle()`, das weder `keyGenerator` noch `trustProxyHeaders`, `trustedHops` oder `trustedProxies` setzt, folgt dem `behindProxy` der App, sodass jeder Client hinter Ihrem Proxy (oder auf Vercel und Cloudflare Workers, wo es keinen Peer-Socket gibt) seinen eigenen Bucket erhält, statt dass sich alle einen teilen. Explizite Optionen des Limiters haben immer Vorrang, und `trustProxyHeaders: false` schaltet das ab. Lassen Sie `behindProxy` der Realität entsprechen: Bevorzugen Sie `{ cidrs }`, wenn Sie die Proxy-Adressen kennen, denn `{ hops }` vertraut den rechtesten weitergeleiteten Einträgen von jedem, der die Anwendung direkt erreichen kann.
+
+```ts
+const app = new App({ behindProxy: { hops: 1 } }); // ein vertrauenswürdiger Proxy davor
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // Schlüssel ist die echte Client-IP
+```
+
+Für Routen, auf denen Zugangsdaten eingegeben werden, verwenden Sie [`loginThrottle()`](/docs/security/websocket-login-throttle) (auf Englisch) über `/login`, OTP und Passwort-Zurücksetzung hinweg, und `wsRateLimit()` für zugehörige WebSocket-Upgrades. Beide Helfer können aus demselben `groupId`-Bucket verbrauchen.
+
+## Selbst gehostete Doku-Assets [#self-hosted-docs-assets]
+
+Die eingebauten Doku-Helfer erzwingen keine auf jsDelivr zugeschnittene CSP mehr. Sie können die Assets von Swagger UI oder Scalar selbst hosten, dem Bootstrap-Skript eine Nonce hinzufügen und für Ihre Doku-Route eine CSP nur für den eigenen Origin ausgeben.
+
+```ts
+import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});
+```
+
+## Installation härten [#install-hardening]
+
+Ab pnpm 11 liegen die Einstellungen zur Installationszeit in `pnpm-workspace.yaml`, mit Schlüsseln in camelCase. pnpm 11 ignoriert die `.npmrc`-Schreibweise dieser Einstellungen, daher verliert ein Setup nur mit `.npmrc` stillschweigend die Wartezeit und die Skript-Richtlinie. Behalten Sie eine gespiegelte `.npmrc` nur für npm und ältere Werkzeuge.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440    # skip versions published in the last 24 hours
+blockExoticSubdeps: true   # transitive deps must come from the registry
+ignoreScripts: true        # no dependency lifecycle scripts
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+```
+
+Diese Einstellungen schützen die Installationen, die sie verwenden. `ignoreScripts` stoppt Würmer in Installationsskripten (von der Art Shai-Hulud); eine Nutzlast, die läuft, wenn Ihr Code das Paket importiert, wird nur durch die Wartezeit und eine eingecheckte Lockfile abgemildert. `create-daloy` schreibt diese Datei für pnpm-Projekte.
+
+Das vollständige Handbuch für CI/CD und Maintainer finden Sie unter [Supply-chain security](/docs/security/supply-chain) (auf Englisch). Führen Sie `pnpm audit --prod` in CI und vor jedem Release aus.
+
+## Zuordnung zu den OWASP API Security Top 10 [#owasp-api-security-top-10-mapping]
+
+Eine Durchsicht Punkt für Punkt, wie Daloy jeden Eintrag der [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) sowie die übergreifenden Best Practices (Verschlüsselung, Validierung, Rate Limiting, Logging, Inventar, sicherer Umgang mit APIs von Drittanbietern) adressiert, finden Sie unter [OWASP API Top 10 mapping](/docs/security/owasp-api-top-10) (auf Englisch).
+
+## Eine Sicherheitslücke melden [#reporting-a-vulnerability]
+
+Nutzen Sie die private Meldung von Sicherheitslücken auf GitHub unter [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) und geben Sie Schritte zur Reproduktion an. Eröffnen Sie kein öffentliches Issue mit Details zum Exploit.

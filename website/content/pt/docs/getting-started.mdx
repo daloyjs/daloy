@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-A mesma URL (`GET /docs`), os mesmos endpoints ao vivo `/openapi.json` e `/openapi.yaml`, o mesmo tratamento de CSP; só muda o HTML renderizado. Você também pode manter os dois: deixe a rota montada automaticamente com o Scalar e exponha uma segunda rota com Swagger por conta própria usando `swaggerUiHtml()` (veja a receita manual no [guia de OpenAPI](/docs/openapi), em inglês).
+A mesma URL (`GET /docs`), os mesmos endpoints ao vivo `/openapi.json` e `/openapi.yaml`, o mesmo tratamento de CSP; só muda o HTML renderizado. Você também pode manter os dois: deixe a rota montada automaticamente com o Scalar e exponha uma segunda rota com Swagger por conta própria usando `swaggerUiHtml()` (veja a receita manual no [guia de OpenAPI](/pt/docs/openapi)).
 
-Quer outro caminho? Use a forma de objeto: `docs: { ui: "swagger", path: "/reference" }`. A forma de objeto só é montada fora de produção, a menos que você adicione `enabled: true` (desde a 1.5.5), igual a `docs: "auto"`, que pula a montagem quando `production: true`. Precisa de controle total? Defina `docs: false` e monte suas próprias rotas com `generateOpenAPI()` e `swaggerUiHtml() / scalarHtml()`: veja o [guia de OpenAPI](/docs/openapi) (em inglês).
+Quer outro caminho? Use a forma de objeto: `docs: { ui: "swagger", path: "/reference" }`. A forma de objeto só é montada fora de produção, a menos que você adicione `enabled: true` (desde a 1.5.5), igual a `docs: "auto"`, que pula a montagem quando `production: true`. Precisa de controle total? Defina `docs: false` e monte suas próprias rotas com `generateOpenAPI()` e `swaggerUiHtml() / scalarHtml()`: veja o [guia de OpenAPI](/pt/docs/openapi).
 
 Tanto `swaggerUiHtml()` quanto `scalarHtml()` carregam seus recursos padrão pela CDN do jsDelivr, então uma Content-Security-Policy estrita precisa permitir esses recursos, senão a interface de documentação pode aparecer em branco. A rota montada automaticamente e `htmlResponse()` adicionam uma CSP compatível sozinhas. Se você montar sua própria resposta, importe `docsContentSecurityPolicy` de `@daloyjs/core/docs` e passe o resultado como cabeçalho da resposta:
 
@@ -237,7 +237,7 @@ A autenticação prova quem está chamando. Ela não prova que essa pessoa pode 
 
 ## Próximos passos
 
-- [Roteamento](/docs/routing) (em inglês)
-- [Validação com Standard Schema](/docs/validation) (em inglês)
-- [Proteções de segurança e middlewares](/docs/security) (em inglês)
+- [Roteamento](/pt/docs/routing)
+- [Validação com Standard Schema](/pt/docs/validation)
+- [Proteções de segurança e middlewares](/pt/docs/security)
 - [Tutorial: a API de uma livraria](/pt/docs/tutorials/bookstore)

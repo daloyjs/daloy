@@ -651,7 +651,7 @@ test("get_doc reads a translated route and names the authoritative English page"
 test("get_doc refuses traversal and untranslated routes under a locale prefix", async () => {
   for (const [id, path] of [
     [75, "/zh/docs/../../docs/installation"],
-    [76, "/zh/docs/routing"],
+    [76, "/zh/docs/adapters"],
     [77, "/it/docs/installation"],
   ] as const) {
     const { json } = await legacyRpc(id, "tools/call", { name: "get_doc", arguments: { path } });

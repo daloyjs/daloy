@@ -1,0 +1,170 @@
+---
+title: 错误与 problem+json
+description: "在 DaloyJS 中抛出类型化错误，默认序列化为 RFC 9457 problem+json 响应，并可在 OpenAPI 中自定义、扩展和记录错误。"
+keywords:
+  - problem+json
+  - RFC 9457
+  - DaloyJS 错误
+  - HTTP 错误响应
+  - TypeScript 类型化错误
+---
+
+# 错误与 problem+json
+
+在 DaloyJS 中，错误是一等公民。每个抛出的 `HttpError` 都会序列化为 [RFC 9457 problem+json](https://www.rfc-editor.org/rfc/rfc9457)，带有稳定的 `type` URI、请求 id 以及相应的 Content-Type。
+
+<FlowDiagram title="从抛出的错误到 problem+json" numbered steps={[
+          {
+            eyebrow: "处理函数",
+            label: "throw new NotFoundError(...)",
+            detail: "任意 HttpError 子类",
+            tone: "accent",
+          },
+          {
+            eyebrow: "框架",
+            label: "映射为 RFC 9457 字段",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "生产环境",
+            label: "脱敏 5xx detail",
+            detail: "仅在 env 为 development 或 test 时显示",
+            tone: "muted",
+          },
+          {
+            eyebrow: "线上传输",
+            label: "序列化后的响应",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]} caption="抛出的 HttpError 会自动变成 problem+json 文档。除非环境被明确设为 development 或 test，否则 5xx 响应中的 detail 字段会被脱敏，堆栈跟踪和 SQL 片段永远不会到达客户端，而完整的错误仍会传给你的 onError hook。" />
+
+## 内置错误类 [#built-in-error-classes]
+
+```ts
+import {
+  HttpError,                         // 基类：任意状态码，可自定义 type/title/headers
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401 + cache-control: no-store
+  ForbiddenError,                    // 403 + cache-control: no-store
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + Allow 响应头
+  RequestTimeoutError,               // 408 / 503 / 504 + cache-control: no-store
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After + cache-control: no-store
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500（在 dev/test 之外 detail 会被脱敏）
+  ServiceUnavailableError,           // 503 + Retry-After + cache-control: no-store
+} from "@daloyjs/core";
+```
+
+`TooManyRequestsError` 和 `ServiceUnavailableError` 以相同方式校验 `retryAfterSeconds`：只要不是非负的安全整数，构造时就会抛出 `RangeError`，因此缺失的环境变量产生的 `NaN` 永远不会变成无效的 `Retry-After` 响应头。`RequestTimeoutError`（`requestTimeoutMs` 截止时间，参见 [`requestTimeoutStatus`](/docs/api-reference/app)（英文））自 1.16.0 起在每种状态码变体下都是 `no-store`，因此后端恢复后，共享缓存不会继续提供 `503`/`504`。直接 `new HttpError(status, …)` 得到的 problem `type` 是 `https://httpstatuses.io/<status>`；内置类则带有稳定的 `https://daloyjs.dev/errors/<slug>` URI。
+
+## 在处理函数中抛出错误 [#throwing-in-a-handler]
+
+```ts
+import { NotFoundError } from "@daloyjs/core";
+
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
+    const user = await db.find(params.id);
+    if (!user) throw new NotFoundError(`user ${params.id} not found`);
+    return { status: 200, body: user };
+  },
+);
+```
+
+## 传输格式 [#wire-format]
+
+请求 id 会在两个地方返回给客户端：`x-request-id` 响应头，以及（按照 [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail)）problem 文档中以 `urn:request:<uuid>` URN 形式出现的 `instance` 字段。没有顶层的 `requestId` 属性，客户端应读取响应头，或从 `instance` 中解析 URN。
+
+```json
+HTTP/1.1 404 Not Found
+content-type: application/problem+json
+x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
+
+{
+  "type": "https://daloyjs.dev/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user 42 not found",
+  "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
+}
+```
+
+## 生产环境脱敏 [#production-redaction]
+
+除非环境**明确**是 development 或 test，DaloyJS 都会去掉任何 5xx 响应中的 `detail` 字段，因此内部错误消息和 SQL 片段不会泄露给客户端。完整的错误仍会输出到你的日志记录器和 `onError` hook。
+
+| 配置 | 5xx `detail` |
+| --- | --- |
+| `env: "development"` 或 `env: "test"` | 显示 |
+| 未设置 `env`，`NODE_ENV=development` 或 `test` | 显示 |
+| 未设置 `env`，`NODE_ENV` 未设置、为空或为其他任何值 | **脱敏** |
+| `env: "production"`、`production: true` 或 `NODE_ENV=production` | 脱敏 |
+| `production: false` 且 `NODE_ENV` 未设置 | **脱敏** |
+
+未设置环境时有意采取失败即关闭的策略。Cloudflare Workers 和 Deno Deploy 等边缘运行时没有 `NODE_ENV`，如果把这种情况当作 development，就会把异常消息发给客户端。如果你没有设置 `NODE_ENV`，`daloy dev` 会为它的子进程设置 `NODE_ENV=development`，因此本地开发时仍能看到 detail。你自己序列化的错误（例如在 catch 块中用 `err.message` 构建的响应体）不会被脱敏。请改为抛出它们，或者抛出一个带安全 `detail` 的 `HttpError`。
+
+## 自定义错误类 [#custom-error-classes]
+
+```ts
+import { HttpError } from "@daloyjs/core";
+
+export class QuotaExceededError extends HttpError {
+  constructor(resource: string) {
+    super(429, {
+      title: "Quota exceeded",
+      type: "https://api.example.com/errors/quota-exceeded",
+      detail: `Quota exceeded for ${resource}`,
+    });
+  }
+}
+```
+
+上面的内置类都会设置 `https://daloyjs.dev/errors/<slug>` 形式的 `type`。不带 `type` 抛出的普通 `HttpError` 会回退到 `https://httpstatuses.io/<status>`。返回 `503` 的官方中间件（`loadShedding()`、`concurrencyLimit()`、`requestTimeoutStatus: 503`）会设置自己的 `daloyjs.dev` type，因此回退只适用于你自己构造的错误。如果客户端依据 `type` 做判断，请设置它，或者使用内置类：
+
+```ts
+throw new HttpError(503, { title: "Service Unavailable" });
+// "type": "https://httpstatuses.io/503"
+
+throw new HttpError(503, {
+  title: "Service Unavailable",
+  type: "https://api.example.com/errors/service-unavailable",
+});
+```
+
+## 服务不可用 [#service-unavailable]
+
+对于维护模式、依赖服务中断或正在排空的实例，请抛出 `ServiceUnavailableError`。它会返回 `503`，带有稳定的 `https://daloyjs.dev/errors/service-unavailable` type、可选的 `Retry-After` 以及 `cache-control: no-store`，因此在你恢复之后，CDN 不会继续提供故障响应。
+
+```ts
+import { ServiceUnavailableError } from "@daloyjs/core";
+
+if (await maintenance.isOn()) {
+  // Retry-After: 120。在 development/test 之外 detail 会被脱敏，
+  // 所以客户端真正能据以行动的是这个响应头。
+  throw new ServiceUnavailableError(120, "scheduled database maintenance");
+}
+```
+
+`retryAfterSeconds` 必须是非负整数。其他任何值（缺失环境变量得到的 `NaN`、`-1`、`1.5`）都会抛出 `RangeError`，而不是发送格式错误的 `Retry-After` 响应头。
+
+## 自定义 `onError` [#custom-onerror]
+
+```ts
+app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.state.requestId }, "request failed");
+    // 返回一个 Response 即可覆盖；否则 DaloyJS 会序列化为 problem+json
+  },
+});
+```

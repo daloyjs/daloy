@@ -1,0 +1,336 @@
+---
+title: الأمان
+description: يأتي DaloyJS بضوابط أمان تفرضها النواة، وبرمجيات وسيطة رسمية للترويسات الآمنة وتحديد المعدل وCORS وCSRF والجلسات وتعزيز سلسلة التوريد.
+keywords:
+  - الأمان في DaloyJS
+  - افتراضيات HTTP آمنة
+  - تحديد المعدل
+  - ترويسات آمنة
+  - OWASP بلغة TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# الأمان
+
+الافتراضيات السيئة أخطاء برمجية. يفصل DaloyJS بين الضوابط التي تفرضها النواة والبرمجيات الوسيطة الأمنية الرسمية، فتُحظر الأمور الخطرة افتراضيًا وتبقى الأمور الخاصة بالنشر صريحة.
+
+<blockquote>تحمي ضوابط النواة كل تطبيق افتراضيًا. وتضيف البرمجيات الوسيطة الرسمية السياسة التي تعتمد على مساراتك ومستخدميك وطريقة نشرك.</blockquote>
+
+<LayerStack title="طبقتان من الدفاع" flow="down" layers={[
+          {
+            title: "ضوابط تفرضها النواة",
+            detail: "مفعّلة افتراضيًا، دون الحاجة إلى استدعاء أي برمجية وسيطة",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "رفض اجتياز المسار",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "تنقيح 5xx في الإنتاج",
+            ],
+          },
+          {
+            title: "برمجيات وسيطة أمنية رسمية",
+            detail: "صريحة، لأن السياسة قرار يخص النشر",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]} caption="تُحظر الأمور الخطرة في النواة دون أي إعداد. أما الأمور الخاصة بالنشر (CSP، وأصول CORS، وأسرار الجلسات، وطرح CSRF) فتبقى برمجيات وسيطة صريحة تفعّلها بنفسك." />
+
+## ما الذي تفرضه النواة [#what-the-core-enforces]
+
+تحدث هذه الفحوص داخل `App` أو داخل محوّل بيئة التشغيل نفسه. تحصل عليها التطبيقات دون استدعاء أي برمجية وسيطة.
+
+<FlowDiagram title="كل طلب يمر عبر سلسلة الحواجز" numbered steps={[
+          {
+            eyebrow: "الدخول",
+            label: "الطلب الوارد",
+            detail: "الطريقة، المسار، الترويسات، الجسم",
+          },
+          {
+            eyebrow: "سقف الحجم",
+            label: "حد حجم الجسم",
+            detail: "Content-Length فوق السقف يعطي 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "التحليل",
+            label: "تحليل JSON معزَّز",
+            detail: "يحذف __proto__ / constructor",
+          },
+          {
+            eyebrow: "التوجيه",
+            label: "الموجّه + فحص الطريقة",
+            detail: "يُحل .. إلى المسار المعياري. الطريقة الخاطئة 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "المعالج",
+            label: "معالجك مكتوب الأنواع",
+            detail: "يعمل تحت requestTimeoutMs",
+            tone: "success",
+          },
+        ]} caption="لا يصل الطلب إلى معالجك إلا بعد اجتياز سقف الجسم، والمحلل الآمن من تلويث النماذج الأولية، وحمايات المسار والطريقة. وأي شيء يفشل في حماية ما ترفضه النواة قبل أن تعمل شيفرتك." />
+
+| التهديد | السلوك المدمج |
+| --- | --- |
+| حجب الخدمة بحجم الجسم | قراءة متدفقة، وسقف صارم (الافتراضي 1 MiB)، وفحص Content-Length أولًا -\> 413. منذ 1.5.4 يغطي السقف كل مسار، بما في ذلك المعالجات التي تقرأ `ctx.request` مباشرةً؛ وقبل ذلك كان يغطي المسارات ذات مخطط الجسم فقط. يُطبَّق السقف عند قراءة الجسم، فالمسار الذي يتجاهل جسمه لا يُرفض بسببه. |
+| تلويث النماذج الأولية | يحذف `safeJsonParse` المفاتيح `__proto__` و`constructor` و`prototype` عبر دالة reviver. |
+| UTF-8 مشوّه في الأجسام | منذ 1.16.0 تفك محللات أجسام JSON وurlencoded والنص الترميز بصرامة: الجسم الذي يحتوي على تسلسل UTF-8 غير صالح أو مُطوَّل يُجاب بـ `400` بدلًا من التحقق منه بعد استبدال `U+FFFD` (RFC 8259 §8.1). ويظل النص غير ASCII السليم وعلامة BOM في البداية قابلين للتحليل. أما المعالج الذي يقرأ `ctx.request.text()` بنفسه فيحتفظ بفك الترميز المتساهل الخاص بالمنصة. |
+| تقسيم الترويسات أو الاستجابة | يرفض `sanitizeHeaderName` / `sanitizeHeaderValue` محارف CRLF وNUL. |
+| اجتياز المسار | طبقتان. أولًا يُوحَّد عنوان الطلب: يحل تحليل URL وفق WHATWG المقاطع `.` / `..` (وصيغها `%2e`)، ويطبّق محوّل Node الخطوة نفسها على أهداف الطلب الخام. ثم يرفض موجّه النواة أي مقطع نقطة أو مقطع فارغ `//` يتبقى، ولا يربط أبدًا الاجتياز المرمّز (`%2e%2e`، `..%2F`) في المعاملات. تطابق المسارات نصوصًا دقيقة، فلا يوجد مجلد يمكن الهروب إليه. |
+| Slow-loris والمعالجات المعلّقة | يعيد `requestTimeoutMs` (الافتراضي 30 ثانية) الرمز `408` ويُطلق `ctx.request.signal` للتفكيك التعاوني. منذ 1.5.4 يغطي الخطافات وقراءة الجسم والمعالج (وقبل ذلك: المعالج فقط). ويضبط محوّل Node أيضًا مهلات المقابس. |
+| حدود معطّلة بقيمة خاطئة | منذ 1.5.4، يجب أن تكون `bodyLimitBytes` و`requestTimeoutMs` و`maxHeaderCount` و`jsonMaxKeys` و`jsonMaxDepth` أعدادًا صحيحة منتهية غير سالبة؛ وترمي `NaN` (مثل `Number(process.env.UNSET)`) والقيم غير الصالحة الأخرى خطأً عند الإنشاء في كل البيئات. |
+| أنواع محتوى غير مدعومة | المسارات ذات مخططات الجسم ترفض أنواع المحتوى غير المسموح بها -\> 415. |
+| الالتباس في الطريقة | استجابة **405** حقيقية مع ترويسة `Allow`، وليس 404 مضللًا أبدًا. |
+| كشف المعلومات (5xx) | يُنقَّح `detail` في problem+json لاستجابات 5xx ما لم تكن البيئة development أو test صراحةً؛ و`NODE_ENV` غير المضبوط يؤدي إلى التنقيح أيضًا. |
+
+## البرمجيات الوسيطة الأمنية الرسمية [#first-party-security-middleware]
+
+هذه جزء من DaloyJS وموثقة معًا، لكنها تبقى صريحة لأن CSP وCORS ومفاتيح تحديد المعدل وأسرار الجلسات وطرح CSRF قرارات تخص النشر.
+
+```ts
+import {
+  requestId,
+  secureHeaders,
+  cors,
+  rateLimit,
+  bearerAuth,
+  timing,
+} from "@daloyjs/core";
+
+app.use(requestId());           // نشر x-request-id
+app.use(secureHeaders());       // CSP وHSTS وX-Frame-Options وCOOP وCORP وno-sniff ...
+app.use(cors({                  // قائمة سماح صريحة؛ لا * مع بيانات الاعتماد أبدًا
+  origin: ["https://app.example.com"],
+  credentials: true,
+  methods: ["GET", "POST"],
+}));
+app.use(rateLimit({             // لكل نظير TCP افتراضيًا؛ اضبط trustedProxies خلف وكيل
+  windowMs: 60_000,
+  max: 120,
+}));
+app.use(timing());              // ترويسة Server-Timing للمراقبة
+```
+
+ضع `rateLimit()` أو `loginThrottle()` قبل مصادقة bearer/basic/JWK/mTLS عندما يجب أن يُحتسب فشل بيانات الاعتماد. سيظل المحدِّد يستهلك المحاولة ويعيد `429` بعد السقف حتى لو رفضت المصادقة في `preBody`. ولا يقرأ DaloyJS جسم الطلب المصرّح به لفعل ذلك. وينبغي لمولّد المفاتيح المخصص في هذا المسار استخدام بيانات الطلب الخام أو حالة يملؤها خطاف `preBody` سابق.
+
+تربط القوالب الرسمية هذه البرمجيات لك: تفعّل قوالب Node وBun وDeno كلًا من `secureHeaders()` و`requestId()` و`rateLimit()`. وتفعّل قوالب Cloudflare Worker وVercel كلًا من `secureHeaders()` و`requestId()` مع حدود أضيق للجسم والمهلة مناسبة للحافة.
+
+## التوصيات حسب بيئة النشر [#recommended-by-deployment-target]
+
+ابدأ بالبرمجيات الوسيطة أدناه ما لم يكن لديك سبب ملموس لتغييرها. هذا يُبقي الخيارات الخطرة صريحة ومتسقة.
+
+| البيئة | خط الأساس الموصى به |
+| --- | --- |
+| واجهة برمجية على Node / Bun / Deno | `requestId()` و`secureHeaders()` و`rateLimit()`، و`cors()` عندما تكون الواجهة عابرة للأصول. |
+| Cloudflare Workers | `requestId()` و`secureHeaders()` افتراضيًا. استخدم `cors()` فقط عند الحاجة، وفضّل محدِّدًا خارجيًا أو مشتركًا على الافتراضي في الذاكرة عندما تمتد الحركة عبر عزلات (isolates) كثيرة. |
+| Vercel | `requestId()` و`secureHeaders()` افتراضيًا. أضف `cors()` فقط عند الحاجة، واستخدم محدِّدًا مشتركًا إن احتجت إلى عدّادات دائمة عبر المناطق. |
+| تطبيق مصادقته بملفات تعريف الارتباط | أضف `session()` و`csrf()` فوق خط الأساس حتى تُحمى المسارات المعدِّلة من هجمات النماذج وfetch عبر المواقع. |
+| خلف وكيل عكسي موثوق | أبقِ خط الأساس، ثم اضبط `rateLimit()` مع `keyGenerator` صريح، أو اضبط `trustProxyHeaders: true` فقط بعد أن يحذف الوكيل ترويسات التمرير ويعيد كتابتها. |
+
+## `csrf()` للمسارات التي تغيّر الحالة [#csrf-for-state-changing-routes]
+
+استخدم [`csrf()`](/docs/security/csrf) (بالإنجليزية) لحماية نقاط النهاية المعدِّلة. هناك استراتيجيتان مدعومتان:
+
+- ملف تعريف الارتباط مزدوج الإرسال (الافتراضي): يضبط ملف تعريف ارتباط يحمل رمزًا في الطلبات الآمنة، ويتطلب القيمة نفسها في الترويسة `x-csrf-token` للطرق غير الآمنة، ويرفض عدم التطابق بـ **403** آمن من هجمات التوقيت.
+- Fetch Metadata (`strategy: "fetch-metadata"`): حماية دون رموز تعتمد على الترويسة الحديثة `Sec-Fetch-Site`. لا ذهاب وإياب لملف تعريف الارتباط، ولا ارتباط بعرض HTML. موصى بها لتطبيقات المتصفح الجديدة.
+
+```ts
+import { csrf } from "@daloyjs/core";
+
+// ملف تعريف الارتباط الكلاسيكي مزدوج الإرسال (الافتراضي).
+app.use(csrf());
+
+// حماية Fetch-Metadata دون رموز (موصى بها لتطبيقات المتصفح).
+app.use(csrf({
+  strategy: "fetch-metadata",
+  allowedOrigins: ["https://app.example.com"],
+}));
+```
+
+## افتراضيات `secureHeaders()` [#secureheaders-defaults]
+
+```text
+content-security-policy: default-src 'self'; frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+permissions-policy: camera=(), microphone=(), geolocation=(), clipboard-write=()
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+```
+
+إذا احتجت إلى CSP مختلفة، أو أردت تعطيل HSTS في التطوير المحلي، أو احتجت إلى سياسة أذونات أكثر تساهلًا، فمرّر الخيارات إلى `secureHeaders()` صراحةً. والترويسة القديمة `X-XSS-Protection: 0` اختيارية عبر `xssProtection: true` لعمليات النشر التي تريد تعطيل مرشحات XSS القديمة في المتصفحات صراحةً.
+
+### CSP مع nonce لكل طلب وTrusted Types [#csp-with-per-request-nonces-and-trusted-types]
+
+يستطيع `secureHeaders()` بناء CSP من خريطة توجيهات وحقن **nonce جديد لكل طلب** في `script-src` و`script-src-elem` و`style-src` و`style-src-elem`، إضافة إلى إصدار `require-trusted-types-for 'script'` لتعزيز الحماية من DOM XSS في وقت التشغيل. ويُعرض الـ nonce في `ctx.state.cspNonce` حتى تتمكن المعالجات من وضعه في وسوم `<script nonce="...">`.
+
+```ts
+import { secureHeaders } from "@daloyjs/core";
+
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": "'self'",
+      "script-src": "'self'",
+      "style-src": "'self'",
+      "img-src": ["'self'", "data:"],
+    },
+    nonce: true,
+    trustedTypes: { policies: ["default"] },
+  },
+}));
+
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
+  // أعد HTML بنفسك حتى تكون CSP ذات الـ nonce من secureHeaders هي التي تُرسل.
+  async ({ state }) => ({
+    status: 200,
+    body: `<!doctype html>
+<script nonce="${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
+);
+```
+
+**لا** تعرض هذه الصفحة باستخدام `htmlResponse()` من `@daloyjs/core/docs`: فتلك الدالة المساعدة ترسل Content-Security-Policy خاصة بها (مضبوطة لواجهات توثيق Swagger / Scalar، مع `'unsafe-inline'`) وستتجاوز CSP الصارمة ذات الـ nonce أعلاه، فلا يعود الـ nonce هو ما يتحكم في السكربتات المضمّنة. احتفظ بـ `htmlResponse()` لمسار توثيق الواجهة البرمجية، وأعد جسم `Response` خاصًا بك للصفحات المحمية بالـ nonce.
+
+## المصادقة [#auth]
+
+```ts
+import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
+
+// Bearer (رموز معتمة، أو JWT يُتحقق منه عبر `validate` الخاصة بك).
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
+
+// المصادقة الأساسية (RFC 7617).
+app.use(basicAuth({
+  realm: "books-api",
+  verify: (user, pass) =>
+    timingSafeEqual(user, "admin") &&
+    timingSafeEqual(pass, process.env.ADMIN_PASSWORD ?? ""),
+}));
+```
+
+## حقن SQL [#sql-injection]
+
+لا يأتي Daloy بمشغّل قاعدة بيانات، لكن حدود HTTP التي *يملكها* فعلًا (مخططات Zod الصارمة، ومحلل JSON المعزَّز، وسقوف حجم الجسم) تقلّص السطح الذي يصل إلى طبقة المستودع لديك. راجع [SQL injection](/docs/security/sql-injection) (بالإنجليزية) للأنماط الآمنة وغير الآمنة لكل ORM (Prisma وDrizzle وKysely والمشغّلات الخام)، ووصفة قائمة سماح لـ `ORDER BY` الديناميكي، وقواعد grep التي يستخدمها المشرفون لاكتشاف التراجعات.
+
+## حقن الأوامر [#command-injection]
+
+بيئة تشغيل DaloyJS خالية من `child_process` بموجب بوابة CI، لذا لا يستطيع الإطار نفسه تشغيل أوامر الصدفة. راجع [Command injection](/docs/security/command-injection) (بالإنجليزية) للشكل الآمن لمعالج يحتاج فعلًا إلى استدعاء برنامج خارجي (`execFile` + مصفوفة argv، وليس أبدًا `` exec(`cmd $${input}`) ``)، وفخ *BatBadBut* في Windows، وقواعد grep التي تمنع دخول أخطاء جديدة وقت مراجعة طلبات الدمج.
+
+## لوحات الإدارة [#admin-panels]
+
+تبني واجهة إدارة أو نجاح عملاء فوق DaloyJS؟ راجع [Secure admin panels](/docs/security/admin-panels) (بالإنجليزية) للنمط الموصى به: مسارات `internal: true`، و`ipRestriction()`، وCSP صارمة مع nonce لكل طلب، ومصادقة لكل مسؤول، ومجموعات `rateLimit()` لخنق تسجيل الدخول، وتسجيل تدقيق منظَّم، وكلها مطابقة بندًا ببند لقائمة Aikido العامة "secure admin panel".
+
+## سلسلة التوريد [#supply-chain]
+
+يُوزَّع DaloyJS عبر [pnpm](https://pnpm.io/motivation) لنموذج تثبيت أكثر صرامة. ترث تطبيقات pnpm المنشأة بالقوالب ضوابط وقت التثبيت، بينما يضيف مستودع DaloyJS نفسه وحزمة GitHub Actions الاختيارية ضوابط CI/CD ضد أنماط تسميم الذاكرة المؤقتة، وتصيّد المشرفين، وإساءة استخدام رموز OIDC التي ظهرت في حوادث npm الأخيرة.
+
+- عزل صارم: لا تستطيع الحزم الوصول إلى الاعتماديات الشبحية.
+- مخزن معنون بالمحتوى: كل بايت مُجزَّأ ومُتحقق منه.
+- ملف قفل مجمّد في CI مع `--ignore-scripts`: تثبيتات قابلة لإعادة الإنتاج دون تنفيذ سكربتات دورة الحياة المتعدية.
+- `verifyStoreIntegrity`، قراءات تكتشف التلف.
+- `strictPeerDependencies`، لا عدم تطابق صامت في اعتماديات النظراء.
+- `minimumReleaseAge: 1440` في `pnpm-workspace.yaml`، انتظر 24 ساعة قبل تثبيت الإصدارات الجديدة (يتجاهل pnpm 11 الصيغة الموجودة في `.npmrc`؛ راجع [تعزيز التثبيت](#install-hardening)).
+- `ignoreScripts: true` في القوالب، و`strictDepBuilds` مع قائمة سماح `allowBuilds` في مستودع DaloyJS: لا سكربتات تثبيت للاعتماديات إلا ما رُوجع منها. هذا يوقف ديدان سكربتات التثبيت، لا الحمولات التي تعمل عند الاستيراد.
+- GitHub Actions مثبتة بـ SHA: تثبّت مسارات عمل GitHub الاختيارية المولَّدة إجراءات الأطراف الثالثة على التزامات ثابتة، لا على وسوم قابلة للتغيير.
+- نشر محمي لحزم DaloyJS على npm: تستخدم حزم الإطار نفسه مسار عمل إصدار قائمًا على الوسوم فقط، وموافقة بيئة محمية، والنشر الموثوق عبر OIDC، و`--provenance`.
+
+إذا كان تطبيقك المولَّد خارج GitHub، فانقل الأجزاء القابلة للنقل مباشرةً وترجم قواعد مسارات عمل GitHub إلى مضيف CI لديك. لا يستطيع الإطار فرض حماية الفروع أو تقييد خروج المشغّلات في تثبيت خاص على GitLab أو Bitbucket أو Azure DevOps أو في البنية المحلية.
+
+## الوكلاء الموثوقون وتحديد المعدل [#trusted-proxies-and-rate-limiting]
+
+لم يعد DaloyJS يثق افتراضيًا بـ `X-Forwarded-For` أو `X-Real-IP` عند اشتقاق مفتاح تحديد المعدل. يمكن للعميل تزوير هذه الترويسات ما لم يحذفها الوكيل العكسي ويعيد كتابتها. لذلك يعتمد المحدِّد الافتراضي على نظير TCP غير القابل للتزوير (منذ 1.3.7؛ مع دلو مشترك واحد فقط في بيئات التشغيل التي لا تكشف النظير) حتى توفّر `keyGenerator` صريحًا أو تفعّل `trustProxyHeaders: true` / `trustedProxies` خلف وكيل موثوق. وعندما تكون ترويسات الوكيل موثوقة، يكون المفتاح هو إدخال `X-Forwarded-For` **الأيمن** (الذي أضافه وكيلك)، وليس أبدًا إدخالًا أيسر أضافه مهاجم في البداية. وتصرّح السلاسل متعددة القفزات بعدد قفزاتها عبر `trustedHops`. وعندما يمكن الوصول إلى الأصل نفسه مباشرةً، اضبط `trustedProxies` حتى يُتحقق من مقبس النظير مقابل قائمة سماح CIDR قبل تصديق أي ترويسة تمرير (راجع [ملاحظة autoBan](/docs/auto-ban#verify-the-peer-trustedproxies)، بالإنجليزية).
+
+إذا كنت قد صرّحت بالفعل ببنية شبكتك على التطبيق عبر `behindProxy`، فلا داعي لتكرارها. فـ `rateLimit()` أو `loginThrottle()` الذي لا يضبط أيًا من `keyGenerator` و`trustProxyHeaders` و`trustedHops` و`trustedProxies` يتبع `behindProxy` الخاص بالتطبيق، فيحصل كل عميل خلف وكيلك (أو على Vercel وCloudflare Workers، حيث لا يوجد مقبس نظير) على دلوه الخاص بدلًا من أن يتشارك الجميع دلوًا واحدًا. وخيارات المحدِّد الصريحة هي الغالبة دائمًا، و`trustProxyHeaders: false` يلغي ذلك. اجعل `behindProxy` مطابقًا للواقع: فضّل `{ cidrs }` عندما تعرف عناوين الوكيل، لأن `{ hops }` يثق بالإدخالات المُمرَّرة الأيمن من أي شخص يستطيع الوصول إلى التطبيق مباشرةً.
+
+```ts
+const app = new App({ behindProxy: { hops: 1 } }); // وكيل موثوق واحد في المقدمة
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // يعتمد على عنوان IP الحقيقي للعميل
+```
+
+لمسارات إدخال بيانات الاعتماد، استخدم [`loginThrottle()`](/docs/security/websocket-login-throttle) (بالإنجليزية) عبر مسارات `/login` وOTP وإعادة تعيين كلمة المرور، و`wsRateLimit()` على ترقيات WebSocket المرتبطة بها. ويمكن للدالتين الاستهلاك من دلو `groupId` نفسه.
+
+## موارد التوثيق المستضافة ذاتيًا [#self-hosted-docs-assets]
+
+لم تعد دوال التوثيق المساعدة المدمجة تفرض CSP مصممة لـ jsDelivr. يمكنك استضافة موارد Swagger UI أو Scalar بنفسك، وإضافة nonce إلى سكربت الإقلاع، وإصدار CSP من الأصل نفسه لمسار التوثيق.
+
+```ts
+import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});
+```
+
+## تعزيز التثبيت [#install-hardening]
+
+في pnpm 11 وما بعده، توجد إعدادات وقت التثبيت في `pnpm-workspace.yaml` بمفاتيح camelCase. يتجاهل pnpm 11 صيغة `.npmrc` لهذه الإعدادات، لذا فإن الإعداد المعتمد على `.npmrc` وحده يفقد بصمت فترة الانتظار وسياسة السكربتات. احتفظ بنسخة مطابقة في `.npmrc` فقط لـ npm والأدوات الأقدم.
+
+```yaml title="pnpm-workspace.yaml"
+minimumReleaseAge: 1440    # skip versions published in the last 24 hours
+blockExoticSubdeps: true   # transitive deps must come from the registry
+ignoreScripts: true        # no dependency lifecycle scripts
+strictPeerDependencies: true
+verifyStoreIntegrity: true
+preferFrozenLockfile: true
+```
+
+تحمي هذه الإعدادات التثبيتات التي تستخدمها. يوقف `ignoreScripts` ديدان سكربتات التثبيت (من نوع Shai-Hulud)؛ أما الحمولة التي تعمل عندما تستورد شيفرتك الحزمة فلا يخففها إلا فترة الانتظار وملف القفل الملتزَم به. ويكتب `create-daloy` هذا الملف لقوالب pnpm.
+
+لدليل CI/CD والمشرفين الكامل، اقرأ [Supply-chain security](/docs/security/supply-chain) (بالإنجليزية). شغّل `pnpm audit --prod` في CI وقبل الإصدار.
+
+## مطابقة OWASP API Security Top 10 [#owasp-api-security-top-10-mapping]
+
+لشرح بندًا ببند لكيفية معالجة Daloy لكل إدخال في [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) إضافة إلى أفضل الممارسات الشاملة (التشفير، والتحقق، وتحديد المعدل، والتسجيل، والجرد، وأمان واجهات الأطراف الثالثة)، اقرأ [OWASP API Top 10 mapping](/docs/security/owasp-api-top-10) (بالإنجليزية).
+
+## الإبلاغ عن ثغرة [#reporting-a-vulnerability]
+
+استخدم الإبلاغ الخاص عن الثغرات في GitHub على [github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) مع خطوات إعادة الإنتاج. لا تفتح مشكلة عامة تحتوي على تفاصيل الاستغلال.

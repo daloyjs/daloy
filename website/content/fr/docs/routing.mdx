@@ -1,0 +1,333 @@
+---
+title: Routage
+description: "Définissez des routes HTTP typées dans DaloyJS avec une API orientée contrat : paramètres, query, corps et réponses inférés à partir d’une seule déclaration."
+keywords:
+  - routage DaloyJS
+  - routes typées
+  - routage orienté contrat
+  - routeur HTTP TypeScript
+sitemap:
+  priority: 0.7
+---
+
+# Routage
+
+DaloyJS utilise un trie de segments avec un chemin rapide pour les routes statiques. Après les contrôles de sûreté du chemin, les routes statiques exactes se résolvent en un seul `Map.get`. Les recherches dynamiques privilégient les segments littéraux, puis les paramètres, puis les jokers. Une recherche sans retour arrière est linéaire en fonction de la longueur du chemin ; des routes qui se chevauchent peuvent obliger à visiter des branches supplémentaires du trie.
+
+Seules les routes complètes comptent comme correspondances. Par exemple, enregistrer `/users/me/details/:field` n’empêche pas `/users/:id` de correspondre à `/users/me`. Dans le trie dynamique, un chemin complet de priorité supérieure l’emporte même s’il n’a pas de handler pour la méthode demandée. Une route statique exacte l’emporte pour ses méthodes enregistrées ; les autres méthodes peuvent encore correspondre au trie dynamique.
+
+## Raccourcis progressifs [#progressive-shorthands]
+
+Les raccourcis de méthode réduisent la cérémonie sans supprimer le contrat. DaloyJS dérive un identifiant d’opération stable à partir de la méthode et du chemin, comme `getRoot` ou `postBookItemsByItemId`. Un `operationId` explicite reste prioritaire.
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+Les raccourcis conservent la même validation, le même OpenAPI, la même sécurité et le même comportement du client typé que `route()`. Il n’existe pas de forme à deux arguments qui ignorerait silencieusement le contrat de réponse. Pour un corps volontairement opaque, passez explicitement `acknowledgeNoResponseBodySchema: true`. Les réponses brutes de succès renvoyées par `preBody` ou `beforeHandle` exigent la même confirmation. Les refus ordinaires `4xx`/`5xx` des hooks, non. Les descriptions de réponse restent facultatives. Les valeurs omises deviennent dans OpenAPI une description stable `HTTP <status> response`.
+
+## Définir des routes [#defining-routes]
+
+Une déclaration de route est la source de vérité pour la correspondance, la validation des requêtes, la validation des réponses, la sortie OpenAPI et les clients typés. Fournissez un `operationId` lorsque vous utilisez `route()` pour une route publique que vous voulez voir dans le client typé ou dans le SDK généré. Les raccourcis HTTP en dérivent un automatiquement. DaloyJS rejette les valeurs `operationId` en double à l’enregistrement.
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // params, query et headers sont inférés à partir des schémas ci-dessus.
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## Inférence de types sur plusieurs fichiers [#multi-file-type-inference]
+
+Exportez chaque route avec `defineRoute()`, puis composez les contrats importés avec `registerRoutes()`. Le tuple littéral survit aux frontières de fichiers et de modules : le client sans génération de code conserve donc chaque identifiant d’opération et chaque schéma.
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+Les appels `route()` chaînés s’accumulent aussi correctement. Évitez une simple annotation `const app: App` sur l’application finale composée, car elle élargit explicitement le type et efface le tuple de routes.
+
+`group()` en style callback et `register()` des plugins assurent toujours la portée à l’exécution, mais TypeScript ne peut pas élargir la variable parente depuis l’intérieur de leurs callbacks. Pour un client entièrement typé sans génération de code sur de gros modules, exportez des tuples de routes littéraux et faites de `registerRoutes()` la frontière finale de composition.
+
+## Méthodes HTTP [#http-methods]
+
+Les méthodes prises en charge sont `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` et `OPTIONS`. Les méthodes personnalisées comme `TRACE`, `CONNECT` et les verbes WebDAV sont rejetées à l’enregistrement.
+
+`HEAD` se rabat sur la route `GET` correspondante lorsqu’aucune route `HEAD` explicite n’existe, et renvoie les mêmes en-têtes avec un corps vide. `OPTIONS` renvoie un preflight 204 avec un en-tête `Allow` lorsqu’un chemin existe mais qu’aucune route `OPTIONS` explicite n’est enregistrée.
+
+Des méthodes raccourcies existent pour `GET`, `POST`, `PUT`, `PATCH`, `DELETE` et `HEAD`. Enregistrez une route `OPTIONS` explicite avec `route()`. Sinon, DaloyJS gère automatiquement le preflight.
+
+## Paramètres de chemin [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+Les valeurs de chemin sont décodées avant la validation. Si vous omettez le schéma `request.params`, `ctx.params` est inféré à partir du chemin sous forme de chaînes brutes. Des noms de paramètres en conflit à la même position du trie, comme `/a/:x` et `/a/:y`, lèvent une erreur à l’enregistrement.
+
+Les noms de capture doivent être non vides et uniques au sein d’une route. Les noms `__proto__`, `constructor` et `prototype` sont rejetés pour que les objets de paramètres restent sûrs en aval. Un enregistrement rejeté ne réserve pas son `operationId`.
+
+### Captures joker [#wildcard-captures]
+
+Un segment final `*name` capture le reste du chemin dans une seule chaîne décodée et exige au moins un segment restant. Un `*` seul utilise le nom `wildcard`. Les jokers doivent être terminaux : `/assets/*path/private` lève une erreur à l’enregistrement au lieu de correspondre silencieusement à un chemin plus large. Plusieurs méthodes peuvent partager une route joker si le nom de capture concorde. Les méthodes en double et les noms de joker en conflit lèvent une erreur.
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+Les segments bruts de traversée de chemin (`..`), les segments vides `//` et les échappements pourcentage malformés dans les captures ne correspondent tout simplement pas. La découverte des méthodes applique les mêmes contrôles : les chemins rejetés n’annoncent donc pas d’en-tête `Allow`. Depuis la 1.3.7, un segment de paramètre ou de joker ne se lie jamais à `.` ou `..`, y compris sous les formes encodées `%2e` et `%2e%2e`. Un analyseur d’URL les résoudrait comme des déplacements de répertoire : les laisser se lier donnerait au handler un chemin différent de celui qu’a vu le middleware. Une capture refuse aussi une valeur décodée contenant un composant `.` ou `..` derrière un séparateur encodé (`..%2F..%2Fsecret`, `..%5C`), ou tout caractère de contrôle (`%00`, `%0A`, `%09`, `%7F`). Ces requêtes reçoivent un `404`.
+
+Une capture qui décode un `/` ou un `\` encodé (`%2F`, `%5C`) est aussi refusée par défaut avec un `404`, car une seule valeur capturée couvrirait alors plusieurs segments de chemin pour tout consommateur en aval (système de fichiers, URL ou proxy). Si une route utilise réellement des identifiants contenant une barre oblique, activez l’option route par route :
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+Cette option ne réadmet jamais les composants `..` ni les caractères de contrôle. Les paramètres décodés restent des données non fiables et ne sont pas des chemins de système de fichiers assainis : validez donc séparément les accès au système de fichiers.
+
+Les adaptateurs maintiennent aussi le routeur et le middleware sur une même vue du chemin (depuis la 1.3.7). L’adaptateur Node canonicalise, avant le routage, les cibles de requête contenant `\`, des segments point ou leurs formes `%2e`, comme le ferait `new URL()`. Les adaptateurs Node et AWS Lambda refusent tous deux avec un `400` un en-tête `Host` qui n’est pas un simple `host[:port]` (par exemple s’il contient `\ / ? # @ %` ou des espaces). Les garde-fous fondés sur le chemin, comme `except()`, correspondent donc exactement à la route qui s’exécute. Voir l’[adaptateur Node](/docs/adapters/node) (en anglais) pour les détails.
+
+## Groupes [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// chemin final : /api/v1/health
+```
+
+Les groupes fusionnent préfixes, tags, hooks et valeurs d’authentification par défaut dans les routes enregistrées à l’intérieur du callback. L’application enfant est encapsulée : un middleware ajouté dans un groupe ne déborde pas sur les routes extérieures à ce groupe. Les routes groupées sont visibles par le routage à l’exécution et par OpenAPI. Pour des contrats `/api/v1` et `/api/v2` parallèles, une politique de migration et des SDK générés séparément, lisez le [guide de versionnage d’API](/docs/api-versioning) (en anglais).
+
+## Options de route [#route-options]
+
+- `request` : schémas pour `params`, `query`, `headers` et `body`.
+- `responses` : codes de statut déclarés et schémas facultatifs de corps et d’en-têtes de réponse.
+- `accepts` : liste d’autorisation `Content-Type` par route, pour les routes ayant un schéma de corps de requête.
+- `auth` : exigence de sécurité OpenAPI de la route. Associez-la à un hook d’authentification comme `bearerAuth()`.
+- `internal` : masque une route aux adaptateurs publics tout en autorisant les appels en processus via `app.inject()`.
+- `deprecated` et `sunset` : marquent un endpoint comme obsolète et émettent les en-têtes de réponse correspondants.
+- `callbacks` et `meta` : ajoutent des callbacks OpenAPI, des exemples et des métadonnées de route adaptées à l’IA.
+
+## Hooks [#hooks]
+
+Les hooks attachent un comportement à des points fixes du cycle de vie :
+
+- `onRequest` : le plus tôt, avant l’analyse.
+- `preBody` : après la correspondance de route, avant la validation des schémas ou toute E/S sur le corps. L’authentification intégrée par en-tête, JWT, basic ou mTLS s’exécute ici.
+- `beforeHandle` : après la validation, avant votre handler. Renvoyez une `Response` pour court-circuiter.
+- `afterHandle` : enveloppe ou transforme le résultat du handler avant la sérialisation de la réponse.
+- `onError` : observe ou remplace la réponse d’erreur.
+- `onSend` : modifie en place les en-têtes sortants ou renvoie une nouvelle `Response`. S’exécute sur les chemins de succès, d’erreur et de preflight `OPTIONS`.
+- `onResponse` : observateur final. Utilisez-le pour les logs et les métriques. Ne modifiez pas la réponse ici.
+
+<FlowDiagram title="Cycle de vie d’une requête" numbered caption="Les hooks se déclenchent à des points fixes autour de votre handler. Une authentification peu coûteuse peut rejeter dans preBody avant toute E/S sur le corps. Les middlewares qui ont besoin du corps gardent beforeHandle après la validation. Si quelque chose lève une erreur, le contrôle passe à onError, puis onSend et onResponse s’exécutent quand même." steps={[
+          { label: "onRequest", eyebrow: "le plus tôt", detail: "avant l’analyse" },
+          {
+            label: "preBody",
+            eyebrow: "rejet le moins coûteux",
+            detail: "route trouvée · corps intact",
+          },
+          {
+            label: "validate",
+            eyebrow: "framework",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "renvoyez une Response pour court-circuiter",
+          },
+          { label: "handler", detail: "la logique de votre route", tone: "accent" },
+          { label: "afterHandle", detail: "envelopper / transformer le résultat" },
+          { label: "onSend", detail: "modifier ou remplacer la Response" },
+          {
+            label: "onResponse",
+            eyebrow: "toujours",
+            detail: "observabilité uniquement",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## Transformer les réponses avec `onSend` [#transforming-responses-with-onsend]
+
+Utilisez `onSend` lorsque vous devez réécrire la réponse sortante, par exemple pour ajouter un en-tête, retirer un en-tête interne ou remplacer entièrement la réponse. Renvoyer `void` conserve la réponse actuelle. Plusieurs hooks `onSend` se composent en pipeline (global -\> groupe -\> route).
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // Annonce toujours la version de l’API sur chaque réponse sortante,
+      // y compris les réponses d’erreur et les preflights OPTIONS.
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // Retire un détail d’implémentation interne avant que la réponse parte.
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+`onSend` s’exécute *après* la validation de la réponse et après la fusion des en-têtes propres à la requête, dont `x-request-id`. Il s’exécute *avant* `onResponse`, qui reste le bon endroit pour les logs et les métriques.
+
+## 405 Method Not Allowed [#405-method-not-allowed]
+
+Si un chemin est enregistré pour une méthode mais appelé avec une autre, le routeur renvoie **405** avec un en-tête `Allow` correct, jamais un 404 trompeur. Les routes marquées `internal: true` sont filtrées des réponses 405 et `Allow` publiques, pour que des endpoints d’administration ou de cron cachés ne fuient pas par sondage des méthodes.
+
+La découverte des méthodes inclut à la fois une route statique exacte et la route dynamique sélectionnée. Avec `GET /users/me` et `POST /users/:id`, le chemin `/users/me` annonce les deux méthodes enregistrées. L’en-tête liste les enregistrements explicites ; la gestion synthétisée de HEAD et OPTIONS n’y ajoute pas d’entrées.
+
+## Performances [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

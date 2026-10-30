@@ -123,7 +123,7 @@ export const HOME_COPY_AR: HomeCopy = {
     installation: "/ar/docs/installation",
     tutorial: "/ar/docs/tutorials/bookstore",
     mcp: "/docs/mcp",
-    openapi: "/docs/openapi",
+    openapi: "/ar/docs/openapi",
     blog: "/blog",
   },
   hero: {
@@ -133,7 +133,7 @@ export const HOME_COPY_AR: HomeCopy = {
     primaryCta: "ابدأ: ثبّت Daloy",
     secondaryCta: "اقرأ التوثيق",
     contentLanguageNote:
-      "صفحات البدء السريع والتثبيت والدرس التعليمي متاحة بالعربية؛ أما بقية التوثيق والمدونة فمتاحة حاليًا بالإنجليزية.",
+      "صفحات البدء والأدلة الأساسية (التوجيه، التحقق، الأخطاء، OpenAPI، العميل مكتوب الأنواع، الأمان) متاحة بالعربية؛ أما بقية التوثيق والمدونة فبالإنجليزية.",
     factsLabel: "المشروع في أرقام",
     facts: [
       "أكثر من 3000 اختبار ناجح للإطار",

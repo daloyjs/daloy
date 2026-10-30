@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-同样的 URL（`GET /docs`）、同样的实时 `/openapi.json` 和 `/openapi.yaml` 端点、同样的 CSP 处理，只有渲染出的 HTML 不同。你也可以两者兼得：让自动挂载的路由继续使用 Scalar，再用 `swaggerUiHtml()` 自己暴露第二个 Swagger 路由（手动做法见 [OpenAPI 指南](/docs/openapi)（英文））。
+同样的 URL（`GET /docs`）、同样的实时 `/openapi.json` 和 `/openapi.yaml` 端点、同样的 CSP 处理，只有渲染出的 HTML 不同。你也可以两者兼得：让自动挂载的路由继续使用 Scalar，再用 `swaggerUiHtml()` 自己暴露第二个 Swagger 路由（手动做法见 [OpenAPI 指南](/zh/docs/openapi)）。
 
-想换个路径？使用对象形式：`docs: { ui: "swagger", path: "/reference" }`。对象形式只在非生产环境中挂载，除非你加上 `enabled: true`（自 1.5.5 起），这一点与 `docs: "auto"` 相同，后者在 `production: true` 时会跳过挂载。需要完全掌控？设置 `docs: false`，然后用 `generateOpenAPI()` 和 `swaggerUiHtml() / scalarHtml()` 挂载你自己的路由：参见 [OpenAPI 指南](/docs/openapi)（英文）。
+想换个路径？使用对象形式：`docs: { ui: "swagger", path: "/reference" }`。对象形式只在非生产环境中挂载，除非你加上 `enabled: true`（自 1.5.5 起），这一点与 `docs: "auto"` 相同，后者在 `production: true` 时会跳过挂载。需要完全掌控？设置 `docs: false`，然后用 `generateOpenAPI()` 和 `swaggerUiHtml() / scalarHtml()` 挂载你自己的路由：参见 [OpenAPI 指南](/zh/docs/openapi)。
 
 `swaggerUiHtml()` 和 `scalarHtml()` 默认都从 jsDelivr CDN 加载资源，因此严格的 Content-Security-Policy 必须允许这些资源，否则文档界面可能显示为空白。自动挂载的路由和 `htmlResponse()` 都会自动添加兼容的 CSP。如果你自己构建响应，请从 `@daloyjs/core/docs` 导入 `docsContentSecurityPolicy`，并把结果作为响应头传入：
 
@@ -237,7 +237,7 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 ## 下一步
 
-- [路由](/docs/routing)（英文）
-- [使用 Standard Schema 校验](/docs/validation)（英文）
-- [安全防护与中间件](/docs/security)（英文）
+- [路由](/zh/docs/routing)
+- [使用 Standard Schema 校验](/zh/docs/validation)
+- [安全防护与中间件](/zh/docs/security)
 - [教程：图书商店 API](/zh/docs/tutorials/bookstore)

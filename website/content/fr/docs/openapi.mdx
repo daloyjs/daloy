@@ -1,0 +1,355 @@
+---
+title: Spécification OpenAPI de DaloyJS
+description: "Génération OpenAPI dans DaloyJS : produisez OpenAPI 3.1 depuis vos routes. Avec Hey API, la spec reste alignée sur vos contrats et alimente le client typé."
+keywords:
+  - spécification OpenAPI DaloyJS
+  - OpenAPI 3.1
+  - générateur OpenAPI TypeScript
+  - Hey API
+  - DaloyJS OpenAPI
+  - documentation d’API automatique
+  - Swagger UI
+  - référence d’API Scalar
+  - Redoc
+  - changer d’interface de documentation
+sitemap:
+  priority: 0.7
+---
+
+# Spécification OpenAPI de DaloyJS
+
+DaloyJS produit un document **OpenAPI 3.1** propre directement à partir de vos définitions de routes, sans plugins ni décorateurs séparés. La validation, les types et la spécification partagent une seule source de vérité.
+
+<BranchDiagram title="Un contrat, quatre sorties" source={{
+          eyebrow: "source unique de vérité",
+          label: "Définition de route",
+          detail: "app.get(path, { request, responses }, handler)",
+        }} branches={[
+          {
+            eyebrow: "exécution",
+            label: "Validation des requêtes et réponses",
+            detail: "Zod · Valibot · ArkType",
+          },
+          {
+            eyebrow: "spécification",
+            label: "Document OpenAPI 3.1",
+            detail: "GET /openapi.json · /openapi.yaml",
+          },
+          {
+            eyebrow: "humains",
+            label: "Interface de documentation",
+            detail: "Scalar · Swagger UI · Redoc",
+          },
+          {
+            eyebrow: "consommateurs",
+            label: "SDK client typé",
+            detail: "génération de code Hey API",
+          },
+        ]} caption="Vous écrivez la route une seule fois. La validation, la spécification OpenAPI, la documentation interactive et le client typé en sont tous dérivés : ils ne peuvent donc jamais se désynchroniser." />
+
+## Une ligne : montage automatique de /docs, /openapi.json, /openapi.yaml [#one-line-auto-mount-docs-openapi-json-openapi-yaml]
+
+À la manière de FastAPI. Passez `docs: "auto"` (ou `docs: true`) au constructeur de `App` et DaloyJS enregistre pour vous `GET /openapi.json` + `GET /openapi.yaml` (la spécification en direct dans les deux formats) et `GET /docs` (une interface de référence d’API Scalar).
+
+```ts
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    servers: [{ url: "https://api.example.com" }],
+    securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+  },
+  docs: "auto", // monte GET /docs, GET /openapi.json et GET /openapi.yaml hors production
+});
+```
+
+`docs: "auto"` ne monte les routes que lorsque l’App n’est pas en production (les modèles `create-daloy` l’utilisent par défaut, pour qu’une API déployée ne publie pas son schéma) ; vous pouvez aussi le laisser désactivé (la valeur par défaut) et monter les routes à la main avec les helpers ci-dessous. Personnalisez chemins, interface et tags via la forme objet. Depuis la 1.5.5, la forme objet se comporte comme `"auto"` sauf si vous définissez `enabled` : personnaliser l’interface ne publie donc jamais par accident votre carte des routes en production. Définissez `enabled: true` (ou `docs: true`) pour une API publique qui doit servir sa documentation en production :
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    path: "/reference",              // par défaut : "/docs"
+    openapiPath: "/spec.json",       // par défaut : "/openapi.json"
+    openapiYamlPath: "/spec.yaml",   // par défaut : "/openapi.yaml" ; false le désactive
+    ui: "scalar",                     // "scalar" (par défaut) | "swagger" | "redoc"
+    scalar: {
+      theme: "kepler",
+      customCss: ":root { --scalar-color-accent: #2563eb; }",
+      hideTestRequestButton: true,
+    },
+    tags: ["Docs"],                   // par défaut : ["Docs"], passez [] pour l’omettre
+    enabled: "auto",                  // par défaut "auto" (désactivé en production) ; true | false
+  },
+});
+```
+
+<blockquote><strong>Sécurité :</strong> une spécification publiée est une carte complète de votre surface d’attaque : chaque chemin, paramètre, schéma d’authentification et forme d’erreur. Avec <code>docs: true</code> ou <code>enabled: true</code> en production, DaloyJS journalise <code>docs.public_in_production</code> et sert la spécification à quiconque peut l’atteindre. C’est le bon choix pour une API publique. Pour tout le reste, gardez <code>"auto"</code>, ou placez la documentation derrière une authentification (un <code>bearerAuth()</code> au niveau de l’application sans <code>except()</code> pour <code>/docs</code> et <code>/openapi.json</code> les couvre). Marquez les routes d’administration, de cron et de débogage <code>internal: true</code>. Elles sont alors exclues du document généré et répondent <code>404</code> au trafic réseau, tandis que <code>app.inject()</code> peut toujours les appeler. Voir <a href="/docs/security/admin-panels">Secure admin panels</a> (en anglais).</blockquote>
+
+## Choisissez une interface : Scalar, Swagger UI ou Redoc [#pick-a-ui-scalar-swagger-ui-or-redoc]
+
+Réglez `ui` sur `"scalar"` (par défaut), `"swagger"` ou `"redoc"`. Les trois affichent la même spécification en direct, se montent sur les mêmes chemins et livrent la même CSP stricte et les mêmes ressources hébergées sur CDN : changer d’interface tient en un mot. Scalar et Swagger UI incluent une console de requêtes pour les développeurs sur les routes protégées. Redoc est une interface de référence en lecture seule : elle affiche les exigences de sécurité, mais ne fournit pas de console *Try it* intégrée.
+
+```ts
+new App({
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+  docs: {
+    ui: "swagger",
+    swagger: {
+      docExpansion: "none",
+      displayRequestDuration: true,
+    },
+  },
+});
+```
+
+Par défaut, Swagger UI conserve d’un rechargement à l’autre les autorisations saisies dans sa boîte de dialogue *Authorize*. Il le fait en stockant le jeton collé dans le `localStorage` du navigateur, comme Scalar avec `persistAuth: true`. N’importe quel script exécuté sur l’origine de la documentation peut le lire, et il survit à la fermeture de l’onglet. Ne collez que des jetons de test à courte durée de vie et au moindre privilège, jamais d’identifiants de production ou d’administration, et servez la documentation depuis une origine distincte de toute application web maison. Passez `swagger: { persistAuthorization: false }` pour garder les jetons en mémoire uniquement. Scalar sélectionne automatiquement le premier schéma de sécurité OpenAPI configuré : le formulaire d’authentification est ainsi prêt pour que les développeurs collent un jeton bearer ou une clé d’API. Si vous voulez un autre choix par défaut pour Scalar, définissez-le explicitement :
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+    },
+  },
+  docs: {
+    scalar: {
+      persistAuth: true,
+      authentication: { preferredSecurityScheme: "bearer" },
+    },
+  },
+});
+```
+
+Si votre documentation a besoin d’un point d’entrée de connexion visible, ajoutez `docs.auth`. Le même bouton est affiché pour Scalar, Swagger UI et Redoc. Faites-le pointer vers un formulaire de connexion local, une route Better Auth, une URL de connexion Clerk ou une URL d’autorisation OIDC d’Auth0, Okta, Microsoft Entra ID, Cognito, Keycloak ou d’un autre fournisseur :
+
+```ts
+new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      oidc: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://login.example.com/oauth2/v2.0/authorize",
+            tokenUrl: "https://login.example.com/oauth2/v2.0/token",
+            scopes: { "api.read": "Read API data" },
+          },
+        },
+      },
+    },
+  },
+  docs: {
+    ui: "redoc", // fonctionne aussi avec "scalar" et "swagger"
+    auth: {
+      loginUrl: "/login", // ou l’URL d’autorisation/de connexion de votre fournisseur
+      label: "Sign in",
+      target: "popup",
+    },
+  },
+});
+```
+
+L’objet `redoc` est transmis tel quel à `Redoc.init(specUrl, configuration, element)`. Comme Redoc construit son index de recherche dans un Web Worker `blob:`, la route `/docs` montée automatiquement élargit d’elle-même la CSP de cette page avec `worker-src 'self' blob:`, pour `ui: "redoc"` uniquement. Scalar et Swagger UI conservent la politique plus stricte. L’option `scalar` est ignorée sauf si `ui` vaut `"scalar"`, et il en va de même pour `swagger` et `redoc`.
+
+L’objet `scalar` est transmis à l’API HTML de Scalar comme configuration JSON, tandis que Daloy garde l’`openapiPath` en direct comme source. Utilisez-le pour les thèmes, le CSS personnalisé, la mise en page, les valeurs d’authentification par défaut et la visibilité des clients, sans copier le HTML de la documentation.
+
+## Avancé : générer la spécification à la main [#advanced-generate-the-spec-manually]
+
+Besoin de l’objet de spécification brut (pour la génération de code, des tests de contrat ou une route personnalisée) ? Appelez directement `generateOpenAPI(app, options)` :
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+});
+
+console.log(JSON.stringify(doc, null, 2));
+```
+
+## Avancé : servir la documentation depuis votre propre route [#advanced-serve-docs-from-your-own-route]
+
+Une route de documentation écrite à la main est une route ordinaire : le filtrage de `docs: "auto"` ne s’y applique donc pas. Décidez vous-même si elle doit exister en production et si elle doit être authentifiée. Il en va de même pour toute route `/openapi.json` que vous servez à la main avec `generateOpenAPI()` :
+
+```ts
+import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+// Non couvert par `docs: "auto"` : filtrez-le vous-même.
+if (process.env.NODE_ENV !== "production") {
+  app.get(
+    "/docs",
+    {
+      operationId: "docs",
+      responses: { 200: { description: "API reference" } },
+    },
+    async () => {
+      const html = scalarHtml({
+        specUrl: "/openapi.json",
+        title: "My API",
+        configuration: { theme: "kepler" },
+      });
+      const res = htmlResponse(html);
+      return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
+    },
+  );
+}
+```
+
+`swaggerUiHtml`, `scalarHtml` et `redocHtml` renvoient tous des pages HTML autonomes qui chargent leurs ressources depuis jsDelivr, avec une CSP stricte n’autorisant que cette origine. Si vous écrivez la route à la main avec `redocHtml`, passez `allowBlobWorkers: true` à `htmlResponse` (ou à `docsContentSecurityPolicy`) pour que la CSP autorise le worker de recherche `blob:` de Redoc :
+
+```ts
+import { redocHtml, htmlResponse } from "@daloyjs/core/docs";
+
+const res = htmlResponse(
+  redocHtml({ specUrl: "/openapi.json", title: "My API", configuration: { hideDownloadButtons: true } }),
+  { allowBlobWorkers: true },
+);
+```
+
+Si vous voulez tester l’ergonomie de votre documentation sur un contrat beaucoup plus volumineux, consultez la [grande démo REST factice](/docs/tutorials/fake-rest-api) (en anglais). C’est un meilleur banc d’essai qu’un petit exemple CRUD lorsque vous devez valider la recherche, le regroupement et les performances d’affichage.
+
+## Écrire sur le disque pour la génération de code [#dump-to-disk-for-codegen]
+
+```ts
+// scripts/dump-openapi.ts
+import { writeFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { buildApp } from "../src/build-app.js";
+
+const app = buildApp();
+const out = "./generated/openapi.json";
+await mkdir(dirname(out), { recursive: true });
+await writeFile(out, JSON.stringify(generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+}), null, 2));
+console.log(`wrote ${out}`);
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts"
+}
+```
+
+## Ce qui est produit [#what-gets-emitted]
+
+- Un `operationId` par route ; les doublons lèvent une erreur à l’enregistrement.
+- Les paramètres de chemin `:id` normalisés en `{id}`.
+- Les corps de schéma convertis via `schema.toJSONSchema?.()` lorsque c’est pris en charge, sinon par un repli structurel.
+- Un `components.schemas.Problem` réutilisable pour les erreurs RFC 9457.
+- `tags`, `summary`, `description` et la `description` par statut.
+- Les routes marquées `internal: true` sont omises, sauf si vous passez `includeInternal: true` (par exemple pour un contrat purement interne destiné à vos propres outils). Ne publiez jamais ce document.
+
+## Webhooks [#webhooks]
+
+OpenAPI 3.1 permet à un producteur de publier des **webhooks de premier niveau**, des opérations qu’un consommateur est censé implémenter. Passez `webhooks` à `generateOpenAPI` et DaloyJS les produit sous la table `webhooks` de premier niveau du document.
+
+```ts
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+
+const doc = generateOpenAPI(app, {
+  info: { title: "Books", version: "1.0.0" },
+  webhooks: {
+    bookCreated: {
+      method: "POST",
+      operationId: "onBookCreated",
+      summary: "Fires when a book is created",
+      tags: ["Webhooks"],
+      request: { body: z.object({ id: z.string(), title: z.string() }) },
+      responses: { 200: { description: "Acknowledged" } },
+      auth: { scheme: "bearer", scopes: ["webhook:receive"] },
+    },
+  },
+});
+```
+
+La table `webhooks` ne fait que *décrire* l’opération ; elle ne livre ni ne sécurise rien. Pour de vraies livraisons, signez chaque charge utile pour que les destinataires puissent vérifier à la fois l’origine et l’intégrité, et incluez un horodatage pour qu’ils puissent rejeter les rejeux. Un jeton bearer statique seul ne prouve ni l’un ni l’autre. [`createWebhookSender()`](/docs/webhook-delivery) (en anglais) signe, horodate, réessaie et fait passer chaque requête sortante par `fetchGuard()`. Les destinataires vérifient avec `verifyWebhookSignature()`. Documentez les en-têtes de signature dans la `description` du webhook.
+
+## Callbacks [#callbacks]
+
+Les **callbacks** décrivent des requêtes hors bande qu’une opération peut déclencher vers le consommateur (par ex. un endpoint d’abonnement qui envoie plus tard un POST à l’URL fournie par l’appelant). Attachez une table `callbacks` directement à une route ou à un webhook.
+
+```ts
+import { fetchGuard } from "@daloyjs/core";
+
+// Chaque requête vers une URL fournie par l’appelant passe par la protection SSRF.
+const safeFetch = fetchGuard();
+
+app.post(
+  "/subscribe",
+  {
+    operationId: "subscribe",
+    request: {
+      body: z
+        .object({
+          // https uniquement : rejette file:, gopher:, javascript: et http: simple
+          callbackUrl: z.url({ protocol: /^https$/ }),
+        })
+        .strict(),
+    },
+    responses: { 201: { description: "Subscribed" } },
+    callbacks: {
+      onEvent: {
+        "{$request.body#/callbackUrl}": {
+          method: "POST",
+          operationId: "onEventCallback",
+          request: { body: z.object({ id: z.string() }) },
+          responses: {
+            200: { description: "ack" },
+            410: { description: "gone" },
+          },
+        },
+      },
+    },
+  },
+  async () => ({ status: 201, body: undefined }),
+);
+```
+
+<blockquote><strong>Sécurité :</strong> une URL de callback fournie par l’appelant est un point d’entrée de Server-Side Request Forgery. La validation par schéma ne suffit pas. <code>z.url()</code> seul accepte <code>http://169.254.169.254/</code> (métadonnées cloud), <code>http://localhost:6379/</code> et les URL <code>file:</code>/<code>gopher:</code>, et même <code>{"z.url({ protocol: /^https$/ })"}</code> accepte encore <code>https://169.254.169.254/</code> ou un nom d’hôte qui se résout en adresse privée. Envoyez chaque callback via <code>safeFetch</code> issu de <a href="/docs/security/fetch-guard"><code>fetchGuard()</code></a> (en anglais), qui vérifie l’adresse résolue et chaque saut de redirection. Mieux encore, livrez avec <a href="/docs/webhook-delivery"><code>createWebhookSender()</code></a> (en anglais), qui signe aussi la charge utile. Envisagez de vérifier la propriété de l’URL, par exemple avec une requête de défi, avant de l’enregistrer.</blockquote>
+
+Chaque nom de callback correspond à une ou plusieurs clés d’expression d’exécution (par ex. `"{$request.body#/callbackUrl}"`), chacune correspondant à une ou plusieurs opérations indexées par méthode HTTP. Les tables et tableaux vides sont ignorés : passer un callback vide ne produit jamais une spécification malformée.
+
+## Unions discriminées [#discriminated-unions]
+
+Le `discriminator` d’OpenAPI 3.1 est la façon canonique de décrire des unions étiquetées. DaloyJS fournit deux helpers dans `@daloyjs/core/openapi` (et dans le paquet racine) :
+
+- `discriminator(propertyName, mapping?)` : le constructeur de spécification brut. Utilisez-le lorsque vous avez déjà un JSON Schema écrit à la main et voulez y attacher proprement le champ.
+- `discriminatedUnion(propertyName, variants, opts?)` : une enveloppe compatible Standard Schema qui valide *à la fois* à l’exécution (en aiguillant selon la valeur du discriminant) *et* expose `.toJSONSchema()`, pour que le générateur OpenAPI produise automatiquement `{ oneOf, discriminator }`.
+
+```ts
+import { z } from "zod";
+import { discriminatedUnion } from "@daloyjs/core";
+
+// .strict() rejette les clés inconnues (par ex. un `isAdmin` injecté) avec un 422
+// au lieu de les retirer silencieusement.
+const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() }).strict();
+const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() }).strict();
+
+const Animal = discriminatedUnion(
+  "kind",
+  { cat: Cat, dog: Dog },
+  { mapping: { cat: "#/components/schemas/Cat", dog: "#/components/schemas/Dog" } },
+);
+
+app.post(
+  "/animals",
+  {
+    operationId: "createAnimal",
+    request: { body: Animal },
+    responses: { 201: { description: "ok", body: Animal } },
+  },
+  async ({ body }) => ({ status: 201, body }),
+);
+```
+
+À l’exécution, l’enveloppe rejette, avec un problème Standard Schema clair, les valeurs qui ne sont pas des objets, les discriminants manquants ou non textuels et les valeurs de discriminant inconnues (y compris des noms hérités comme `__proto__`, `constructor` et `toString`), puis délègue tout le reste au validateur de la variante correspondante.

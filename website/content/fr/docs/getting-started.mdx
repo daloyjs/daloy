@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-Même URL (`GET /docs`), mêmes endpoints en direct `/openapi.json` et `/openapi.yaml`, même gestion de la CSP : seul le HTML rendu change. Vous pouvez aussi garder les deux : laissez la route montée automatiquement sur Scalar et exposez vous-même une seconde route Swagger avec `swaggerUiHtml()` (voir la recette manuelle dans le [guide OpenAPI](/docs/openapi), en anglais).
+Même URL (`GET /docs`), mêmes endpoints en direct `/openapi.json` et `/openapi.yaml`, même gestion de la CSP : seul le HTML rendu change. Vous pouvez aussi garder les deux : laissez la route montée automatiquement sur Scalar et exposez vous-même une seconde route Swagger avec `swaggerUiHtml()` (voir la recette manuelle dans le [guide OpenAPI](/fr/docs/openapi)).
 
-Vous voulez un autre chemin ? Utilisez la forme objet : `docs: { ui: "swagger", path: "/reference" }`. La forme objet n’est montée qu’en dehors de la production, sauf si vous ajoutez `enabled: true` (depuis la 1.5.5), comme `docs: "auto"`, qui ignore le montage lorsque `production: true`. Besoin d’un contrôle total ? Réglez `docs: false` et montez vos propres routes avec `generateOpenAPI()` et `swaggerUiHtml() / scalarHtml()` : voir le [guide OpenAPI](/docs/openapi) (en anglais).
+Vous voulez un autre chemin ? Utilisez la forme objet : `docs: { ui: "swagger", path: "/reference" }`. La forme objet n’est montée qu’en dehors de la production, sauf si vous ajoutez `enabled: true` (depuis la 1.5.5), comme `docs: "auto"`, qui ignore le montage lorsque `production: true`. Besoin d’un contrôle total ? Réglez `docs: false` et montez vos propres routes avec `generateOpenAPI()` et `swaggerUiHtml() / scalarHtml()` : voir le [guide OpenAPI](/fr/docs/openapi).
 
 `swaggerUiHtml()` et `scalarHtml()` chargent tous deux leurs ressources par défaut depuis le CDN jsDelivr : une Content-Security-Policy stricte doit donc les autoriser, sinon l’interface de documentation peut s’afficher vide. La route montée automatiquement et `htmlResponse()` ajoutent toutes deux une CSP compatible. Si vous construisez votre propre réponse, importez `docsContentSecurityPolicy` depuis `@daloyjs/core/docs` et passez le résultat comme en-tête de la réponse :
 
@@ -237,7 +237,7 @@ L’authentification prouve qui appelle. Elle ne prouve pas que l’appelant a l
 
 ## Étapes suivantes
 
-- [Routage](/docs/routing) (en anglais)
-- [Validation avec Standard Schema](/docs/validation) (en anglais)
-- [Garde-fous de sécurité et middlewares](/docs/security) (en anglais)
+- [Routage](/fr/docs/routing)
+- [Validation avec Standard Schema](/fr/docs/validation)
+- [Garde-fous de sécurité et middlewares](/fr/docs/security)
 - [Tutoriel : l’API d’une librairie](/fr/docs/tutorials/bookstore)

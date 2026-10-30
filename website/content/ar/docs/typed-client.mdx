@@ -1,0 +1,148 @@
+---
+title: عملاء API مكتوبو الأنواع
+description: ولّد عملاء TypeScript مكتوبي الأنواع بالكامل من مواصفة OpenAPI في DaloyJS مع Hey API، واحصل على أمان أنواع متكامل بين الخادم والعميل دون أي انحراف.
+keywords:
+  - عميل API مكتوب الأنواع
+  - عميل OpenAPI بلغة TypeScript
+  - عميل Hey API
+  - أمان أنواع متكامل
+  - بديل ts-rest
+  - ts-rest مقابل DaloyJS
+sitemap:
+  priority: 0.7
+---
+
+# العملاء مكتوبو الأنواع
+
+يوفّر DaloyJS طريقتين **اثنتين** لاستدعاء واجهتك البرمجية بأمان أنواع كامل. استخدم ما يناسب المستهلك لديك.
+
+## 1. العميل مكتوب الأنواع داخل العملية (دون توليد شيفرة) [#1-in-process-typed-client-zero-codegen]
+
+لمستهلكي TypeScript في المستودع الأحادي نفسه (الاختبارات، والأدوات الداخلية، وإجراءات الخادم في Next.js):
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string، مكتوب الأنواع بالكامل
+}
+```
+
+يُفهرس العميل حسب `operationId`، ويعيد اتحادًا مميَّزًا من `{status, body, headers}`، ويستنتج كل شيء من تعريف المسار نفسه. دون خطوة بناء.
+
+### معاملات المسار [#path-parameters]
+
+تُستبدل معاملات المسار بمقطع كامل، فلا يطابق `:id` أبدًا داخل `:idx`، وتُرمَّز كل قيمة بالنسبة المئوية في مقطعها الخاص. ومنذ 1.3.7 ترمي الدالة المولَّدة `TypeError` قبل إرسال أي طلب، عندما يكون المعامل مفقودًا أو فارغًا أو `.` أو `..`. فتحليل URL سيحل مقطع النقطة (حتى بصيغة `%2E%2E`) ويغيّر هدف الاستدعاء بصمت، فيحوّل مثلًا `DELETE /orgs/:org/members/..` إلى `DELETE /orgs/:org`. وتقبل مسارات أحرف البدل (`*path`، أو `*` مجرد باسم `wildcard`) قيمة مفصولة بـ `/`؛ ويُرمَّز كل مقطع ويُفحص بالطريقة نفسها.
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="ركّب صفوف المسارات بدلًا من توسيع نوع App.">
+<p>صدّر ملفات المسارات باستخدام <code>defineRoute()</code> وسجّل صفًا حرفيًا باستخدام <code>app.registerRoutes(\[...\])</code>{". "}وتعمل استدعاءات <code>route()</code> المتسلسلة أيضًا. هناك أمران يمحوان الاستنتاج عمدًا ويختزلان العميل إلى سطح فضفاض:</p>
+<ul>
+<li>تعليق النسخة بالنوع المجرد{" "}<code>const app: App = ...</code> (أو إعادة <code>: App</code>{" "}من دالة مصنع). يتخلص تعليق التوسيع من المسارات المتراكمة، لذا دع النوع يُستنتج بدلًا من ذلك.</li>
+<li>تسجيل المسارات كعبارات منفصلة على متغير مُصرَّح به سابقًا بدلًا من إعادة النتيجة المتسلسلة أو استخدام{" "}<code>registerRoutes()</code>.</li>
+</ul>
+<p>يعرض دليل المونوليث المعياري (modular monolith) تركيبًا متعدد الملفات بصفوف مسارات من عدة سياقات محدودة. لا يزال{" "}<code>group()</code> بأسلوب الاستدعاء الراجع و<code>register()</code> الخاص بالإضافات يوفّران تغليفًا في وقت التشغيل، لكن استدعاءاتهما الراجعة لا تستطيع توسيع النوع العام في TypeScript لمتغير الأب. استخدم صفوف المسارات حدًّا لتركيب العميل مكتوب الأنواع.</p>
+</Callout>
+
+## 2. SDK مع Hey API (عبر اللغات والمستودعات، وقت البناء) [#2-hey-api-sdk-cross-language-cross-repo-build-time]
+
+للمستهلكين خارج المستودع الأحادي أو بلغات أخرى، ولّد SDK لـ fetch مكتوب الأنواع بالكامل باستخدام [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
+
+<FlowDiagram title="خط توليد الشيفرة" numbered caption="يشغّل pnpm gen السلسلة كاملة: يحفظ المواصفة من مساراتك، ثم يدع Hey API يحوّلها إلى SDK لـ fetch مكتوب الأنواع. أعد تشغيله كلما تغيّر مسار فيبقى العميل متطابقًا مع العقد." steps={[
+          { label: "المسارات", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "مواصفة OpenAPI 3.1 على القرص" },
+          { label: "openapi-ts", detail: "مولّد Hey API" },
+          { label: "SDK مكتوب الأنواع", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "المستهلك",
+            detail: "استدعاءات fetch مكتوبة الأنواع بالكامل",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# يكتب:
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## استخدام SDK المولَّد [#using-the-generated-sdk]
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## أيهما أستخدم؟ [#which-one-should-i-use]
+
+| حالة الاستخدام | الاختيار |
+| --- | --- |
+| مستدعٍ بلغة TypeScript في المستودع نفسه (الاختبارات، الأدوات الداخلية) | `createInProcessClient` |
+| تطبيق ويب أو حزمة React Native للهاتف في مستودع منفصل | SDK مع Hey API |
+| مستهلك بغير TypeScript (Python، Swift، Kotlin) | مستند OpenAPI + المولّد الذي يفضّلونه |
+| SDK عام لأطراف ثالثة | SDK مع Hey API، منشور كحزمة مستقلة |
+
+## قادم من ts-rest؟ [#coming-from-ts-rest]
+
+[ts-rest](https://ts-rest.com/) مكتبة شائعة قائمة على العقود تمنحك أنواع TypeScript متكاملة **دون توليد شيفرة** عبر مشاركة عقد (`initContract`) بين خادم قائم على المحوّلات (Express، Fastify، NestJS، Next.js) وعميل fetch (`initClient`). إن كنت تحب هذا النموذج، فسيبدو DaloyJS مألوفًا، مع فرقين.
+
+أولًا، في DaloyJS **تعريف المسار هو العقد**، فلا يوجد كائن عقد منفصل يجب إبقاؤه متزامنًا. ويمنح `createClient` داخل العملية الموضح أعلاه التجربة نفسها دون توليد شيفرة ومع أنواع مشتركة لمستدعي TypeScript في المستودع نفسه.
+
+ثانيًا، أمان الأنواع في ts-rest خاص بـ TypeScript ويتطلب أن يستورد العميل العقد. أما DaloyJS فيُصدر مواصفة **OpenAPI 3.1** من الدرجة الأولى وSDK مع Hey API من المسارات نفسها، لذا فالمستهلكون الذين لا يستطيعون استيراد أنواعك (مستودعات أخرى، لغات أخرى، حزم SDK عامة) مشمولون أيضًا. في ts-rest، يُعد OpenAPI إضافة اختيارية (`@ts-rest/open-api`). وDaloyJS هو أيضًا الخادم وبيئة التشغيل نفسها، قابل للنقل عبر Node وBun وDeno وCloudflare وVercel، وليس طبقة أنواع مركّبة على إطار منفصل.
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| مصدر العقد | كائن `initContract` منفصل | تعريف المسار نفسه |
+| عميل مكتوب الأنواع دون توليد شيفرة | نعم (`initClient`، TypeScript فقط) | نعم (`createClient`، TypeScript فقط) |
+| عملاء عبر اللغات والمستودعات | إضافة OpenAPI (`@ts-rest/open-api`) | OpenAPI 3.1 + SDK مع Hey API، من الدرجة الأولى |
+| الخادم | محوّل على Express / Fastify / NestJS / Next.js | مدمج، وقابل للنقل بين بيئات التشغيل |
+| التحقق في وقت التشغيل | Standard Schema (Zod / Valibot / ArkType) | Standard Schema (Zod / Valibot / ArkType / TypeBox) |
+| الافتراضيات الأمنية | أحضرها بنفسك | الترويسات وحدود الجسم مفعّلة افتراضيًا؛ وCSRF وتحديد المعدل على بُعد سطر واحد |
+
+تحتاج إلى عقد أكبر للتحقق من مخرجات المولّد لديك؟ استخدم [عرض REST الوهمي الكبير](/docs/tutorials/fake-rest-api) (بالإنجليزية) كحالة اختبار ضغط بدلًا من تطبيق تعليمي بسيط.

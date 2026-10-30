@@ -1,0 +1,333 @@
+---
+title: 路由
+description: "用契约优先的 API 在 DaloyJS 中定义类型安全的 HTTP 路由：路径参数、查询、请求体和响应 schema 都从同一份声明端到端推断。"
+keywords:
+  - DaloyJS 路由
+  - 类型安全路由
+  - 契约优先路由
+  - TypeScript HTTP 路由器
+sitemap:
+  priority: 0.7
+---
+
+# 路由
+
+DaloyJS 使用分段 trie，并为静态路由提供快速路径。通过路径安全检查后，精确的静态路由只需一次 `Map.get` 即可解析。动态查找优先匹配字面量分段，其次是参数，最后是通配符。没有回溯的查找与路径长度成线性关系；相互重叠的路由可能需要访问更多的 trie 分支。
+
+只有完整的路由才算匹配。例如，注册 `/users/me/details/:field` 并不会阻止 `/users/:id` 匹配 `/users/me`。在动态 trie 中，优先级更高的完整路径即使没有请求方法对应的处理函数也会胜出。精确的静态路由对其已注册的方法胜出；其他方法仍可能匹配到动态 trie。
+
+## 渐进式简写 [#progressive-shorthands]
+
+方法简写减少了样板代码，但不会去掉契约。DaloyJS 会根据方法和路径推导出稳定的 operation id，例如 `getRoot` 或 `postBookItemsByItemId`。显式指定的 `operationId` 仍然优先。
+
+```ts
+const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );
+```
+
+简写与 `route()` 保持相同的校验、OpenAPI、安全和类型化客户端行为。不存在会悄悄跳过响应契约的两参数形式。如果响应体确实不透明，请显式传入 `acknowledgeNoResponseBodySchema: true`。由 `preBody` 或 `beforeHandle` 返回的成功原始响应也需要同样的确认，而普通的 `4xx`/`5xx` hook 拒绝则不需要。响应描述仍是可选的：省略时，OpenAPI 中会使用稳定的 `HTTP <status> response` 描述。
+
+## 定义路由 [#defining-routes]
+
+路由声明是匹配、请求校验、响应校验、OpenAPI 输出和类型化客户端的唯一事实来源。用 `route()` 定义希望出现在类型化客户端或生成的 SDK 中的公开路由时，请提供 `operationId`。HTTP 简写会自动推导一个。DaloyJS 在注册时会拒绝重复的 `operationId`。
+
+```ts
+import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
+});
+
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
+}
+
+export const app = new App().route({
+  method: "GET",
+  path: "/users/:id",
+  operationId: "getUser",
+  tags: ["Users"],
+  summary: "Get a user by id",
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z
+      .object({ include: z.enum(["profile", "settings"]).optional() })
+      .optional(),
+    headers: z.object({ "x-tenant": z.string() }),
+  },
+  responses: {
+    200: { description: "Found", body: UserSchema },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, query, headers }) => {
+    // params、query 和 headers 的类型都从上面的 schema 推断而来。
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
+  },
+});
+```
+
+## 跨文件类型推断 [#multi-file-type-inference]
+
+用 `defineRoute()` 导出每条路由，再通过 `registerRoutes()` 组合导入的契约。字面量元组能跨越文件和模块边界保留下来，因此免代码生成的客户端会保留每个 operation id 和 schema。
+
+```ts
+// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);
+```
+
+链式调用 `route()` 同样能正确累积类型。不要给最终组合好的应用加上单纯的 `const app: App` 类型注解，因为那会显式地把路由元组放宽掉。
+
+回调形式的 `group()` 和插件的 `register()` 仍然提供运行时作用域，但 TypeScript 无法在它们的回调内部放宽父级变量的类型。如果要在大型模块之间获得完全类型化的免代码生成客户端，请导出字面量路由元组，并让 `registerRoutes()` 成为最终的组合边界。
+
+## HTTP 方法 [#http-methods]
+
+支持的方法包括 `GET`、`POST`、`PUT`、`PATCH`、`DELETE`、`HEAD` 和 `OPTIONS`。`TRACE`、`CONNECT` 和 WebDAV 动词等自定义方法会在注册时被拒绝。
+
+当没有显式的 `HEAD` 路由时，`HEAD` 会回退到匹配的 `GET` 路由，返回相同的响应头和空的响应体。当路径存在但没有注册显式的 `OPTIONS` 路由时，`OPTIONS` 会返回带 `Allow` 响应头的 204 预检响应。
+
+`GET`、`POST`、`PUT`、`PATCH`、`DELETE` 和 `HEAD` 都有简写方法。显式的 `OPTIONS` 路由请用 `route()` 注册；否则 DaloyJS 会自动处理预检请求。
+
+## 路径参数 [#path-parameters]
+
+```ts
+app.route({
+  method: "GET",
+  path: "/orgs/:org/repos/:repo",
+  operationId: "getRepo",
+  request: {
+    params: z.object({ org: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Repository",
+      body: z.object({ org: z.string(), repo: z.string() }),
+    },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+```
+
+路径值会在校验之前解码。如果省略 `request.params` schema，`ctx.params` 会从路径推断为原始字符串。同一 trie 位置上相互冲突的参数名（例如 `/a/:x` 和 `/a/:y`）会在注册时抛出错误。
+
+捕获名必须非空，并且在一条路由内唯一。`__proto__`、`constructor` 和 `prototype` 这些名称会被拒绝，以保证参数对象在下游使用时是安全的。被拒绝的注册不会占用它的 `operationId`。
+
+### 通配符捕获 [#wildcard-captures]
+
+末尾的 `*name` 分段会把剩余路径捕获为一个解码后的字符串，并且要求至少还剩一个分段。单独的 `*` 使用名称 `wildcard`。通配符必须位于末尾：`/assets/*path/private` 会在注册时抛出错误，而不是悄悄匹配一个更宽的路径。当捕获名一致时，多个方法可以共用同一条通配符路由。重复的方法和相互冲突的通配符名称会抛出错误。
+
+```ts
+app.route({
+  method: "GET",
+  path: "/assets/*path",
+  operationId: "getAsset",
+  request: { params: z.object({ path: z.string() }) },
+  responses: {
+    200: { description: "Asset", body: z.object({ path: z.string() }) },
+  },
+  handler: async ({ params }) => ({ status: 200, body: params }),
+});
+
+// GET /assets/css/app.css -> params.path === "css/app.css"
+```
+
+原始的路径穿越分段（`..`）、空分段 `//` 以及捕获中格式错误的百分号转义都会干净地匹配失败。方法发现也执行同样的检查，因此被拒绝的路径不会通告 `Allow` 响应头。自 1.3.7 起，参数或通配符分段永远不会绑定 `.` 或 `..`，包括编码写法 `%2e` 和 `%2e%2e`。URL 解析器会把它们当作目录跳转来解析，如果允许绑定，处理函数看到的路径就会与中间件看到的不同。捕获还会拒绝在编码分隔符之后含有 `.` 或 `..` 组成部分的解码值（`..%2F..%2Fsecret`、`..%5C`），以及任何控制字符（`%00`、`%0A`、`%09`、`%7F`）。这些请求会得到 `404`。
+
+解码出编码的 `/` 或 `\`（`%2F`、`%5C`）的捕获默认也会以 `404` 拒绝，因为这样一个捕获值就会对下游的任何文件系统、URL 或代理使用方跨越多个路径分段。如果某条路由确实使用带斜杠的 id，请按路由单独开启：
+
+```ts
+app.route({
+  method: "GET",
+  path: "/books/:id",
+  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+  responses: { 200: { description: "Book" } },
+  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+});
+```
+
+开启后也绝不会重新放行 `..` 组成部分或控制字符。解码后的参数仍是不可信数据，并不是经过清理的文件系统路径，因此请单独校验文件系统访问。
+
+适配器也会让路由器和中间件看到同一个路径视图（自 1.3.7 起）。Node 适配器会在路由之前，像 `new URL()` 那样规范化含有 `\`、点分段或其 `%2e` 形式的请求目标。Node 和 AWS Lambda 适配器都会以 `400` 拒绝不是纯 `host[:port]` 的 `Host` 请求头（例如含有 `\ / ? # @ %` 或空白字符）。因此，`except()` 等基于路径的守卫匹配的正是实际运行的那条路由。详情参见 [Node 适配器](/docs/adapters/node)（英文）。
+
+## 分组 [#groups]
+
+```ts
+app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
+// 最终路径：/api/v1/health
+```
+
+分组会把前缀、标签、hook 和认证默认值合并到回调内注册的路由中。子应用是封装的：在分组内添加的中间件不会泄漏到分组之外的路由。分组内的路由对运行时路由和 OpenAPI 都可见。关于并行的 `/api/v1` 和 `/api/v2` 契约、迁移策略以及分别生成的 SDK，请阅读 [API 版本管理指南](/docs/api-versioning)（英文）。
+
+## 路由选项 [#route-options]
+
+- `request`：`params`、`query`、`headers` 和 `body` 的 schema。
+- `responses`：声明的状态码，以及可选的响应体/响应头 schema。
+- `accepts`：针对带请求体 schema 的路由，按路由设置的 `Content-Type` 允许列表。
+- `auth`：路由的 OpenAPI 安全要求。请与 `bearerAuth()` 等认证 hook 搭配使用。
+- `internal`：对公开适配器隐藏路由，但仍允许进程内的 `app.inject()` 调用。
+- `deprecated` 和 `sunset`：把端点标记为已弃用，并发出相应的响应头。
+- `callbacks` 和 `meta`：添加 OpenAPI 回调、示例以及对 AI 友好的路由元数据。
+
+## Hook [#hooks]
+
+Hook 在固定的生命周期节点上附加行为：
+
+- `onRequest`：最早执行，在解析之前。
+- `preBody`：在路由匹配之后、schema 校验或请求体 I/O 之前。内置的请求头/JWT/basic/mTLS 认证在这里运行。
+- `beforeHandle`：在校验之后、你的处理函数之前。返回一个 `Response` 即可短路。
+- `afterHandle`：在响应序列化之前包装或转换处理函数的结果。
+- `onError`：观察或替换错误响应。
+- `onSend`：就地修改传出的响应头，或返回一个新的 `Response`。在成功、错误和 `OPTIONS` 预检路径上都会运行。
+- `onResponse`：最后的观察者。用于日志和指标，不要在这里修改响应。
+
+<FlowDiagram title="请求生命周期" numbered caption="Hook 在处理函数前后的固定节点触发。低成本的认证可以在 preBody 中、请求体 I/O 之前就拒绝请求。需要读取请求体的中间件则把 beforeHandle 放在校验之后。只要有任何地方抛出错误，控制流就会跳到 onError，之后 onSend 和 onResponse 仍会运行。" steps={[
+          { label: "onRequest", eyebrow: "最早", detail: "解析之前" },
+          {
+            label: "preBody",
+            eyebrow: "最低成本的拒绝",
+            detail: "路由已匹配 · 请求体未读取",
+          },
+          {
+            label: "validate",
+            eyebrow: "框架",
+            detail: "params · query · body · headers",
+          },
+          {
+            label: "beforeHandle",
+            detail: "返回 Response 即可短路",
+          },
+          { label: "handler", detail: "你的路由逻辑", tone: "accent" },
+          { label: "afterHandle", detail: "包装 / 转换结果" },
+          { label: "onSend", detail: "修改或替换 Response" },
+          {
+            label: "onResponse",
+            eyebrow: "始终运行",
+            detail: "仅用于可观测性",
+            tone: "success",
+          },
+        ]} />
+
+```ts
+app.route({
+  method: "POST",
+  path: "/admin/purge",
+  operationId: "adminPurge",
+  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+  responses: {
+    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+    401: { description: "denied" },
+  },
+  handler: async () => ({ status: 200, body: { purged: true } }),
+});
+```
+
+## 用 `onSend` 转换响应 [#transforming-responses-with-onsend]
+
+当你需要改写传出的响应时，使用 `onSend`，例如附加一个响应头、去掉一个内部响应头，或者整个替换响应。返回 `void` 会保留当前响应。多个 `onSend` hook 以管道方式组合（全局 -\> 分组 -\> 路由）。
+
+```ts
+const app = new App({
+  hooks: {
+    onSend(res) {
+      // 在每个传出的响应上都声明 API 版本，
+      // 包括错误响应和 OPTIONS 预检响应。
+      res.headers.set("x-api-version", "2026-05-15");
+    },
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/users/me",
+  operationId: "me",
+  hooks: {
+    onSend(res) {
+      // 在响应发出之前去掉内部实现细节。
+      res.headers.delete("x-internal-cache-key");
+    },
+  },
+  responses: {
+    200: { description: "ok", body: z.object({ id: z.string() }) },
+  },
+  handler: async ({ set }) => {
+    set.headers.set("x-internal-cache-key", "shard-a");
+    return { status: 200, body: { id: "u_1" } };
+  },
+});
+```
+
+`onSend` 在响应校验*之后*运行，也在包括 `x-request-id` 在内的请求作用域响应头合并之后运行。它在 `onResponse` *之前*运行，日志和指标仍应放在 `onResponse` 中。
+
+## 405 Method Not Allowed [#405-method-not-allowed]
+
+如果某个路径只为一种方法注册，却用另一种方法调用，路由器会返回 **405** 并带上正确的 `Allow` 响应头，而绝不会返回误导性的 404。标记为 `internal: true` 的路由会从公开的 405 和 `Allow` 响应中过滤掉，因此隐藏的管理端点或定时任务端点不会通过方法探测泄露出去。
+
+方法发现同时包括精确的静态路由和选中的动态路由。在有 `GET /users/me` 和 `POST /users/:id` 的情况下，路径 `/users/me` 会同时通告这两个已注册的方法。该响应头列出的是显式注册的方法；自动合成的 HEAD 和 OPTIONS 处理不会增加条目。
+
+## 性能 [#performance]
+
+```text
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
+```

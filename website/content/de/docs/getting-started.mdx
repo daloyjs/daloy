@@ -171,9 +171,9 @@ const app = new App({
 });
 ```
 
-Dieselbe URL (`GET /docs`), dieselben Live-Endpunkte `/openapi.json` und `/openapi.yaml`, dieselbe CSP-Behandlung; nur das ausgelieferte HTML ändert sich. Sie können auch beides behalten: Lassen Sie die automatisch eingebundene Route bei Scalar und stellen Sie selbst eine zweite Swagger-Route mit `swaggerUiHtml()` bereit (das manuelle Vorgehen steht im [OpenAPI-Leitfaden](/docs/openapi), auf Englisch).
+Dieselbe URL (`GET /docs`), dieselben Live-Endpunkte `/openapi.json` und `/openapi.yaml`, dieselbe CSP-Behandlung; nur das ausgelieferte HTML ändert sich. Sie können auch beides behalten: Lassen Sie die automatisch eingebundene Route bei Scalar und stellen Sie selbst eine zweite Swagger-Route mit `swaggerUiHtml()` bereit (das manuelle Vorgehen steht im [OpenAPI-Leitfaden](/de/docs/openapi)).
 
-Sie brauchen einen anderen Pfad? Nutzen Sie die Objektform: `docs: { ui: "swagger", path: "/reference" }`. Die Objektform wird nur außerhalb der Produktion eingebunden, es sei denn, Sie ergänzen `enabled: true` (seit 1.5.5), genau wie `docs: "auto"`, das bei `production: true` übersprungen wird. Volle Kontrolle? Setzen Sie `docs: false` und binden Sie eigene Routen mit `generateOpenAPI()` und `swaggerUiHtml() / scalarHtml()` ein: siehe [OpenAPI-Leitfaden](/docs/openapi) (auf Englisch).
+Sie brauchen einen anderen Pfad? Nutzen Sie die Objektform: `docs: { ui: "swagger", path: "/reference" }`. Die Objektform wird nur außerhalb der Produktion eingebunden, es sei denn, Sie ergänzen `enabled: true` (seit 1.5.5), genau wie `docs: "auto"`, das bei `production: true` übersprungen wird. Volle Kontrolle? Setzen Sie `docs: false` und binden Sie eigene Routen mit `generateOpenAPI()` und `swaggerUiHtml() / scalarHtml()` ein: siehe [OpenAPI-Leitfaden](/de/docs/openapi).
 
 `swaggerUiHtml()` und `scalarHtml()` laden ihre Standard-Assets vom CDN jsDelivr, daher muss eine strikte Content-Security-Policy diese Assets erlauben, sonst bleibt die Doku-Oberfläche womöglich leer. Die automatisch eingebundene Route und `htmlResponse()` fügen selbst eine passende CSP hinzu. Bauen Sie die Antwort selbst, importieren Sie `docsContentSecurityPolicy` aus `@daloyjs/core/docs` und übergeben Sie das Ergebnis als Response-Header:
 
@@ -237,7 +237,7 @@ Authentifizierung belegt, wer aufruft. Sie belegt nicht, dass dieser Aufrufer di
 
 ## Nächste Schritte
 
-- [Routing](/docs/routing) (auf Englisch)
-- [Validierung mit Standard Schema](/docs/validation) (auf Englisch)
-- [Sicherheitsmechanismen und Middleware](/docs/security) (auf Englisch)
+- [Routing](/de/docs/routing)
+- [Validierung mit Standard Schema](/de/docs/validation)
+- [Sicherheitsmechanismen und Middleware](/de/docs/security)
 - [Tutorial: API für einen Buchladen](/de/docs/tutorials/bookstore)

@@ -1,0 +1,148 @@
+---
+title: Типизированные API-клиенты
+description: Генерируйте полностью типизированные TypeScript-клиенты из спецификации OpenAPI DaloyJS через Hey API. Сквозная типобезопасность сервера и клиента без дрейфа.
+keywords:
+  - типизированный API-клиент
+  - клиент OpenAPI на TypeScript
+  - клиент Hey API
+  - сквозная типобезопасность
+  - альтернатива ts-rest
+  - ts-rest против DaloyJS
+sitemap:
+  priority: 0.7
+---
+
+# Типизированные клиенты
+
+DaloyJS предлагает **два** способа вызывать ваш API с полной типобезопасностью. Используйте тот, что подходит вашему потребителю.
+
+## 1. Типизированный клиент внутри процесса (без кодогенерации) [#1-in-process-typed-client-zero-codegen]
+
+Для потребителей на TypeScript в том же монорепозитории (тесты, внутренние инструменты, серверные действия Next.js):
+
+```ts
+import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
+
+const client = createInProcessClient(app);
+
+const r = await client.getBookById({ params: { id: "1" } });
+//    ^? { status: 200; body: { id: string; title: string } }
+//      | { status: 404; body: ProblemJson }
+
+if (r.status === 200) {
+  console.log(r.body.title); // string, полностью типизировано
+}
+```
+
+Ключами клиента служат значения `operationId`, он возвращает размеченное объединение `{status, body, headers}` и выводит всё из самого определения маршрута. Шаг сборки не нужен.
+
+### Параметры пути [#path-parameters]
+
+Параметры пути подставляются целыми сегментами, поэтому `:id` никогда не совпадёт внутри `:idx`, а каждое значение percent-кодируется в собственный сегмент. Начиная с 1.3.7 сгенерированный метод выбрасывает `TypeError` ещё до отправки запроса, если параметр отсутствует, пуст, равен `.` или `..`. Разбор URL разрешил бы точечный сегмент (даже в виде `%2E%2E`) и молча перенаправил бы вызов, например превратив `DELETE /orgs/:org/members/..` в `DELETE /orgs/:org`. Wildcard-маршруты (`*path` или голый `*` с именем `wildcard`) принимают значение, разделённое `/`; каждый сегмент кодируется и проверяется так же.
+
+```ts
+// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed
+```
+
+<Callout type="tip" title="Собирайте кортежи маршрутов, а не расширяйте тип App.">
+<p>Экспортируйте файлы маршрутов через <code>defineRoute()</code> и регистрируйте литеральный кортеж через <code>app.registerRoutes(\[...\])</code>{". "}Цепочка вызовов <code>route()</code> тоже работает. Две вещи намеренно стирают вывод типов и сводят клиент к нестрогой поверхности:</p>
+<ul>
+<li>Аннотация экземпляра голым{" "}<code>const app: App = ...</code> (или возврат <code>: App</code>{" "}из фабрики). Расширяющая аннотация отбрасывает накопленные маршруты, поэтому позвольте типу вывестись самостоятельно.</li>
+<li>Регистрация маршрутов отдельными инструкциями на ранее объявленной переменной вместо возврата результата цепочки или использования{" "}<code>registerRoutes()</code>.</li>
+</ul>
+<p>Руководство по модульному монолиту показывает композицию в нескольких файлах с кортежами маршрутов из нескольких ограниченных контекстов. <code>group()</code> с колбэком и <code>register()</code> плагинов по-прежнему дают изоляцию во время выполнения, но их колбэки не могут расширить TypeScript-дженерик родительской переменной. Используйте кортежи маршрутов как границу композиции для типизированного клиента.</p>
+</Callout>
+
+## 2. SDK Hey API (для других языков и репозиториев, во время сборки) [#2-hey-api-sdk-cross-language-cross-repo-build-time]
+
+Для потребителей вне монорепозитория или на других языках сгенерируйте полностью типизированный fetch SDK с помощью [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
+
+<FlowDiagram title="Конвейер кодогенерации" numbered caption="pnpm gen запускает всю цепочку: выгружает спецификацию из ваших маршрутов, затем Hey API превращает её в типизированный fetch SDK. Запускайте его заново при каждом изменении маршрута, и клиент будет идти в ногу с контрактом." steps={[
+          { label: "Маршруты", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "спецификация OpenAPI 3.1 на диске" },
+          { label: "openapi-ts", detail: "генератор Hey API" },
+          { label: "Типизированный SDK", detail: "sdk.gen.ts · types.gen.ts" },
+          {
+            label: "Потребитель",
+            detail: "полностью типизированные вызовы fetch",
+            tone: "success",
+          },
+        ]} />
+
+```bash
+pnpm add -D @hey-api/openapi-ts prettier
+```
+
+```ts
+// openapi-ts.config.ts
+import { defineConfig } from "@hey-api/openapi-ts";
+
+export default defineConfig({
+  input: "./generated/openapi.json",
+  output: { path: "./generated/client", postProcess: ["prettier"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
+});
+```
+
+```json
+// package.json
+"scripts": {
+  "gen:openapi": "node scripts/dump-openapi.ts",
+  "gen:client":  "openapi-ts",
+  "gen":         "pnpm gen:openapi && pnpm gen:client"
+}
+```
+
+```bash
+pnpm gen
+# записывает:
+#   generated/openapi.json
+#   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
+```
+
+## Использование сгенерированного SDK [#using-the-generated-sdk]
+
+```ts
+import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
+
+client.setConfig({ baseUrl: "https://api.example.com" });
+
+const { data, error } = await getBookById({ path: { id: "1" } });
+if (error) console.error(error);
+else if (data) console.log(data.title);
+```
+
+## Что выбрать? [#which-one-should-i-use]
+
+| Сценарий | Выбор |
+| --- | --- |
+| Вызывающий код на TypeScript в том же репозитории (тесты, внутренние инструменты) | `createInProcessClient` |
+| Веб-приложение или мобильный бандл RN в отдельном репозитории | SDK Hey API |
+| Потребитель не на TypeScript (Python, Swift, Kotlin) | Документ OpenAPI + предпочитаемый им генератор |
+| Публичный SDK для третьих сторон | SDK Hey API, опубликованный отдельным пакетом |
+
+## Переходите с ts-rest? [#coming-from-ts-rest]
+
+[ts-rest](https://ts-rest.com/) является популярной библиотекой в стиле contract-first, которая даёт сквозные типы TypeScript **без кодогенерации**, разделяя контракт (`initContract`) между сервером на адаптерах (Express, Fastify, NestJS, Next.js) и fetch-клиентом (`initClient`). Если вам нравится такая модель, DaloyJS покажется знакомым, но с двумя отличиями.
+
+Во-первых, в DaloyJS **контрактом является само определение маршрута**, и отдельного объекта контракта, который нужно синхронизировать, нет. Показанный выше `createClient` внутри процесса даёт тот же опыт без кодогенерации и с общими типами для вызывающего кода на TypeScript в том же репозитории.
+
+Во-вторых, типобезопасность ts-rest работает только в TypeScript и требует, чтобы клиент импортировал контракт. DaloyJS из тех же маршрутов генерирует полноценную спецификацию **OpenAPI 3.1** и SDK Hey API, поэтому покрыты и потребители, которые не могут импортировать ваши типы (другие репозитории, другие языки, публичные SDK). В ts-rest OpenAPI является необязательным дополнением (`@ts-rest/open-api`). Кроме того, DaloyJS сам является сервером и рантаймом, переносимым между Node, Bun, Deno, Cloudflare и Vercel, а не слоем типизации поверх отдельного фреймворка.
+
+|  | ts-rest | DaloyJS |
+| --- | --- | --- |
+| Источник контракта | Отдельный объект `initContract` | Само определение маршрута |
+| Типизированный клиент без кодогенерации | Да (`initClient`, только TypeScript) | Да (`createClient`, только TypeScript) |
+| Клиенты для других языков и репозиториев | Дополнение OpenAPI (`@ts-rest/open-api`) | OpenAPI 3.1 + SDK Hey API, встроено |
+| Сервер | Адаптер для Express / Fastify / NestJS / Next.js | Встроенный, переносимый между рантаймами |
+| Валидация во время выполнения | Standard Schema (Zod / Valibot / ArkType) | Standard Schema (Zod / Valibot / ArkType / TypeBox) |
+| Безопасность по умолчанию | На ваше усмотрение | Заголовки и лимиты тела включены по умолчанию; CSRF и ограничение частоты в одной строке |
+
+Нужен контракт побольше, чтобы проверить вывод генератора? Используйте [большое демо фейкового REST API](/docs/tutorials/fake-rest-api) (на английском) как стресс-тест вместо минимального учебного приложения.
