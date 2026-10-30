@@ -138,6 +138,8 @@ import { App, session } from "@daloyjs/core";
 
 export const app = new App();
 
+// Pair this with csrf() from the section above: in production, session()
+// plus a state-changing route without csrf() refuses to boot.
 app.use(
   session({
     // Provide MORE than one to rotate signing keys without logging users out.
@@ -170,13 +172,13 @@ import Redis from "ioredis";
 
 const redis = new Redis(process.env.REDIS_URL!);
 
-export const app = new App();
+// Only with a sanitizing proxy in front! rateLimit() follows behindProxy.
+export const app = new App({ behindProxy: { hops: 1 } });
 
 app.use(
   rateLimit({
     windowMs: 60_000,
     max: 120,
-    trustProxyHeaders: true, // only with a sanitizing proxy in front!
     store: redisRateLimitStore({
       client: ioredisAdapter(redis),
       prefix: "myapp:rl:",
@@ -346,7 +348,7 @@ In-memory rate limits are a lie the moment you have two app instances behind a l
 <CodeBlock language="ts" code={RATE_LIMIT_REDIS} />
 </EditorFrame>
 
-Two details worth pausing on. First, `trustProxyHeaders` is `false` by default, because if you turn it on without a sanitizing proxy in front, an attacker can spoof `x-forwarded-for` and rate-limit themselves into invisibility. Second, the Redis adapter is *fail-open* by default: if Redis is down, requests are allowed through. That's the right choice for most apps (you don't want a Redis blip to take you offline), but you can flip it to fail-closed with one option if you'd rather block on uncertainty.
+Two details worth pausing on. First, forwarded headers are not trusted by default, because if you trust them without a sanitizing proxy in front, an attacker can spoof `x-forwarded-for` and rate-limit themselves into invisibility. You declare the proxy once with `behindProxy` on the App and the limiter follows it (in production, a forwarded header with no `behindProxy` gets a `500` instead of being believed). Second, the Redis adapter is *fail-open* by default: if Redis is down, requests are allowed through. That's the right choice for most apps (you don't want a Redis blip to take you offline), but you can flip it to fail-closed with one option if you'd rather block on uncertainty.
 
 ## The defaults table, for the busy reader
 

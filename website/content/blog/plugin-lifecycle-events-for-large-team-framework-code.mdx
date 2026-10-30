@@ -240,7 +240,7 @@ export const SHUTDOWN_FLOW = `# What happens when app.shutdown() is called:
 #
 # T+done    Single log line: "DaloyJS shutdown complete".
 #
-# Both Node and Bun adapters call app.shutdown() automatically on
+# The Node, Bun, and Deno adapters call app.shutdown() automatically on
 # SIGINT and SIGTERM. Other runtimes (Workers, Lambda) call it from
 # your handler when the lifecycle event fires.`;
 

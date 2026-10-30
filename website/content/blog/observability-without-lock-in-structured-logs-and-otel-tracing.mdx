@@ -145,6 +145,9 @@ const app = new App({
     tracer,
     // Use your routing knowledge to template the span name instead of
     // letting it be "GET /books/abc123" (high-cardinality nightmare).
+    // Update (1.11.0): without spanName, the span is renamed to
+    // "GET /books/:id" automatically when the tracer supports updateName
+    // (the OTel SDK does). A custom spanName is never renamed.
     spanName: (req) => {
       const url = new URL(req.url);
       const m = url.pathname.match(/^\\/books\\/[^/]+$/);
@@ -162,11 +165,14 @@ export const OTEL_LIFECYCLE = `# The four-hook lifecycle, in order, for a single
 # 2) beforeHandle  - stores the span on ctx.state.otelSpan so handlers
 #                    can add events / create child spans / set custom
 #                    attributes ("user.id", "tenant.id", ...).
-# 3) onError       - calls span.recordException(err) and sets status
-#                    to ERROR with err.message. Runs ONCE.
-# 4) onSend        - sets http.response.status_code, escalates to ERROR
-#                    for 5xx if onError didn't already, and calls
-#                    span.end() exactly once. Even if the handler threw.
+# 3) onError       - remembers the thrown error. Runs ONCE. Whether it
+#                    marks the span is decided by the final status.
+# 4) onSend        - sets http.response.status_code and http.route,
+#                    renames the span to "<METHOD> <route template>",
+#                    and for 5xx only records the exception and sets
+#                    ERROR (a 4xx leaves the status unset, per the OTel
+#                    HTTP conventions). Calls span.end() exactly once.
+#                    Even if the handler threw.
 #
 # Everything is delivered through the standard Hooks contract from
 # src/types.ts - no monkey-patching of fetch, no async-hooks magic,
@@ -183,7 +189,7 @@ app.route({
   responses: { 200: { description: "ok" } },
   handler: async (ctx) => {
     const span = (ctx.state as { otelSpan?: TracingSpan }).otelSpan;
-    span?.setAttribute("http.route", "/books/:id");
+    span?.setAttribute("http.route", "/books/:id"); // automatic since 1.11.0
     span?.setAttribute("books.id", ctx.params.id);
     span?.setAttribute("tenant.id", ctx.state.tenantId as string);
 
@@ -326,8 +332,9 @@ export const RUNTIME_NOTES = `# Runtime-by-runtime observability checklist.
 # Cloudflare Workers:
 # - createLogger writes via console.log (the Workers runtime captures
 #   it). Logpush ships to R2/S3/Splunk.
-# - For tracing: roll a small TracingTracer that POSTs to an OTLP/HTTP
-#   collector (or directly to vendor APIs like Honeycomb). The "no OTel
+# - For tracing: createOtlpTracer() from @daloyjs/core/otlp (since
+#   1.11.0) pushes spans to an OTLP/HTTP collector with no SDK, or roll
+#   a small TracingTracer for vendor APIs like Honeycomb. The "no OTel
 #   SDK" example above is the template.
 # - Inherit traceparent via contextFromRequest - propagation only needs
 #   reading the header; you can do that without the OTel propagator.
@@ -353,16 +360,19 @@ export const CHECKLIST = `# Pre-flight observability checklist for any service.
 #    Use ctx.state.log inside handlers, not the top-level instance.
 # 3) timing() so the Network tab shows handler latency without
 #    instrumentation in the frontend.
-# 4) otelTracing({ tracer, spanName }) - TEMPLATE the span name. Raw
-#    URLs are the most common source of cardinality explosions in
-#    every observability bill on earth.
+# 4) otelTracing({ tracer }) - keep span names TEMPLATED. The default
+#    renames spans to the route template when the tracer supports
+#    updateName; a custom spanName must template it itself. Raw URLs
+#    are the most common source of cardinality explosions in every
+#    observability bill on earth.
 # 5) Wire contextFromRequest to your propagator. A trace that starts
 #    at the frontend and ends in the database is the only kind worth
 #    paying for.
 # 6) Record exceptions and stamp http.response.status_code. The
 #    framework does this for you - just verify in dev.
-# 7) Tie logs to traces. Stamp the trace id on every log line; jump
-#    from a log entry to the matching span in your UI of choice.
+# 7) Tie logs to traces. Stamp the trace id on every log line
+#    (otelTracing({ correlateLogs: true }) does it for ctx.state.log);
+#    jump from a log entry to the matching span in your UI of choice.
 # 8) Keep the SDK out of @daloyjs/core. The portability story dies
 #    the day you accept a hard dep on @opentelemetry/api.`;
 
@@ -414,7 +424,7 @@ Most frameworks get this boundary wrong: `otelTracing()` is shaped like the `@op
 
 ## The four-hook lifecycle
 
-<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="onRequest · preBody · beforeHandle · onError · onSend">
+<EditorFrame files={["NOTES.md"]} activeFile="NOTES.md" status="onRequest · beforeHandle · onError · onSend">
 <CodeBlock language="bash" code={OTEL_LIFECYCLE} />
 </EditorFrame>
 
@@ -422,9 +432,9 @@ Most frameworks get this boundary wrong: `otelTracing()` is shaped like the `@op
 
 <HookCard hook="beforeHandle" purpose="Expose the span on ctx.state.otelSpan.">The <code>stateKey</code> is configurable. Default is{" "}<code>otelSpan</code>{". "}Handlers add events / child spans / custom attributes here.</HookCard>
 
-<HookCard hook="onError" purpose="recordException() + ERROR status.">Runs exactly once. The error is captured as a structured exception event with name and message, ready for your APM to group on.</HookCard>
+<HookCard hook="onError" purpose="Remember the thrown error.">Runs exactly once. The error is kept for <code>onSend</code>, which records it as a structured exception event (name and message) only when the final status is 5xx. A thrown 404 or 422 is not a server error.</HookCard>
 
-<HookCard hook="onSend" purpose="status_code, 5xx escalation, end()."><code>span.end()</code> fires exactly once per request even if the handler threw. WeakMap-keyed by Request so it's safe across async boundaries.</HookCard>
+<HookCard hook="onSend" purpose="status_code, http.route, 5xx escalation, end()."><code>span.end()</code> fires exactly once per request even if the handler threw. WeakMap-keyed by Request so it's safe across async boundaries.</HookCard>
 
 ## Adding your own semantic attributes
 

@@ -147,19 +147,20 @@ METHOD  PATH                       OPERATION ID    RESPONSES   TAGS
 GET     /v1/orders/admin/dump      -               -           -
 POST    /v1/orders                 createOrder     201         orders
 GET     /v1/orders/:id             getOrder        200,404     orders
-PUT     /v1/orders/:id             createOrder     200,404,422 orders
+PUT     /v1/orders/:id             replaceOrder    200,404,422 orders
 DELETE  /v1/orders/:id             deleteOrder     204,404     orders
 
 5 routes.
 
-Contract checks: 5 routes · 3 errors · 1 warning
+Contract checks: 5 routes · 2 errors · 1 warning
   [error] GET /v1/orders/admin/dump: Missing operationId
   [error] GET /v1/orders/admin/dump: No responses declared
-  [error] PUT /v1/orders/:id: Duplicate operationId "createOrder" (also on POST /v1/orders)
   [warning] DELETE /v1/orders/:id: Body schema declared on DELETE (likely a mistake)
 FAIL.
 
-# Exit code: 1.  Wire this into CI and the bad PR can't merge.`;
+# Exit code: 1.  Wire this into CI and the bad PR can't merge.
+# (A duplicate operationId never gets this far: app.route() throws at
+# registration, so the CLI fails to load the App and exits non-zero.)`;
 
 export const OPENAPI_FLAG = `# --openapi prints the full OpenAPI 3.1 document the App would generate.
 # Same generator the website's "Try it" page uses, same generator your
@@ -184,14 +185,12 @@ $ pnpm daloy inspect --json --check | jq '
 [
   {
     "level": "error",
-    "count": 3,
+    "count": 2,
     "items": [
       { "level": "error", "route": "GET /v1/orders/admin/dump",
         "message": "Missing operationId" },
       { "level": "error", "route": "GET /v1/orders/admin/dump",
-        "message": "No responses declared" },
-      { "level": "error", "route": "PUT /v1/orders/:id",
-        "message": "Duplicate operationId \\"createOrder\\" (also on POST /v1/orders)" }
+        "message": "No responses declared" }
     ]
   },
   {
@@ -330,7 +329,7 @@ The two patterns I use the most: a default export for tiny apps, and a zero-arg 
 
 <FlagCard flag="--method <method>" use="filter to one verb.">Most regressions happen on writes. Running{" "}<code>--method POST</code> at the end of a review is a cheap second pass that has caught me at least once a quarter.</FlagCard>
 
-<FlagCard flag="--check" use="run the contract suite, exit 1 on errors.">Missing or duplicate operationIds, missing responses, a body schema on GET/HEAD/DELETE (warning), and route examples that don't match their schemas or declared statuses. Wire it into CI and a bad PR can't merge.</FlagCard>
+<FlagCard flag="--check" use="run the contract suite, exit 1 on errors.">Missing operationIds (a duplicate already throws at registration), missing responses, a body schema on GET/HEAD/DELETE (warning), and route examples that don't match their schemas or declared statuses. Wire it into CI and a bad PR can't merge.</FlagCard>
 
 <FlagCard flag="--openapi" use="print the full OpenAPI 3.1 document.">The exact same generator the docs UI and your Hey API codegen use. Pipe to <code>generated/openapi.json</code>{", "}<code>git diff --exit-code</code>{", "}done, your CI now blocks PRs that change the surface without checking in the new spec.</FlagCard>
 

@@ -140,6 +140,9 @@ fileField({
   maxBytes: 10 * 1024 * 1024,                // hard cap on file.size
   accept:   ["image/*", "application/pdf"],  // exact or "type/*" wildcard
   filename: (name) => name.length <= 200,    // your custom predicate
+  allowUnsafeFilenames: false,               // since 1.16.0: names with "/", "\\",
+                                             //   control chars, "." / ".." or >255
+                                             //   chars are refused unless true
   magicBytes: true,                          // sniff PNG/JPEG/GIF/WebP/PDF/ZIP/GZIP
                                              //   signatures derived from accept
   rejectScriptableImages: true,              // refuse SVG/MVG/PostScript (on by
@@ -370,7 +373,7 @@ Notice that the rejection happens *before* the handler runs. By the time your bu
 
 ## fileField(): every option, in one screen
 
-<EditorFrame files={["@daloyjs/core · multipart.ts"]} activeFile="@daloyjs/core · multipart.ts" status="seven knobs · no hidden behavior">
+<EditorFrame files={["@daloyjs/core · multipart.ts"]} activeFile="@daloyjs/core · multipart.ts" status="eight knobs · no hidden behavior">
 <CodeBlock language="ts" code={FILE_FIELD_OPTIONS} />
 </EditorFrame>
 

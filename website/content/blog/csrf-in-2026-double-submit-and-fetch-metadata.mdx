@@ -149,7 +149,7 @@ csrf({ strategy: "tripple-submit" });
 // Error: csrf(): strategy must be "double-submit", "fetch-metadata", or "both".
 
 csrf({ cookieName: "csrf token" });
-// Error: csrf(): cookieName is not a valid cookie name.
+// Error: csrf(): cookieName (cookie name) "csrf token" is not a valid cookie name (RFC 6265 token).
 
 csrf({ cookieName: "csrf", cookieOptions: { sameSite: "lax" as never } });
 // Error: csrf(): cookieOptions.sameSite must be "Strict", "Lax", or "None".

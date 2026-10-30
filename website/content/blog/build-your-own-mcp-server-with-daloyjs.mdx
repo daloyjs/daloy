@@ -115,7 +115,7 @@ That dual-era support is also where a lazy implementation gets burned. If a gate
 
 A tool call looks like an API request, but the thing deciding to make it is a language model that can be talked into things by whatever text it read last. So the MCP endpoint gets stricter defaults than a normal route:
 
-- **No auth, no service.** In a production app with `secureDefaults` (the default), an MCP route without an auth hook fails closed. Every request gets a 500, and your logs get an error that tells you exactly how to fix it. A genuinely public MCP server has to say so with `mcpRoutes(path, handler, { public: true })`.
+- **No auth, no service.** In a production app with `secureDefaults` (the default), an MCP route without an auth hook fails closed. `serve()` (and the other adapters) refuse to start, and the error tells you exactly how to fix it. A genuinely public MCP server has to say so with `mcpRoutes(path, handler, { public: true })`.
 - **DNS rebinding is blocked.** A malicious web page can trick a browser into calling a server on your machine or your network. The handler checks the `Origin` header and refuses unknown browser origins with a 403. Desktop clients and CLIs, which send no `Origin`, work normally. Trusted web apps go into `allowedOrigins`.
 - **The schema is enforced, not just advertised.** Arguments are checked against your `inputSchema` before your handler runs.
 - **The boring bits are on too:** body size limits, prototype-pollution-safe parsing, and internal errors redacted in production, so a failing tool does not leak your database error to the model (and from there, to whoever is chatting with it).

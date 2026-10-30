@@ -155,7 +155,7 @@ test("every route is a good citizen", async () => {
 export const PNPM_GEN_SCRIPTS = `// apps/api/package.json
 {
   "scripts": {
-    "gen:openapi": "tsx scripts/dump-openapi.ts",
+    "gen:openapi": "node scripts/dump-openapi.ts",
     "gen:client":  "openapi-ts",
     "gen":         "pnpm gen:openapi && pnpm gen:client"
   }
@@ -230,7 +230,7 @@ One route, two declared responses (`200` and `404`), each with a real Zod schema
 
 <ProjectionStep index={1} title="generateOpenAPI(app), the spec is a function of the routes" from="app.route({...})" to="generated/openapi.json">
 <p>The registered routes produce the OpenAPI document as a pure function. Call <code>generateOpenAPI(app, ...)</code>{", "}get a fully-formed OpenAPI 3.1 document back, write it wherever you want it.</p>
-<EditorFrame files={["apps/api/scripts/dump-openapi.ts"]} activeFile="apps/api/scripts/dump-openapi.ts" status="tsx scripts/dump-openapi.ts ✓ wrote 14 KB">
+<EditorFrame files={["apps/api/scripts/dump-openapi.ts"]} activeFile="apps/api/scripts/dump-openapi.ts" status="node scripts/dump-openapi.ts ✓ wrote 14 KB">
 <CodeBlock language="ts" code={PROJECTION_OPENAPI} />
 </EditorFrame>
 <p>The proof is one <code>jq</code> away:</p>

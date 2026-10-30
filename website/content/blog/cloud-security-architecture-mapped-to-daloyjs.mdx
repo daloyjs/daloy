@@ -150,7 +150,7 @@ See [the fetch-guard docs](/docs/security/fetch-guard) for the full default deny
 
 ## Principle 5: Automate security with IaC scanning
 
-<PrincipleCard principle="Scan infrastructure-as-code in CI before it ships" framework="The framework's own repo runs ~15 verify-* gates on every PR. The scaffolded app from create-daloy ships with the same CI workflow templates so your project gets them on day one." platform="Terraform / CloudFormation / Pulumi scanners (Checkov, tfsec, Aikido, etc.) for your cloud resources. Daloy does not scan your S3 buckets, but it does refuse to install a dependency that runs a postinstall script." />
+<PrincipleCard principle="Scan infrastructure-as-code in CI before it ships" framework="The framework's own repo runs 30+ verify-* gates on every PR. The scaffolded app from create-daloy ships with its own hardened CI workflow templates (on by default, --no-ci to skip) so your project gets them on day one." platform="Terraform / CloudFormation / Pulumi scanners (Checkov, tfsec, Aikido, etc.) for your cloud resources. Daloy does not scan your S3 buckets, but it does refuse to install a dependency that runs a postinstall script." />
 
 The cloud post is talking about Terraform scanners. The framework analogue is the supply-chain CI gate. These gates run today, and any failure blocks merge:
 

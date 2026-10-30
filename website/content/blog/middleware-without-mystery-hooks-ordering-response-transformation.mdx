@@ -358,7 +358,7 @@ There are six hooks. They fire in the order they appear in the code, in the orde
 
 ## The whole API in one screen
 
-<EditorFrame files={["@daloyjs/core · types.ts"]} activeFile="@daloyjs/core · types.ts" status="six hooks · two phases · zero hidden ones">
+<EditorFrame files={["@daloyjs/core · types.ts"]} activeFile="@daloyjs/core · types.ts" status="seven hooks · two phases · zero hidden ones">
 <CodeBlock language="ts" code={HOOKS_INTERFACE} />
 </EditorFrame>
 
@@ -531,7 +531,7 @@ For anything you'd ship as a unit, a metrics endpoint plus its `onResponse` obse
 
 ## Make ordering visible
 
-Middleware in DaloyJS is one interface, `Hooks`, with six method slots. Three scopes, composed in a fixed order. One side-channel for errors. Once the mental model clicks, you stop asking *where does this go* and start asking *which scope*: which is a far more interesting question, and one whose answer you can usually argue about in a Slack thread without anyone getting hurt.
+Middleware in DaloyJS is one interface, `Hooks`, with seven method slots. Three scopes, composed in a fixed order. One side-channel for errors. Once the mental model clicks, you stop asking *where does this go* and start asking *which scope*: which is a far more interesting question, and one whose answer you can usually argue about in a Slack thread without anyone getting hurt.
 
 For the surrounding pieces: [RFC 9457 errors](/blog/problem-details-done-right-rfc-9457-errors) is the contract `onError` serializes into. [Sessions](/blog/sessions-on-the-edge) is the most common `beforeHandle` consumer you'll write, and the [bookstore tutorial](/blog/building-a-bookstore-api-with-daloyjs-from-scratch) shows the whole pipeline running against a real route table.
 

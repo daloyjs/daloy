@@ -307,6 +307,8 @@ export const CHECKLIST = `# Production checklist (the list I run through before 
 [ ] regenerate() is called on EVERY privilege change (login, MFA step-up,
     password reset, role assumption, impersonation)
 [ ] destroy() is called on logout AND on account deletion
+[ ] csrf() is mounted next to session() (in production, session() plus a
+    state-changing route without csrf() refuses to boot)
 [ ] saveUninitialized stays false unless you have a cookie consent banner
     that explicitly allows it
 [ ] store is NOT MemorySessionStore in production (it doesn't survive a

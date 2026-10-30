@@ -122,7 +122,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 20
+          node-version: 24
           # NOTE: deliberately no \`cache: pnpm\` - the GHA cache is a known
           # exfiltration channel and a known persistence channel.
       - run: pnpm install --frozen-lockfile --ignore-scripts
@@ -149,7 +149,7 @@ jobs:
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Publish to npm with provenance
@@ -233,16 +233,22 @@ pnpm create daloy@latest my-api \\
 # What this drops into the new repo:
 #   .github/workflows/ci.yml         - pinned actions, no cache, --ignore-scripts
 #   .github/workflows/codeql.yml     - TS/JS static analysis
+#   .github/workflows/opengrep.yml   - second SAST engine next to CodeQL
+#   .github/workflows/dast.yml       - dynamic scan of the running app
 #   .github/workflows/deploy.yml     - manual-only app deployment starter
 #   .github/workflows/container-scan.yml - runs Trivy scans on your dockerfile
 #   .github/workflows/scorecard.yml  - weekly OpenSSF Scorecard
 #   .github/workflows/vuln-scan.yml  - checks for known vulnerabilities
+#   .github/workflows/osv-scan.yml   - second-source dependency scan (OSV.dev)
+#   .github/workflows/secret-scan.yml - gitleaks on PRs, pushes, and daily
+#   .github/workflows/eol-scan.yml   - flags end-of-life runtimes
 #   .github/workflows/zizmor.yml     - workflow lint on every push
 #   .github/dependabot.yml           - weekly bumps, grouped by ecosystem
 #   .github/CODEOWNERS               - @acme/security on workflow files
 #   SECURITY.md                      - disclosure policy + supported versions
 #   scripts/verify-lockfile-sources.mjs - the script above, runnable as
-#                                        pnpm verify:lockfile`;
+#                                        pnpm verify:lockfile
+#   scripts/verify-runtime-eol.mjs   - pnpm verify:runtime-eol`;
 
 export const ATTACK_PATHS = `# A short, opinionated map of the attack paths the above shuts down:
 

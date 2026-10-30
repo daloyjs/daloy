@@ -257,10 +257,14 @@ export function buildApp(): App {
   const app = new App({
     bodyLimitBytes: 1024 * 1024,
     requestTimeoutMs: 5_000,
-    production: process.env.NODE_ENV === "production",
+    // Only assert production when NODE_ENV says so; an explicit \`false\`
+    // would silence the indeterminate-environment warnings.
+    ...(process.env.NODE_ENV === "production" ? { production: true } : {}),
     docs: true,                         // /docs, /openapi.json, /openapi.yaml
     openapi: {
-      servers: [{ url: \`http://localhost:\${process.env.PORT ?? 3000}\` }],
+      // Leave \`servers\` unset so Scalar's "Try it" calls whatever origin
+      // serves the docs. Set PUBLIC_URL to pin an absolute base URL.
+      ...(process.env.PUBLIC_URL ? { servers: [{ url: process.env.PUBLIC_URL }] } : {}),
     },
   });
 

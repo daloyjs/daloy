@@ -294,7 +294,7 @@ DaloyJS is runtime-portable, and the scaffolder is where that promise becomes a 
 
 <TemplateCard name="bun-basic" tag="--template bun-basic" blurb="Bun-native. Uses bun --hot for dev, bun test for testing, and the same buildApp() handed to serve() from @daloyjs/core/bun. Fast cold start, identical handler code." entrypoint="serve(app), from @daloyjs/core/bun" />
 
-<TemplateCard name="deno-basic" tag="--template deno-basic" blurb="Deno-native. deno.json with tasks and an import map for @daloyjs/core (served from JSR as @daloyjs/daloy since 1.5.4; npm: specifiers before that), no node_modules. The only template with no package.json, which is exactly the point." entrypoint="serve(app), from @daloyjs/core/deno" />
+<TemplateCard name="deno-basic" tag="--template deno-basic" blurb="Deno-native. deno.json with tasks and an import map for @daloyjs/core (npm: specifiers again since 1.15.0; it pulled JSR's @daloyjs/daloy from 1.5.4 until then), no node_modules. The only template with no package.json, which is exactly the point." entrypoint="serve(app), from @daloyjs/core/deno" />
 
 <TemplateCard name="cloudflare-worker" tag="--template cloudflare-worker" blurb="Workers entrypoint with wrangler dev / wrangler deploy scripts and a minimal wrangler.toml. Pairs with the KV session store from the sessions post." entrypoint="export default toFetchHandler(app)" />
 

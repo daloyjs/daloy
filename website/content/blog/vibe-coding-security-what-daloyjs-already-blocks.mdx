@@ -29,7 +29,7 @@ I read it, opened DaloyJS, and went through each risk to see what we already blo
 
 ## Risk 1: SQL injection
 
-<RiskCard risk="Aikido: 'SQL injections, path traversal, hardcoded secrets.'" framework="Standard Schema (Zod / Valibot) validation lives in the route definition, not in an afterthought. A declared schema is enforced before the handler runs; a route without one still gets the raw ctx.request, so look for that in review. /docs/security/sql-injection documents the per-ORM patterns; the scaffolder ships Prisma / Drizzle / TypeORM templates that are parameterized by construction." user="Pick a real ORM. Don't write template-string SQL. The framework will not stop you from doing the wrong thing inside your handler, but it will hand you a fully-typed, validated input object so you have no excuse." />
+<RiskCard risk="Aikido: 'SQL injections, path traversal, hardcoded secrets.'" framework="Standard Schema (Zod / Valibot) validation lives in the route definition, not in an afterthought. A declared schema is enforced before the handler runs; a route without one still gets the raw ctx.request, so look for that in review. /docs/security/sql-injection documents the per-ORM patterns, and the /docs/orm pages (Prisma, Drizzle, TypeORM and more) show setups that are parameterized by construction." user="Pick a real ORM. Don't write template-string SQL. The framework will not stop you from doing the wrong thing inside your handler, but it will hand you a fully-typed, validated input object so you have no excuse." />
 
 DaloyJS doesn't ship an ORM. That's deliberate, pinning one ORM would be the same kind of opinionation that gets frameworks in trouble. What it does ship is a route shape where the input is validated *before* your handler runs:
 

@@ -425,6 +425,8 @@ The framework ships an HttpError subclass for every status code you actually use
 
 <ErrorRow name="InternalError" status={500} detail="Last-resort wrap for unhandled exceptions. Detail is redacted in production." />
 
+<ErrorRow name="ServiceUnavailableError" status={503} detail="Added in 1.15.0. Optional retryAfterSeconds becomes Retry-After, and Cache-Control: no-store keeps a shared cache from serving the outage after recovery." />
+
 ## ValidationError: the one you'll see most
 
 You don't throw `ValidationError` by hand most of the time, the framework throws it for you the moment a request body, params, query, or headers fail their declared schema. It carries an `errors` array of `{ path, message }` records, which is the shape every form library on the planet expects.

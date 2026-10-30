@@ -86,7 +86,8 @@ const handle = serve(app, {
   // SIGTERM / SIGINT auto-wired; drain window is here.
   shutdownTimeoutMs: 10_000,
   handleSignals: true,
-  // If a load balancer sets x-forwarded-*, trust it.
+  // If a load balancer sets x-forwarded-*, trust it for the request URL.
+  // Also declare it on the App (behindProxy), or production answers 500.
   trustProxy: true,
 });
 

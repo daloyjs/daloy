@@ -39,15 +39,15 @@ DaloyJS is an HTTP framework, so stages 1 and 2 only matter for users who build 
 
 ## Stage 1: Pre-auth SQL injection
 
-<StageCard stage="Database read via injection" ghost="A query parameter on a public Ghost endpoint was concatenated into a SQL string. Unauthenticated attackers could dump arbitrary tables, including 'mobiledoc_revisions' and the row holding admin API keys." daloyjs="DaloyJS doesn't ship an ORM (zero runtime deps in @daloyjs/core), but every docs example uses parameterised queries, pg tagged templates, postgres.js, better-sqlite3 prepared statements, or Prisma. 'website/app/docs/security/sql-injection' walks through each, and explicitly calls out the 'knex.raw(`${input}`)' template-literal footgun. The Standard Schema .strict() validator on params/query/body rejects unknown shapes before the handler runs, which removes the 'unexpected JSON in a query param' attack surface that often leads to SQLi in the first place." />
+<StageCard stage="Database read via injection" ghost="A query parameter on a public Ghost endpoint was concatenated into a SQL string. Unauthenticated attackers could dump arbitrary tables, including 'mobiledoc_revisions' and the row holding admin API keys." daloyjs="DaloyJS doesn't ship an ORM (zero runtime deps in @daloyjs/core), but every docs example uses parameterised queries, pg tagged templates, postgres.js, better-sqlite3 prepared statements, or Prisma. The /docs/security/sql-injection page walks through Prisma, Drizzle, Kysely, and node-postgres, and calls out the 'sql.raw(`${input}`)' template-literal footgun. The Standard Schema .strict() validator on params/query/body rejects unknown shapes before the handler runs, which removes the 'unexpected JSON in a query param' attack surface that often leads to SQLi in the first place." />
 
 ```typescript
 // What CVE-2026-26980 looked like: a query parameter on Ghost's
 // admin API was concatenated straight into a SQL string. DaloyJS
 // doesn't ship its own ORM (zero runtime deps, by design), but every
-// docs example uses parameterized queries. The 'website/app/docs/
-// security/sql-injection' page walks through pg, postgres, better-
-// sqlite3, and Prisma.
+// docs example uses parameterized queries. The '/docs/security/
+// sql-injection' page walks through Prisma, Drizzle, Kysely, and
+// node-postgres.
 import { App } from "@daloyjs/core";
 import postgres from "postgres";
 import { z } from "zod";

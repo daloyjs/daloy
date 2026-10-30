@@ -119,7 +119,7 @@ Avoid XML parsing when the domain allows it. Daloy does. If your domain forces y
 
 ## #6: Insecure deserialization
 
-<ThreatCard num={6} threat="Insecure deserialization (cookies, bodies, RPC)" status="default" framework="Bodies are JSON-only. The JSON parser strips __proto__ / constructor / prototype keys before validation. session() cookies default to __Host- prefix + HttpOnly + SameSite=Lax. Session payloads are MAC'd (timing-safe verify) and rotate signing keys cleanly." user="Don't accept Java-style serialized blobs, BSON from untrusted sources, or YAML !!js/function tags. If you do, validate the shape with a Standard Schema before touching it." />
+<ThreatCard num={6} threat="Insecure deserialization (cookies, bodies, RPC)" status="default" framework="Bodies are JSON, urlencoded, or multipart forms, never native serialized objects. The JSON parser strips __proto__ / constructor / prototype keys before validation. session() cookies default to __Host- prefix + HttpOnly + SameSite=Lax. Session payloads are MAC'd (timing-safe verify) and rotate signing keys cleanly." user="Don't accept Java-style serialized blobs, BSON from untrusted sources, or YAML !!js/function tags. If you do, validate the shape with a Standard Schema before touching it." />
 
 ```ts
 // JSON parsing in DaloyJS strips dangerous keys before they reach
