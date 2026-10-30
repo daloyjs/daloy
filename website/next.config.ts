@@ -15,7 +15,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const gitDates = readGitDates(root);
 if (gitDates.status !== "ok") {
   console.warn(
-    `[git-dates] Git history is ${gitDates.status}: docs "Last updated" dates and sitemap <lastmod> will be omitted. On Vercel, set VERCEL_DEEP_CLONE=true and redeploy.`,
+    `[git-dates] Git history is ${gitDates.status}${gitDates.detail ? ` (${gitDates.detail})` : ""}: docs "Last updated" dates and sitemap <lastmod> will be omitted.${gitDates.status === "shallow" ? " On Vercel, set VERCEL_DEEP_CLONE=true and redeploy." : ""}`,
   );
 }
 

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -29,20 +29,50 @@ export type GitDatesResult = {
    * are returned); `unavailable` when git is missing or this is no checkout.
    */
   status: "ok" | "shallow" | "unavailable";
+  /** Why history is unavailable (git's first error line), for build logs. */
+  detail?: string;
 };
+
+/**
+ * The checkout root above `dir` (the nearest directory holding `.git`).
+ *
+ * @param dir - Directory inside the checkout.
+ * @returns The real path of the checkout root, or `null` outside a checkout.
+ */
+export function findCheckoutRoot(dir: string): string | null {
+  for (let current = path.resolve(dir); ; current = path.dirname(current)) {
+    if (existsSync(path.join(current, ".git"))) return realpathSync(current);
+    if (path.dirname(current) === current) return null;
+  }
+}
 
 /**
  * Run a read-only git command. Fixed argv, no shell, so nothing from content
  * or requests can reach the command line.
+ *
+ * `safe.directory` trusts exactly this checkout: build machines (Vercel) may
+ * run as a different user than the one that cloned, and git then refuses the
+ * repository as "dubious ownership". Only these fixed read-only commands run
+ * with the exemption, and only for the checkout that holds this website.
  */
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
+function git(cwd: string, checkout: string, args: string[]): string {
+  return execFileSync("git", ["-c", `safe.directory=${checkout}`, ...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
     timeout: 20_000,
-    stdio: ["ignore", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+/**
+ * A short, single-line reason for a failed git call: git's first stderr
+ * line, else the spawn error code (e.g. `ENOENT` when git is not installed).
+ */
+function gitFailure(error: unknown): string {
+  const { stderr, code, message } = (error ?? {}) as { stderr?: unknown; code?: unknown; message?: unknown };
+  const line = typeof stderr === "string" ? stderr.split("\n").find((l) => l.trim()) : undefined;
+  return String(line ?? code ?? message ?? "unknown error").trim().slice(0, 200);
 }
 
 /**
@@ -94,21 +124,23 @@ export function parseGitLog(log: string, prefix: string, ignored: ReadonlySet<st
 /**
  * Read last-commit dates for the dated directories with one `git log` pass.
  * Never throws: a shallow clone or missing git yields no dates and a status
- * the caller can report.
+ * (plus, when unavailable, a `detail`) the caller can report.
  *
  * @param dir - Website root (inside a git checkout).
  * @returns The dates and how they were obtained.
  */
 export function readGitDates(dir: string): GitDatesResult {
+  const checkout = findCheckoutRoot(dir);
+  if (!checkout) return { dates: {}, status: "unavailable", detail: "no .git directory above the website" };
   try {
-    if (git(dir, ["rev-parse", "--is-shallow-repository"]).trim() !== "false") {
+    if (git(dir, checkout, ["rev-parse", "--is-shallow-repository"]).trim() !== "false") {
       return { dates: {}, status: "shallow" };
     }
-    const prefix = git(dir, ["rev-parse", "--show-prefix"]).trim();
-    const log = git(dir, ["log", "--format=%x00%H %cI", "--name-only", "--no-renames", "--", ...DATED_DIRS]);
+    const prefix = git(dir, checkout, ["rev-parse", "--show-prefix"]).trim();
+    const log = git(dir, checkout, ["log", "--format=%x00%H %cI", "--name-only", "--no-renames", "--", ...DATED_DIRS]);
     return { dates: parseGitLog(log, prefix, readIgnoredRevs(dir)), status: "ok" };
-  } catch {
-    return { dates: {}, status: "unavailable" };
+  } catch (error) {
+    return { dates: {}, status: "unavailable", detail: gitFailure(error) };
   }
 }
 

@@ -35,7 +35,7 @@ export async function getLastModifiedMap(): Promise<Record<string, string>> {
     // Should not happen once the build embeds dates; say so in the logs
     // instead of silently dropping every date.
     console.warn(
-      `[git-dates] No build-time dates and git is ${live.status}: docs "Last updated" dates and sitemap <lastmod> are omitted.`,
+      `[git-dates] No build-time dates and git is ${live.status}${live.detail ? ` (${live.detail})` : ""}: docs "Last updated" dates and sitemap <lastmod> are omitted.`,
     );
   }
   return live.dates;

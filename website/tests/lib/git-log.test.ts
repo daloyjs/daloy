@@ -1,6 +1,6 @@
 import { mock, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,7 +10,7 @@ mock.module("next/cache", {
   namedExports: { cacheLife: () => {}, cacheTag: () => {} },
 });
 
-const { GIT_LASTMOD_ENV, parseEmbeddedDates, readGitDates } = await import("../../lib/git-log");
+const { GIT_LASTMOD_ENV, findCheckoutRoot, parseEmbeddedDates, readGitDates } = await import("../../lib/git-log");
 const { getLastModifiedMap } = await import("../../lib/git-dates");
 
 test("readGitDates reads history in the checkout", () => {
@@ -22,7 +22,39 @@ test("readGitDates reads history in the checkout", () => {
 test("readGitDates reports a missing checkout instead of throwing", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "no-git-"));
   try {
-    assert.deepEqual(readGitDates(dir), { dates: {}, status: "unavailable" });
+    assert.deepEqual(readGitDates(dir), {
+      dates: {},
+      status: "unavailable",
+      detail: "no .git directory above the website",
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("findCheckoutRoot finds the checkout above a nested directory", () => {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "checkout-")));
+  try {
+    mkdirSync(path.join(dir, ".git"));
+    mkdirSync(path.join(dir, "website", "content"), { recursive: true });
+    assert.equal(findCheckoutRoot(path.join(dir, "website", "content")), dir);
+    // This website sits inside the real checkout.
+    assert.ok(findCheckoutRoot(process.cwd()));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("readGitDates reports git's own error when the checkout is broken", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "broken-git-"));
+  try {
+    // A `.git` file that is not a valid gitfile: git exits with a fatal error.
+    writeFileSync(path.join(dir, ".git"), "not a gitdir\n");
+    const result = readGitDates(dir);
+    assert.equal(result.status, "unavailable");
+    assert.deepEqual(result.dates, {});
+    assert.match(result.detail ?? "", /^fatal: /);
+    assert.ok(!result.detail?.includes("\n"));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
