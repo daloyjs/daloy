@@ -4,24 +4,28 @@
 # the repo, since it can execute with our credentials and (via release.yml)
 # mint OIDC tokens that publish to npm. Treat workflow changes like
 # security-relevant code: only the core maintainers can approve them.
+#
+# Owners are listed as individual handles (the repo owners and admins) rather
+# than an org team: GitHub ignores a CODEOWNERS entry whose team does not
+# exist, which silently leaves every path unowned.
 
-* @daloyjs/maintainers
+* @devlinduldulao @aurorascharff
 
 # Workflow / CI / CD — strictly maintainers.
-/.github/                         @daloyjs/maintainers
-/.github/workflows/               @daloyjs/maintainers
-/.github/workflows/release.yml    @daloyjs/maintainers
-/.github/dependabot.yml           @daloyjs/maintainers
-/.github/CODEOWNERS               @daloyjs/maintainers
+/.github/                         @devlinduldulao @aurorascharff
+/.github/workflows/               @devlinduldulao @aurorascharff
+/.github/workflows/release.yml    @devlinduldulao @aurorascharff
+/.github/dependabot.yml           @devlinduldulao @aurorascharff
+/.github/CODEOWNERS               @devlinduldulao @aurorascharff
 
 # Anything that affects what gets shipped to npm.
-/package.json                     @daloyjs/maintainers
-/pnpm-lock.yaml                   @daloyjs/maintainers
-/pnpm-workspace.yaml              @daloyjs/maintainers
-/.npmrc                           @daloyjs/maintainers
-/packages/create-daloy/package.json @daloyjs/maintainers
+/package.json                     @devlinduldulao @aurorascharff
+/pnpm-lock.yaml                   @devlinduldulao @aurorascharff
+/pnpm-workspace.yaml              @devlinduldulao @aurorascharff
+/.npmrc                           @devlinduldulao @aurorascharff
+/packages/create-daloy/package.json @devlinduldulao @aurorascharff
 
 # Security policy and incident notes.
-/SECURITY.md                      @daloyjs/maintainers
-/SECURITY-CONTACTS.md             @daloyjs/maintainers
-/otherdocs/security-incidence.md  @daloyjs/maintainers
+/SECURITY.md                      @devlinduldulao @aurorascharff
+/SECURITY-CONTACTS.md             @devlinduldulao @aurorascharff
+/otherdocs/security-incidence.md  @devlinduldulao @aurorascharff
