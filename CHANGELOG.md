@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-03
+
 ### Added
 
 - **Named schemas in OpenAPI (`components.schemas`).** A schema that carries a

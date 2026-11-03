@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/daloy",
-  "version": "1.17.2",
+  "version": "1.18.0",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
