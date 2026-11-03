@@ -17,6 +17,45 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- **Named schemas in OpenAPI (`components.schemas`).** A schema that carries a
+  JSON Schema id (Zod 4 `.meta({ id: "Book" })`) is now emitted once under
+  `components.schemas.Book` and referenced by `$ref` from every operation,
+  path/query parameter, webhook, and callback that uses it, including from
+  inside other named schemas. Hey API and other generators therefore produce a
+  single named `Book` type instead of a per-operation anonymous shape
+  (`GetBookResponse`, `ListBooksResponse[number]`), so hand-written
+  "rename the generated types" model files are no longer needed. Schemas
+  without an id keep being inlined. Two structurally different schemas sharing
+  one id, or a user schema named `Problem`, make `generateOpenAPI()` throw
+  rather than silently overwrite. See [Named schemas](https://daloyjs.dev/docs/openapi#named-schemas).
+- **`createJwtSigner({ now })` and `jwk({ now })`.** Both accept the same
+  injectable Unix-seconds clock `createJwtVerifier({ now })` already took. The
+  signer uses it as the default `iat` when the payload omits one; `jwk()`
+  forwards it to its verifier. A test suite that pins time can now mint and
+  verify tokens under one clock and step past `exp` without re-signing. All
+  three refuse a non-function `now` at construction (`JwtError("invalid_options")`);
+  a clock that returns a non-finite value fails closed (`sign()` throws
+  `JwtError("invalid_clock")`, verification rejects with `401`). See
+  [Pinning the clock](https://daloyjs.dev/docs/auth#testing-clock).
+- **`RequestState` / `ContextState` types.** `ctx.state.requestId: string` and
+  `ctx.state.log: Logger` are now declared on every HTTP context
+  (`PreBodyContext`, `BaseContext`) through the exported `RequestState`
+  interface, matching what the framework has always written at runtime. Apps
+  no longer need to augment `AppState` just to log from a handler; an existing
+  augmentation with the same types keeps compiling. `ContextState` names the
+  full `ctx.state` type (`AppState & RequestState & Record<string, unknown>`).
+
+### Fixed
+
+- **OpenAPI no longer emits dangling `#/$defs/...` pointers.** Before this
+  release an id-tagged Zod schema was inlined verbatim as
+  `{ $ref: "#/$defs/Book", $defs: { Book } }`, a pointer into the document
+  root (which has no `$defs`), so validators and generators could not resolve
+  it. Zod's per-schema `$schema` dialect marker is also dropped from inlined
+  schemas: OpenAPI 3.1 already fixes the dialect document-wide.
+
 ## [1.17.2] - 2026-10-24
 
 Response to the [Node.js October 21, 2026 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).

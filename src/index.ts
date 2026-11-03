@@ -58,6 +58,8 @@ export type {
   PreBodyContext,
   IdentityGateContext,
   AppState,
+  RequestState,
+  ContextState,
   AuthScheme,
   AuthContext,
   HandlerReturn,

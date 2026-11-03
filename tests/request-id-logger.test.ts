@@ -48,11 +48,12 @@ function app(hooks: Parameters<App["use"]>[0]) {
     path: "/log",
     acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "ok" } },
-    handler: (ctx: { state: { log: { info(o: unknown): void } } }) => {
+    handler: (ctx) => {
+      // `ctx.state.log` is typed via `RequestState`; no augmentation or cast needed.
       ctx.state.log.info({ from: "handler" });
       return { status: 200 as const, body: undefined };
     },
-  } as never);
+  });
   return { app: a, lines };
 }
 

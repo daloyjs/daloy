@@ -246,8 +246,61 @@ console.log(`wrote ${out}`);
 - Path params `:id` normalized to `{id}`.
 - Schema bodies converted via `schema.toJSONSchema?.()` when supported, or a structural fallback.
 - Reusable `components.schemas.Problem` for RFC 9457 errors.
+- Schemas tagged with an id (`.meta({ id: "Book" })`) are hoisted into `components.schemas` and referenced by `$ref` (see [Named schemas](#named-schemas)).
 - `tags`, `summary`, `description`, and per-status `description`.
 - Routes marked `internal: true` are omitted unless you pass `includeInternal: true` (for example, an internal-only contract for your own tooling). Never publish that document.
+
+## Named schemas and `components.schemas` [#named-schemas]
+
+By default every request and response schema is inlined into the operation that uses it. That is correct, but a generated client then names the types after the operation (`GetBookResponse`, `ListBooksResponse[number]`), and the same shape is repeated in every operation that returns it.
+
+Give a schema an id and DaloyJS emits it **once** under `components.schemas`, referencing it by `$ref` everywhere it appears, including inside other named schemas, path and query parameter schemas, webhooks, and callbacks:
+
+```ts
+import { z } from "zod";
+
+export const Book = z
+  .object({ id: z.string(), title: z.string() })
+  .strict()
+  .meta({ id: "Book" });
+
+export const Author = z
+  .object({ name: z.string(), books: z.array(Book) })
+  .strict()
+  .meta({ id: "Author" });
+
+app.get("/books/:id", { responses: { 200: { body: Book } } }, getBook);
+app.get("/authors", { responses: { 200: { body: z.array(Author) } } }, listAuthors);
+```
+
+```json
+{
+  "paths": {
+    "/books/{id}": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "$ref": "#/components/schemas/Book" } } } } } } },
+    "/authors": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Author" } } } } } } } }
+  },
+  "components": {
+    "schemas": {
+      "Problem": { "...": "..." },
+      "Book": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } }, "required": ["id", "title"], "additionalProperties": false },
+      "Author": { "type": "object", "properties": { "name": { "type": "string" }, "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } }, "required": ["name", "books"], "additionalProperties": false }
+    }
+  }
+}
+```
+
+Hey API (and every other OpenAPI client generator) now produces a `Book` and an `Author` type you can import directly, instead of a per-operation anonymous shape, so there is no need to hand-maintain a `models.ts` that renames generated types.
+
+Rules:
+
+- **Ids must be unique per shape.** Two structurally different schemas sharing one id make `generateOpenAPI()` throw, because the second would silently replace the first in every generated client. Reuse the same schema instance, or give the second one its own id.
+- **`Problem` is reserved** for the built-in RFC 9457 error schema.
+- Zod 4's own `$defs` / `$schema` keys never reach the document: the dialect is already set document-wide by OpenAPI 3.1, and `#/$defs/...` pointers are rewritten to `#/components/schemas/...` so no reference dangles.
+- Schemas without an id keep being inlined, exactly as before.
+
+Zod is the reference implementation here (`.meta({ id })` is what makes `toJSONSchema()` emit `$defs`). Any Standard Schema library whose `toJSONSchema()` returns the same `{ $ref, $defs }` shape is hoisted the same way.
 
 ## Webhooks
 

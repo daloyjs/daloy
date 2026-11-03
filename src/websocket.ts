@@ -478,7 +478,7 @@ export function wsRateLimit<P extends string = string, S = AppState>(
       query: wsContext.query,
       headers: wsContext.headers,
       body: undefined,
-      state: wsContext.state as AppState & Record<string, unknown>,
+      state: wsContext.state as BaseContext<any, any>["state"],
       set: { headers: setHeaders },
     };
     try {

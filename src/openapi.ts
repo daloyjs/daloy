@@ -6,6 +6,14 @@
  * If a schema exposes a `toJSONSchema()` method (Zod 4, Valibot, etc.)
  * we use it. Otherwise we emit a permissive `{}` placeholder rather than
  * fail — codegen and docs still work, just with looser types for that field.
+ *
+ * Schemas that carry a JSON Schema id (Zod 4 `.meta({ id: "Book" })`) come
+ * back from `toJSONSchema()` as `{ $ref: "#/$defs/Book", $defs: { Book } }`.
+ * Inlining that verbatim would leave a dangling pointer (the document root
+ * has no `$defs`) and copy the shape into every operation, so the generator
+ * hoists each named definition into `components.schemas` and rewrites the
+ * reference to `#/components/schemas/Book`. Generated clients then emit one
+ * named type per schema instead of an anonymous shape per operation.
  */
 
 import type { App } from "./app.js";
@@ -145,7 +153,11 @@ export interface OpenAPIOptions {
  *
  * Schemas implementing Standard Schema with an optional `toJSONSchema()`
  * method (Zod 4, Valibot, ArkType, ...) are converted to JSON Schema
- * automatically; otherwise a permissive `{}` is emitted.
+ * automatically; otherwise a permissive `{}` is emitted. A schema tagged
+ * with an id (Zod 4 `.meta({ id: "Book" })`) is emitted once under
+ * `components.schemas.Book` and referenced by `$ref` everywhere it is used,
+ * so generated clients get a named `Book` type rather than an anonymous
+ * shape per operation. Two different schemas sharing one id are refused.
  *
  * @example
  * ```ts
@@ -164,53 +176,175 @@ export interface OpenAPIOptions {
  * @param app - The application whose routes are documented.
  * @param options - Document metadata, servers, security schemes, and webhooks.
  * @returns A JSON-serializable OpenAPI 3.1 document.
+ * @throws {Error} when two structurally different schemas declare the same
+ *   id, or when a schema id collides with the built-in `Problem` schema.
  * @since 0.1.0
  */
 export function generateOpenAPI(app: App, options: OpenAPIOptions): Record<string, unknown> {
-  const paths: Record<string, Record<string, unknown>> = {};
-  for (const route of app.routes) {
-    if (route.internal === true && options.includeInternal !== true) continue;
-    const oasPath = route.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
-    (paths[oasPath] ??= {})[route.method.toLowerCase()] = buildOperation(route, route.path);
+  const registry = new SchemaRegistry();
+  const previous = activeRegistry;
+  activeRegistry = registry;
+  try {
+    const paths: Record<string, Record<string, unknown>> = {};
+    for (const route of app.routes) {
+      if (route.internal === true && options.includeInternal !== true) continue;
+      const oasPath = route.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+      (paths[oasPath] ??= {})[route.method.toLowerCase()] = buildOperation(route, route.path);
+    }
+
+    const webhooks = buildWebhooks(options.webhooks);
+
+    return {
+      openapi: "3.1.0",
+      info: options.info,
+      ...(options.servers ? { servers: options.servers } : {}),
+      paths,
+      ...(webhooks ? { webhooks } : {}),
+      components: {
+        ...(options.securitySchemes
+          ? { securitySchemes: normalizeSecuritySchemes(options.securitySchemes) }
+          : {}),
+        schemas: registry.toComponents(),
+      },
+    };
+  } finally {
+    activeRegistry = previous;
   }
+}
 
-  const webhooks = buildWebhooks(options.webhooks);
-
-  return {
-    openapi: "3.1.0",
-    info: options.info,
-    ...(options.servers ? { servers: options.servers } : {}),
-    paths,
-    ...(webhooks ? { webhooks } : {}),
-    components: {
-      ...(options.securitySchemes
-        ? { securitySchemes: normalizeSecuritySchemes(options.securitySchemes) }
-        : {}),
-      schemas: {
-        Problem: {
-          type: "object",
-          required: ["type", "title", "status"],
-          properties: {
-            type: { type: "string", format: "uri" },
-            title: { type: "string" },
-            status: { type: "integer" },
-            detail: { type: "string" },
-            instance: { type: "string" },
-            errors: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  path: { type: "string" },
-                  message: { type: "string" },
-                },
-              },
-            },
-          },
+/** JSON Schema for RFC 9457 problem responses, always present in `components.schemas`. */
+const PROBLEM_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  required: ["type", "title", "status"],
+  properties: {
+    type: { type: "string", format: "uri" },
+    title: { type: "string" },
+    status: { type: "integer" },
+    detail: { type: "string" },
+    instance: { type: "string" },
+    errors: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          message: { type: "string" },
         },
       },
     },
-  };
+  },
+};
+
+const DEFS_REF_PREFIX = "#/$defs/";
+const COMPONENTS_REF_PREFIX = "#/components/schemas/";
+
+/**
+ * Collects named JSON Schema definitions hoisted out of per-schema `$defs`
+ * blocks for one `generateOpenAPI()` call. `Problem` is pre-registered so a
+ * user schema cannot silently replace the framework's error shape.
+ */
+class SchemaRegistry {
+  readonly #defs = new Map<string, unknown>([["Problem", PROBLEM_SCHEMA]]);
+  readonly #fingerprints = new Map<string, string>([
+    ["Problem", JSON.stringify(PROBLEM_SCHEMA)],
+  ]);
+
+  /** Register one named definition; refuses a second, structurally different definition under the same name. */
+  add(name: string, definition: unknown): void {
+    const fingerprint = JSON.stringify(definition);
+    const existing = this.#fingerprints.get(name);
+    if (existing === undefined) {
+      this.#defs.set(name, definition);
+      this.#fingerprints.set(name, fingerprint);
+      return;
+    }
+    if (existing !== fingerprint) {
+      throw new Error(
+        `generateOpenAPI(): two different schemas declare the id "${name}". ` +
+          "Schema ids become components.schemas names, so each id must map to exactly one shape; " +
+          "rename one of them (for example with .meta({ id: \"...\" })) or reuse the same schema instance."
+      );
+    }
+  }
+
+  /** Look up a hoisted definition by `components.schemas` name. */
+  get(name: string): unknown {
+    return this.#defs.get(name);
+  }
+
+  /** Materialize `components.schemas` (`Problem` first, then hoisted ids in registration order). */
+  toComponents(): Record<string, unknown> {
+    return Object.fromEntries(this.#defs);
+  }
+}
+
+let activeRegistry: SchemaRegistry | null = null;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Rewrite every `$ref` that points into a schema-local `$defs` block so it
+ * targets the document-level `components.schemas` entry instead. Arrays and
+ * nested objects are walked; non-schema values are returned untouched.
+ */
+function rewriteDefsRefs(node: unknown): unknown {
+  if (Array.isArray(node)) {
+    let changed = false;
+    const out = node.map((item) => {
+      const next = rewriteDefsRefs(item);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? out : node;
+  }
+  if (!isPlainRecord(node)) return node;
+  let out: Record<string, unknown> | undefined;
+  for (const [key, value] of Object.entries(node)) {
+    let next: unknown = value;
+    if (key === "$ref" && typeof value === "string" && value.startsWith(DEFS_REF_PREFIX)) {
+      next = COMPONENTS_REF_PREFIX + value.slice(DEFS_REF_PREFIX.length);
+    } else {
+      next = rewriteDefsRefs(value);
+    }
+    if (next !== value) {
+      out ??= { ...node };
+      out[key] = next;
+    }
+  }
+  return out ?? node;
+}
+
+/**
+ * Normalize the raw output of a schema's `toJSONSchema()` for embedding in
+ * an OpenAPI operation: drop the `$schema` dialect marker (OpenAPI 3.1 sets
+ * it document-wide), hoist `$defs` entries into the active registry, and
+ * rewrite `#/$defs/...` pointers to `#/components/schemas/...`.
+ */
+function normalizeJsonSchema(raw: unknown): unknown {
+  if (!isPlainRecord(raw) || activeRegistry === null) return raw;
+  const { $schema: _dialect, $defs: defs, ...rest } = raw;
+  if (isPlainRecord(defs)) {
+    for (const [name, definition] of Object.entries(defs)) {
+      activeRegistry.add(name, rewriteDefsRefs(definition));
+    }
+  } else if (defs !== undefined) {
+    rest.$defs = defs;
+  }
+  return rewriteDefsRefs(rest);
+}
+
+/**
+ * Follow a `#/components/schemas/<name>` reference back to its hoisted
+ * definition so property-level extraction (path and query parameters) sees
+ * the object schema rather than the pointer.
+ */
+function resolveComponentRef(schema: unknown): unknown {
+  if (!isPlainRecord(schema) || activeRegistry === null) return schema;
+  const ref = schema.$ref;
+  if (typeof ref !== "string" || !ref.startsWith(COMPONENTS_REF_PREFIX)) return schema;
+  return activeRegistry.get(ref.slice(COMPONENTS_REF_PREFIX.length)) ?? schema;
 }
 
 function normalizeSecuritySchemes(
@@ -258,7 +392,7 @@ function buildOperation(route: OperationLike, path?: string): Record<string, unk
   }
 
   if (route.request?.query) {
-    const schema = toJsonSchema(route.request.query) ?? { type: "object" };
+    const schema = resolveComponentRef(toJsonSchema(route.request.query)) ?? { type: "object" };
     const props = (schema as any).properties ?? {};
     const required: string[] = (schema as any).required ?? [];
     for (const [name, propSchema] of Object.entries(props)) {
@@ -470,11 +604,17 @@ function toJsonSchema(schema: StandardSchemaV1 | undefined): unknown | undefined
   const anySchema = schema as any;
   // Zod 4 has `.toJSONSchema()`; Valibot/TypeBox vary by adapter/version.
   if (typeof anySchema.toJSONSchema === "function") {
+    let raw: unknown;
+    let converted = false;
     try {
-      return anySchema.toJSONSchema();
+      raw = anySchema.toJSONSchema();
+      converted = true;
     } catch {
       /* fall through */
     }
+    // Outside the try: a registry conflict is a configuration error that
+    // must surface, not degrade silently to the `{}` placeholder.
+    if (converted) return normalizeJsonSchema(raw);
   }
   if (anySchema._def && typeof anySchema._def === "object") {
     // Zod fallback — tiny heuristic; real apps should pass `.toJSONSchema()`-capable schemas.
@@ -488,7 +628,7 @@ function extractPropertySchema(
   prop: string
 ): unknown | undefined {
   if (!schema) return undefined;
-  const js = toJsonSchema(schema) as any;
+  const js = resolveComponentRef(toJsonSchema(schema)) as any;
   return js?.properties?.[prop];
 }
 

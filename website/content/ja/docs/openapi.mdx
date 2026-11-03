@@ -246,8 +246,61 @@ console.log(`wrote ${out}`);
 - パスパラメーター `:id` は `{id}` に正規化されます。
 - スキーマのボディは、サポートされていれば `schema.toJSONSchema?.()` で変換され、そうでなければ構造的なフォールバックで変換されます。
 - RFC 9457 のエラー用に再利用可能な `components.schemas.Problem`。
+- id を付けたスキーマ（`.meta({ id: "Book" })`）は `components.schemas` に引き上げられ、`$ref` で参照されます（[名前付きスキーマ](#named-schemas) を参照）。
 - `tags`、`summary`、`description`、ステータスごとの `description`。
 - `internal: true` を付けたルートは、`includeInternal: true` を渡さない限り省略されます（たとえば自社ツール用の内部専用コントラクトなど）。そのドキュメントは決して公開しないでください。
+
+## 名前付きスキーマと `components.schemas` [#named-schemas]
+
+既定では、リクエストとレスポンスのすべてのスキーマは、それを使う操作の中にインライン展開されます。それ自体は正しいのですが、生成されたクライアントは型を操作名から命名し（`GetBookResponse`、`ListBooksResponse[number]`）、同じ形がそれを返すすべての操作で繰り返されます。
+
+スキーマに id を付けると、DaloyJS はそれを `components.schemas` に **一度だけ** 出力し、他の名前付きスキーマの内部、パスとクエリのパラメータースキーマ、Webhook、コールバックを含め、登場するすべての場所で `$ref` によって参照します。
+
+```ts
+import { z } from "zod";
+
+export const Book = z
+  .object({ id: z.string(), title: z.string() })
+  .strict()
+  .meta({ id: "Book" });
+
+export const Author = z
+  .object({ name: z.string(), books: z.array(Book) })
+  .strict()
+  .meta({ id: "Author" });
+
+app.get("/books/:id", { responses: { 200: { body: Book } } }, getBook);
+app.get("/authors", { responses: { 200: { body: z.array(Author) } } }, listAuthors);
+```
+
+```json
+{
+  "paths": {
+    "/books/{id}": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "$ref": "#/components/schemas/Book" } } } } } } },
+    "/authors": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Author" } } } } } } } }
+  },
+  "components": {
+    "schemas": {
+      "Problem": { "...": "..." },
+      "Book": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } }, "required": ["id", "title"], "additionalProperties": false },
+      "Author": { "type": "object", "properties": { "name": { "type": "string" }, "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } }, "required": ["name", "books"], "additionalProperties": false }
+    }
+  }
+}
+```
+
+Hey API（および他のあらゆる OpenAPI クライアントジェネレーター）は、操作ごとの匿名の形ではなく、直接インポートできる `Book` 型と `Author` 型を生成するようになります。生成された型を改名するための `models.ts` を手作業で保守する必要はありません。
+
+ルール:
+
+- **id は形ごとに一意でなければなりません。** 構造の異なる 2 つのスキーマが同じ id を共有すると `generateOpenAPI()` はエラーを投げます。2 つ目が生成されたすべてのクライアントで 1 つ目を黙って置き換えてしまうからです。同じスキーマインスタンスを再利用するか、2 つ目に独自の id を付けてください。
+- **`Problem` は予約済み** です。組み込みの RFC 9457 エラースキーマに使われます。
+- Zod 4 自身の `$defs` / `$schema` キーはドキュメントに到達しません。方言は OpenAPI 3.1 によってドキュメント全体で既に定まっており、`#/$defs/...` のポインターは `#/components/schemas/...` に書き換えられるため、参照が宙に浮くことはありません。
+- id のないスキーマは、これまでどおりインライン展開されたままです。
+
+ここでの参照実装は Zod です（`.meta({ id })` によって `toJSONSchema()` が `$defs` を出力します）。`toJSONSchema()` が同じ `{ $ref, $defs }` の形を返す Standard Schema ライブラリであれば、同じように引き上げられます。
 
 ## Webhook [#webhooks]
 

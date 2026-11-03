@@ -129,6 +129,15 @@ export interface JwtSignerOptions {
   secureDefaults?: boolean;
   /** Optional extra header fields (`kid`, `typ`, ...). `alg` is always derived. `crit` is refused: no JWS extensions are supported, so a `crit` token could never verify. */
   header?: Record<string, unknown>;
+  /**
+   * Optional injectable clock returning **Unix seconds**. Used only as the
+   * default `iat` when the payload omits one, so a test that pins time can
+   * mint tokens whose `iat` matches the verifier's clock. Must return a
+   * finite number; the wall clock is used when omitted.
+   *
+   * @since 1.18.0
+   */
+  now?: () => number;
 }
 
 /** Options for {@link createJwtVerifier}. */
@@ -198,7 +207,12 @@ export interface JwtVerifierOptions {
    * @since 1.1.0
    */
   maxLifetimeSeconds?: number;
-  /** Optional injectable clock for tests. */
+  /**
+   * Optional injectable clock returning **Unix seconds** (not milliseconds),
+   * matching the `exp` / `nbf` / `iat` claims it is compared against. Lets a
+   * test suite that pins time verify tokens it minted under the same pinned
+   * clock. Must be a function; the wall clock is used when omitted.
+   */
   now?: () => number;
 }
 
@@ -219,6 +233,26 @@ interface ResolvedVerifier {
   isRevoked: ((verified: JwtVerified) => boolean | Promise<boolean>) | null;
   maxLifetimeSeconds: number | null;
   now: () => number;
+}
+
+const wallClockSeconds = (): number => Math.floor(Date.now() / 1000);
+
+/** Validate an optional injected clock at construction; defaults to the wall clock in Unix seconds. */
+function resolveClock(now: (() => number) | undefined, where: string): () => number {
+  if (now === undefined) return wallClockSeconds;
+  if (typeof now !== "function") {
+    throw new JwtError("invalid_options", `${where}: now must be a function returning Unix seconds.`);
+  }
+  return now;
+}
+
+/** Read the clock, refusing a non-finite value so a broken clock can never mint an un-expiring token. */
+function readClock(clock: () => number, where: string): number {
+  const value = clock();
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new JwtError("invalid_clock", `${where}: now() must return a finite number of Unix seconds.`);
+  }
+  return value;
 }
 
 function getCrypto(): Crypto {
@@ -634,6 +668,7 @@ export function createJwtSigner(opts: JwtSignerOptions): {
       "jwt(): header.crit is refused — this implementation supports no JWS extensions, so a crit token could never verify."
     );
   }
+  const clock = resolveClock(opts.now, "createJwtSigner()");
 
   const resolved: Promise<ResolvedSigner> = (async () => {
     const key = await importKey(alg, opts.key, "sign");
@@ -652,7 +687,7 @@ export function createJwtSigner(opts: JwtSignerOptions): {
         throw new JwtError("invalid_payload", "jwt().sign(): payload must be a plain object.");
       }
       const r = await resolved;
-      const now = Math.floor(Date.now() / 1000);
+      const now = readClock(clock, "jwt().sign()");
       const iat = typeof payload.iat === "number" ? payload.iat : now;
       const expRaw = payload.exp;
       if (expRaw === undefined) {
@@ -882,7 +917,7 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
     clockSkewSeconds: opts.clockSkewSeconds ?? 0,
     isRevoked: opts.isRevoked ?? null,
     maxLifetimeSeconds: opts.maxLifetimeSeconds ?? null,
-    now: opts.now ?? (() => Math.floor(Date.now() / 1000)),
+    now: resolveClock(opts.now, "createJwtVerifier()"),
   };
 
   return {

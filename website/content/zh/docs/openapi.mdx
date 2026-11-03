@@ -246,8 +246,61 @@ console.log(`wrote ${out}`);
 - 路径参数 `:id` 规范化为 `{id}`。
 - 在支持时通过 `schema.toJSONSchema?.()` 转换 schema 请求体，否则使用结构化的回退方案。
 - 为 RFC 9457 错误提供可复用的 `components.schemas.Problem`。
+- 带有 id 的 schema（`.meta({ id: "Book" })`）会被提升到 `components.schemas` 并通过 `$ref` 引用（参见[命名 schema](#named-schemas)）。
 - `tags`、`summary`、`description` 以及按状态码的 `description`。
 - 标记为 `internal: true` 的路由会被省略，除非你传入 `includeInternal: true`（例如为你自己的工具生成仅供内部使用的契约）。绝不要公开那份文档。
+
+## 命名 schema 与 `components.schemas` [#named-schemas]
+
+默认情况下，每个请求和响应 schema 都会内联到使用它的操作中。这样做是正确的，但生成的客户端会按操作来命名类型（`GetBookResponse`、`ListBooksResponse[number]`），同一个结构会在每个返回它的操作里重复出现。
+
+给 schema 指定一个 id，DaloyJS 就会在 `components.schemas` 下 **只输出一次**，并在它出现的所有位置通过 `$ref` 引用，包括其他命名 schema 内部、路径和查询参数 schema、webhook 以及回调：
+
+```ts
+import { z } from "zod";
+
+export const Book = z
+  .object({ id: z.string(), title: z.string() })
+  .strict()
+  .meta({ id: "Book" });
+
+export const Author = z
+  .object({ name: z.string(), books: z.array(Book) })
+  .strict()
+  .meta({ id: "Author" });
+
+app.get("/books/:id", { responses: { 200: { body: Book } } }, getBook);
+app.get("/authors", { responses: { 200: { body: z.array(Author) } } }, listAuthors);
+```
+
+```json
+{
+  "paths": {
+    "/books/{id}": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "$ref": "#/components/schemas/Book" } } } } } } },
+    "/authors": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Author" } } } } } } } }
+  },
+  "components": {
+    "schemas": {
+      "Problem": { "...": "..." },
+      "Book": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } }, "required": ["id", "title"], "additionalProperties": false },
+      "Author": { "type": "object", "properties": { "name": { "type": "string" }, "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } }, "required": ["name", "books"], "additionalProperties": false }
+    }
+  }
+}
+```
+
+Hey API（以及其他所有 OpenAPI 客户端生成器）现在会生成可以直接导入的 `Book` 和 `Author` 类型，而不是每个操作一个匿名结构，因此不再需要手工维护一个用来重命名生成类型的 `models.ts`。
+
+规则：
+
+- **每种结构的 id 必须唯一。** 两个结构不同的 schema 共用同一个 id 会让 `generateOpenAPI()` 抛出错误，因为第二个会在所有生成的客户端中悄悄替换第一个。请复用同一个 schema 实例，或给第二个单独的 id。
+- **`Problem` 是保留名**，用于内置的 RFC 9457 错误 schema。
+- Zod 4 自己的 `$defs` / `$schema` 键永远不会进入文档：OpenAPI 3.1 已经在整个文档层面确定了方言，`#/$defs/...` 指针会被改写为 `#/components/schemas/...`，因此不会有悬空引用。
+- 没有 id 的 schema 仍然内联，与之前完全一致。
+
+这里以 Zod 作为参考实现（正是 `.meta({ id })` 让 `toJSONSchema()` 输出 `$defs`）。任何 `toJSONSchema()` 返回同样 `{ $ref, $defs }` 结构的 Standard Schema 库都会以同样的方式被提升。
 
 ## Webhooks [#webhooks]
 

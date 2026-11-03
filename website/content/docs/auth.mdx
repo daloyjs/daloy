@@ -249,6 +249,38 @@ test("only admins can delete", async () => {
 
 Build the app from a function that takes its auth config, so tests pass the test key set and production passes the real JWKS URL. Never ship a test key or a test issuer in production config.
 
+### Pinning the clock [#testing-clock]
+
+If your tests freeze time (an injected `now()` for the rest of the app, fake timers, a fixed `Date`), do not mix wall-clock tokens with a frozen app clock. Both the signer and `jwk()` accept the same `now` function, in **Unix seconds**, that `createJwtVerifier()` already takes:
+
+```ts
+let nowSeconds = 1_700_000_000; // the suite's frozen clock
+
+const signer = createJwtSigner({
+  alg: "ES256",
+  key: privateJwk,
+  maxLifetimeSeconds: 3600,
+  header: { kid: "test" },
+  now: () => nowSeconds, // default `iat` when the payload omits one
+});
+
+app.use(jwk({
+  jwks: { keys: [publicJwk] },
+  algorithms: ["ES256"],
+  issuer: "https://issuer.test",
+  audience: "books",
+  now: () => nowSeconds, // exp / nbf / iat are checked against this clock
+}));
+
+const token = await signer.sign({ sub: "u1", exp: nowSeconds + 300 });
+assert.equal((await call(token)).status, 200);
+
+nowSeconds += 301; // step past exp without minting a new token
+assert.equal((await call(token)).status, 401);
+```
+
+A clock that returns a non-finite value fails closed: `sign()` throws `JwtError("invalid_clock")` and verification rejects the token with `401`. Leave `now` unset in production; it exists so tests can be deterministic, not so an app can "fix" clock drift. Use `clockSkewSeconds` for that.
+
 ## Not supported (yet) [#not-supported]
 
 - **Opaque tokens and introspection (RFC 7662).** There is no built-in introspection client. Call your IdP's `/introspect` endpoint from `bearerAuth({ validate })` with your client credentials, and cache positive results briefly, because every request otherwise costs a network round-trip. Okta's org authorization server and Auth0 tokens without an audience are opaque.

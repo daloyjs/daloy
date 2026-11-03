@@ -124,6 +124,17 @@ export interface JwkOptions {
   maxLifetimeSeconds?: number;
   /** Clock skew tolerance applied to `exp` / `nbf` / `iat`. Default `0`. */
   clockSkewSeconds?: number;
+  /**
+   * Optional injectable clock returning **Unix seconds**, forwarded to the
+   * underlying JWT verifier (see {@link JwtVerifierOptions.now}). Lets a test
+   * suite that pins time verify tokens it minted under the same pinned clock
+   * instead of mixing wall-clock tokens with a frozen app clock. The JWKS
+   * fetch cache keeps using the wall clock. Must be a function; the wall
+   * clock is used when omitted.
+   *
+   * @since 1.18.0
+   */
+  now?: () => number;
   /** `WWW-Authenticate` realm. Default: `"api"`. */
   realm?: string;
   /**
@@ -352,7 +363,7 @@ function makeJwksLoader(
  * @throws {JwtError} (`invalid_options`) when there is no `audience` and
  *   `allowAnyAudience` is not set, in production: at construction when
  *   `NODE_ENV=production`, and when registered on an App that resolves to
- *   production.
+ *   production; also at construction when `now` is set but is not a function.
  * @since 0.22.0
  */
 export function jwk(opts: JwkOptions): Hooks {
@@ -425,6 +436,7 @@ export function jwk(opts: JwkOptions): Hooks {
     ...(opts.allowAnyAudience !== undefined ? { allowAnyAudience: opts.allowAnyAudience } : {}),
     maxLifetimeSeconds: opts.maxLifetimeSeconds,
     clockSkewSeconds: opts.clockSkewSeconds,
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
     // Resolver picks the JWK by `kid` and enforces the alg cross-check.
     key: async (header: Record<string, unknown>) => {
       const kid = header.kid;

@@ -246,8 +246,61 @@ console.log(`wrote ${out}`);
 - تُوحَّد معاملات المسار `:id` إلى `{id}`.
 - تُحوَّل أجسام المخططات عبر `schema.toJSONSchema?.()` عندما يكون مدعومًا، أو عبر بديل هيكلي.
 - مكوّن قابل لإعادة الاستخدام `components.schemas.Problem` لأخطاء RFC 9457.
+- المخططات الموسومة بمعرّف (`.meta({ id: "Book" })`) تُرفع إلى `components.schemas` ويُشار إليها عبر `$ref` (انظر [المخططات المسماة](#named-schemas)).
 - `tags` و`summary` و`description`، و`description` لكل رمز حالة.
 - تُحذف المسارات المعلّمة بـ `internal: true` ما لم تمرّر `includeInternal: true` (مثلًا لعقد داخلي فقط لأدواتك الخاصة). لا تنشر ذلك المستند أبدًا.
+
+## المخططات المسماة و`components.schemas` [#named-schemas]
+
+افتراضيًا، يُضمَّن كل مخطط طلب واستجابة داخل العملية التي تستخدمه. هذا صحيح، لكن العميل المولَّد يسمّي الأنواع حينها باسم العملية (`GetBookResponse` و`ListBooksResponse[number]`)، ويتكرر الشكل نفسه في كل عملية تعيده.
+
+أعطِ المخطط معرّفًا وسيُصدره DaloyJS **مرة واحدة** تحت `components.schemas`، مع الإشارة إليه عبر `$ref` في كل موضع يظهر فيه، بما في ذلك داخل المخططات المسماة الأخرى، ومخططات معاملات المسار والاستعلام، والـ webhooks، والـ callbacks:
+
+```ts
+import { z } from "zod";
+
+export const Book = z
+  .object({ id: z.string(), title: z.string() })
+  .strict()
+  .meta({ id: "Book" });
+
+export const Author = z
+  .object({ name: z.string(), books: z.array(Book) })
+  .strict()
+  .meta({ id: "Author" });
+
+app.get("/books/:id", { responses: { 200: { body: Book } } }, getBook);
+app.get("/authors", { responses: { 200: { body: z.array(Author) } } }, listAuthors);
+```
+
+```json
+{
+  "paths": {
+    "/books/{id}": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "$ref": "#/components/schemas/Book" } } } } } } },
+    "/authors": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Author" } } } } } } } }
+  },
+  "components": {
+    "schemas": {
+      "Problem": { "...": "..." },
+      "Book": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } }, "required": ["id", "title"], "additionalProperties": false },
+      "Author": { "type": "object", "properties": { "name": { "type": "string" }, "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } }, "required": ["name", "books"], "additionalProperties": false }
+    }
+  }
+}
+```
+
+يولّد Hey API (وأي مولّد عملاء OpenAPI آخر) الآن نوعًا باسم `Book` وآخر باسم `Author` يمكنك استيرادهما مباشرة، بدلًا من شكل مجهول لكل عملية، فلا حاجة إلى صيانة ملف `models.ts` يدويًا لإعادة تسمية الأنواع المولَّدة.
+
+القواعد:
+
+- **يجب أن تكون المعرّفات فريدة لكل شكل.** مخططان مختلفان بنيويًا يتشاركان معرّفًا واحدًا يجعلان `generateOpenAPI()` يرمي خطأ، لأن الثاني سيحل محل الأول بصمت في كل عميل مولَّد. أعد استخدام نسخة المخطط نفسها، أو أعطِ الثاني معرّفًا خاصًا به.
+- **`Problem` محجوز** لمخطط الخطأ المدمج وفق RFC 9457.
+- مفاتيح `$defs` / `$schema` الخاصة بـ Zod 4 لا تصل أبدًا إلى المستند: اللهجة محددة مسبقًا على مستوى المستند بواسطة OpenAPI 3.1، وتُعاد كتابة مؤشرات `#/$defs/...` إلى `#/components/schemas/...` حتى لا تبقى أي إشارة معلّقة.
+- المخططات بلا معرّف تبقى مضمَّنة كما كانت تمامًا.
+
+Zod هنا هو التنفيذ المرجعي (`.meta({ id })` هو ما يجعل `toJSONSchema()` يُصدر `$defs`). أي مكتبة Standard Schema يعيد `toJSONSchema()` فيها الشكل نفسه `{ $ref, $defs }` تُرفع بالطريقة ذاتها.
 
 ## Webhooks [#webhooks]
 

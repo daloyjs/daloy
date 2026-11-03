@@ -48,6 +48,24 @@ app.log.info({ port: 3000 }, "server starting");
 app.log.warn({ retries: 3 }, "upstream slow");
 ```
 
+### `ctx.state.log` and `ctx.state.requestId` are typed [#request-state]
+
+Both fields are declared on the exported `RequestState` interface and are part of `ctx.state` on every HTTP context (`preBody`, `beforeHandle`, handlers, `onError`). You do not need to augment `AppState` to use them:
+
+```ts
+import type { RequestState } from "@daloyjs/core";
+
+app.get("/health", { responses: { 200: { body: z.object({ ok: z.boolean() }) } } }, ({ state }) => {
+  state.log.info({ requestId: state.requestId }, "health probe"); // typed: Logger, string
+  return { status: 200 as const, body: { ok: true } };
+});
+
+// Pass the request's logger to a service without re-declaring its type.
+function createOrder(log: RequestState["log"], input: OrderInput) { /* ... */ }
+```
+
+If an existing project augmented `AppState` with `log: Logger` or `requestId: string` itself, that augmentation can be deleted; it still compiles as long as the types match. `requestId` is a plain `string` field that the `requestId()` hooks (and your own `preBody`/`beforeHandle` hooks) may overwrite with a non-empty string; the framework then rebinds `state.log` so log lines and the `x-request-id` header stay in sync.
+
 ## Choosing a level
 
 Levels follow the familiar pino ordering: `trace` (10), `debug` (20), `info` (30), `warn` (40), `error` (50), `fatal` (60). Records below the configured level are dropped. Set the level when you construct the app:

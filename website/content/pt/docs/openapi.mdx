@@ -246,8 +246,61 @@ console.log(`wrote ${out}`);
 - Parâmetros de caminho `:id` normalizados para `{id}`.
 - Corpos de schema convertidos via `schema.toJSONSchema?.()` quando suportado, ou por um fallback estrutural.
 - Um `components.schemas.Problem` reutilizável para erros RFC 9457.
+- Esquemas marcados com um id (`.meta({ id: "Book" })`) são elevados para `components.schemas` e referenciados por `$ref` (veja [Esquemas nomeados](#named-schemas)).
 - `tags`, `summary`, `description` e `description` por status.
 - Rotas marcadas com `internal: true` são omitidas, a menos que você passe `includeInternal: true` (por exemplo, para um contrato somente interno usado pelas suas próprias ferramentas). Nunca publique esse documento.
+
+## Esquemas nomeados e `components.schemas` [#named-schemas]
+
+Por padrão, cada esquema de requisição e de resposta é embutido na operação que o usa. Isso está correto, mas um cliente gerado passa a nomear os tipos conforme a operação (`GetBookResponse`, `ListBooksResponse[number]`), e a mesma forma se repete em cada operação que a retorna.
+
+Dê um id a um esquema e o DaloyJS o emite **uma única vez** em `components.schemas`, referenciando-o por `$ref` em todos os lugares em que aparece, inclusive dentro de outros esquemas nomeados, em esquemas de parâmetros de caminho e de consulta, webhooks e callbacks:
+
+```ts
+import { z } from "zod";
+
+export const Book = z
+  .object({ id: z.string(), title: z.string() })
+  .strict()
+  .meta({ id: "Book" });
+
+export const Author = z
+  .object({ name: z.string(), books: z.array(Book) })
+  .strict()
+  .meta({ id: "Author" });
+
+app.get("/books/:id", { responses: { 200: { body: Book } } }, getBook);
+app.get("/authors", { responses: { 200: { body: z.array(Author) } } }, listAuthors);
+```
+
+```json
+{
+  "paths": {
+    "/books/{id}": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "$ref": "#/components/schemas/Book" } } } } } } },
+    "/authors": { "get": { "responses": { "200": { "content": { "application/json": {
+      "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Author" } } } } } } } }
+  },
+  "components": {
+    "schemas": {
+      "Problem": { "...": "..." },
+      "Book": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } }, "required": ["id", "title"], "additionalProperties": false },
+      "Author": { "type": "object", "properties": { "name": { "type": "string" }, "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } }, "required": ["name", "books"], "additionalProperties": false }
+    }
+  }
+}
+```
+
+O Hey API (e qualquer outro gerador de cliente OpenAPI) agora produz um tipo `Book` e um tipo `Author` que você pode importar diretamente, em vez de uma forma anônima por operação, então não é preciso manter à mão um `models.ts` que renomeia os tipos gerados.
+
+Regras:
+
+- **Ids precisam ser únicos por forma.** Dois esquemas estruturalmente diferentes compartilhando um id fazem `generateOpenAPI()` lançar um erro, porque o segundo substituiria silenciosamente o primeiro em todos os clientes gerados. Reutilize a mesma instância de esquema ou dê ao segundo o seu próprio id.
+- **`Problem` é reservado** para o esquema de erro integrado conforme a RFC 9457.
+- As chaves `$defs` / `$schema` do próprio Zod 4 nunca chegam ao documento: o dialeto já é definido para o documento inteiro pelo OpenAPI 3.1, e os ponteiros `#/$defs/...` são reescritos como `#/components/schemas/...`, de modo que nenhuma referência fica pendente.
+- Esquemas sem id continuam sendo embutidos, exatamente como antes.
+
+O Zod é a implementação de referência aqui (`.meta({ id })` é o que faz `toJSONSchema()` emitir `$defs`). Qualquer biblioteca Standard Schema cujo `toJSONSchema()` retorne a mesma forma `{ $ref, $defs }` é elevada da mesma maneira.
 
 ## Webhooks [#webhooks]
 
