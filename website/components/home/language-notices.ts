@@ -14,7 +14,7 @@ export const LANGUAGE_NOTICES: Record<PromotedLocale, { badge: string; text: str
   },
   es: {
     badge: "Nuevo",
-    text: "DaloyJS ya está disponible en español de España.",
+    text: "DaloyJS ya está disponible en español.",
     cta: "Leer en español",
   },
   zh: {
