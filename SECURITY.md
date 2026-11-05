@@ -123,6 +123,13 @@ cookie-authenticated state changes. HTTP message signatures cover only selected
 components: body integrity requires verifying the digest and requiring that
 digest component to be signed, plus replay policy where the operation needs it.
 
+`Server` and `X-Powered-By` are stripped from every response by default. The
+opt-in `poweredBy` option deliberately discloses the framework (a versionless
+`X-Powered-By: DaloyJS` unless a string is given) for technology profilers such
+as Wappalyzer. Enabling it is an operator decision, not a vulnerability; its
+value is validated at construction against header injection and is reported by
+`getSecurityPosture().poweredBy`.
+
 ## Supported Versions
 
 Security fixes target the latest published minor of the current major line, plus `main`. Older minors are not patched in place: within a major line the upgrade path is always forward to its newest minor.

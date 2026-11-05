@@ -202,6 +202,11 @@ export const docsNav: DocsNavSection[] = [
         href: "/docs/security/internal-service-preset" as Route,
       },
       { title: "Compression", href: "/docs/security/compression" as Route },
+      {
+        title: "Technology detection",
+        href: "/docs/security/technology-detection" as Route,
+        badge: "new",
+      },
       { title: "mTLS / client certificates", href: "/docs/mtls" as Route },
       {
         title: "HTTP message signatures (RFC 9421)",

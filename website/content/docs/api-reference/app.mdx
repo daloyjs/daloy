@@ -61,6 +61,7 @@ interface AppOptions {
   env?: "development" | "production" | "test";  // "production" also forces mcpRoutes() error redaction
   logger?: Logger | { level?: LogLevel } | false;
   stripServerHeaders?: boolean;        // default: true
+  poweredBy?: boolean | string;        // default: off; true → X-Powered-By: DaloyJS
 
   // Header / cross-origin guards (secure-by-default)
   secureHeaders?: SecureHeadersOptions | false;

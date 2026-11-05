@@ -1,0 +1,99 @@
+---
+title: Technology detection (Wappalyzer)
+description: "Let profilers such as the Wappalyzer extension detect DaloyJS with the opt-in poweredBy option, which stamps a validated X-Powered-By header on every response."
+keywords:
+  - DaloyJS poweredBy
+  - X-Powered-By header
+  - Wappalyzer DaloyJS
+  - technology detection
+  - framework fingerprinting
+---
+
+# Technology detection (Wappalyzer)
+
+<blockquote>DaloyJS hides its stack by default. Set <code>poweredBy: true</code> to advertise <code>X-Powered-By: DaloyJS</code> so technology profilers such as the Wappalyzer browser extension can recognise it.</blockquote>
+
+Technology profilers identify a backend from what the browser receives. For server frameworks that is almost always the `X-Powered-By` response header: the Wappalyzer database matches Express on `^Express`, Koa on `^koa$`, and Hono on `Hono`. DaloyJS strips `Server` and `X-Powered-By` from every response by default ([`stripServerHeaders`](/docs/security/secure-defaults)), so out of the box there is nothing to detect. `poweredBy` is the explicit opt-in.
+
+<FlowDiagram title="Where the header is stamped" steps={[
+          {
+            eyebrow: "handler",
+            label: "Response built",
+            detail: "handler, 404, error, or preBody short-circuit",
+          },
+          {
+            eyebrow: "hooks",
+            label: "onSend runs",
+            detail: "may set any header, including X-Powered-By",
+          },
+          {
+            eyebrow: "strip",
+            label: "Fingerprint pass",
+            detail: "Server and any upstream X-Powered-By removed",
+            tone: "danger",
+          },
+          {
+            eyebrow: "opt-in",
+            label: "poweredBy stamped",
+            detail: "X-Powered-By: DaloyJS (exactly one value)",
+            tone: "success",
+          },
+        ]} caption="The stamp happens after the strip pass and after every onSend hook, so the advertised value is the only X-Powered-By on the wire and no hook can swap in a different stack name." />
+
+## Quick start
+
+```ts title="src/app.ts"
+import { App } from "@daloyjs/core";
+
+const app = new App({
+  poweredBy: true, // → X-Powered-By: DaloyJS
+});
+```
+
+To include a version, pass the exact string. Profilers capture it, but so do attackers looking for a known-vulnerable release, so only do this deliberately:
+
+```ts
+new App({ poweredBy: "DaloyJS/1.19.0" });
+```
+
+## Options
+
+| Value | Result |
+| --- | --- |
+| `undefined` / `false` (default) | No `X-Powered-By`; any value set by a handler or hook is stripped. |
+| `true` | `X-Powered-By: DaloyJS` (versionless on purpose). |
+| `string` | That exact value. 1–128 printable ASCII characters, no leading or trailing space. |
+
+`app.getSecurityPosture().poweredBy` reports the advertised value, or `false`.
+
+## Boot-time validation
+
+The value is checked once when the `App` is constructed, so a bad configuration fails at deploy instead of on the first request:
+
+- Control characters (`\r`, `\n`, NUL), non-ASCII, empty strings, surrounding spaces, and values over 128 characters throw. This rules out response-header injection through a value read from an environment variable.
+- `poweredBy` together with `stripServerHeaders: false` throws. With stripping off nothing removes `X-Powered-By`, so set it yourself in an `onSend` hook instead.
+
+## What Wappalyzer can actually see
+
+<Callout type="note">The Wappalyzer extension reads response headers of the **top-level page** you navigate to. It does not read headers on the `fetch`/XHR calls a single-page app makes in the background.</Callout>
+
+So DaloyJS is detected when someone opens a DaloyJS URL directly in the browser: an API endpoint, the [API docs UI](/docs/openapi), or a server-rendered page. A DaloyJS API sitting behind a Next.js or Vite front end shows up as that front end.
+
+Turning the header on is half of it. Wappalyzer only reports technologies that are in its database, and since 2023 that database and the extension are closed source. New technologies are proposed through the [suggestion form](https://www.wappalyzer.com/technologies/suggest/), which asks for an established user base (at least 1,000 users) and links to live sites that use the technology. A fingerprint proposal for DaloyJS would be:
+
+```json
+{
+  "DaloyJS": {
+    "cats": [18],
+    "headers": { "X-Powered-By": "^DaloyJS(?:/([\\d.]+))?$\\;version:\\1" },
+    "oss": true,
+    "website": "https://daloyjs.dev"
+  }
+}
+```
+
+Category `18` is "Web frameworks". There is no `implies: Node.js`, because the same app also runs on Bun, Deno, Cloudflare Workers and Vercel. Open-source scanners built on the community fork ([enthec/webappanalyzer](https://github.com/enthec/webappanalyzer), used by tools such as webanalyze) accept the same JSON as a pull request, and require ten or more links to live sites.
+
+## Security trade-off
+
+Advertising the framework is a small information disclosure: it tells an attacker which framework-specific bugs to try first. Leave it off for internal or high-value services. If you turn it on, prefer the versionless `true` and keep up with releases.

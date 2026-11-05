@@ -654,7 +654,7 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 - Request-smuggling defense: duplicate `Host`, `Content-Length`, and `Transfer-Encoding` headers are rejected.
 - `allowedHosts` refuses unknown `Host` values with `400` before routing (DNS rebinding); `serve()` on Node, Bun and Deno defaults to `localhost`, `*.localhost` and IP literals in development.
 - Opt-in `requireAuth: true` refuses, at registration, any route with no authentication hook unless it is marked `public: true`.
-- `Server` and `X-Powered-By` headers stripped by default.
+- `Server` and `X-Powered-By` headers stripped by default. Opt-in `poweredBy: true` advertises a versionless `X-Powered-By: DaloyJS` (stamped after the strip pass and after `onSend`, validated at boot) so profilers such as Wappalyzer can detect the framework; see [technology detection](https://daloyjs.dev/docs/security/technology-detection).
 - Structured-log redaction defaults for authorization, cookie, password, token, and JWT-shaped values.
 - `secureHeaders()` auto-applied; user-installed instances automatically replace the auto one.
 - Cross-origin state-changing requests rejected with `403` unless a route's `cors()` policy allows the origin.

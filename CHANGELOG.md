@@ -17,6 +17,19 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in `poweredBy` app option for technology detection.** `new App({ poweredBy: true })`
+  sends `X-Powered-By: DaloyJS` (no version) so profilers such as the
+  Wappalyzer browser extension can recognise the framework; a string sends that
+  exact value. Off by default, so `stripServerHeaders` still removes every
+  stack header. The value is stamped after the strip pass and after `onSend`,
+  so it is the only `X-Powered-By` on the wire. Unsafe values (control
+  characters, non-ASCII, empty, over 128 characters) and the combination with
+  `stripServerHeaders: false` throw at construction.
+  `getSecurityPosture().poweredBy` reports it. See
+  [technology detection](https://daloyjs.dev/docs/security/technology-detection).
+
 ## [1.18.0] - 2026-11-03
 
 ### Added

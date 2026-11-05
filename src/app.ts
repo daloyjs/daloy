@@ -503,6 +503,25 @@ export interface AppOptions {
   stripServerHeaders?: boolean;
 
   /**
+   * Opt in to advertising the framework with an `X-Powered-By` response
+   * header, which is what technology profilers such as the Wappalyzer
+   * browser extension match on. Off by default: disclosing the stack helps
+   * attackers pick exploits.
+   *
+   * - `true` sends `X-Powered-By: DaloyJS` (no version, on purpose).
+   * - A string sends that exact value, e.g. `"DaloyJS/1.18.0"`. It must be
+   *   1–128 printable ASCII characters with no leading/trailing space.
+   *
+   * The header is stamped after the `stripServerHeaders` pass, so any
+   * upstream `X-Powered-By` is replaced, never duplicated.
+   *
+   * @throws {Error} At construction when the string is empty, too long, or
+   *   contains control/non-ASCII characters (header-injection guard).
+   * @since 1.19.0
+   */
+  poweredBy?: boolean | string;
+
+  /**
    * Master switch for the secure-by-default surface (auto-applied
    * {@link secureHeaders}, cross-origin guard for state-changing requests
    * when no {@link cors} hook allows the request origin). Defaults to `true`
@@ -1500,6 +1519,35 @@ function numericOption(name: string, value: unknown, fallback: number): number {
   return value;
 }
 
+/** Default `X-Powered-By` value for `poweredBy: true`; deliberately versionless. */
+const POWERED_BY_DEFAULT = "DaloyJS";
+/** Printable ASCII, no leading/trailing space, max 128 chars: no CR/LF injection. */
+const POWERED_BY_VALUE = /^[\x21-\x7e](?:[\x20-\x7e]{0,126}[\x21-\x7e])?$/;
+
+/**
+ * Resolve {@link AppOptions.poweredBy} + `stripServerHeaders` into the
+ * finalizer's fingerprint mode (`false` | `true` | header value).
+ * @throws Error for a non-boolean/non-string, an unsafe header value, or
+ *   `poweredBy` combined with `stripServerHeaders: false`.
+ */
+function fingerprintOption(poweredBy: unknown, strip: boolean): boolean | string {
+  if (poweredBy === undefined || poweredBy === false) return strip;
+  const value = poweredBy === true ? POWERED_BY_DEFAULT : poweredBy;
+  if (typeof value !== "string" || !POWERED_BY_VALUE.test(value)) {
+    throw new Error(
+      `app({ poweredBy }) must be true or 1-128 printable ASCII characters ` +
+        `without leading/trailing spaces; got ${JSON.stringify(value) ?? typeof value}.`,
+    );
+  }
+  if (!strip) {
+    throw new Error(
+      "app({ poweredBy }) cannot be combined with stripServerHeaders: false. " +
+        "With stripping off, nothing removes X-Powered-By, so set it in an onSend hook instead.",
+    );
+  }
+  return value;
+}
+
 /**
  * Validate {@link AppOptions.requestTimeoutStatus}: `undefined` takes `408`.
  * @throws Error for any value other than `408`, `503`, or `504`.
@@ -1841,6 +1889,12 @@ export class App<
     >
   > &
     AppOptions;
+  /**
+   * Resolved fingerprint mode handed to the finalizers: `false` leaves
+   * headers alone, `true` strips `Server`/`X-Powered-By`, a string strips
+   * then stamps it as `X-Powered-By` (the `poweredBy` opt-in).
+   */
+  private readonly fingerprint: boolean | string;
   /** Structured logger for the app. Defaults to a JSON-lines console logger; override via `options.logger`. */
   readonly log: Logger;
   /**
@@ -2051,6 +2105,10 @@ export class App<
       jsonMaxKeys: numericOption("jsonMaxKeys", resolved.jsonMaxKeys, DEFAULTS.jsonMaxKeys),
       jsonMaxDepth: numericOption("jsonMaxDepth", resolved.jsonMaxDepth, DEFAULTS.jsonMaxDepth),
     };
+    this.fingerprint = fingerprintOption(
+      resolved.poweredBy,
+      resolved.stripServerHeaders !== false,
+    );
     // Telemetry is resolved before the logger so the logger's write sink can
     // tee into the OTLP log exporter. Inert when no endpoint is configured.
     const telemetryOpt = options.telemetry;
@@ -2227,6 +2285,8 @@ export class App<
     jsonMaxKeys: number;
     jsonMaxDepth: number;
     stripServerHeaders: boolean;
+    /** `X-Powered-By` value advertised via `poweredBy`, or `false` (default). @since 1.19.0 */
+    poweredBy: string | false;
     production: boolean;
   } {
     const o = this.options;
@@ -2248,6 +2308,7 @@ export class App<
       jsonMaxKeys: this.options.jsonMaxKeys ?? DEFAULTS.jsonMaxKeys,
       jsonMaxDepth: this.options.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
       stripServerHeaders: o.stripServerHeaders !== false,
+      poweredBy: typeof this.fingerprint === "string" ? this.fingerprint : false,
       production: this.isProduction(),
     });
   }
@@ -5314,7 +5375,7 @@ export class App<
     const baseLog = this.log;
     let log =
       baseLog === noopLogger ? noopLogger : requestLogger(baseLog, requestId, request);
-    const stripFingerprint = this.options.stripServerHeaders !== false;
+    const stripFingerprint = this.fingerprint;
     // One timer per request bounds hooks, body read and handler together. It
     // is created at the first asynchronous step, so a fully synchronous
     // request never arms a timer, and it is cleared in `finally`.
@@ -6682,7 +6743,7 @@ function finalizeResponse(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onSend" | "onResponse">,
-  stripFingerprint: boolean = true,
+  stripFingerprint: boolean | string = true,
 ): Response | PromiseLike<Response> {
   let final = res;
 
@@ -6704,12 +6765,9 @@ function finishFinalize(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onResponse">,
-  stripFingerprint: boolean,
+  stripFingerprint: boolean | string,
 ): Response | PromiseLike<Response> {
-  if (stripFingerprint) {
-    res.headers.delete("server");
-    res.headers.delete("x-powered-by");
-  }
+  if (stripFingerprint) applyFingerprint(res, stripFingerprint);
   if (hooks.onResponse !== undefined) {
     const onResponseResult = hooks.onResponse(res, ctx);
     if (isPromiseLike(onResponseResult)) {
@@ -6753,14 +6811,22 @@ function isPromiseLike<T = unknown>(
  * hooks). Avoids the two `await undefined` microtasks per request that
  * dominate sub-millisecond dispatch overhead in the no-middleware
  * benchmark. Behaviour parity with {@link finalizeResponse}: only the
- * server-fingerprint headers are stripped.
+ * server-fingerprint headers are touched (see {@link applyFingerprint}).
  */
-function finalizeFast(res: Response, stripFingerprint: boolean): Response {
-  if (stripFingerprint) {
-    res.headers.delete("server");
-    res.headers.delete("x-powered-by");
-  }
+function finalizeFast(res: Response, stripFingerprint: boolean | string): Response {
+  if (stripFingerprint) applyFingerprint(res, stripFingerprint);
   return res;
+}
+
+/**
+ * Strip `Server`, then strip (`true`) or overwrite (string, the
+ * `poweredBy` opt-in) `X-Powered-By`. Runs after `onSend`, so user hooks
+ * cannot leak a stack header past it.
+ */
+function applyFingerprint(res: Response, mode: true | string): void {
+  res.headers.delete("server");
+  if (mode === true) res.headers.delete("x-powered-by");
+  else res.headers.set("x-powered-by", mode);
 }
 
 function chain<F extends (...args: any[]) => any>(fns: F[]): F | undefined {
