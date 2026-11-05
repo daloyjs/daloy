@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-05
+
 ### Added
 
 - **Opt-in `poweredBy` app option for technology detection.** `new App({ poweredBy: true })`
