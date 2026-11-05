@@ -120,10 +120,10 @@ export const PAGES_COPY_ES: TranslatedPagesCopy = {
   docsIndex: {
     title: "Documentación en español",
     description:
-      "Primeros pasos con DaloyJS en castellano: instalación, tu primera ruta basada en contratos y un tutorial completo. El resto de la documentación está en inglés.",
+      "Primeros pasos con DaloyJS en español: instalación, tu primera ruta basada en contratos y un tutorial completo. El resto de la documentación está en inglés.",
     keywords: ["documentación DaloyJS", "DaloyJS en español", "tutorial TypeScript API", "primeros pasos DaloyJS"],
     heading: "Documentación en español",
     intro:
-      "Estas páginas te llevan de una carpeta vacía a una API tipada y probada. Son traducciones de la documentación original en inglés; el resto de la documentación técnica (seguridad, adaptadores, referencia de la API y demás) está, de momento, solo en inglés.",
+      "Estas páginas te llevan de una carpeta vacía a una API tipada y con pruebas. Son traducciones de la documentación original en inglés; el resto de la documentación técnica (adaptadores, referencia de la API, entre otros) está disponible, por ahora, solo en inglés.",
   },
 };
