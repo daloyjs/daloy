@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-06
+
 ### Added
 
 - `markWebSocketAuth(fn)` marks a `beforeUpgrade` hook as authenticating for

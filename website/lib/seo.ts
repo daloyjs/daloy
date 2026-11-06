@@ -75,7 +75,7 @@ export const BRAND_PROFILES = [
 ] as const;
 
 export const CORE_PACKAGE_VERSION =
-  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.19.0";
+  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.20.0";
 
 export const HOME_TITLE =
   "Contract-first TypeScript REST APIs with secure defaults, built for AI-assisted teams";
@@ -219,10 +219,10 @@ export function buildMetadata(input: PageSeoInput): Metadata {
       locale: OG_LOCALE[locale],
       ...(input.translatedPath
         ? {
-            alternateLocale: SITE_LOCALES.filter((other) => other !== locale).map(
-              (other) => OG_LOCALE[other],
-            ),
-          }
+          alternateLocale: SITE_LOCALES.filter((other) => other !== locale).map(
+            (other) => OG_LOCALE[other],
+          ),
+        }
         : {}),
     },
     twitter: {
