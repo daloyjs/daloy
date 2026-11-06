@@ -8,15 +8,18 @@
  * production webhook sender needs:
  *
  * - **Signed delivery with timestamped signatures.** Every request carries
- *   an HMAC signature computed over `"<timestamp>.<body>"` (the Stripe /
- *   Standard Webhooks convention), plus an idempotency id and a timestamp
- *   header, so the receiver can authenticate the payload and reject
- *   replays with {@link verifyWebhookSignature}.
+ *   an HMAC signature computed over `"<id>.<timestamp>.<body>"` (the
+ *   Standard Webhooks convention), plus the id and timestamp headers, so
+ *   the receiver can authenticate the payload, bind the id, and reject
+ *   replays with {@link verifyWebhookSignature} (pass `id` and
+ *   `timestamp`). The event-type header is **not** signed (Standard
+ *   Webhooks does not sign it either); receivers must route on a type
+ *   field inside the signed body, never on that header.
  * - **Retry with backoff.** Transient failures (network errors, timeouts,
  *   `408` / `429` / `5xx`) are retried with exponential backoff and full
  *   jitter, honouring a `Retry-After` header. The signature is computed
  *   **once** so every retry carries the same id and signature — the
- *   receiver can dedupe on the id.
+ *   receiver can dedupe on the id, which the signature covers.
  * - **Dead-letter semantics.** When every attempt is exhausted (or the
  *   upstream returns a permanent `4xx`), the failed delivery is handed to
  *   a {@link WebhookDeadLetterSink} for later inspection or replay instead
@@ -69,12 +72,17 @@ export interface WebhookEvent {
   payload: unknown;
   /**
    * Optional event type (e.g. `"invoice.paid"`), emitted as a header and
-   * recorded on the dead letter. Purely informational.
+   * recorded on the dead letter. Purely informational: the header is
+   * **not** covered by the signature (matching Standard Webhooks), so a
+   * replayer can change it. Put the type inside `payload` and have
+   * receivers route on that signed field.
    */
   eventType?: string;
   /**
-   * Stable idempotency id, emitted in the id header so the receiver can
-   * dedupe retries. A random UUID is generated when omitted.
+   * Stable idempotency id, emitted in the id header and bound into the
+   * signature (`"<id>.<timestamp>.<body>"`) so the receiver can dedupe
+   * retries on a signed value. Must be 1-256 printable ASCII characters
+   * with no `.`. A random UUID is generated when omitted.
    */
   id?: string;
   /**
@@ -345,7 +353,9 @@ function randomId(): string {
  *   {@link WebhookSenderOptions} for the per-field defaults.
  * @returns A `send(event)` function that resolves to a
  *   {@link WebhookDeliveryResult}.
- * @throws Error at construction when `secret` is missing or empty.
+ * @throws Error at construction when `secret` is missing or empty. The
+ *   returned `send()` rejects with a TypeError when `event.id` is not 1-256
+ *   printable ASCII characters without `.`.
  * @since 0.37.0
  */
 export function createWebhookSender(
@@ -424,12 +434,14 @@ export function createWebhookSender(
     const timestamp = Math.floor(now() / 1000);
 
     // Sign ONCE — every retry carries the same id + signature so the
-    // receiver can dedupe and the timestamp stays stable.
+    // receiver can dedupe and the timestamp stays stable. The id is bound
+    // into the HMAC so a replay cannot pick a fresh id to dodge dedupe.
     const signature = await signWebhookPayload({
       payload: bytes,
       secret: options.secret,
       algorithm,
       timestamp,
+      id,
     });
 
     const baseHeaders: Record<string, string> = {

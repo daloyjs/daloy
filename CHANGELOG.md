@@ -17,6 +17,112 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- `markWebSocketAuth(fn)` marks a `beforeUpgrade` hook as authenticating for
+  `requireAuth` and group `auth` checks.
+- `ipReputation({ onUnresolvedIp })` chooses between the TCP peer (default)
+  and an unchecked pass-through when no forwarded client IP resolves, and
+  `urlFeed(url, { guard })` configures the default `fetchGuard()` transport.
+
+### Security
+
+Fixes from a coverage-led source audit of `src/` (see
+[SECURITY.md](SECURITY.md#source-first-audit-2026-11-04)) and its follow-up
+run over the units that audit deferred. Each fix ships with regression tests
+in `tests/audit-2026-11-*.test.ts` and `tests/ip-reputation.test.ts`.
+
+- **`some()` rolls back a rejected branch's state.** A candidate that throws or
+  returns a `Response` no longer leaves `ctx.state` changes (including `user`
+  and the auth-ran record) behind for the winning branch, and any lease that
+  branch acquired (a `concurrencyLimit()` slot, an `idempotency()`
+  reservation) is released at the same time rather than orphaned. `bearerAuth()` and
+  `jwk()` now set `ctx.state.user` only after `verify()` accepts, so a revoked
+  token can no longer lend its scopes, roles or tenant claim to a
+  lower-privilege credential presented alongside it. A `verify()` hook no
+  longer sees `ctx.state.user`; it still receives the token or payload.
+- **Header-mode mTLS parses forwarded DNs per RFC 4514.** An escaped comma in
+  another attribute (`OU=x\,CN=admin`) can no longer be read as the CN, and a
+  DN with several CNs or a malformed escape yields no CN, so
+  `allowSubjectCNs` / `allowIssuerCNs` fail closed. XFCC `subjectDN` now keeps
+  its RFC 4514 escapes. A typed `allowSANs` entry matches only an identical SAN.
+- **The request deadline no longer releases leases early.** When
+  `requestTimeoutMs` answers while a handler or hook is still running,
+  `concurrencyLimit()` slots, `idempotency()` reservations and the
+  graceful-shutdown drain stay held until that work settles (at most
+  10 × `requestTimeoutMs`), so `maxConcurrent` bounds running work and a
+  same-key retry after a `503`/`504` timeout gets `409` instead of re-running
+  the side effect.
+- **`every()` / `some()` chain every app-registration receiver.** The App's
+  `behindProxy` posture (and the production and body-limit hooks) now reach
+  every composed guard, so `every(rateLimit(), loginThrottle())` behind a
+  declared proxy keys each guard on the real client instead of the proxy.
+- **The body cap is installed before user hooks.** `onRequest` hooks, and
+  `preBody` hooks on routes with a body schema, can no longer read past
+  `bodyLimitBytes`. A declared `Content-Length: 0` no longer skips the cap when
+  a body is present.
+- **`app.ws()` honors `requireAuth` and group `auth`.** Under either, a
+  WebSocket route is refused at registration unless its `beforeUpgrade` is
+  wrapped with the new `markWebSocketAuth()` or the route sets
+  `acknowledgeUnauthenticated: true`. See
+  [WebSocket auth](https://daloyjs.dev/docs/websocket#require-auth).
+- **Outbound webhooks sign the message id.** `createWebhookSender()` signs
+  `"<id>.<timestamp>.<body>"` (Standard Webhooks layout), and
+  `signWebhookPayload()` / `verifyWebhookSignature()` accept an optional `id`.
+  Receivers of `createWebhookSender()` deliveries must now pass the
+  `webhook-id` header as `id` when verifying, and should dedupe only on that
+  verified id. `verifyWebhookSignature()` returns `false` instead of throwing
+  for an empty or missing secret.
+- **Probe limiters key on the client.** `healthcheck()`, `readinesscheck()`,
+  `metrics()` and `cspReportRoute()` resolve the caller with the App's
+  `behindProxy` posture, the same identity `rateLimit()` uses, and never read
+  raw `X-Real-IP` / `Fly-Client-IP`. One client can no longer lock the probe
+  for everyone or rotate a header to escape the cap, and `cspReportRoute`'s
+  `onReport` receives a validated address or `null`. `trustProxy: true` without
+  `behindProxy` now keys on the TCP peer.
+- **`app({ env })` is validated.** A value other than `"development"`,
+  `"production"` or `"test"` now throws at construction instead of silently
+  disabling production guards and 5xx redaction.
+- **`except(paths, cors())` keeps the cross-origin write guard on exempted
+  paths.** The CORS allow predicate is now path-gated like the CORS response
+  decorator. `CorsOriginAllow` receives the request as an optional second
+  argument.
+- **An allow-all `cors()` origin predicate counts as a wildcard.** It is refused
+  in production like `origin: "*"`, whether or not `credentials` is set.
+- **RFC 9421 `@query-param` values are percent-encoded** (§2.2.8) before they
+  enter the signature base, and component values containing a line break are
+  refused, so one signature cannot verify a boundary-shifted query string.
+- **Idempotency store keys are namespaced unambiguously**
+  (`t=<tenant>|s=<scope>|k=<key>`), so an unscoped client key can no longer name
+  a scoped or tenant slot. Keys are opaque to `IdempotencyStore`
+  implementations. Records stored under the previous format stop matching
+  after the upgrade. The body fingerprint no longer trusts a declared
+  `Content-Length: 0`.
+- **`rejectScriptableImages` detects more SVG/MVG forms.** It decodes UTF-16,
+  ignores comments, processing instructions and whitespace, and recognizes
+  namespace-prefixed SVG roots. `multipartObject({ strict: true })` now treats
+  inherited names such as `toString` as unknown fields, and client values in
+  its error messages are echo-safe.
+- **Lambda adapter refuses re-routable event paths.** A path with a `.`/`..`
+  segment in any spelling, `\`, `?` or `#` now answers `400` instead of being
+  resolved onto a different route than the one API Gateway authorized. A
+  `sourceIp` that is not an IP address is no longer attached as the peer.
+- **Integer `Mcp-Param-*` headers must be decimal.** Forms such as `0x2A`,
+  `4.2e1`, `+42`, `042` or an empty value are refused with `-32020`.
+- **`ipReputation()` checks the TCP peer when it cannot resolve a forwarded
+  IP.** With `trustedProxies`, `trustedHops` or `trustProxyHeaders`, a listed
+  client that went direct-to-origin (untrusted peer, or an `X-Forwarded-For`
+  chain shorter than declared) used to pass unchecked. It is now checked by its
+  socket address; `onUnresolvedIp: "allow"` restores the pass-through.
+- **`ipReputation()` with no trust option now blocks.** It used to resolve no
+  client IP at all, so `ipReputation({ feeds })` never blocked anyone, despite
+  the docs saying it read the socket address. It now follows the App's
+  `behindProxy` posture and otherwise checks the TCP peer. An explicit
+  `trustProxyHeaders: false` keeps the peer and ignores the App's posture.
+- **`urlFeed()` keeps feed credentials on the feed's origin.** Every header
+  passed in `headers` is removed on a cross-origin redirect, so a custom
+  credential such as `x-api-key` no longer follows a redirect to another host.
+
 ## [1.19.0] - 2026-11-05
 
 ### Added

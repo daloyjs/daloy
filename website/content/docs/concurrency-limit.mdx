@@ -35,6 +35,7 @@ Each request:
 - if all slots are busy, waits in a bounded FIFO queue (`maxQueue`) for up to `queueTimeoutMs`;
 - is rejected with a fast `503 Service Unavailable` (+ `Retry-After`) once the queue is full or the wait times out;
 - releases its slot when the response is finalized: on success, error, and short-circuit paths alike, so a slot is never leaked. The release also runs as a per-request finalizer in the dispatcher's `finally` block, so the slot comes back even when another middleware's `onSend` or `onError` hook throws, and it is never released twice (since 1.3.7).
+- keeps its slot after a `requestTimeoutMs` timeout until the handler actually settles (since 1.20.0). The deadline answers the client and aborts `ctx.request.signal`, but it cannot stop a handler that ignores the signal, so releasing on the `408` would let `maxConcurrent` count open responses instead of running work. A handler that never settles gives its slot back after 10 x `requestTimeoutMs` (5 minutes at the 30s default), so a hung call cannot pin a slot for the life of the process. Graceful shutdown waits for these handlers the same way.
 
 <FlowDiagram title="Acquire, queue, or shed" steps={[
           {

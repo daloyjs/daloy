@@ -46,9 +46,12 @@
  */
 
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
+import type { BehindProxyConfig } from "./conn-info.js";
 import { ForbiddenError } from "./errors.js";
-import { fetchGuard } from "./fetch-guard.js";
+import { fetchGuard, type FetchGuardOptions } from "./fetch-guard.js";
 import {
+  readRemoteAddress,
+  resolveClientIp,
   resolveForwardedClientIp,
   resolveForwardedTrust,
   stampForwardedTrust,
@@ -115,8 +118,16 @@ export interface IpReputationOptions {
    */
   loadOnStart?: boolean;
   /**
-   * Custom client-IP resolver. Overrides {@link IpReputationOptions.trustProxyHeaders}.
-   * Defaults to failing open (no IP → not blocked).
+   * Custom client-IP resolver. Overrides {@link IpReputationOptions.trustProxyHeaders},
+   * {@link trustedHops}, {@link trustedProxies} and the App's `behindProxy`.
+   * Returning `undefined` fails open (not blocked).
+   *
+   * Without a custom resolver or any trust option, the guard follows the App's
+   * `behindProxy` posture (reported at registration) and otherwise checks the
+   * unspoofable TCP peer address, so `ipReputation({ feeds })` on its own
+   * blocks listed peers. Before 1.20.0 it resolved no IP at all and never
+   * blocked anything. Peer-less edge platforms still resolve no IP unless the
+   * App declares `behindProxy`.
    */
   resolveIp?: (ctx: IdentityGateContext) => string | undefined;
   /**
@@ -148,6 +159,23 @@ export interface IpReputationOptions {
    * verification fails closed (forwarded identity ignored).
    */
   trustedProxies?: readonly string[];
+  /**
+   * What to do when the forwarded-IP resolver (enabled by
+   * {@link trustProxyHeaders}, {@link trustedHops} or {@link trustedProxies})
+   * resolves no client IP: the peer is not a trusted proxy, or the
+   * `X-Forwarded-For` chain is missing or shorter than {@link trustedHops}.
+   *
+   * - `"peer"` (default): check the immediate TCP peer address instead. A
+   *   request that skipped the declared proxy chain (direct-to-origin) came
+   *   from that peer, so a listed client cannot pass just by bypassing the
+   *   CDN. A denylist can only block, so the fallback never admits anyone.
+   * - `"allow"`: let the request through unchecked (the pre-1.20.0 behaviour).
+   *
+   * Ignored when a custom {@link resolveIp} is supplied.
+   *
+   * @since 1.20.0
+   */
+  onUnresolvedIp?: "peer" | "allow";
   /**
    * `"block"` (default) throws a {@link ForbiddenError} on a match; `"log"`
    * only invokes {@link IpReputationOptions.onMatch} and lets the request
@@ -211,8 +239,23 @@ export interface UrlFeedOptions {
    * mirror.
    */
   fetchImpl?: typeof fetch;
-  /** Extra request headers (e.g. an API token for a commercial feed). */
+  /**
+   * Extra request headers (e.g. an API token for a commercial feed). With the
+   * default transport, every header listed here is removed when a redirect
+   * leaves the feed's origin, so a feed host (or an open redirect on it)
+   * cannot forward a custom credential header such as `x-api-key` to another
+   * host. A custom {@link fetchImpl} must enforce that itself.
+   */
   headers?: Record<string, string>;
+  /**
+   * Options for the default {@link fetchGuard} transport (for example
+   * `allowHosts` for an internal mirror). `maxResponseBytes` defaults to
+   * 64 MiB, and the names in {@link headers} are always added to
+   * `sensitiveHeaders`. Ignored when {@link fetchImpl} is set.
+   *
+   * @since 1.20.0
+   */
+  guard?: FetchGuardOptions;
 }
 
 /**
@@ -240,10 +283,13 @@ function parseFeedLine(line: string): string | undefined {
  * are skipped by {@link ipReputation}, so a partially-malformed feed still loads
  * its good entries.
  *
- * The outbound fetch is SSRF-hardened by default (see {@link UrlFeedOptions.fetchImpl}).
+ * The outbound fetch is SSRF-hardened by default (see {@link UrlFeedOptions.fetchImpl}),
+ * and the feed's request headers never follow a cross-origin redirect (see
+ * {@link UrlFeedOptions.headers}).
  *
  * @param url - The feed URL.
- * @param opts - Optional feed name, custom `fetch`, and request headers.
+ * @param opts - Optional feed name, custom `fetch`, default-guard options, and
+ *   request headers.
  * @returns A feed ready to pass to {@link IpReputationOptions.feeds}.
  * @since 0.37.0
  */
@@ -253,7 +299,19 @@ export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFee
   // redirects are re-validated per hop and internal/metadata targets are
   // refused, matching createWebhookSender's posture. Callers can override.
   // Reputation feeds can be large plain-text lists: allow up to 64 MiB.
-  const doFetch = opts.fetchImpl ?? fetchGuard({ maxResponseBytes: 64 * 1024 * 1024 });
+  // Every caller-supplied header is treated as a credential on cross-origin
+  // redirects: fetchGuard only strips Authorization/Cookie by default, and a
+  // feed token in `x-api-key` would otherwise follow a redirect off-origin.
+  const doFetch =
+    opts.fetchImpl ??
+    fetchGuard({
+      maxResponseBytes: 64 * 1024 * 1024,
+      ...opts.guard,
+      sensitiveHeaders: [
+        ...(opts.guard?.sensitiveHeaders ?? []),
+        ...Object.keys(opts.headers ?? {}),
+      ],
+    });
   return {
     name,
     async fetch(signal) {
@@ -291,8 +349,40 @@ function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) 
     resolveForwardedClientIp(ctx.request, hops, trustedPeers);
 }
 
-function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
-  return undefined;
+/**
+ * Registration-time hook key the App calls with its `behindProxy` posture.
+ * Must match the symbol read in `app.ts`.
+ * @internal
+ */
+const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
+
+/**
+ * @internal Default resolver for a guard given no trust options: follows the
+ * App's `behindProxy` posture once reported, and the TCP peer otherwise (no
+ * posture, `"none"`, or two Apps reporting different postures).
+ */
+function appPostureResolver(): {
+  resolve: (ctx: BaseContext<any, any>) => string | undefined;
+  receive: (cfg: unknown) => void;
+} {
+  let posture: BehindProxyConfig | undefined;
+  let received = false;
+  let conflicted = false;
+  const receive = (cfg: unknown): void => {
+    if (conflicted) return;
+    if (!received) {
+      received = true;
+      posture = cfg as BehindProxyConfig | undefined;
+      return;
+    }
+    if (JSON.stringify(cfg) !== JSON.stringify(posture)) {
+      conflicted = true;
+      posture = undefined;
+    }
+  };
+  const resolve = (ctx: BaseContext<any, any>): string | undefined =>
+    resolveClientIp(ctx.request, posture);
+  return { resolve, receive };
 }
 
 /** Compiled per-feed denylist, split by family for cheaper matching. */
@@ -308,13 +398,17 @@ interface CompiledFeed {
  * requests from listed IPs, reusing the `ipRestriction()` CIDR matcher.
  *
  * Fail-open by design: a feed that cannot be loaded never blocks traffic — the
- * last-known-good list is retained (empty until the first successful load). An
- * unresolvable client IP is also treated as not-listed.
+ * last-known-good list is retained (empty until the first successful load).
+ * The client IP is the App's `behindProxy`-resolved client (or the TCP peer)
+ * by default; with a forwarded-trust option, a request whose forwarded IP
+ * cannot be resolved is checked by its TCP peer (see
+ * {@link IpReputationOptions.onUnresolvedIp}). Only a request with no
+ * resolvable IP at all (a peer-less runtime) is treated as not-listed.
  *
  * @param opts - Reputation configuration; `feeds` must be non-empty.
  * @returns An {@link IpReputationController} whose `hooks` go to `app.use(...)`.
- * @throws Error when `feeds` is empty, `mode` is invalid, or a numeric option
- *   is out of range.
+ * @throws Error when `feeds` is empty, `mode` or `onUnresolvedIp` is invalid,
+ *   or a numeric option is out of range.
  * @since 0.37.0
  */
 export function ipReputation(opts: IpReputationOptions): IpReputationController {
@@ -334,11 +428,30 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
     throw new Error("ipReputation(): fetchTimeoutMs must be a positive integer.");
   }
   const message = opts.message ?? DEFAULT_MESSAGE;
+  const onUnresolvedIp = opts.onUnresolvedIp ?? "peer";
+  if (onUnresolvedIp !== "peer" && onUnresolvedIp !== "allow") {
+    throw new Error('ipReputation(): onUnresolvedIp must be "peer" or "allow".');
+  }
   const hops = resolveForwardedTrust("ipReputation()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("ipReputation()", opts);
-  const resolveIp =
+  // An explicit `trustProxyHeaders: false` means "never forwarded headers":
+  // it keeps the peer but does not inherit the App's proxy posture.
+  const inherited =
+    opts.resolveIp === undefined && hops === undefined && opts.trustProxyHeaders === undefined
+      ? appPostureResolver()
+      : undefined;
+  const forwarded = hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : undefined;
+  // Peer fallback: a request that skipped the declared proxy chain is checked
+  // against the socket it actually arrived on, never waved through.
+  const peerFallback = onUnresolvedIp === "peer";
+  const resolveIp: (ctx: IdentityGateContext) => string | undefined =
     opts.resolveIp ??
-    (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
+    inherited?.resolve ??
+    (forwarded !== undefined
+      ? peerFallback
+        ? (ctx) => forwarded(ctx) ?? readRemoteAddress(ctx)
+        : forwarded
+      : readRemoteAddress);
 
   // Last-known-good compiled denylist, one entry per feed so a single feed's
   // failed refresh doesn't drop the others.
@@ -437,6 +550,9 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
       return matchingFeeds(ip).length > 0;
     },
   };
+  if (inherited) {
+    (controller.hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK] = inherited.receive;
+  }
   stampForwardedTrust(controller.hooks, "ipReputation()", opts);
   return controller;
 }

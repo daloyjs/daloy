@@ -60,8 +60,10 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
   and a bounded body traversal. They are not injection prevention or a complete
   payload scan. Use strict length-limited schemas, parameterized database APIs,
   output encoding, and sink-specific path validation.
-- The multipart scriptable-image check inspects the first 512 bytes. It does
-  not sanitize or fully decode an image. Use `magicBytes`, explicit field/file
+- The multipart scriptable-image check inspects the first 512 bytes. Inside
+  that window it decodes UTF-16, ignores comments, processing instructions and
+  whitespace, and recognizes namespace-prefixed SVG roots (since 1.20.0), but it
+  does not sanitize or fully decode an image. Use `magicBytes`, explicit field/file
   limits, and an isolated, maintained image decoder. Platform `formData()` may
   allocate before part-count validation; a wire-byte cap is not a heap cap.
 - `fetchGuard()` is an opt-in wrapper: outbound calls are guarded only when
@@ -372,10 +374,16 @@ From 1.11.0 Envoy XFCC parsing honors `\"` escapes inside quoted values, so a
 certificate Subject cannot smuggle a top-level `DNS=` / `URI=` SAN, and a
 malformed XFCC header (unbalanced or stray quotes, a pair without `=`)
 provides no identity.
+From 1.20.0 forwarded subject and issuer DNs (XFCC and structured header
+modes) are parsed per RFC 4514: an escaped separator such as `OU=x\,CN=admin`
+cannot create a CN, XFCC unquoting keeps the RFC 4514 escapes, and a DN with
+more than one CN, a hex-encoded CN, or any malformed escape yields no CN, so
+`allowSubjectCNs` / `allowIssuerCNs` fail closed. A typed `allowSANs` entry
+(`URI:…`, `DNS:…`) matches only an identical SAN.
 
 #### Body-size DoS + structural DoS
 
-Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced. From 1.5.4 the cap applies to every route, including handlers that read `ctx.request` directly (`text()`, `json()`, `arrayBuffer()`, `formData()`, the `body` stream, `clone()`), answering `413`; before 1.5.4 only routes with a request-body schema were capped.
+Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced. From 1.5.4 the cap applies to every route, including handlers that read `ctx.request` directly (`text()`, `json()`, `arrayBuffer()`, `formData()`, the `body` stream, `clone()`), answering `413`; before 1.5.4 only routes with a request-body schema were capped. From 1.20.0 the cap is installed before any user hook can read the body, so `onRequest` hooks and `preBody` hooks on schema routes are bounded too, and a declared `Content-Length: 0` no longer skips the cap when a body is actually present.
 
 From 1.5.4, `bodyLimitBytes`, `requestTimeoutMs`, `maxHeaderCount`, `jsonMaxKeys` and `jsonMaxDepth` must be finite non-negative integers, checked at construction in every environment (`NaN`, `Infinity`, negatives, non-integers and strings throw; an explicit `undefined` uses the default). `Number(process.env.UNSET)` is `NaN`, which previously disabled a limit silently. `rateLimit()` likewise refuses a `windowMs` that is not a positive integer or a `max` that is not a non-negative integer (`max: 0` still refuses every request).
 
@@ -641,6 +649,48 @@ TOCTOU window on `https:` and non-Node runtimes in `fetchGuard`; Node defaults
 operator egress firewall for defense-in-depth) are spelled out at their source
 rather than hidden.
 
+### Source-first audit (2026-11-04)
+
+A coverage-led source audit of `src/` (audited ref `e7e98585`, Node 26.12.1,
+macOS) followed the [Cloudflare security-audit methodology](https://github.com/cloudflare/security-audit-skill):
+a deterministic coverage ledger, isolated hunters per trust boundary, coverage
+critics after each wave, and two independent verifiers per candidate. Every
+proof of concept ran in an OS sandbox (loopback-only network, empty
+environment, scratch-only writes) against the real Node adapter or in-process
+`app.fetch`. It confirmed 14 findings, all fixed in 1.20.0 with regression tests
+in `tests/audit-2026-11-*.test.ts`. None was reachable with defaults alone. The
+pattern is the one this document already warns about: guards that are correct
+on their own but fail when composed, and second parsers that disagree with the
+first.
+
+| Severity | Class | Fixed behavior |
+| --- | --- | --- |
+| medium | `some()` state carry-over | A rejected branch's `ctx.state` (including `user` and the auth-ran record) is rolled back; `bearerAuth()`/`jwk()` set `user` only after `verify()` accepts. A revoked token can no longer lend its scopes, roles or tenant claim to a lower-privilege winning branch. |
+| medium | Header-mode mTLS CN confusion | RFC 4514 DN parsing; an escaped comma cannot create a CN (see *Client-certificate identity parsing*). |
+| medium | Deadline releases leases early | When `requestTimeoutMs` answers while a handler still runs, `concurrencyLimit()` slots, `idempotency()` reservations and the shutdown drain are held until it settles (bounded at 10 x `requestTimeoutMs`). |
+| medium | `every()`/`some()` dropped proxy posture | All app-registration receivers (`behindProxy`, production, body limit) are chained, so every composed `rateLimit()`/`loginThrottle()` keys on the real client, not the proxy. |
+| low | Hook body reads uncapped | See *Body-size DoS*. |
+| low | `app.ws()` ignored `requireAuth` / group `auth` | Registration is refused unless `beforeUpgrade` is wrapped with `markWebSocketAuth()` or the route sets `acknowledgeUnauthenticated: true`. |
+| low | Unsigned webhook id | `createWebhookSender()` signs `<id>.<timestamp>.<body>`; receivers pass `id` to `verifyWebhookSignature()` and dedupe only on a verified id. `webhook-event-type` stays unsigned for Standard Webhooks interop: route on a type inside the signed body. |
+| low | Probe limiter identity | `healthcheck()`/`readinesscheck()`/`metrics()`/`cspReportRoute()` key on the resolved client IP (like `rateLimit()`), never on raw `X-Real-IP`/`Fly-Client-IP`. |
+| low | Unvalidated `env` option | `app({ env })` outside `development`/`production`/`test` throws; 5xx detail is revealed only for an explicit development or test env. |
+| low | `except(paths, cors())` | The CORS allow predicate is path-gated like the response decorator, so exempted paths keep the cross-origin write guard. |
+| low | RFC 9421 `@query-param` | Names and values are percent-encoded per §2.2.8 and line breaks are refused, so one signature cannot verify a boundary-shifted query. |
+| low | Idempotency key namespace | Store keys are labeled (`t=…\|s=…\|k=…`), so an unscoped key cannot address a scoped or tenant slot. |
+| low | Allow-all `cors()` predicate | A predicate that accepts any origin counts as a wildcard and is refused in production like `origin: "*"`. |
+| low | Scriptable-image detection | See the multipart accepted-risk note above. |
+
+Three source-grounded leads depend on deployment facts and were hardened
+fail-closed anyway: the Lambda adapter refuses event paths with dot segments,
+`\`, `?` or `#` (so `new Request()` cannot re-route a path API Gateway already
+authorized), integer `Mcp-Param-*` headers must be decimal (so a gateway parsing
+`0x2A` cannot disagree with the tool), and a declared `Content-Length: 0` no
+longer skips the body cap. Two candidates were rejected as matching documented
+contracts. Deferred for a follow-up run: `ipReputation()` trust-knob parity with
+the `behindProxy: "none"` boot refusal, `fetchGuard` pinning on non-Node runtimes
+(needs Bun/Deno/workerd), and the v1.18.0 changes that landed after the audited
+ref.
+
 ### Hook phase decides what a short-circuiting middleware can preempt
 
 A hook that returns a `Response` ends the chain for its phase. Any gate in the
@@ -699,7 +749,7 @@ aggregate is worth knowing before you rely on it as defense in depth:
 | `ipRestriction`    | fail **closed** — `403`                                                                              |
 | `geoBlock`         | **closed** with an `allow` list; **open** for `deny`-only (an unknown country is not on a deny list) |
 | `autoBan`          | falls back to the unspoofable **TCP peer**; `onUnresolvedIdentity: "skip"` opts out                  |
-| `ipReputation`     | fail **open** — an unknown address is not on a denylist                                              |
+| `ipReputation`     | falls back to the unspoofable **TCP peer**; `onUnresolvedIp: "allow"` opts out                       |
 | `concurrencyLimit` | fail **open** — not subject to limiting                                                              |
 | `rateLimit` / `loginThrottle` | the **TCP peer**; with no peer (edge / serverless), one shared `"global"` bucket, logged once in production as `rate-limit.shared-bucket` |
 
@@ -708,9 +758,14 @@ not have, and failing closed there would reject all traffic on any topology
 hiccup. But it does mean a **direct-to-origin request that skips your CDN
 disengages those controls**, so treat "every request reaches the app through my
 proxy chain" as a security requirement, not a deployment detail. Bind the origin
-to the proxy's network, or authenticate the hop. `autoBan` is the exception
-because unlimited credential attempts is never an acceptable answer to "I cannot
-identify you".
+to the proxy's network, or authenticate the hop. `autoBan` and `ipReputation` are the
+exceptions: unlimited credential attempts is never an acceptable answer to "I
+cannot identify you", and a denylist checked against the socket can only block,
+so the peer fallback never admits anyone. With no trust option `ipReputation`
+follows the App's `behindProxy` posture and otherwise checks the TCP peer
+(before 1.20.0 it resolved no IP and never blocked anything). `urlFeed()` also
+strips every caller-supplied request header on a cross-origin redirect, so a
+feed's API key cannot follow the redirect to another host.
 
 On edge and serverless platforms (Vercel, Cloudflare Workers, Netlify) there is
 no TCP peer to fall back on, so `behindProxy: { hops: 1 }` is what lets

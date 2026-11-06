@@ -525,6 +525,36 @@ interface MessageContext {
 
 class ComponentError extends Error {}
 
+const HEX_UPPER = "0123456789ABCDEF";
+
+/**
+ * Percent-encode a decoded query parameter name or value per RFC 9421 §2.2.8:
+ * UTF-8 bytes outside the application/x-www-form-urlencoded safe set
+ * (ASCII alphanumerics, `*`, `-`, `.`, `_`) become `%XX` (uppercase), and space
+ * becomes `%20` rather than `+`. The output never contains CR or LF.
+ *
+ * @internal
+ */
+function encodeQueryParamComponent(s: string): string {
+  let out = "";
+  for (const b of ENC.encode(s)) {
+    if (
+      (b >= 0x30 && b <= 0x39) ||
+      (b >= 0x41 && b <= 0x5a) ||
+      (b >= 0x61 && b <= 0x7a) ||
+      b === 0x2a ||
+      b === 0x2d ||
+      b === 0x2e ||
+      b === 0x5f
+    ) {
+      out += String.fromCharCode(b);
+    } else {
+      out += "%" + HEX_UPPER[b >> 4] + HEX_UPPER[b & 15];
+    }
+  }
+  return out;
+}
+
 function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
   const name = c.name;
   if (name === "@signature-params") {
@@ -555,7 +585,13 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
         if (c.paramName === undefined) {
           throw new ComponentError("@query-param requires a ;name parameter");
         }
-        const values = msg.url.searchParams.getAll(c.paramName);
+        // RFC 9421 §2.2.8: `name` is the *encoded* parameter name, and both
+        // name and value are re-encoded before entering the base so a decoded
+        // CR/LF can never forge another component line.
+        const values: string[] = [];
+        for (const [key, value] of msg.url.searchParams) {
+          if (encodeQueryParamComponent(key) === c.paramName) values.push(value);
+        }
         if (values.length === 0) {
           throw new ComponentError(
             `@query-param;name="${c.paramName}" is not present in the query`
@@ -572,7 +608,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
               "Cover `@query` or `@target-uri` instead, or send a single value."
           );
         }
-        return values[0]!;
+        return encodeQueryParamComponent(values[0]!);
       }
       case "@status":
         if (msg.status === undefined) {
@@ -610,7 +646,13 @@ function buildSignatureBase(
       throw new ComponentError(`duplicate covered component ${id}`);
     }
     seen.add(id);
-    base += `${id}: ${resolveComponentValue(c, msg)}\n`;
+    const value = resolveComponentValue(c, msg);
+    // Defense in depth: a CR/LF inside a value would let it forge the next
+    // `id: value` line, making the base ambiguous across distinct messages.
+    if (value.includes("\n") || value.includes("\r")) {
+      throw new ComponentError(`component ${id} value contains a line break`);
+    }
+    base += `${id}: ${value}\n`;
   }
   base += `"@signature-params": ${signatureParamsValue}`;
   return base;
@@ -644,6 +686,9 @@ export interface SignMessageOptions {
    * (`@method`, `@target-uri`, `@authority`, `@scheme`, `@request-target`,
    * `@path`, `@query`, `@query-param;name="…"`, `@status`); everything else is
    * a lowercased HTTP header name. Defaults to `["@method", "@target-uri"]`.
+   * Per RFC 9421 §2.2.8, an `@query-param` `name` is the percent-encoded
+   * parameter name, and the value enters the base percent-encoded (space as
+   * `%20`). A component value containing CR or LF makes signing throw.
    */
   components?: string[];
   /** Algorithm to sign with. */

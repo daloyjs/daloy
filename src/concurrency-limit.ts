@@ -60,7 +60,7 @@ import {
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
-import { registerRequestFinalizer } from "./request-finalizers.js";
+import { isRequestAbandoned, registerRequestFinalizer } from "./request-finalizers.js";
 
 /**
  * Details of a request rejected by {@link concurrencyLimit}, passed to
@@ -408,7 +408,9 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
       return undefined;
     },
     onSend(_res, ctx) {
-      if (ctx) releaseFor(ctx);
+      // A deadline response leaves the handler running: keep the slot until
+      // it settles. The deferred request finalizer releases it then.
+      if (ctx && !isRequestAbandoned(ctx)) releaseFor(ctx);
       return undefined;
     },
   }, "concurrencyLimit()", opts);

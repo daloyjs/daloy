@@ -47,6 +47,8 @@ app.assertSecureConfig({ production: true });
 
 **Unrecognized `NODE_ENV` (1.5.4).** A `NODE_ENV` other than `development`, `test` or `production` (for example `staging` or `prod`) is treated the same way: DaloyJS logs a one-time warning naming the value, and each would-be production refusal is logged instead of enforced. If `staging` should behave like production, set `app({ env: "production" })` there.
 
+**Unrecognized `env` option (1.20.0).** `app({ env })` outranks `NODE_ENV`, so it is validated strictly: anything other than `"development"`, `"production"` or `"test"` (for example `"Production"`, `"staging"`, or `""` from an unset variable) throws at construction instead of silently resolving to non-production. 5xx `detail` is likewise revealed only for an explicit `development` or `test` env.
+
 **Your CI.** Because most guards need a production signal, a test run with `NODE_ENV=test` does not trip them. Run `daloy doctor`, or call `app.assertSecureConfig({ production: true })` in a test, to check the production configuration in CI. In 1.5.4, several `daloy doctor` checks that read option names that do not exist (and so never fired) were fixed to read the real options.
 
 <FlowDiagram title="Fail in the driveway, not the intersection" numbered steps={[
@@ -113,6 +115,13 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 
 // Or a predicate.
 app.use(cors({ origin: (o) => o.endsWith(".example.com") }));
+```
+
+Since 1.20.0 a predicate that accepts every origin counts as `"*"` and is refused the same way. Daloy calls it once at `cors()` time with a test origin no real allowlist contains (`https://daloy-cors-canary.invalid`); if it returns `true`, as `() => true` or `(o) => !!o` do, the app refuses to boot in production. A predicate that only adds the opaque origin `"null"` is not treated as a wildcard, matching a literal `"null"` entry. The escape hatch is the same as for `"*"`: `app({ secureDefaults: false, acknowledgeInsecureDefaults: true })`.
+
+```ts
+// Throws at boot in production since 1.20.0.
+app.use(cors({ origin: () => true }));
 ```
 
 ## 3. `session()` + state-changing route without `csrf()` [#3-session-state-changing-route-without-csrf]
@@ -327,6 +336,8 @@ app.route({ method: "GET", path: "/status", public: true, /* ... */ });   // ok:
 ```
 
 Hooks apply to routes registered after them, so register auth before the routes it should cover. A route registered first is refused even if you add `app.use(auth)` later, which is the point: that route really would be unauthenticated. Framework routes that are public by design are already marked: docs, OpenAPI and AsyncAPI documents, health and metrics probes (which have their own `token`), the CSP report endpoint, the MCP and A2A `GET` / `OPTIONS` routes, and the A2A Agent Card. `mcpRoutes()` and `a2aRoutes()` with `{ public: true }` mark their JSON-RPC route public too.
+
+WebSocket routes are covered too. App and group hooks never run on an upgrade, so from 1.20.0 `app.ws()` under `requireAuth: true`, or inside a `group(prefix, { auth })`, throws in every environment unless its `beforeUpgrade` is wrapped with `markWebSocketAuth()` or the route passes `acknowledgeUnauthenticated: true`. See [WebSocket authentication](/docs/websocket#require-auth).
 
 ## 11. `allowedHosts`: DNS rebinding [#11-allowed-hosts]
 

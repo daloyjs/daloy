@@ -169,7 +169,9 @@ export interface JwkOptions {
    * Optional per-request revalidation hook. Returning `false` rejects the
    * request with `403`; returning `true` or `undefined` accepts. Use for
    * revocation lists / token-version counters / "user changed password since
-   * this JWT was issued". Runs before request-body I/O.
+   * this JWT was issued". Runs before request-body I/O. Since 1.20.0 it runs
+   * before `ctx.state.user` is stamped (read the claims from its `payload`
+   * argument), so a revoked token never sets `ctx.state.user`.
    *
    * @since 0.22.0
    */
@@ -475,17 +477,19 @@ export function jwk(opts: JwkOptions): Hooks {
       }
       // Stamp a user-shaped view on ctx.state so requireScopes() and handlers
       // can read it without re-parsing the JWT.
+      // Only once opts.verify() accepted it, so a revoked token never leaves
+      // an identity on ctx.state.
       const payload = verified.payload;
+      if (opts.verify) {
+        const ok = await opts.verify(payload, ctx);
+        if (ok === false) throw new ForbiddenError("Token revoked");
+      }
       const scopes = extractScopes(payload);
       (ctx.state as Record<string, unknown>).user = {
         sub: payload.sub,
         scopes,
         claims: payload,
       };
-      if (opts.verify) {
-        const ok = await opts.verify(payload, ctx);
-        if (ok === false) throw new ForbiddenError("Token revoked");
-      }
       markAuthPassed(ctx);
       return undefined;
     },

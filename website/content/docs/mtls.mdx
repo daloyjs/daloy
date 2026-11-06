@@ -153,9 +153,9 @@ app.use(
 ## Allow-lists & checks [#allow-lists-and-checks]
 
 - `requireVerified` (default `true`): refuse any certificate the TLS terminator did not verify.
-- `allowSubjectCNs` / `allowIssuerCNs`: exact CN match.
+- `allowSubjectCNs` / `allowIssuerCNs`: exact CN match. In header mode (XFCC or structured) the CN is parsed from the forwarded DN per RFC 4514: backslash escapes (`\,` `\+` `\;` `\"` `\\` and `\XX` hex pairs) never start a new attribute, so a certificate whose subject prints as `OU=x\,CN=admin,O=acme` has **no** CN and is rejected by `allowSubjectCNs: ["admin"]`. A DN that is malformed or carries more than one CN attribute also yields no CN, so these allow-lists fail closed.
 - `allowFingerprints`: SHA-256 fingerprint match in **constant time** (colons/spaces and case are ignored, so a value copied from `openssl` works as-is).
-- `allowSANs`: at least one Subject Alternative Name must match (as `TYPE:value` like `URI:spiffe://acme/svc-a`, or as a bare value).
+- `allowSANs`: at least one Subject Alternative Name must match (as `TYPE:value` like `URI:spiffe://acme/svc-a`, or as a bare value). A typed entry matches only an identical SAN; only bare entries match against a SAN's value part.
 - `checkValidity` (default `true`): reject certificates outside their `[notBefore, notAfter]` window when known (belt-and-braces for header-forwarded certs).
 - `verify(cert, ctx)`: a custom async hook run last. Returning `false` rejects with `403`.
 

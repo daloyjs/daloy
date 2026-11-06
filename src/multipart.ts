@@ -314,8 +314,10 @@ function normalizeMagicBytesOption(
  * Heuristics for scriptable / vector image formats that libraries such as
  * ImageMagick treat as code (SVG, MVG, MSL, PostScript / EPS). These are
  * deliberately fuzzy — they look at an ASCII prefix because the real files
- * are text and can be preceded by BOMs, whitespace, XML prologues, or
- * comments. Returning the label here means "refuse this upload".
+ * are text and can be preceded by BOMs, UTF-16 encoding, whitespace, XML
+ * prologues, or comments. Only the first 512 bytes are inspected, so treat
+ * this as a backstop to `magicBytes`, not a replacement. Returning the
+ * label here means "refuse this upload".
  */
 const SCRIPTABLE_IMAGE_PREFIX_BYTES = 512;
 
@@ -343,30 +345,63 @@ function asciiPrefix(bytes: Uint8Array): string {
   return out.toLowerCase();
 }
 
+/**
+ * Decode a UTF-16 probe (BOM, or NUL-interleaved ASCII without one) to a
+ * one-byte-per-character view so keyword matching sees `<svg`, not
+ * `< s v g`. Code units outside Latin-1 become a space. Anything that is
+ * not UTF-16 is returned unchanged.
+ */
+function maybeDecodeUtf16(bytes: Uint8Array): Uint8Array {
+  let le: boolean | undefined;
+  let start = 0;
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    le = true;
+    start = 2;
+  } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    le = false;
+    start = 2;
+  } else if (bytes.length >= 4 && bytes[0] !== 0 && bytes[1] === 0 && bytes[2] !== 0 && bytes[3] === 0) {
+    le = true;
+  } else if (bytes.length >= 4 && bytes[0] === 0 && bytes[1] !== 0 && bytes[2] === 0 && bytes[3] !== 0) {
+    le = false;
+  }
+  if (le === undefined) return bytes;
+  const out = new Uint8Array((bytes.length - start) >> 1);
+  for (let i = 0; i < out.length; i++) {
+    const lo = bytes[start + 2 * i + (le ? 0 : 1)]!;
+    const hi = bytes[start + 2 * i + (le ? 1 : 0)]!;
+    out[i] = hi === 0 ? lo : 0x20;
+  }
+  return out;
+}
+
+/** An SVG element with an optional namespace prefix (`<svg`, `<s:svg`). */
+const SVG_ELEMENT_RE = /<(?:[a-z0-9_.-]+:)?svg(?:[\s>/]|$)/;
+
 function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
-  const prefix = asciiPrefix(bytes);
+  // Decode UTF-16, fold to lower-case ASCII, and collapse whitespace runs
+  // so spacing / encoding variants of the keywords below still match.
+  const prefix = asciiPrefix(maybeDecodeUtf16(bytes)).replace(/\s+/g, " ");
+  const trimmed = prefix.trimStart();
   // PostScript / EPS — "%!PS" is the canonical Adobe header.
-  if (prefix.startsWith("%!ps") || prefix.includes("%!ps-adobe")) {
+  if (trimmed.startsWith("%!ps") || prefix.includes("%!ps-adobe")) {
     return "postscript";
   }
   // ImageMagick MVG / MSL — vector / scripting formats that can shell out
   // through the `url:`, `ephemeral:`, `msl:` coders (ImageTragick).
   if (
     prefix.includes("push graphic-context") ||
-    prefix.startsWith("<msl>") ||
+    trimmed.startsWith("viewbox ") ||
+    /<msl[\s>/]/.test(prefix) ||
     prefix.includes("<image ")
   ) {
     return "mvg-or-msl";
   }
   // SVG — XML-based and routinely carries `<script>` / external references.
-  // Match both raw `<svg` and an `<?xml ...?>` prologue that introduces SVG.
-  const trimmed = prefix.trimStart();
-  if (trimmed.startsWith("<svg") || /<!doctype\s+svg/.test(trimmed)) {
-    return "svg";
-  }
-  if (trimmed.startsWith("<?xml") && /<svg[\s>]/.test(trimmed)) {
-    return "svg";
-  }
+  // Match an (optionally namespaced) SVG element anywhere in the window
+  // rather than at the start, so leading comments, processing instructions
+  // and DOCTYPEs cannot push the root out of an anchored match.
+  if (prefix.includes("<!doctype svg") || SVG_ELEMENT_RE.test(prefix)) return "svg";
   return undefined;
 }
 
@@ -390,7 +425,7 @@ async function verifyMagicBytes(
         signature.mimes.some((mime) => mimeMatches(declared, mime))
       )
     ) {
-      return `Declared MIME "${declared}" does not match sniffed magic bytes: ${matched.map((signature) => signature.label).join(", ")}`;
+      return `Declared MIME "${echoSafe(declared)}" does not match sniffed magic bytes: ${matched.map((signature) => signature.label).join(", ")}`;
     }
   }
   return undefined;
@@ -535,7 +570,9 @@ export function isFileFieldSchema(s: unknown): s is FileFieldSchema {
 export interface MultipartObjectOptions {
   /**
    * Reject extra fields not declared in the shape. Default: false (extras
-   * are passed through to handlers, but never validated).
+   * are silently dropped: only declared fields reach the handler). Field
+   * names are matched as own keys of the shape, so inherited names such as
+   * `toString` count as unknown.
    */
   strict?: boolean;
 }
@@ -562,7 +599,7 @@ interface MultipartSchema<S extends MultipartShape> extends StandardSchemaV1<
  *
  * @param shape - Record mapping form-field names to per-field validators.
  * @param options - `strict: true` rejects undeclared extra fields. Defaults
- *   to `{ strict: false }` (extras pass through unvalidated).
+ *   to `{ strict: false }` (undeclared extras are dropped from the output).
  * @returns A marker-carrying schema the OpenAPI generator renders as
  *   `multipart/form-data`; validation issues are prefixed with the field name.
  */
@@ -597,9 +634,9 @@ export function multipartObject<S extends MultipartShape>(
         }
         if (strict) {
           for (const key of Object.keys(input)) {
-            if (!(key in shape)) {
+            if (!Object.hasOwn(shape, key)) {
               issues.push({
-                message: `Unknown field "${key}"`,
+                message: `Unknown field "${echoSafe(key)}"`,
                 path: [key],
               });
             }

@@ -321,6 +321,16 @@ function splitRespectingQuotes(value: string, sep: string): string[] | null {
   return out;
 }
 
+/**
+ * Strip one XFCC-level quoted span. Only the XFCC `\"` escape is resolved; any
+ * other backslash pair is kept verbatim (both characters) so RFC 4514 escapes
+ * inside a quoted Subject DN (`\,`, `\+`, `\\`, `\2C`, ...) reach
+ * {@link cnFromDN} intact. Pairs are consumed exactly as
+ * {@link splitRespectingQuotes} consumes them, so the two scanners agree on
+ * where a quoted span ends. Returns `undefined` for unbalanced or stray quotes.
+ *
+ * @internal
+ */
 function unquote(value: string): string | undefined {
   const trimmed = value.trim();
   if (trimmed.startsWith('"')) {
@@ -331,7 +341,7 @@ function unquote(value: string): string | undefined {
       const ch = trimmed[i]!;
       if (escaped) {
         escaped = false;
-        out += ch;
+        out += ch === '"' ? ch : "\\" + ch;
       } else if (ch === "\\") {
         escaped = true;
       } else if (ch === '"') {
@@ -339,24 +349,133 @@ function unquote(value: string): string | undefined {
       } else {
         out += ch;
       }
-  }
+    }
     return escaped ? undefined : out;
   }
   if (trimmed.includes('"')) return undefined;
   return trimmed;
 }
 
+const DN_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+function isHexDigit(c: number): boolean {
+  return (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102);
+}
+
+/**
+ * Extract the Common Name from a string-form Distinguished Name (RFC 4514,
+ * accepting the RFC 2253 `;` separator and double-quoted values). Backslash is
+ * an escape everywhere (`\,` `\+` `\;` `\"` `\\` `\=` `\#` `\<` `\>` `\ ` and
+ * `\XX` hex pairs decoded as UTF-8), so an escaped separator inside another
+ * attribute (`OU=x\,CN=admin`) never creates a CN. RDNs split only on
+ * unescaped `,`/`;`, multi-valued AVAs only on unescaped `+`.
+ *
+ * Fails closed: returns `undefined` when the DN is malformed (missing `=`,
+ * empty attribute type, dangling or unknown escape, invalid UTF-8, stray or
+ * unbalanced quote, text after a closing quote), when it holds more than one
+ * CN AVA (`CN`, `2.5.4.3` or `OID.2.5.4.3`), or when the CN is a `#` hex BER
+ * value. `allowSubjectCNs` / `allowIssuerCNs` then reject the certificate.
+ * Single linear scan, no backtracking.
+ *
+ * @internal
+ */
 function cnFromDN(dn: string | undefined): string | undefined {
   if (!dn) return undefined;
-  const rdns = splitRespectingQuotes(dn, ",");
-  if (!rdns) return undefined;
-  for (const rdn of rdns) {
-    const eq = rdn.indexOf("=");
-    if (eq === -1) continue;
-    const key = rdn.slice(0, eq).trim();
-    if (key.toUpperCase() === "CN") return unquote(rdn.slice(eq + 1));
+  const n = dn.length;
+  let cn: string | undefined;
+  let i = 0;
+  for (;;) {
+    // Attribute type: up to the first `=`.
+    const eq = dn.indexOf("=", i);
+    if (eq === -1) return undefined;
+    const type = dn.slice(i, eq).trim().toUpperCase();
+    if (type.length === 0 || /[\\",+;]/.test(type)) return undefined;
+    const isCN = type === "CN" || type === "2.5.4.3" || type === "OID.2.5.4.3";
+    i = eq + 1;
+    while (i < n && dn[i] === " ") i++;
+    let value = "";
+    let bytes: number[] | undefined;
+    // Length of `value` that must survive trailing-space trimming (escaped).
+    let keep = 0;
+    const quoted = dn[i] === '"';
+    if (quoted) i++;
+    if (!quoted && dn[i] === "#" && isCN) return undefined;
+    let closed = false;
+    for (; i < n; i++) {
+      const ch = dn[i]!;
+      if (ch === "\\") {
+        const next = dn.charCodeAt(i + 1);
+        if (Number.isNaN(next)) return undefined;
+        if (isHexDigit(next)) {
+          const lo = dn.charCodeAt(i + 2);
+          if (!isHexDigit(lo)) return undefined;
+          (bytes ??= []).push(parseInt(dn.slice(i + 1, i + 3), 16));
+          i += 2;
+          continue;
+        }
+        if (bytes) {
+          try {
+            value += DN_UTF8.decode(new Uint8Array(bytes));
+          } catch {
+            return undefined;
+          }
+          bytes = undefined;
+        }
+        const esc = dn[i + 1]!;
+        if (!',+;"\\<>=# '.includes(esc)) return undefined;
+        value += esc;
+        keep = value.length;
+        i++;
+        continue;
+      }
+      if (bytes) {
+        try {
+          value += DN_UTF8.decode(new Uint8Array(bytes));
+        } catch {
+          return undefined;
+        }
+        bytes = undefined;
+        keep = value.length;
+      }
+      if (quoted) {
+        if (ch === '"') {
+          closed = true;
+          i++;
+          break;
+        }
+        value += ch;
+        continue;
+      }
+      if (ch === "," || ch === ";" || ch === "+") break;
+      if (ch === '"') return undefined;
+      value += ch;
+    }
+    if (bytes) {
+      try {
+        value += DN_UTF8.decode(new Uint8Array(bytes));
+      } catch {
+        return undefined;
+      }
+      keep = value.length;
+    }
+    if (quoted) {
+      if (!closed) return undefined;
+      while (i < n && dn[i] === " ") i++;
+      if (i < n && dn[i] !== "," && dn[i] !== ";" && dn[i] !== "+") return undefined;
+    } else {
+      let end = value.length;
+      while (end > keep && value[end - 1] === " ") end--;
+      value = value.slice(0, end);
+    }
+    if (isCN) {
+      if (cn !== undefined) return undefined;
+      cn = value;
+    }
+    if (i >= n) return cn;
+    // dn[i] is an unescaped separator; an empty trailing AVA is malformed.
+    i++;
+    if (i >= n) return undefined;
   }
-  return undefined;
 }
 
 /**
@@ -369,7 +488,9 @@ function cnFromDN(dn: string | undefined): string | undefined {
  * and replace it with its own value. Append-only forwarding is insufficient.
  * Quoted values honor Envoy's `\"` escapes, so an escaped quote inside a
  * Subject cannot end the quoted span and smuggle a top-level `DNS=` / `URI=`
- * SAN.
+ * SAN. Every other backslash pair is kept verbatim, so RFC 4514 escapes in the
+ * Subject (`OU=x\,CN=admin`) survive and `subjectCN` is parsed from the real
+ * CN attribute (or left `undefined` for a malformed / multi-CN DN).
  *
  * @param headerValue Raw XFCC header value; `null`/`undefined` are tolerated.
  * @returns The certificate parsed from the first XFCC element, or `undefined`
@@ -516,9 +637,18 @@ export interface ClientCertAuthOptions {
    * component performs verification out of band.
    */
   requireVerified?: boolean;
-  /** If set, the subject CN must exactly match one of these values. */
+  /**
+   * If set, the subject CN must exactly match one of these values. In header
+   * mode the CN is parsed from the forwarded DN per RFC 4514 (escaped `\,` /
+   * `\+` never start a new attribute); a malformed DN or one with several CN
+   * attributes yields no CN and is rejected.
+   */
   allowSubjectCNs?: readonly string[];
-  /** If set, the issuer CN must exactly match one of these values. */
+  /**
+   * If set, the issuer CN must exactly match one of these values. In header
+   * mode the CN is parsed from the forwarded DN per RFC 4514; a malformed DN
+   * or one with several CN attributes yields no CN and is rejected.
+   */
   allowIssuerCNs?: readonly string[];
   /**
    * If set, the certificate's SHA-256 fingerprint must match one of these
@@ -530,7 +660,9 @@ export interface ClientCertAuthOptions {
   /**
    * If set, at least one Subject Alternative Name must match one of these.
    * Entries may be given as `TYPE:value` (e.g. `"URI:spiffe://acme/svc-a"`) or
-   * as a bare value matched against any SAN's value part.
+   * as a bare value matched against any SAN's value part. A typed entry
+   * (prefix `DNS:`, `URI:`, `IP:`, `email:`, ...) matches only a SAN that is
+   * exactly equal, never via the bare-value fallback.
    */
   allowSANs?: readonly string[];
   /**
@@ -789,11 +921,22 @@ function matchesFingerprint(cert: ClientCertificate, allowed: readonly string[])
   return matched;
 }
 
+/**
+ * SAN type prefixes emitted by {@link normalizePeerCertificate},
+ * {@link parseForwardedClientCert} and common terminators. An allow entry that
+ * starts with one of these is typed and must match a SAN exactly.
+ */
+const SAN_TYPE_PREFIX = /^(?:DNS|URI|IP|IP Address|email|DirName|Registered ID|othername):/i;
+
 function matchesSAN(sans: readonly string[], allowed: readonly string[]): boolean {
   if (sans.length === 0) return false;
   for (const want of allowed) {
+    // A typed entry (`URI:spiffe://a`) only matches exactly: the bare-value
+    // fallback below would otherwise let a SAN `URI:URI:spiffe://a` match it.
+    const typed = SAN_TYPE_PREFIX.test(want);
     for (const have of sans) {
       if (have === want) return true;
+      if (typed) continue;
       // Allow matching a bare value against the `TYPE:value` form.
       const colon = have.indexOf(":");
       if (colon !== -1 && have.slice(colon + 1) === want) return true;

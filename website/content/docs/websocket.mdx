@@ -192,6 +192,30 @@ app.ws("/api", {
 });
 ```
 
+### `requireAuth` and group auth [#require-auth]
+
+Because app and group hooks skip the upgrade, `app({ requireAuth: true })` and a `group(prefix, { auth })` cannot authenticate a socket for you. Since 1.20.0, `app.ws()` in either scope throws at registration, in every environment, unless the route's `beforeUpgrade` is wrapped with `markWebSocketAuth()` or the route passes `acknowledgeUnauthenticated: true`. Any other `beforeUpgrade` (for example `wsRateLimit()` on its own) does not count.
+
+```ts
+import { App, markWebSocketAuth } from "@daloyjs/core";
+
+const app = new App({ requireAuth: true });
+
+app.ws("/feed", {
+  allowedOrigins: "same-origin",
+  beforeUpgrade: markWebSocketAuth(async (req) => {
+    if (!(await verifyToken(req.headers.get("authorization")))) {
+      return new Response(null, { status: 401 });
+    }
+  }),
+  open(c) { c.send("hello"); },
+});
+
+app.ws("/lobby", { acknowledgeUnauthenticated: true, allowedOrigins: "same-origin", open() {} }); // deliberately public
+```
+
+Mark only a hook that really rejects unauthenticated callers before the 101 response.
+
 ## Origin policy and CSWSH
 
 `allowedOrigins` is checked before `beforeUpgrade` in both Node and Bun. Use `"same-origin"` for browser clients served from the same scheme, host, and port as the WS endpoint, use an array for explicit cross-origin browser clients, or use a predicate when machine clients must also send an `Origin` header.

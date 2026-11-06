@@ -1001,6 +1001,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 const MAX_MCP_VALIDATION_ERRORS = 20;
 /** Recursion-depth cap so a deeply-nested payload can't exhaust the stack. */
 const MAX_MCP_SCHEMA_DEPTH = 64;
+/** Decimal integer form accepted for an integer `Mcp-Param-*` header ("42", "-7", "3.0"). */
+const MCP_HEADER_INTEGER_RE = /^-?(?:0|[1-9][0-9]*)(?:\.0+)?$/;
 
 /** Narrow an arbitrary JSON value to a schema object (`{}`), excluding arrays/null. */
 function isSchemaObject(v: unknown): v is McpJsonObject {
@@ -2216,11 +2218,16 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       if (decoded === undefined) {
         return `Header mismatch: Mcp-Param-${param.name} is not valid Base64-encoded UTF-8`;
       }
-      // Integers compare numerically ("42.0" equals 42); strings and booleans
-      // compare against their canonical string form.
+      // Integers compare numerically ("42.0" equals 42), but only in decimal
+      // form: `Number()` alone also accepts "0x2A", "4.2e1", "+42", padded
+      // and empty strings, which a gateway reading the header as text or with
+      // parseInt would see as a different value. Strings and booleans compare
+      // against their canonical string form.
       const matches =
         param.type === "integer"
-          ? typeof value === "number" && Number(decoded) === value
+          ? typeof value === "number" &&
+            MCP_HEADER_INTEGER_RE.test(decoded) &&
+            Number(decoded) === value
           : decoded === String(value);
       if (!matches) {
         return `Header mismatch: Mcp-Param-${param.name} header value does not match the request body`;

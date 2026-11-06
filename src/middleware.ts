@@ -204,7 +204,7 @@ function generateCspNonce(): string {
   if (!cryptoApi?.getRandomValues) {
     throw new Error(
       "secureHeaders(): WebCrypto is required to generate a CSP nonce. " +
-        "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel."
+      "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel."
     );
   }
   const nonceBytes = new Uint8Array(16);
@@ -358,9 +358,9 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
     if (!cspProvidesFrameAncestors) {
       throw new Error(
         "secureHeaders(): refusing to construct with both frameOptions: false " +
-          "AND no CSP frame-ancestors directive — that disables every clickjacking " +
-          "defense the helper provides. Set frameOptions: 'DENY' / 'SAMEORIGIN', " +
-          "or add a `frame-ancestors` directive to contentSecurityPolicy."
+        "AND no CSP frame-ancestors directive — that disables every clickjacking " +
+        "defense the helper provides. Set frameOptions: 'DENY' / 'SAMEORIGIN', " +
+        "or add a `frame-ancestors` directive to contentSecurityPolicy."
       );
     }
   }
@@ -677,7 +677,8 @@ export const CORS_ORIGIN_ALLOW_MARKER: unique symbol = Symbol.for(
 
 /**
  * Marker stamped on the `Hooks` object returned by {@link cors} when the
- * configured `origin` permits the wildcard `"*"`. Used by the
+ * configured `origin` permits the wildcard `"*"`, or (since 1.20.0) is a
+ * predicate that accepts any origin. Used by the
  * boot-time refuse-to-boot guard: a wildcard CORS origin in production is
  * almost always a misconfiguration, so `App` constructed with
  * `secureDefaults: true` (the 0.16+ default) and resolved to
@@ -916,15 +917,25 @@ export function markAuthHook(hooks: Hooks): Hooks {
   return stampAuthHook(hooks);
 }
 
-/** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
-export type CorsOriginAllow = (origin: string) => boolean;
+/**
+ * Predicate stamped on a CORS `Hooks` object that returns `true` for allowed
+ * origins. The cross-origin write guard also passes the request (since
+ * 1.20.0), so a path-scoped policy, such as a `cors()` wrapped in `except()`,
+ * can decline on the paths it does not cover. Predicates that ignore the
+ * second argument keep working.
+ */
+export type CorsOriginAllow = (origin: string, request?: Request) => boolean;
 
 /** Options for {@link cors}. */
 export interface CorsOptions {
   /**
    * Allowed cross-origin caller(s): a single origin string, an array of
    * origins, or a predicate. `"*"` is rejected with `credentials: true`
-   * and refused at boot on production `secureDefaults` apps.
+   * and refused at boot on production `secureDefaults` apps. Since 1.20.0 a
+   * predicate that accepts any origin (probed with a canary origin no real
+   * allowlist contains, such as `() => true`) counts as `"*"` and is refused
+   * at boot the same way; the escape hatch is the same as for `"*"`
+   * (`app({ secureDefaults: false, acknowledgeInsecureDefaults: true })`).
    */
   origin: string | string[] | ((origin: string) => boolean);
   /**
@@ -991,6 +1002,17 @@ export const CORS_RESPONSE_DECORATOR = Symbol.for("daloyjs.cors.decorate");
 const CORS_CANARY_ORIGIN = "https://daloy-cors-canary.invalid";
 
 export function cors(opts: CorsOptions): Hooks {
+  // A predicate that accepts an origin no real allowlist contains (the canary)
+  // allows every site, exactly like "*": probe it once here so the production
+  // wildcard refusal and the credentials refusal below both see it.
+  let predicateAllowsAny = false;
+  if (typeof opts.origin === "function") {
+    try {
+      predicateAllowsAny = !!opts.origin(CORS_CANARY_ORIGIN);
+    } catch {
+      // A predicate that throws on an unexpected origin is not permissive.
+    }
+  }
   // Reject the classic CORS footgun up front. Browsers will refuse to attach
   // credentials to a wildcard origin (the spec literally forbids
   // `Access-Control-Allow-Origin: *` together with
@@ -1003,7 +1025,7 @@ export function cors(opts: CorsOptions): Hooks {
     if (includesWildcard) {
       throw new Error(
         'cors(): origin: "*" cannot be combined with credentials: true. ' +
-          "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
+        "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
       );
     }
     // The same footgun without the literal "*": a predicate that returns true
@@ -1013,22 +1035,21 @@ export function cors(opts: CorsOptions): Hooks {
     // local files, which any attacker page can produce. Probe both.
     const allowsNull =
       opts.origin === "null" || (Array.isArray(opts.origin) && opts.origin.includes("null"));
-    let allowsAny = false;
+    let predicateAllowsNull = false;
     if (typeof opts.origin === "function") {
-      for (const canary of [CORS_CANARY_ORIGIN, "null"]) {
-        try {
-          if (opts.origin(canary)) allowsAny = true;
-        } catch {
-          // A predicate that throws on an unexpected origin is not permissive.
-        }
+      try {
+        predicateAllowsNull = !!opts.origin("null");
+      } catch {
+        // A predicate that throws on an unexpected origin is not permissive.
       }
     }
+    const allowsAny = predicateAllowsAny || predicateAllowsNull;
     if (allowsNull || allowsAny) {
       throw new Error(
         `cors(): credentials: true with an origin policy that allows ${allowsNull ? '"null"' : "any origin"} ` +
-          `would let every website read responses with the user's cookies. ` +
-          `The policy accepted ${allowsNull ? 'the opaque origin "null"' : `the test origin ${CORS_CANARY_ORIGIN}`}. ` +
-          "List the exact origins you trust (or a predicate that checks them exactly)."
+        `would let every website read responses with the user's cookies. ` +
+        `The policy accepted ${allowsNull ? 'the opaque origin "null"' : `the test origin ${CORS_CANARY_ORIGIN}`}. ` +
+        "List the exact origins you trust (or a predicate that checks them exactly)."
       );
     }
   }
@@ -1041,7 +1062,7 @@ export function cors(opts: CorsOptions): Hooks {
   if (opts.methods?.some((m) => m === "*" || m.trim() === "*")) {
     throw new Error(
       'cors(): methods cannot include "*". Declare each verb explicitly ' +
-        '(e.g. ["GET", "HEAD", "POST"]).'
+      '(e.g. ["GET", "HEAD", "POST"]).'
     );
   }
   const allow = (origin: string | null): string | null => {
@@ -1119,8 +1140,15 @@ export function cors(opts: CorsOptions): Hooks {
   });
   (hooks as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER] = (origin: string) =>
     allow(origin) !== null;
+  // An allow-everything predicate counts as a wildcard, so the production
+  // boot refusal (and its `secureDefaults: false` escape hatch) applies to it
+  // too; otherwise `origin: () => true` would silently open every
+  // state-changing route to every site. A predicate that only adds the opaque
+  // origin "null" is left alone, like a literal "null" entry.
   const hasWildcard =
-    opts.origin === "*" || (Array.isArray(opts.origin) && opts.origin.includes("*"));
+    opts.origin === "*" ||
+    (Array.isArray(opts.origin) && opts.origin.includes("*")) ||
+    predicateAllowsAny;
   if (hasWildcard) {
     (hooks as Record<PropertyKey, unknown>)[CORS_WILDCARD_ORIGIN_MARKER] = true;
   }
@@ -1359,8 +1387,8 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   if (!Number.isInteger(opts.max) || opts.max < 0) {
     throw new Error(
       `rateLimit(): max must be a non-negative integer (got ${String(opts.max)}). ` +
-        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
-        `would otherwise disable the limit.`,
+      `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+      `would otherwise disable the limit.`,
     );
   }
   if (opts.standardHeaders !== undefined && opts.standardHeaders !== "draft-8") {
@@ -1580,8 +1608,8 @@ function assertPositiveInteger(name: string, value: number, owner = "loginThrott
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(
       `${owner}: ${name} must be a positive integer (got ${String(value)}). ` +
-        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
-        `would otherwise disable the limit.`,
+      `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+      `would otherwise disable the limit.`,
     );
   }
 }
@@ -1821,7 +1849,8 @@ export interface BearerAuthOptions {
    * Optional per-request revalidation hook. Called after `validate`
    * accepts the token. Returning `false` rejects the request with `403`;
    * returning `true` or `undefined` accepts. Use for revocation lists,
-   * token-version counters, etc.
+   * token-version counters, etc. Since 1.20.0 it runs before the `validate`
+   * object is stamped on `ctx.state.user`, so a revoked token never sets it.
    *
    * @since 0.22.0
    */
@@ -1896,11 +1925,13 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
       }
       const ok = await options.validate(token);
       if (!ok) throw new ForbiddenError("Invalid token");
-      if (typeof ok === "object") (ctx.state as Record<string, unknown>).user = ok;
       if (options.verify) {
         const verified = await options.verify(token, ctx);
         if (verified === false) throw new ForbiddenError("Token revoked");
       }
+      // Stamp the principal only once verify() accepted it, so a revoked
+      // token never leaves an identity on ctx.state for later hooks to read.
+      if (typeof ok === "object") (ctx.state as Record<string, unknown>).user = ok;
       markAuthPassed(ctx);
       return undefined;
     },
@@ -2051,7 +2082,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     if (ignore.has(method)) {
       throw new Error(
         `csrf(): ignoreMethods must not include ${method}. State-changing requests are the ones ` +
-          `CSRF protection is for; exempt a specific route with except() instead.`
+        `CSRF protection is for; exempt a specific route with except() instead.`
       );
     }
   }
@@ -2065,7 +2096,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     if (acceptsAny) {
       throw new Error(
         `csrf(): the allowedOrigins predicate accepted the test origin ${CORS_CANARY_ORIGIN}, so it ` +
-          "would trust every site and switch the origin check off. Check origins exactly."
+        "would trust every site and switch the origin check off. Check origins exactly."
       );
     }
   }
@@ -2470,7 +2501,7 @@ export function requireScopes(
   if (match === "any" && phase !== "preBody") {
     throw new Error(
       'requireScopes(): match "any" requires phase "preBody", so the check runs before ' +
-        "stored-response replays (idempotency(), responseCache())."
+      "stored-response replays (idempotency(), responseCache())."
     );
   }
   const anyOf = match === "any";

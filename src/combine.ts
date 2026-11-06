@@ -10,11 +10,13 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import {
   _mergePreBodyWithEarlyRejections,
   _orderBeforeHandleForReplay,
+  CORS_ORIGIN_ALLOW_MARKER,
   DEFERRED_PRE_BODY_HOOK_MARKER,
   DEFERRED_PRE_BODY_ONLY_MARKER,
   EARLY_REJECTION_HOOK_MARKER,
   REQUIRE_SCOPES_HOOK_MARKER,
 } from "./middleware.js";
+import { requestFinalizerMark, rollbackRequestFinalizers } from "./request-finalizers.js";
 
 /**
  * Run every supplied {@link Hooks} bundle in order, pipeline-style.
@@ -61,6 +63,12 @@ export function every(...layers: Hooks[]): Hooks {
  * - When a bundle returns a `Response`, that response is treated as a
  *   denial and the next bundle gets a chance to pass. If every bundle
  *   denies, the first denial wins.
+ * - Each bundle is a transaction over `ctx.state`: when it throws or returns
+ *   a `Response`, every own string and symbol key it added or changed (a
+ *   rejected token's `user`, the auth-ran record of an auth hook that passed
+ *   before a later gate in the same branch denied) is rolled back before the
+ *   next bundle runs, and any lease it acquired (a `concurrencyLimit()` slot,
+ *   an `idempotency()` reservation) is released at the same time. Since 1.20.0.
  * - When the first denial is a thrown error, that error is rethrown so the
  *   client gets a deterministic status code. Place the auth method whose
  *   `WWW-Authenticate` challenge you want clients to see first.
@@ -99,34 +107,47 @@ export function some(...layers: Hooks[]): Hooks {
   const candidates = usePreBody
     ? preBodyCandidates
     : layers.flatMap((hooks) => {
-        if (hooks.preBody && hooks.beforeHandle) {
-          return [
-            async (ctx: BaseContext<any, any>) => {
-              const early = await hooks.preBody!(ctx);
-              return early instanceof Response
-                ? early
-                : hooks.beforeHandle!(ctx);
-            },
-          ];
-        }
-        const gate = hooks.preBody ?? hooks.beforeHandle;
-        return gate ? [gate] : [];
-      });
+      if (hooks.preBody && hooks.beforeHandle) {
+        return [
+          async (ctx: BaseContext<any, any>) => {
+            const early = await hooks.preBody!(ctx);
+            return early instanceof Response
+              ? early
+              : hooks.beforeHandle!(ctx);
+          },
+        ];
+      }
+      const gate = hooks.preBody ?? hooks.beforeHandle;
+      return gate ? [gate] : [];
+    });
   if (candidates.length === 0) return base;
   const runCandidates = async (ctx: BaseContext<any, any>) => {
     let firstFailure:
       | { kind: "throw"; err: unknown }
       | { kind: "response"; res: Response }
       | undefined;
+    // Each candidate is a transaction over ctx.state: a branch that denies
+    // must not leave its identity (a revoked token's `user`, the AUTH_RAN
+    // record of an auth hook that passed before a later gate in the same
+    // branch denied) for the winning branch or the handler to read. Leases
+    // the branch acquired are released first, while their bookkeeping is
+    // still on ctx.state, so the rollback cannot orphan a slot.
+    const state = ctx.state as Record<PropertyKey, unknown>;
+    const snapshot = snapshotState(state);
+    const finalizerMark = requestFinalizerMark(ctx);
     for (const fn of candidates) {
       try {
         const r = await fn(ctx);
         if (r instanceof Response) {
+          rollbackRequestFinalizers(ctx, finalizerMark);
+          restoreState(state, snapshot);
           if (!firstFailure) firstFailure = { kind: "response", res: r };
           continue;
         }
         return undefined;
       } catch (err) {
+        rollbackRequestFinalizers(ctx, finalizerMark);
+        restoreState(state, snapshot);
         if (!firstFailure) firstFailure = { kind: "throw", err };
       }
     }
@@ -140,6 +161,30 @@ export function some(...layers: Hooks[]): Hooks {
     ...base,
     beforeHandle: runCandidates,
   };
+}
+
+/** Own string and symbol keys of `ctx.state` with their values, taken before a `some()` candidate runs. */
+interface StateSnapshot {
+  keys: PropertyKey[];
+  values: unknown[];
+}
+
+function snapshotState(state: Record<PropertyKey, unknown>): StateSnapshot {
+  const keys = Reflect.ownKeys(state);
+  const values = new Array<unknown>(keys.length);
+  for (let i = 0; i < keys.length; i++) values[i] = state[keys[i] as PropertyKey];
+  return { keys, values };
+}
+
+/** Put `state` back to `snapshot`: drop keys a failed branch added, reset the ones it changed. */
+function restoreState(state: Record<PropertyKey, unknown>, snapshot: StateSnapshot): void {
+  for (const key of Reflect.ownKeys(state)) {
+    if (!snapshot.keys.includes(key)) delete state[key];
+  }
+  for (let i = 0; i < snapshot.keys.length; i++) {
+    const key = snapshot.keys[i] as PropertyKey;
+    if (state[key] !== snapshot.values[i]) state[key] = snapshot.values[i];
+  }
 }
 
 /**
@@ -157,8 +202,8 @@ export type ExceptPredicate =
   | string
   | string[]
   | ((
-      ctx: PreBodyContext<any> | BaseContext<any, any>,
-    ) => boolean | Promise<boolean>);
+    ctx: PreBodyContext<any> | BaseContext<any, any>,
+  ) => boolean | Promise<boolean>);
 
 /**
  * Run a hook bundle on every request EXCEPT those matching `when`. The
@@ -177,6 +222,12 @@ export type ExceptPredicate =
  * shared concerns like request-id propagation are not accidentally
  * exempted. Wrap each bundle with {@link except} individually when you
  * need to gate other phases.
+ *
+ * A wrapped `cors()` policy is off on the exempted paths: it adds no CORS
+ * headers there, and (since 1.20.0) it no longer lets the cross-origin write
+ * guard accept a `POST`/`PUT`/`PATCH`/`DELETE` from its origins there. With a
+ * function `when`, which the guard cannot evaluate before the hooks run, the
+ * wrapped policy never relaxes that guard on any path.
  *
  * @param when Paths or predicate ({@link ExceptPredicate}) that exempt a request.
  * @param hooks The hook bundle whose `preBody` and `beforeHandle` gates are skipped on a match.
@@ -215,6 +266,25 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
       (wrapped as Record<PropertyKey, unknown>)[decoratorKey] = (request: Request, headers: Headers) => {
         if (!exempt(request.url)) (decorate as (r: Request, h: Headers) => void)(request, headers);
       };
+    }
+  }
+  // The cross-origin write guard runs before any hook and consults the cors()
+  // allow predicate directly, so gate it on the same paths: an exempted path
+  // must not have its cross-origin writes accepted by a policy that is off
+  // there. A function `when` cannot be decided synchronously, so the wrapped
+  // policy then never relaxes the guard (fail closed). It is replaced rather
+  // than deleted, because a bare CORS_HOOK_MARKER means "allow every origin".
+  const allowKey = CORS_ORIGIN_ALLOW_MARKER;
+  const allowFn = (wrapped as Record<PropertyKey, unknown>)[allowKey];
+  if (typeof allowFn === "function") {
+    if (typeof when === "function") {
+      (wrapped as Record<PropertyKey, unknown>)[allowKey] = () => false;
+    } else {
+      const exempt = compilePathMatcher(when);
+      (wrapped as Record<PropertyKey, unknown>)[allowKey] = (origin: string, request?: Request) =>
+        request !== undefined &&
+        !exempt(request.url) &&
+        (allowFn as (o: string, r?: Request) => boolean)(origin, request);
     }
   }
   if (Array.isArray(earlyRejectionHooks)) {
@@ -307,6 +377,22 @@ function compilePathPattern(pattern: string): (path: string) => boolean {
 
 /** Registration-time production hook key (see app.ts APP_PRODUCTION_HOOK). */
 const APP_PRODUCTION_HOOK = Symbol.for("daloyjs.hooks.appProduction");
+/** Registration-time behindProxy receiver (rateLimit / loginThrottle); see app.ts. */
+const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
+/** Registration-time body-limit receiver (idempotency); see internal-replay.ts. */
+const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
+
+/**
+ * Registration callbacks the App calls once with its own settings. Every
+ * composed bundle's receiver must hear it: keeping only the first would leave
+ * a later rateLimit()/loginThrottle() keyed on the proxy (one bucket shared by
+ * every client), or a later idempotency() reading past the App body limit.
+ */
+const CHAINED_REGISTRATION_HOOKS: ReadonlySet<symbol> = new Set([
+  APP_PRODUCTION_HOOK,
+  APP_BEHIND_PROXY_HOOK,
+  APP_BODY_LIMIT_HOOK,
+]);
 
 function mergeCombineHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
@@ -421,18 +507,22 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
         (merged as Record<PropertyKey, unknown>)[key] = union;
         continue;
       }
-      if (key === APP_PRODUCTION_HOOK) {
-        // Several bundles (jwk(), session()) can each refuse a production-only
-        // misconfiguration at registration; call all of them, not the first.
+      if (CHAINED_REGISTRATION_HOOKS.has(key)) {
+        // Several bundles can each receive the same App setting at
+        // registration (jwk() and session() refuse production-only
+        // misconfigurations; rateLimit() and loginThrottle() learn the
+        // behindProxy posture); call all of them, not the first.
         const existing = (merged as Record<PropertyKey, unknown>)[key];
         const incoming = record[key];
         (merged as Record<PropertyKey, unknown>)[key] =
           typeof existing === "function" && typeof incoming === "function"
-            ? (production: boolean) => {
-                (existing as (p: boolean) => void)(production);
-                (incoming as (p: boolean) => void)(production);
-              }
-            : incoming;
+            ? (...args: unknown[]) => {
+              (existing as (...a: unknown[]) => void)(...args);
+              (incoming as (...a: unknown[]) => void)(...args);
+            }
+            : typeof incoming === "function"
+              ? incoming
+              : existing;
         continue;
       }
       if (!(key in (merged as Record<PropertyKey, unknown>))) {

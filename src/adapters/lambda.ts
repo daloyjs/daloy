@@ -1,5 +1,6 @@
 import type { App } from "../app.js";
 import { setConnInfo } from "../conn-info.js";
+import { parseIp } from "../ip-match.js";
 
 /**
  * AWS Lambda / Netlify Functions adapter.
@@ -267,6 +268,14 @@ function eventToRequest(event: LambdaEvent, trustProto: boolean): Request {
     : queryStringForV1(event);
   const qs = rawQueryString ? `?${rawQueryString}` : "";
   const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+  // API Gateway has already matched a route (and may have run a route-level
+  // authorizer) on this exact path. `new Request()` would resolve dot segments,
+  // fold `\` into `/` and split on `?` / `#`, landing the request on a different
+  // app route than the one the gateway authorized. Refuse those shapes instead
+  // (the caller answers 400).
+  if (!isPlainEventPath(path)) {
+    throw new TypeError("Invalid request path");
+  }
   const url = `${proto}://${host}${path}${qs}`;
 
   const init: RequestInit = { method, headers };
@@ -283,10 +292,25 @@ function eventToRequest(event: LambdaEvent, trustProto: boolean): Request {
   const sourceIp = isV2Event(event)
     ? event.requestContext?.http?.sourceIp
     : event.requestContext?.identity?.sourceIp;
-  if (sourceIp) {
+  if (sourceIp && parseIp(sourceIp) !== undefined) {
     setConnInfo(request, { remoteAddress: sourceIp, tls: true });
   }
   return request;
+}
+
+/**
+ * `true` when an API Gateway event path is safe to splice into a URL without
+ * the WHATWG parser moving it: no `\`, `?` or `#`, and no `.` / `..` segment in
+ * any spelling (`%2e`, `.%2E`, ...). Encoded slashes stay opaque and are fine.
+ */
+function isPlainEventPath(path: string): boolean {
+  if (path.includes("\\") || path.includes("?") || path.includes("#")) return false;
+  for (const segment of path.split("/")) {
+    if (segment.length === 0 || segment.length > 6) continue;
+    const s = segment.toLowerCase().replaceAll("%2e", ".");
+    if (s === "." || s === "..") return false;
+  }
+  return true;
 }
 
 async function responseToLambda(

@@ -1,5 +1,5 @@
 export { App } from "./app.js";
-export { createApp } from "./app.js";
+export { createApp, markWebSocketAuth } from "./app.js";
 export { defineRoute } from "./types.js";
 export { findRoutesMissingResponseBodySchema } from "./app.js";
 export { _resetCrashHandlersForTests } from "./app.js";

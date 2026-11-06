@@ -67,10 +67,11 @@ const WEAK_SECRET_STRINGS: ReadonlyArray<string>;
 // Webhook HMAC
 type WebhookHmacAlgorithm = "sha256" | "sha384" | "sha512";
 const WEBHOOK_DEFAULT_TOLERANCE_SECONDS = 300;
-signWebhookPayload(opts: { secret; payload; algorithm?; timestamp?; }): Promise<string>;
+signWebhookPayload(opts: { secret; payload; algorithm?; timestamp?; id?; }): Promise<string>;
 verifyWebhookSignature(opts: {
   secret; payload; signature; algorithm?;
   timestamp?: string | number;
+  id?: string;                     // since 1.20.0; signs "<id>.<timestamp>.<body>"
   toleranceSeconds?: number;
   now?: () => number;
 }): Promise<boolean>;
