@@ -87,12 +87,13 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Allow the intentionally fake webhook signing-secret fixture used in webhook-delivery tests."
+description = "Allow the intentionally fake webhook signing-secret fixture used in webhook-delivery tests and the 2026-11 webhook audit regression tests."
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = [
   '''(?:^|/)tests/webhook-delivery\.test\.ts$''',
+  '''(?:^|/)tests/audit-2026-11-webhooks\.test\.ts$''',
 ]
 regexes = [
   '''whsec_test_0123456789abcdef0123456789abcdef''',
