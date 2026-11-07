@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-07
+
 ### Security
 
 A second scoped run of the upstream Cloudflare security-audit agent skill over
