@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-11-06
+
 ### Added
 
 - Per-route `bodyLimitBytes` and `requestTimeoutMs` on `RouteDefinition` (and
