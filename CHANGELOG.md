@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-07
+
 ### Security
 
 Fixes from a quick, scoped run of the upstream Cloudflare security-audit
