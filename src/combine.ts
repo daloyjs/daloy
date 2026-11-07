@@ -7,15 +7,19 @@
  */
 
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
+import { AUTH_OPTIONAL_PASS, AUTH_RAN } from "./internal-auth.js";
 import {
   _mergePreBodyWithEarlyRejections,
   _orderBeforeHandleForReplay,
   COMBINED_BEFORE_HANDLE_LAYERS,
   type CombinedBeforeHandleLayers,
+  CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER,
   CORS_ORIGIN_ALLOW_MARKER,
   DEFERRED_PRE_BODY_HOOK_MARKER,
   DEFERRED_PRE_BODY_ONLY_MARKER,
   EARLY_REJECTION_HOOK_MARKER,
+  PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS,
+  PRE_BODY_SAFE_HOOK_MARKER,
   REQUIRE_SCOPES_HOOK_MARKER,
 } from "./middleware.js";
 import { requestFinalizerMark, rollbackRequestFinalizers } from "./request-finalizers.js";
@@ -76,9 +80,19 @@ export function every(...layers: Hooks[]): Hooks {
  * - When the first denial is a thrown error, that error is rethrown so the
  *   client gets a deterministic status code. Place the auth method whose
  *   `WWW-Authenticate` challenge you want clients to see first.
+ * - A branch in `optional` mode (for example `httpSignatureAuth({ optional: true })`)
+ *   that sees **no** credential does not win: the remaining branches still
+ *   run, so a caller presenting a credential for a later branch is
+ *   authenticated by it. Its unauthenticated pass-through is honoured only
+ *   when no branch denies the request; any denial wins over it. Since 1.22.0.
  * - `afterHandle`, `onSend`, `onResponse`, and `onError` from every bundle
  *   still compose normally — `some()` only changes the auth-gate
  *   evaluation strategy.
+ * - `requireScopes()` inside a branch applies to that branch only: the
+ *   bundle does not advertise an all-of union of every branch's scopes.
+ *   When a branch pairs a `preBody` auth hook with a default-phase
+ *   `requireScopes()`, the whole `some()` runs in `preBody`, ahead of body
+ *   parsing and decompression. Since 1.22.0.
  *
  * @example
  * ```ts
@@ -98,32 +112,44 @@ export function some(...layers: Hooks[]): Hooks {
     ({ preBody: _p, beforeHandle: _b, ...rest }) => rest,
   );
   const base = mergeCombineHooks(stripped);
+  const hadConditionalScopes =
+    Array.isArray((base as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER]) ||
+    layers.some(
+      (h) =>
+        typeof h.beforeHandle === "function" &&
+        (h.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+          CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+        ] === true,
+    );
+  // OR-composed branches do not impose an unconditional all-of scope union on
+  // the route; each branch enforces and records its own scopes when it runs.
+  delete (base as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER];
   const preBodyCandidates = layers
     .map((h) => h.preBody)
     .filter((f): f is NonNullable<Hooks["preBody"]> => typeof f === "function");
-  const beforeHandleCandidates = layers
-    .map((h) => h.beforeHandle)
-    .filter(
-      (f): f is NonNullable<Hooks["beforeHandle"]> => typeof f === "function",
-    );
+  const hasUnsafeBeforeHandle = layers.some(
+    (h) =>
+      typeof h.beforeHandle === "function" &&
+      (h.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+        PRE_BODY_SAFE_HOOK_MARKER
+      ] !== true,
+  );
   const usePreBody =
-    preBodyCandidates.length > 0 && beforeHandleCandidates.length === 0;
-  const candidates = usePreBody
-    ? preBodyCandidates
-    : layers.flatMap((hooks) => {
-      if (hooks.preBody && hooks.beforeHandle) {
-        return [
-          async (ctx: BaseContext<any, any>) => {
-            const early = await hooks.preBody!(ctx);
-            return early instanceof Response
-              ? early
-              : hooks.beforeHandle!(ctx);
-          },
-        ];
-      }
-      const gate = hooks.preBody ?? hooks.beforeHandle;
-      return gate ? [gate] : [];
-    });
+    preBodyCandidates.length > 0 && !hasUnsafeBeforeHandle;
+  const candidates = layers.flatMap((hooks) => {
+    if (hooks.preBody && hooks.beforeHandle) {
+      return [
+        async (ctx: BaseContext<any, any>) => {
+          const early = await hooks.preBody!(ctx);
+          return early instanceof Response
+            ? early
+            : hooks.beforeHandle!(ctx);
+        },
+      ];
+    }
+    const gate = hooks.preBody ?? hooks.beforeHandle;
+    return gate ? [gate] : [];
+  });
   if (candidates.length === 0) return base;
   const runCandidates = async (ctx: BaseContext<any, any>) => {
     let firstFailure:
@@ -137,29 +163,57 @@ export function some(...layers: Hooks[]): Hooks {
     // the branch acquired are released first, while their bookkeeping is
     // still on ctx.state, so the rollback cannot orphan a slot.
     const state = ctx.state as Record<PropertyKey, unknown>;
+    // An earlier optional-mode hook may already have recorded a pass-through;
+    // clear it while the branches run so a branch's own pass-through is
+    // detectable, and put it back afterwards (see `finally`).
+    const priorOptionalPass = state[AUTH_OPTIONAL_PASS] === true;
+    if (priorOptionalPass) delete state[AUTH_OPTIONAL_PASS];
+    let sawOptionalPassthrough = false;
     const snapshot = snapshotState(state);
     const finalizerMark = requestFinalizerMark(ctx);
-    for (const fn of candidates) {
-      try {
-        const r = await fn(ctx);
-        if (r instanceof Response) {
+    try {
+      for (const fn of candidates) {
+        try {
+          const r = await fn(ctx);
+          if (r instanceof Response) {
+            rollbackRequestFinalizers(ctx, finalizerMark);
+            restoreState(state, snapshot);
+            if (!firstFailure) firstFailure = { kind: "response", res: r };
+            continue;
+          }
+          // An optional-mode auth branch that saw no credential did not
+          // authenticate the caller: roll back its pass-through mark and let
+          // the remaining branches evaluate the request. The pass-through is
+          // honoured only when no branch denies; a denial (a present but
+          // invalid credential, a strict branch's 401) wins over it.
+          if (state[AUTH_OPTIONAL_PASS] === true && state[AUTH_RAN] !== true) {
+            sawOptionalPassthrough = true;
+            rollbackRequestFinalizers(ctx, finalizerMark);
+            restoreState(state, snapshot);
+            continue;
+          }
+          return undefined;
+        } catch (err) {
           rollbackRequestFinalizers(ctx, finalizerMark);
           restoreState(state, snapshot);
-          if (!firstFailure) firstFailure = { kind: "response", res: r };
-          continue;
+          if (!firstFailure) firstFailure = { kind: "throw", err };
         }
-        return undefined;
-      } catch (err) {
-        rollbackRequestFinalizers(ctx, finalizerMark);
-        restoreState(state, snapshot);
-        if (!firstFailure) firstFailure = { kind: "throw", err };
       }
+      if (firstFailure?.kind === "response") return firstFailure.res;
+      if (firstFailure?.kind === "throw") throw firstFailure.err;
+      if (sawOptionalPassthrough) state[AUTH_OPTIONAL_PASS] = true;
+      return undefined;
+    } finally {
+      if (priorOptionalPass) state[AUTH_OPTIONAL_PASS] = true;
     }
-    if (firstFailure?.kind === "response") return firstFailure.res;
-    throw (firstFailure as { kind: "throw"; err: unknown }).err;
   };
   if (usePreBody) {
     return { ...base, preBody: runCandidates };
+  }
+  if (hadConditionalScopes) {
+    (runCandidates as unknown as Record<PropertyKey, unknown>)[
+      CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+    ] = true;
   }
   return {
     ...base,
@@ -255,7 +309,15 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
     return hooks;
   const matches = compileExceptMatcher(when);
   const wrapped: Hooks = { ...hooks };
-  delete (wrapped as Record<PropertyKey, unknown>)[COMBINED_BEFORE_HANDLE_LAYERS];
+  const hadRequiredScopes =
+    Array.isArray((wrapped as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER]) ||
+    (typeof hooks.beforeHandle === "function" &&
+      (hooks.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+        CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+      ] === true);
+  // Exempted paths must not inherit static required-scope markers before
+  // `when` is evaluated; non-exempted requests run the inner scope guard.
+  delete (wrapped as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER];
   // The App applies a cors() response decorator ahead of every hook (so early
   // rejections carry CORS headers). Path patterns are checked synchronously
   // here so it still skips the exempted paths; a predicate can be async and
@@ -310,13 +372,29 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
   }
   if (hooks.preBody) {
     const original = hooks.preBody;
-    wrapped.preBody = async (ctx) =>
+    const wrappedPreBody: NonNullable<Hooks["preBody"]> = async (ctx) =>
       (await matches(ctx)) ? undefined : original(ctx);
+    if (
+      (original as unknown as Record<PropertyKey, unknown>)[
+        PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+      ] === true
+    ) {
+      (wrappedPreBody as unknown as Record<PropertyKey, unknown>)[
+        PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+      ] = true;
+    }
+    wrapped.preBody = wrappedPreBody;
   }
   if (hooks.beforeHandle) {
     const original = hooks.beforeHandle;
-    wrapped.beforeHandle = async (ctx) =>
+    const wrappedBeforeHandle: NonNullable<Hooks["beforeHandle"]> = async (ctx) =>
       (await matches(ctx)) ? undefined : original(ctx);
+    if (hadRequiredScopes) {
+      (wrappedBeforeHandle as unknown as Record<PropertyKey, unknown>)[
+        CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+      ] = true;
+    }
+    wrapped.beforeHandle = wrappedBeforeHandle;
   }
   return wrapped;
 }
@@ -431,6 +509,32 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
       }
       return undefined;
     };
+    const beforeHandleLayers = layers.filter(
+      (layer) => typeof layer.beforeHandle === "function",
+    );
+    if (
+      beforeHandleLayers.length > 0 &&
+      beforeHandleLayers.every(
+        (layer) =>
+          (layer.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+            PRE_BODY_SAFE_HOOK_MARKER
+          ] === true,
+      )
+    ) {
+      (run as unknown as Record<PropertyKey, unknown>)[PRE_BODY_SAFE_HOOK_MARKER] = true;
+    }
+    if (
+      beforeHandleLayers.some(
+        (layer) =>
+          (layer.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+            CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+          ] === true,
+      )
+    ) {
+      (run as unknown as Record<PropertyKey, unknown>)[
+        CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+      ] = true;
+    }
     merged.beforeHandle = run;
     // Snapshot the layers so App registration can order the original gates
     // and replays individually. Keyed on `run`: once a wrapper replaces
@@ -499,8 +603,6 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
         ];
         continue;
       }
-      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined && (merged as Record<PropertyKey, unknown>)[DEFERRED_PRE_BODY_ONLY_MARKER] !== true)
-        continue;
       if (key === EARLY_REJECTION_HOOK_MARKER) {
         const existing = (merged as Record<PropertyKey, unknown>)[key];
         const incoming = record[key];

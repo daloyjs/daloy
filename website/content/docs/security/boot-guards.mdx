@@ -298,6 +298,8 @@ alsoGood.use(idempotency({ ttlSeconds: 86_400 }));
 
 Ordering the limiter first does mean cache hits and replays spend budget. That is the intended reading of a rate limit: the cap is on what a caller may ask for, not on what happened to be expensive to produce.
 
+Since 1.22.0 guards 7 and 8 look inside `every()` bundles and compare the earliest stored-response layer against the *latest* tenancy or budget layer in the route's effective chain. `every(responseCache(), tenancy(...))`, and a route-level `rateLimit()` registered after a global `responseCache()` (even with another limiter ahead of the cache), are refused too. Mount every budget the route relies on ahead of the first stored-response hook.
+
 ## 9. Unauthenticated `a2aRoutes()` endpoint [#9-unauthenticated-a2a-endpoint]
 
 An A2A agent endpoint runs your `onMessage` handler for whichever peer agent calls it, so it gets the same rule as MCP. In production with `secureDefaults` on, the App refuses to boot when the `a2aRoutes()` JSON-RPC `POST` route has no authentication hook in its effective chain. The public Agent Card route is never checked: discovery has to work before a peer has credentials. Like guard 5, the boot check sees that an auth hook is present; from 1.5.4 the request-time check also refuses the call in production when that hook did not run. In production, registration also throws if the card advertises a non-HTTPS endpoint on a non-loopback host.

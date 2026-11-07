@@ -36,8 +36,42 @@ import { rateLimit, type RateLimitOptions } from "./middleware.js";
 import { getFileFieldOptions } from "./multipart.js";
 import { Router, type RouteMatch } from "./router.js";
 import type { StandardSchemaV1 } from "./schema.js";
-import { safeJsonParseLimited } from "./security.js";
+import { isForbiddenObjectKey, safeJsonParseLimited } from "./security.js";
 import type { AppState, BaseContext, PathString, PathParams } from "./types.js";
+
+/**
+ * Build a prototype-pollution-safe `ctx.query` record for a WebSocket upgrade
+ * request, skipping `__proto__`, `constructor`, and `prototype`.
+ *
+ * @param searchParams - Parsed `URLSearchParams` from the upgrade URL.
+ * @returns Plain record of query parameters without forbidden object keys.
+ * @internal
+ */
+export function buildWebSocketQuery(searchParams: URLSearchParams): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of searchParams.entries()) {
+    if (isForbiddenObjectKey(key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Build a prototype-pollution-safe `ctx.headers` record for a WebSocket upgrade
+ * request, skipping `__proto__`, `constructor`, and `prototype`.
+ *
+ * @param headers - Upgrade request `Headers`.
+ * @returns Plain record of lower-cased header entries without forbidden object keys.
+ * @internal
+ */
+export function buildWebSocketHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (isForbiddenObjectKey(key)) return;
+    out[key] = value;
+  });
+  return out;
+}
 /** RFC 6455 magic GUID used to compute `Sec-WebSocket-Accept`. */
 export const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 

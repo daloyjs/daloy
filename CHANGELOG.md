@@ -17,6 +17,78 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+A second scoped run of the upstream Cloudflare security-audit agent skill over
+hook composition, boot guards, request parsing, outbound fetch and route body
+limits (see [SECURITY.md](SECURITY.md#follow-up-audit-fixes-2026-11-07-second-pass)).
+Every finding was re-verified during review; two follow-up regressions found in
+that review are fixed in the same change. Each fix ships with regression
+tests in `tests/audit-2026-11-combinators.test.ts`.
+
+- **`pinnedHttpFetch()` no longer crashes the process on a `205` upstream.**
+  `fetchGuard({ pinDns: true })` built a `Response` with a body for `205 Reset
+  Content`, which the WHATWG constructor refuses; the `TypeError` fired inside
+  `node:http`'s `'response'` callback as an **uncaught exception** (process
+  exit, and the pending fetch never settled). `205` now takes the null-body
+  path with `204` / `304` / `HEAD`, and anything else the constructor refuses
+  (a status outside 200–599, a rejected header) rejects that fetch instead of
+  escaping.
+- **A request budget inside `every()` is visible to later rejections.**
+  `every(requestId(), rateLimit({ max }))` dropped its `rateLimit()` /
+  `loginThrottle()` early-rejection hook from the merged bundle, so a `401`
+  from a later `bearerAuth()` never charged the limiter and credential
+  guessing was not throttled. The hook is now forwarded, and the composed
+  `preBody` records that it already bills its own layers so the outer
+  composition does not bill them again.
+- **Review follow-up: a budget is charged at most once per request however
+  bundles nest.** Forwarding the hook made `markAuthHook(every(rateLimit(),
+  auth))` (whose wrapper replaces the composed `preBody`) bill the limiter
+  twice per rejection — the second failed attempt answered `429`. Early-
+  rejection hooks are now de-duplicated per request on `ctx.state`, and
+  `markAuthHook()` keeps the composed-`preBody` marker on its wrapper.
+- **An `optional`-mode branch no longer short-circuits `some()`.** In
+  `some(httpSignatureAuth({ optional: true }), bearerAuth(...))` an unsigned
+  request won the selection as an anonymous pass-through before `bearerAuth()`
+  ran, so a valid bearer token could never authenticate (`401` on `auth:`
+  routes). The pass-through now defers to the remaining branches and is
+  honoured only when no branch denies. Review follow-up: a pass-through already
+  recorded by an *earlier* optional hook is cleared while the branches run (and
+  restored afterwards), so it cannot hide a later branch either.
+- **`requireScopes()` inside `some()` / `except()` no longer leaks an all-of
+  union.** `some(every(auth, requireScopes(["a"])), every(auth2,
+  requireScopes(["b"])))` advertised `["a", "b"]` as the route's requirement,
+  so a caller holding only `a` was refused (`403`) by its own branch; and
+  `except("/public", requireScopes(["admin"]))` imposed `admin` on `/public`
+  through the per-request aggregate other scope guards enforce. Both wrappers
+  now drop the static marker; the conditional gate is stamped so registration
+  ordering runs it ahead of `responseCache()` / `idempotency()` replays, and
+  revocation still refuses a stored response (tested for both replays).
+- **`some()` selects in `preBody` when a branch pairs `preBody` auth with a
+  default-phase `requireScopes()`.** Previously that mix forced the whole
+  selection into `beforeHandle`, after `requestDecompression()` and body
+  parsing, so an unauthenticated caller could trigger inflation. A default
+  `requireScopes()` is marked safe to run early; an explicit `phase:
+  "beforeHandle"` or any other `beforeHandle` gate still defers.
+- **Boot guards look inside `every()`.** The cache-before-tenancy and
+  replay-before-budget guards expand `every()` bundles and compare the earliest
+  replay against the *latest* tenancy / budget layer, so
+  `every(responseCache(), tenancy())` and a route-level `rateLimit()` after a
+  global `responseCache()` are now refused in production.
+- **Prototype-pollution keys are dropped from every attacker-shaped record.**
+  The cold-path (`404` / `405`) `ctx.query`, `ctx.headers`, and the Node / Bun
+  WebSocket upgrade `ctx.query` / `ctx.headers` skip `__proto__`,
+  `constructor` and `prototype`; cold-path `ctx.query` also uses the same
+  repeated-key array shape as matched routes.
+
+### Fixed
+
+- A per-route `bodyLimitBytes` *raised* above the App default refused an
+  adapter-pre-buffered body that fit the route limit with `413`: the first cap
+  captured "over limit" against the App default and the raised route cap
+  returned early without retuning it. The cap now compares the buffered body
+  against the live limit.
+
 ## [1.21.1] - 2026-11-07
 
 ### Security

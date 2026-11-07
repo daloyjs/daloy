@@ -730,6 +730,51 @@ export const EARLY_REJECTION_HOOK_MARKER: unique symbol = Symbol.for(
 );
 
 /**
+ * Marks a composed `preBody` function (from {@link _mergePreBodyWithEarlyRejections})
+ * as already wiring its own layers' {@link EARLY_REJECTION_HOOK_MARKER} callbacks,
+ * so an outer composition only adds those callbacks to its pending list after the
+ * inner `preBody` succeeds.
+ * @internal
+ */
+export const PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS: unique symbol = Symbol.for(
+  "daloyjs.middleware.preBodyHandlesOwnEarlyRejections"
+);
+
+/**
+ * `ctx.state` key holding the set of {@link EARLY_REJECTION_HOOK_MARKER}
+ * callbacks already charged for this request. A wrapper that replaces a
+ * composed `preBody` (`markAuthHook()`, a user spread) loses the
+ * {@link PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS} function marker, so an outer
+ * composition would otherwise bill the same `rateLimit()` / `loginThrottle()`
+ * budget a second time for one rejected request. Allocated only on the
+ * rejection path.
+ * @internal
+ */
+const EARLY_REJECTIONS_CHARGED: unique symbol = Symbol.for(
+  "daloyjs.middleware.earlyRejectionsCharged"
+);
+
+/**
+ * Marks a `beforeHandle` hook (such as default-phase {@link requireScopes}) as
+ * safe to run during `preBody` when composed inside {@link some} alongside
+ * `preBody` authentication branches.
+ * @internal
+ */
+export const PRE_BODY_SAFE_HOOK_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.preBodySafeHook"
+);
+
+/**
+ * Marks a conditional `beforeHandle` gate ({@link some} or {@link except}
+ * wrapping {@link requireScopes}) so {@link _orderBeforeHandleForReplay}
+ * runs it ahead of `responseCache()` / `idempotency()`.
+ * @internal
+ */
+export const CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.conditionalScopesBeforeReplay"
+);
+
+/**
  * Internal list of deferred `preBody` hooks (such as `requestDecompression()`)
  * that must run only after all perimeter and authentication `preBody` hooks
  * in the chain have succeeded, so an unauthenticated, banned, or rate-limited
@@ -789,43 +834,92 @@ export function _mergePreBodyWithEarlyRejections(
     }
   }
   if (!hasNormal && deferred.length === 0) return undefined;
-  return async (ctx) => {
-    const pending: EarlyRejectionHook[] = [];
-    for (const hooks of layers) {
-      const record = hooks as Record<PropertyKey, unknown>;
-      const early = record[EARLY_REJECTION_HOOK_MARKER];
-      if (Array.isArray(early)) {
-        for (const candidate of early) {
-          if (typeof candidate === "function") pending.push(candidate as EarlyRejectionHook);
-        }
+  // Per-layer plan, computed once: the early-rejection hooks a layer carries,
+  // whether its preBody runs at this level, and whether that preBody is itself
+  // a composition that bills its own layers' budgets when it rejects (then its
+  // hooks join this level's pending list only after it has passed, so a later
+  // rejection here still charges them exactly once).
+  interface PreBodyStep {
+    readonly preBody: NonNullable<Hooks["preBody"]> | undefined;
+    readonly early: readonly EarlyRejectionHook[];
+    readonly handlesOwnEarly: boolean;
+  }
+  const steps: PreBodyStep[] = [];
+  for (const hooks of layers) {
+    const record = hooks as Record<PropertyKey, unknown>;
+    const early: EarlyRejectionHook[] = [];
+    const list = record[EARLY_REJECTION_HOOK_MARKER];
+    if (Array.isArray(list)) {
+      for (const candidate of list) {
+        if (typeof candidate === "function") early.push(candidate as EarlyRejectionHook);
       }
-      if (hooks.preBody === undefined || record[DEFERRED_PRE_BODY_ONLY_MARKER] === true) {
+    }
+    const preBody =
+      hooks.preBody === undefined || record[DEFERRED_PRE_BODY_ONLY_MARKER] === true
+        ? undefined
+        : hooks.preBody;
+    const handlesOwnEarly =
+      preBody !== undefined &&
+      (preBody as unknown as Record<PropertyKey, unknown>)[
+        PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+      ] === true;
+    if (preBody === undefined && early.length === 0) continue;
+    steps.push({ preBody, early, handlesOwnEarly });
+  }
+  // Charge each pending budget at most once per request, however the
+  // compositions nest (see EARLY_REJECTIONS_CHARGED). A budget that is
+  // exhausted throws (429) or returns a Response, which replaces the original
+  // rejection.
+  const chargePending = async (
+    ctx: PreBodyContext<any>,
+    pending: readonly EarlyRejectionHook[]
+  ): Promise<Response | undefined> => {
+    if (pending.length === 0) return undefined;
+    const state = ctx.state as Record<PropertyKey, unknown>;
+    let charged = state[EARLY_REJECTIONS_CHARGED] as Set<EarlyRejectionHook> | undefined;
+    if (!(charged instanceof Set)) {
+      charged = new Set();
+      state[EARLY_REJECTIONS_CHARGED] = charged;
+    }
+    let replaced: Response | undefined;
+    for (const hook of pending) {
+      if (charged.has(hook)) continue;
+      charged.add(hook);
+      const replacement = await hook(ctx);
+      if (replacement instanceof Response) replaced = replacement;
+    }
+    return replaced;
+  };
+  const composed: NonNullable<Hooks["preBody"]> = async (ctx) => {
+    const pending: EarlyRejectionHook[] = [];
+    for (const step of steps) {
+      if (step.preBody === undefined) {
+        for (const hook of step.early) pending.push(hook);
         continue;
+      }
+      if (!step.handlesOwnEarly) {
+        for (const hook of step.early) pending.push(hook);
       }
       let result: Awaited<ReturnType<NonNullable<Hooks["preBody"]>>>;
       try {
-        result = await hooks.preBody(ctx);
+        result = await step.preBody(ctx);
       } catch (err) {
         // A guard that *throws* (bearerAuth's 403, a markAuthHook's 401) is a
         // failed attempt too: charge the pending request budgets so a limiter
-        // registered first still counts it. A budget that is exhausted throws
-        // (429) or returns a Response, replacing the original rejection;
-        // otherwise the original error is rethrown unchanged.
-        let replaced: Response | undefined;
-        for (const hook of pending) {
-          const replacement = await hook(ctx);
-          if (replacement instanceof Response) replaced = replacement;
-        }
+        // registered first still counts it. Otherwise the original error is
+        // rethrown unchanged.
+        const replaced = await chargePending(ctx, pending);
         if (replaced !== undefined) return replaced;
         throw err;
       }
-      if (!(result instanceof Response)) continue;
-      let response = result;
-      for (const hook of pending) {
-        const replacement = await hook(ctx);
-        if (replacement instanceof Response) response = replacement;
+      if (!(result instanceof Response)) {
+        if (step.handlesOwnEarly) {
+          for (const hook of step.early) pending.push(hook);
+        }
+        continue;
       }
-      return response;
+      const replaced = await chargePending(ctx, pending);
+      return replaced ?? result;
     }
     for (const fn of deferred) {
       const result = await fn(ctx);
@@ -833,6 +927,10 @@ export function _mergePreBodyWithEarlyRejections(
     }
     return undefined;
   };
+  (composed as unknown as Record<PropertyKey, unknown>)[
+    PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+  ] = true;
+  return composed;
 }
 
 // Same global-registry keys `responseCache()` and `idempotency()` stamp. Kept
@@ -908,7 +1006,12 @@ export function _orderBeforeHandleForReplay(
     replay.push(
       record[REPLAY_RESPONSE_CACHE_MARKER] === true || record[REPLAY_IDEMPOTENCY_MARKER] === true
     );
-    auth.push(record[AUTH_HOOK_MARKER] === true);
+    auth.push(
+      record[AUTH_HOOK_MARKER] === true ||
+        (hooks.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+          CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+        ] === true
+    );
   };
   for (const hooks of layers) collect(hooks);
   const firstReplay = replay.indexOf(true);
@@ -2593,6 +2696,9 @@ export function requireScopes(
     }
     return undefined;
   };
+  if (phase === "beforeHandle" && options.phase === undefined) {
+    (check as unknown as Record<PropertyKey, unknown>)[PRE_BODY_SAFE_HOOK_MARKER] = true;
+  }
   const hooks: Hooks = phase === "preBody" ? { preBody: check } : { beforeHandle: check };
   if (!anyOf) (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = required;
   return hooks;

@@ -86,6 +86,8 @@ import {
 import {
   secureHeaders as secureHeadersMiddleware,
   AUTH_HOOK_MARKER,
+  COMBINED_BEFORE_HANDLE_LAYERS,
+  type CombinedBeforeHandleLayers,
   CORS_HOOK_MARKER,
   CORS_ORIGIN_ALLOW_MARKER,
   CORS_RESPONSE_DECORATOR,
@@ -6640,28 +6642,40 @@ function securityMarkersFromHooks(
   let hasSession = false;
   let hasCsrf = false;
   let hasAuth = false;
-  // `layers` is in execution order, so the first index of each marker is enough
-  // to tell whether the cache reads state before tenancy has written it.
-  let cacheIndex = -1;
-  let tenancyIndex = -1;
-  // First stored-response layer of either kind, and the first request-budget
-  // layer. Only the earliest of each matters: if any replay precedes any budget
-  // hook, that budget is preemptable.
-  let replayIndex = -1;
-  let replayName = "";
-  let budgetIndex = -1;
-  for (let i = 0; i < layers.length; i++) {
-    const record = layers[i] as Record<PropertyKey, unknown>;
+  const flattened: Hooks[] = [];
+  const expand = (hooks: Hooks): void => {
+    const record = hooks as Record<PropertyKey, unknown>;
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
+    const combined = record[COMBINED_BEFORE_HANDLE_LAYERS] as
+      | CombinedBeforeHandleLayers
+      | undefined;
+    if (combined !== undefined && combined !== null && Array.isArray(combined.layers)) {
+      for (const inner of combined.layers) expand(inner);
+      return;
+    }
+    flattened.push(hooks);
+  };
+  for (const hooks of layers) expand(hooks);
+
+  // `flattened` is in execution order: compare the earliest replay layer
+  // against the latest tenancy or budget layer so any replay mounted ahead of
+  // any tenancy / rate-limit / throttle layer is caught, including inside every().
+  let cacheIndex = -1;
+  let tenancyIndex = -1;
+  let replayIndex = -1;
+  let replayName = "";
+  let budgetIndex = -1;
+  for (let i = 0; i < flattened.length; i++) {
+    const record = flattened[i] as Record<PropertyKey, unknown>;
     if (
       cacheIndex === -1 &&
       (record[RESPONSE_CACHE_HOOK_MARKER] === true ||
         record[IDEMPOTENCY_HOOK_MARKER] === true)
     )
       cacheIndex = i;
-    if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true)
+    if (record[TENANCY_HOOK_MARKER] === true)
       tenancyIndex = i;
     if (replayIndex === -1) {
       if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
@@ -6672,7 +6686,10 @@ function securityMarkersFromHooks(
         replayName = "idempotency()";
       }
     }
-    if (budgetIndex === -1 && Array.isArray(record[EARLY_REJECTION_MARKER]))
+    if (
+      Array.isArray(record[EARLY_REJECTION_MARKER]) &&
+      (record[EARLY_REJECTION_MARKER] as unknown[]).length > 0
+    )
       budgetIndex = i;
   }
   return {
@@ -7290,7 +7307,7 @@ function coldPathContext(
       const hi = requestUrl.indexOf("#", qi + 1);
       const qs =
         hi === -1 ? requestUrl.slice(qi + 1) : requestUrl.slice(qi + 1, hi);
-      return (_query = Object.fromEntries(new URLSearchParams(qs))) as any;
+      return (_query = queryToObject(new URLSearchParams(qs))) as any;
     },
     set query(v: any) {
       _query = v;
@@ -7473,6 +7490,7 @@ function validateContext(
 function headersToObject(h: Headers): Record<string, string> {
   const o: Record<string, string> = {};
   h.forEach((v, k) => {
+    if (isForbiddenObjectKey(k)) return;
     o[k] = v;
   });
   return o;
@@ -7926,15 +7944,16 @@ function capRequestBody(request: Request, limit: number): void {
   const cached = (request as unknown as Record<symbol, unknown>)[
     DALOY_REQUEST_RAW_BODY
   ];
-  if (cached instanceof Uint8Array && cached.byteLength <= limit) return;
   const existing = (request as unknown as Record<symbol, unknown>)[
     DALOY_REQUEST_BODY_CAP
   ] as BodyCapState | undefined;
-  if (existing !== undefined && !(cached instanceof Uint8Array)) {
+  if (existing !== undefined) {
     if (limit < existing.limit && existing.stream != null) {
       existing.stream = byteCappedStream(existing.stream, existing);
     }
     existing.limit = limit;
+    if (!(cached instanceof Uint8Array) || cached.byteLength <= limit) return;
+  } else if (cached instanceof Uint8Array && cached.byteLength <= limit) {
     return;
   }
   const declared = request.headers.get("content-length");
@@ -7943,12 +7962,13 @@ function capRequestBody(request: Request, limit: number): void {
   // body: an in-process `app.fetch` / serverless caller can pair it with a
   // stream of any size, so that stream is counted like any other.
   if (declaredBytes === 0 && cached === undefined && readOriginalBody(request) === null) return;
-  const cachedOverLimit =
-    cached instanceof Uint8Array && cached.byteLength > limit;
   const state: BodyCapState = { limit };
   (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_CAP] = state;
   const stream = (): ReadableStream<Uint8Array> | null => {
-    if (cachedOverLimit) {
+    const rawCached = (request as unknown as Record<symbol, unknown>)[
+      DALOY_REQUEST_RAW_BODY
+    ];
+    if (rawCached instanceof Uint8Array && rawCached.byteLength > state.limit) {
       throw new PayloadTooLargeError(state.limit);
     }
     if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > state.limit) {

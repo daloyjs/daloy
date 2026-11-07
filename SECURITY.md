@@ -721,6 +721,31 @@ verification additionally needs a compatible Linux Git and esbuild toolchain;
 missing tools must not be mistaken for a framework test failure or bypassed by
 weakening a security gate.
 
+### Follow-up audit fixes (2026-11-07, second pass)
+
+A second scoped run of the same skill at `ff877a33` covered hook composition
+(`every()` / `some()` / `except()`), the boot guards, cold-path request
+parsing, WebSocket upgrades, pinned outbound fetches and route body limits.
+Every candidate was independently re-verified during code review before
+landing; the review itself found two regressions in the proposed fixes, which
+ship fixed in the same change. All fixes are regression-tested in
+`tests/audit-2026-11-combinators.test.ts` (section 3 for the audit findings,
+section 4 for the review follow-ups).
+
+| Boundary | Fixed behavior | Severity |
+| --- | --- | --- |
+| Outbound fetch versus a hostile upstream | A `205 Reset Content` through `fetchGuard({ pinDns: true })` threw inside `node:http`'s `'response'` callback as an **uncaught exception** (process crash; the fetch never settled). `205` takes the null-body path, and any `Response` the constructor refuses rejects that fetch instead of escaping. | High (availability) |
+| Request budgets versus composed bundles | `every(requestId(), rateLimit())` hid the limiter's early-rejection hook, so a later `bearerAuth()` `401` never charged it and credential guessing was unthrottled. The hook is forwarded; a budget is billed **at most once per request** however bundles nest or are wrapped (`markAuthHook()`, `except()`, a spread). | Medium |
+| OR-composed authentication | An `optional`-mode branch that saw no credential won `some()` as an anonymous pass-through before later branches ran, so a valid credential for a later branch could never authenticate. The pass-through now defers to the other branches and is honoured only when none denies; a pass-through recorded by an earlier optional hook cannot hide a branch either. | Medium (false deny / unexpected anonymous pass) |
+| Scope guards inside `some()` / `except()` | The wrappers advertised an all-of union of their inner `requireScopes()`, refusing callers that satisfied their own branch and imposing exempted scopes on `/public`. The static marker is dropped; the conditional gate is ordered ahead of `responseCache()` / `idempotency()` so revocation still refuses a stored response. | Medium |
+| Authentication before body inflation | `some()` pairing `preBody` auth with a default `requireScopes()` selected in `beforeHandle`, after `requestDecompression()` and body parsing. It now selects in `preBody`. | Medium |
+| Boot guards versus `every()` | Cache-before-tenancy and replay-before-budget could not see inside `every()` and only compared first indices, missing a route-level `rateLimit()` after a global `responseCache()`. | Low |
+| Prototype-pollution keys | Cold-path `ctx.query` / `ctx.headers` and WebSocket upgrade `ctx.query` / `ctx.headers` now drop `__proto__`, `constructor`, `prototype` like every other parsed record. | Low |
+
+Also fixed without a demonstrated security impact: a per-route
+`bodyLimitBytes` raised above the App default refused an adapter-pre-buffered
+body that fit the route limit (`413`).
+
 ### Repeatable local audits with the Cloudflare skill
 
 The audit above used the upstream

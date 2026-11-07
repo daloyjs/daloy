@@ -12,6 +12,8 @@ import {
   WS_CLOSE_CODE,
   WebSocketMessageGate,
   WS_MAX_CONTROL_PAYLOAD,
+  buildWebSocketHeaders,
+  buildWebSocketQuery,
   encodeSendPayload,
   parseSubprotocols,
   validateSelectedSubprotocol,
@@ -263,8 +265,8 @@ async function tryBunUpgrade(
   const ctx: WebSocketContext = {
     request: req,
     params: match.params as any,
-    query: Object.fromEntries(url.searchParams.entries()),
-    headers: Object.fromEntries(req.headers.entries()),
+    query: buildWebSocketQuery(url.searchParams),
+    headers: buildWebSocketHeaders(req.headers),
     state: match.handler.createState() as any,
     protocols: parseSubprotocols(req.headers.get("sec-websocket-protocol")),
   };

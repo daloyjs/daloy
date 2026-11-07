@@ -24,6 +24,8 @@ import {
 import { setConnInfo } from "../conn-info.js";
 import {
   FrameSink,
+  buildWebSocketHeaders,
+  buildWebSocketQuery,
   encodeFrame,
   encodeClosePayload,
   encodeSendPayload,
@@ -1350,8 +1352,8 @@ async function handleUpgrade(
   const ctx: WebSocketContext = {
     request,
     params: match.params as any,
-    query: Object.fromEntries(url.searchParams.entries()),
-    headers: Object.fromEntries(headers.entries()),
+    query: buildWebSocketQuery(url.searchParams),
+    headers: buildWebSocketHeaders(headers),
     state: match.handler.createState() as any,
     protocols: result.protocols,
   };
