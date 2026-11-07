@@ -21,6 +21,7 @@ export type {
   ShutdownEvent,
   SecurityPreset,
   SecureConfigIssue,
+  RouteLimitOverride,
 } from "./app.js";
 export {
   getConnInfo,

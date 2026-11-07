@@ -35,7 +35,7 @@
 import { BadRequestError, ConflictError, HttpError, PayloadTooLargeError } from "./errors.js";
 import { isDisconnectResponse, markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
-import { APP_BODY_LIMIT_HOOK, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
+import { APP_BODY_LIMIT_HOOK, effectiveBodyReadCap, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
 import { isRequestAbandoned, registerRequestFinalizer } from "./request-finalizers.js";
 import type { BaseContext, Hooks } from "./types.js";
 
@@ -756,7 +756,11 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       const key = rawKey.trim();
       validateKey(key, headerName, maxKeyLength);
 
-      const fingerprint = await computeFingerprint(method, ctx, fingerprintCap);
+      const fingerprint = await computeFingerprint(
+        method,
+        ctx,
+        effectiveBodyReadCap(ctx.request, maxFingerprintBodyBytes, fingerprintCap),
+      );
       // Namespace the key by the calling principal so client B can never
       // replay client A's stored response by reusing the same Idempotency-Key
       // (CWE-524). Defaults to the Authorization header plus any mTLS /

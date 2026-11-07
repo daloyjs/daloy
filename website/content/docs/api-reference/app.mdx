@@ -49,9 +49,9 @@ interface AppOptions {
   preset?: "internal-service";         // service-to-service preset (browser guards off)
 
   // Request limits (1.5.4: finite non-negative integers, else construction throws)
-  bodyLimitBytes?: number;             // default: 1 MiB; every route, raw ctx.request reads included (1.5.4)
+  bodyLimitBytes?: number;             // default: 1 MiB; every route, raw ctx.request reads included (1.5.4); a route may override (1.21.0)
   allowedContentTypes?: string[];      // default: ["application/json", "application/x-www-form-urlencoded", "multipart/form-data"]
-  requestTimeoutMs?: number;           // default: 30_000; 0 disables; covers hooks + body read + handler (1.5.4)
+  requestTimeoutMs?: number;           // default: 30_000; 0 disables; covers hooks + body read + handler (1.5.4); a route may override (1.21.0)
   requestTimeoutStatus?: 408 | 503 | 504; // default: 408; status the requestTimeoutMs deadline answers with (1.10.0)
   maxHeaderCount?: number;             // default: 100; 0 disables. Node also 431s at the parser cap (HTTP + WS upgrade); usable budget is 99 at default
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
@@ -205,6 +205,9 @@ interface RouteDefinition<P, Req, Res, S> {
   responses: Res;
   auth?: AuthSpec;
   hooks?: Hooks;
+  accepts?: string[];      // per-route Content-Type allowlist (overrides allowedContentTypes)
+  bodyLimitBytes?: number; // per-route body cap, overrides app bodyLimitBytes (1.21.0)
+  requestTimeoutMs?: number; // per-route deadline, overrides app requestTimeoutMs (1.21.0)
   meta?: RouteMeta;        // AI-friendly metadata (surfaces as x-daloy-* in OpenAPI)
   examples?: RouteExample[];
   callbacks?: CallbackMap;

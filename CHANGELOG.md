@@ -17,6 +17,30 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- Per-route `bodyLimitBytes` and `requestTimeoutMs` on `RouteDefinition` (and
+  the `get` / `post` / ... shorthands). A route raises or lowers either value
+  for itself; the app options stay the default for every other route, so one
+  upload route no longer forces a wider body limit or a longer deadline on
+  login, search and webhooks. Same finite-non-negative-integer validation as
+  the app options, at `app.route()` time. The route limit reaches the schema
+  parser and its `Content-Length` precheck, raw `ctx.request` reads, `preBody`
+  hooks, the pre-route global-`onRequest` cap (retuned once the route is
+  matched), the `requestDecompression()` re-check and the `idempotency()`
+  raw-body fingerprint. `getSecurityPosture().routeOverrides` lists the
+  overriding routes (`RouteLimitOverride`, with an `authenticated` flag) and
+  `daloy doctor` adds `audit.bodyLimit.routeRaisedUnauthenticated`,
+  `audit.bodyLimit.routeBlanket` and `audit.requestTimeout.routeZero`.
+
+### Fixed
+
+- A route without a body schema whose `preBody` hook read `ctx.request.clone()`
+  handed its handler a locked stream (`500 Invalid state: ReadableStream is
+  locked`): the post-`preBody` body-limit re-check re-wrapped the native body
+  the clone had already locked. The body cap now retunes its limit in place
+  instead of wrapping twice.
+
 ## [1.20.0] - 2026-11-06
 
 ### Added

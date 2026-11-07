@@ -188,6 +188,11 @@ export const docsNav: DocsNavSection[] = [
         title: "Runtime protections (portable)",
         href: "/docs/security/runtime-protections" as Route,
       },
+      {
+        title: "Per-route body limits and timeouts",
+        href: "/docs/security/route-limits" as Route,
+        badge: "new",
+      },
       { title: "Lifecycle & health", href: "/docs/security/lifecycle-health" as Route },
       {
         title: "Runtime resilience and configuration",

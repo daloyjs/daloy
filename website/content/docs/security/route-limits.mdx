@@ -1,0 +1,143 @@
+---
+title: Per-route body limits and timeouts
+description: "Override bodyLimitBytes and requestTimeoutMs on one DaloyJS route so a single upload or slow handler gets more room while every other route keeps the defaults."
+keywords:
+  - bodyLimitBytes
+  - requestTimeoutMs
+  - per-route body limit
+  - per-route timeout
+  - file upload size limit
+  - 413 Payload Too Large
+  - 408 Request Timeout
+  - DaloyJS
+sitemap:
+  priority: 0.8
+---
+
+# Per-route body limits and timeouts
+
+`bodyLimitBytes` (1 MiB) and `requestTimeoutMs` (30 s) are set once on the App and apply to every route. Since 1.21.0 a route can override either value for itself. The app value stays the default, so accepting one 10 MiB upload no longer means raising the limit on login, search and webhooks too. The override works in both directions: raise the cap on an upload route, or lower it on a login route to shrink that route's attack surface below the app default.
+
+<FlowDiagram title="Which limit applies to a request" numbered steps={[
+          {
+            eyebrow: "before routing",
+            label: "Global onRequest hook",
+            detail: "body capped at app bodyLimitBytes",
+            tone: "muted",
+          },
+          {
+            eyebrow: "route matched",
+            label: "Route limit replaces the app limit",
+            detail: "route.bodyLimitBytes ?? app.bodyLimitBytes",
+            tone: "accent",
+          },
+          {
+            eyebrow: "preBody",
+            label: "Auth, rate limit, CSRF",
+            detail: "run before any body byte is read",
+          },
+          {
+            eyebrow: "body read",
+            label: "Schema parser or ctx.request",
+            detail: "413 past the route cap; 408 past route requestTimeoutMs",
+            tone: "danger",
+          },
+          {
+            eyebrow: "handler",
+            label: "Typed body within the route's limits",
+            tone: "success",
+          },
+        ]} caption="Both limits are resolved once, when the route is registered, and stored on the compiled route. Dispatch reads two numbers per request, so routes that inherit the app values pay nothing extra." />
+
+## Quick start
+
+```ts title="src/app.ts"
+import { z } from "zod";
+import { App, fileField, multipartObject } from "@daloyjs/core";
+
+const app = new App({
+  bodyLimitBytes: 1024 * 1024, // 1 MiB default for every other route
+  multipart: { maxFileBytes: 5_000_000, maxFiles: 4, maxFields: 32 },
+});
+
+app.post(
+  "/upload",
+  {
+    bodyLimitBytes: 10 * 1024 * 1024, // only this route accepts 10 MiB
+    requestTimeoutMs: 120_000,        // only this route gets a two-minute deadline
+    request: {
+      body: multipartObject({
+        file: fileField({ maxBytes: 5_000_000, accept: ["image/png"], magicBytes: true }),
+      }),
+    },
+    responses: {
+      201: { description: "Stored", body: z.object({ id: z.string() }) },
+      413: { description: "Too large" },
+    },
+  },
+  async ({ body }) => ({ status: 201 as const, body: { id: await store(body.file) } }),
+);
+
+app.post(
+  "/login",
+  {
+    bodyLimitBytes: 4 * 1024, // tighter than the app default
+    requestTimeoutMs: 5_000,
+    request: { body: z.object({ email: z.string().email(), password: z.string() }) },
+    responses: {
+      200: { description: "OK", body: z.object({ token: z.string() }) },
+      401: { description: "Bad credentials" },
+    },
+  },
+  async ({ body }) => ({ status: 200 as const, body: { token: await signIn(body) } }),
+);
+
+// No override: inherits the App's 1 MiB and 30 s.
+app.get(
+  "/books/:id",
+  {
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
+      404: { description: "Not found" },
+    },
+  },
+  async ({ params }) => ({ status: 200 as const, body: { id: params.id, title: `Book ${params.id}` } }),
+);
+```
+
+Both fields are accepted by `app.route({ ... })` and by the `app.get` / `app.post` / `app.put` / `app.patch` / `app.delete` shorthands, inside `group()` and `register()` as well. A route that omits a field inherits the App value. Routes registered inside a group or plugin resolve against the same App value.
+
+## Rules
+
+- **Same validation as the App option.** A route value must be a finite, non-negative integer. `NaN` (for example `Number(process.env.UNSET)`), `Infinity`, negatives, non-integers and strings throw at `app.route()` time, so a bad environment variable cannot silently disable the limit on one route. An explicit `undefined` inherits the App value.
+- **`bodyLimitBytes` applies to every way the body is read**: the schema parser, the `Content-Length` precheck, `ctx.request.text()` / `json()` / `arrayBuffer()` / `formData()` / `body` / `clone()` in a handler or `preBody` hook, the re-check after `requestDecompression()` inflates a body, and the raw-body fingerprint that `idempotency()` computes. Over the cap answers `413` with the route's own limit in the problem detail.
+- **`requestTimeoutMs` covers the same work as the App option**: the `preBody` / `beforeHandle` / `afterHandle` hooks, the body read and the handler. It answers with `requestTimeoutStatus` (default `408`) and aborts `ctx.request.signal` on expiry. `0` disables the deadline for that route only.
+- **Auth still runs before the body is read.** `bearerAuth()`, `jwk()`, `apiKeyAuth()`, `session()` and the other `preBody` hooks run before a single body byte is pulled, so a raised route behind auth rejects anonymous clients without reading anything.
+- **A global `onRequest` hook runs before the route is known.** The body is capped at the App limit while that hook runs; once the route is matched the cap is retuned to the route's value. A global hook that reads the body itself is therefore bounded by the App limit, not the route's.
+
+## What it does not change
+
+The request body is still buffered in memory before parsing. A 50 MiB route limit means ten concurrent uploads hold about 500 MiB of RAM, so the override is for the few-MB to roughly 25 MiB range. For videos, large PDFs and anything bigger, have your route hand the client a presigned URL and let it upload straight to S3, R2 or GCS; see [file uploads](/docs/multipart).
+
+On Node, `serve({ connectionTimeoutMs })` (30 s default) is the socket-level time limit for receiving the whole request and stays server-wide. A per-route `requestTimeoutMs` extends the framework deadline, not that socket timeout, which is one more reason to keep very large uploads off the server entirely. The `multipart.maxFileBytes` / `maxFiles` / `maxFields` caps also stay App-wide; use `fileField({ maxBytes })` for a per-route per-file cap.
+
+## Auditing overrides
+
+`app.getSecurityPosture().routeOverrides` lists every route that overrides either value, with an `authenticated` flag that is `true` when an authentication hook is in the route's effective chain:
+
+```ts
+app.getSecurityPosture().routeOverrides;
+// [
+//   { method: "POST", path: "/upload", bodyLimitBytes: 10485760, requestTimeoutMs: 120000, authenticated: true },
+//   { method: "POST", path: "/login", bodyLimitBytes: 4096, requestTimeoutMs: 5000, authenticated: false },
+// ]
+```
+
+`daloy doctor` reads the same list and warns on:
+
+- `audit.bodyLimit.routeRaisedUnauthenticated`: a route raises `bodyLimitBytes` above the App value and nothing authenticates it. Anonymous clients can hold that much memory per request; put auth in front or move the upload to presigned URLs.
+- `audit.bodyLimit.routeBlanket`: a route cap above 25 MiB.
+- `audit.requestTimeout.routeZero`: a route that disables its deadline.
+
+<Callout type="security" title="Raise the route, not the app">When a limit blocks a legitimate request, the fix is a narrower override, never a weaker default. A route that needs 20 MiB gets `bodyLimitBytes: 20 * 1024 * 1024` on that route; `app({ bodyLimitBytes })` stays at 1 MiB for everything else.</Callout>

@@ -199,7 +199,7 @@ When a response schema is declared, DaloyJS validates the handler return before 
 
 ## Body limits and content types
 
-The `bodyLimitBytes` App option (default 1 MiB) caps the declared Content-Length and the streamed size of every request body -\> **413**. Since 1.5.4 this applies on every route, including bodies a handler reads itself from `ctx.request`; the cap is checked lazily, when the body is read.
+The `bodyLimitBytes` App option (default 1 MiB) caps the declared Content-Length and the streamed size of every request body -\> **413**. Since 1.5.4 this applies on every route, including bodies a handler reads itself from `ctx.request`; the cap is checked lazily, when the body is read. Since 1.21.0 a route can set its own `bodyLimitBytes` (and `requestTimeoutMs`) to raise or lower the cap for itself only; see [per-route body limits and timeouts](/docs/security/route-limits).
 
 When a route declares `request.body`, DaloyJS also enforces:
 

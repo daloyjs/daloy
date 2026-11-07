@@ -251,7 +251,7 @@ export function assertSafeEntryPath(entry: string, context: string): void {
   if (entry.startsWith("-")) {
     throw new Error(
       `${context}: entry path must not start with "-" — runtimes parse leading dashes as flags ` +
-        `(got: ${JSON.stringify(entry)}). Prefix the path with "./" to disambiguate.`
+      `(got: ${JSON.stringify(entry)}). Prefix the path with "./" to disambiguate.`
     );
   }
 }
@@ -347,7 +347,7 @@ async function resolveDevEntry(entry: string | undefined): Promise<string> {
   }
   throw new Error(
     `Could not find a dev entry. Tried: ${DEFAULT_DEV_ENTRIES.join(", ")}.\n` +
-      `Pass an explicit path: daloy dev ./src/server.ts`
+    `Pass an explicit path: daloy dev ./src/server.ts`
   );
 }
 
@@ -620,8 +620,8 @@ function formatContract(report: Awaited<ReturnType<typeof runContractTests>>): s
   const warnings = report.issues.filter((i) => i.level === "warning");
   out.push(
     `Contract checks: ${report.checked} route${report.checked === 1 ? "" : "s"} · ` +
-      `${errors.length} error${errors.length === 1 ? "" : "s"} · ` +
-      `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`
+    `${errors.length} error${errors.length === 1 ? "" : "s"} · ` +
+    `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`
   );
   for (const issue of report.issues) {
     out.push(`  [${issue.level}] ${issue.route}: ${issue.message}`);
@@ -715,7 +715,7 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
     (o.env as string) === "production" ||
     o.production === true ||
     (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV ===
-      "production";
+    "production";
 
   if (opts.noAuditDefaults !== true) {
     // The production boot guards normally fire on the first request (or at
@@ -782,7 +782,7 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
     // policies' preflight cache lifetime, which no construction check covers.
     const corsPolicies =
       (app as unknown as Record<symbol, readonly { credentials: boolean; maxAgeSeconds?: number }[] | undefined>)[
-        Symbol.for("daloyjs.app.corsPolicies")
+      Symbol.for("daloyjs.app.corsPolicies")
       ] ?? [];
     for (const policy of corsPolicies) {
       const maxAge = policy.maxAgeSeconds;
@@ -814,6 +814,48 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
           "Use per-content-type caps for any limit this generous so " +
           "JSON parsers are not DoS-amplified by a multipart-sized blob.",
       });
+    }
+
+    // Per-route overrides audit. A route may raise `bodyLimitBytes` above the
+    // app value (the supported way to accept one large upload without
+    // widening every route), but a raised cap on a route nothing
+    // authenticates is a public memory-exhaustion surface, and a very large
+    // per-route cap or a disabled per-route deadline carries the same risks
+    // the app-level checks above flag.
+    const appBodyLimit =
+      typeof bodyLimitBytes === "number" ? bodyLimitBytes : 1024 * 1024;
+    for (const r of app.getSecurityPosture().routeOverrides) {
+      const route = `${r.method} ${r.path}`;
+      if (r.bodyLimitBytes !== undefined && r.bodyLimitBytes > appBodyLimit && !r.authenticated) {
+        findings.push({
+          level: "warn",
+          code: "audit.bodyLimit.routeRaisedUnauthenticated",
+          message:
+            `${route} raises bodyLimitBytes to ${r.bodyLimitBytes} (app: ${appBodyLimit}) ` +
+            "with no authentication hook in its chain. Bodies are buffered in " +
+            "memory, so an anonymous client can hold that much per request; " +
+            "put auth in front of the route or move large uploads to presigned URLs.",
+        });
+      }
+      if (r.bodyLimitBytes !== undefined && r.bodyLimitBytes > 25 * 1024 * 1024) {
+        findings.push({
+          level: "warn",
+          code: "audit.bodyLimit.routeBlanket",
+          message:
+            `${route} sets bodyLimitBytes to ${r.bodyLimitBytes} (> 25 MiB). ` +
+            "Uploads this large belong on presigned object-storage URLs so they " +
+            "never pass through the server's memory.",
+        });
+      }
+      if (r.requestTimeoutMs === 0) {
+        findings.push({
+          level: "warn",
+          code: "audit.requestTimeout.routeZero",
+          message:
+            `${route} sets requestTimeoutMs to 0, so a slow client can hold this ` +
+            "route's handler and body read open indefinitely.",
+        });
+      }
     }
 
     // Header-count cap audit. The framework's portable maxHeaderCount
@@ -1103,7 +1145,7 @@ async function loadApp(entry: string | undefined, io: CliIO): Promise<App> {
       if (app) return app;
       lastErr = new Error(
         `Loaded "${candidate}" but it did not export an App instance ` +
-          `or a zero-argument buildApp()/createApp() factory.`
+        `or a zero-argument buildApp()/createApp() factory.`
       );
     } catch (err) {
       lastErr = err;
@@ -1116,7 +1158,7 @@ async function loadApp(entry: string | undefined, io: CliIO): Promise<App> {
   }
   throw new Error(
     `Could not find an App entry. Tried: ${DEFAULT_ENTRIES.join(", ")}.\n` +
-      `Pass an explicit path: daloy inspect ./path/to/app.ts`
+    `Pass an explicit path: daloy inspect ./path/to/app.ts`
   );
 }
 

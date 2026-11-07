@@ -1263,6 +1263,17 @@ interface CompiledRoute {
    * reference never crosses an encapsulation boundary.
    */
   decorations: Record<string, unknown> | undefined;
+  /**
+   * Effective request-body cap for this route: `RouteDefinition.bodyLimitBytes`
+   * when set, else `AppOptions.bodyLimitBytes`. Resolved and validated once at
+   * registration so dispatch reads a number, never an option lookup.
+   */
+  bodyLimitBytes: number;
+  /**
+   * Effective request deadline for this route: `RouteDefinition.requestTimeoutMs`
+   * when set, else `AppOptions.requestTimeoutMs`. Resolved at registration.
+   */
+  requestTimeoutMs: number;
 }
 
 /**
@@ -1285,6 +1296,26 @@ export interface SecureConfigIssue {
   message: string;
 }
 
+/**
+ * One route's `bodyLimitBytes` / `requestTimeoutMs` override, as reported by
+ * {@link App.getSecurityPosture} under `routeOverrides` and audited by
+ * `daloy doctor`.
+ *
+ * @since 1.21.0
+ */
+export interface RouteLimitOverride {
+  /** HTTP method of the route. */
+  method: HttpMethod;
+  /** Full (prefixed) path of the route. */
+  path: string;
+  /** Route-level body cap in bytes, or `undefined` when the app value applies. */
+  bodyLimitBytes: number | undefined;
+  /** Route-level deadline in ms, or `undefined` when the app value applies. */
+  requestTimeoutMs: number | undefined;
+  /** `true` when an authentication hook is in the route's effective hook chain. */
+  authenticated: boolean;
+}
+
 interface RouteSecurityMarkers {
   method: HttpMethod;
   path: string;
@@ -1294,6 +1325,10 @@ interface RouteSecurityMarkers {
   hasAuth: boolean;
   /** Route declares an `auth:` requirement (surfaces in the OpenAPI `security` list). */
   declaresAuth: boolean;
+  /** Route-level `bodyLimitBytes` override, or `undefined` when the app value applies. */
+  bodyLimitBytes: number | undefined;
+  /** Route-level `requestTimeoutMs` override, or `undefined` when the app value applies. */
+  requestTimeoutMs: number | undefined;
   /** Route was produced by {@link mcpRoutes} without opting out of the auth boot guard. */
   isMcp: boolean;
   /** Route was produced by `a2aRoutes()` without opting out of the auth boot guard. */
@@ -1533,6 +1568,32 @@ function numericOption(name: string, value: unknown, fallback: number): number {
   return value;
 }
 
+/**
+ * Resolve a per-route numeric limit (`bodyLimitBytes` / `requestTimeoutMs`)
+ * against the app-wide value, with the same validation as {@link numericOption}
+ * so a `NaN` from an unset environment variable cannot disable the limit on
+ * one route either.
+ *
+ * @throws Error when the override is not a finite, non-negative integer.
+ */
+function routeNumericOption(
+  name: string,
+  value: unknown,
+  fallback: number,
+  method: string,
+  path: string,
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
+    throw new Error(
+      `app.route(): ${name} on ${method} ${path} must be a finite, non-negative integer; got ${shown}. ` +
+      `Omit the field to inherit app({ ${name} }).`,
+    );
+  }
+  return value;
+}
+
 /** Default `X-Powered-By` value for `poweredBy: true`; deliberately versionless. */
 const POWERED_BY_DEFAULT = "DaloyJS";
 /** Printable ASCII, no leading/trailing space, max 128 chars: no CR/LF injection. */
@@ -1594,6 +1655,27 @@ export const DALOY_RAW_BODY = Symbol.for("daloyjs.response.rawBody");
  * so first-party adapters can opt in; not part of the userland API surface.
  */
 export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
+
+/**
+ * Internal Symbol under which dispatch records a route's own `bodyLimitBytes`
+ * on the `Request` when it differs from the app value, so hooks that read raw
+ * bytes themselves (`idempotency()`'s fingerprint) can bound their read by the
+ * limit the framework applies to that route. Absent on routes that inherit
+ * the app limit. Not part of the userland API surface.
+ *
+ * @since 1.21.0
+ */
+export const DALOY_REQUEST_BODY_LIMIT: unique symbol = Symbol.for(
+  "daloyjs.request.bodyLimit",
+);
+
+/** Live limit shared by a request's body-cap wrap; see {@link capRequestBody}. */
+interface BodyCapState {
+  limit: number;
+}
+
+/** Module-private key under which {@link capRequestBody} keeps its {@link BodyCapState}. */
+const DALOY_REQUEST_BODY_CAP: unique symbol = Symbol("daloyjs.request.bodyCap");
 
 /**
  * Internal Symbol an adapter sets (on its request shim) to expose the request's
@@ -2313,8 +2395,28 @@ export class App<
     /** `X-Powered-By` value advertised via `poweredBy`, or `false` (default). @since 1.19.0 */
     poweredBy: string | false;
     production: boolean;
+    /**
+     * Routes that override `bodyLimitBytes` and/or `requestTimeoutMs`.
+     * `authenticated` is `true` when an authentication hook is in the route's
+     * effective chain. Empty when every route inherits the app values.
+     * @since 1.21.0
+     */
+    routeOverrides: readonly RouteLimitOverride[];
   } {
     const o = this.options;
+    const routeOverrides: RouteLimitOverride[] = [];
+    for (const m of this.routeSecurityMarkers) {
+      if (m.bodyLimitBytes === undefined && m.requestTimeoutMs === undefined) continue;
+      routeOverrides.push(
+        Object.freeze({
+          method: m.method,
+          path: m.path,
+          bodyLimitBytes: m.bodyLimitBytes,
+          requestTimeoutMs: m.requestTimeoutMs,
+          authenticated: m.hasAuth,
+        }),
+      );
+    }
     return Object.freeze({
       preset: o.preset,
       secureDefaults: o.secureDefaults !== false,
@@ -2335,6 +2437,7 @@ export class App<
       stripServerHeaders: o.stripServerHeaders !== false,
       poweredBy: typeof this.fingerprint === "string" ? this.fingerprint : false,
       production: this.isProduction(),
+      routeOverrides: Object.freeze(routeOverrides),
     });
   }
 
@@ -3753,6 +3856,20 @@ export class App<
     if (merged.sunset !== undefined) {
       merged.sunset = normalizeSunset(merged.sunset, merged.method, fullPath);
     }
+    const routeBodyLimitBytes = routeNumericOption(
+      "bodyLimitBytes",
+      merged.bodyLimitBytes,
+      this.options.bodyLimitBytes,
+      merged.method,
+      fullPath,
+    );
+    const routeRequestTimeoutMs = routeNumericOption(
+      "requestTimeoutMs",
+      merged.requestTimeoutMs,
+      this.options.requestTimeoutMs,
+      merged.method,
+      fullPath,
+    );
     const sources: Hooks[] = [...this.groupHooks, def.hooks ?? {}];
     const hooks = mergeHooks(sources);
     const corsOriginAllows = corsOriginAllowsFromHooks(sources);
@@ -3810,6 +3927,8 @@ export class App<
           (merged as unknown as Record<PropertyKey, unknown>)[A2A_ROUTE_MARKER] === true ||
           (this.options.requireAuth === true && merged.public !== true),
         decorations,
+        bodyLimitBytes: routeBodyLimitBytes,
+        requestTimeoutMs: routeRequestTimeoutMs,
       },
       def.operationId,
     );
@@ -3840,6 +3959,8 @@ export class App<
       path: merged.path,
       ...securityMarkers,
       declaresAuth: merged.auth !== undefined && merged.auth !== null,
+      bodyLimitBytes: merged.bodyLimitBytes,
+      requestTimeoutMs: merged.requestTimeoutMs,
       isMcp:
         (merged as unknown as Record<PropertyKey, unknown>)[
         MCP_ROUTE_MARKER
@@ -5423,8 +5544,9 @@ export class App<
     const stripFingerprint = this.fingerprint;
     // One timer per request bounds hooks, body read and handler together. It
     // is created at the first asynchronous step, so a fully synchronous
-    // request never arms a timer, and it is cleared in `finally`.
-    const timeoutMs = this.options.requestTimeoutMs;
+    // request never arms a timer, and it is cleared in `finally`. Starts at
+    // the app value and switches to the route's own once it is matched.
+    let timeoutMs = this.options.requestTimeoutMs;
     let deadline: RequestDeadline | undefined;
     let ctx: BaseContext<any, any> | undefined;
     // Synthetic OPTIONS-preflight context, tracked only so the `finally` block
@@ -5642,20 +5764,33 @@ export class App<
         hooks,
         mergedHooks: allHooks,
         hasFinalizeHook,
+        bodyLimitBytes: routeBodyLimit,
       } = match.handler;
+      timeoutMs = match.handler.requestTimeoutMs;
       activeErrorHook = allHooks.onError;
       activeResponseHook = allHooks.onResponse;
       activeSendHook = allHooks.onSend;
 
-      // A schema route with no onRequest / preBody hook reads its body only
-      // through the capped parser (readBodyLimited), so it skips the wrap.
-      if (
-        !bodyCapped &&
-        (def.request?.body === undefined ||
+      if (bodyCapped) {
+        // A global onRequest hook capped the body at the app limit before the
+        // route was known; a route with its own limit replaces that cap.
+        if (routeBodyLimit !== this.options.bodyLimitBytes) {
+          capRequestBody(request, routeBodyLimit);
+          (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_LIMIT] = routeBodyLimit;
+        }
+      } else {
+        // A schema route with no onRequest / preBody hook reads its body only
+        // through the capped parser (readBodyLimited), so it skips the wrap.
+        if (
+          def.request?.body === undefined ||
           hooks.onRequest !== undefined ||
-          allHooks.preBody !== undefined)
-      ) {
-        capRequestBody(request, this.options.bodyLimitBytes);
+          allHooks.preBody !== undefined
+        ) {
+          capRequestBody(request, routeBodyLimit);
+        }
+        if (routeBodyLimit !== this.options.bodyLimitBytes) {
+          (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_LIMIT] = routeBodyLimit;
+        }
       }
       if (hooks.onRequest !== undefined) {
         const routeOnRequestResult = hooks.onRequest(request);
@@ -5735,11 +5870,11 @@ export class App<
           return finalizeFast(preBody, stripFingerprint);
         }
         // If a deferred preBody hook (such as `requestDecompression()`) inflated
-        // the body onto `DALOY_REQUEST_RAW_BODY`, re-check `bodyLimitBytes` on
-        // routes without a body schema so raw-body handlers cannot read an
-        // inflated payload that exceeds `bodyLimitBytes`.
+        // the body onto `DALOY_REQUEST_RAW_BODY`, re-check the route's body limit
+        // on routes without a body schema so raw-body handlers cannot read an
+        // inflated payload that exceeds it.
         if (def.request?.body === undefined) {
-          capRequestBody(request, this.options.bodyLimitBytes);
+          capRequestBody(request, routeBodyLimit);
         }
       }
 
@@ -5750,6 +5885,7 @@ export class App<
         ctx as RequestContext,
         def,
         this.options,
+        routeBodyLimit,
       );
       ctx = isPromiseLike(validatedCtx)
         ? await (timeoutMs === 0
@@ -7193,12 +7329,12 @@ function validateContext(
   ctx: RequestContext,
   def: RouteDefinition<any, any, any, any>,
   opts: {
-    bodyLimitBytes: number;
     allowedContentTypes?: string[];
     multipart?: AppOptions["multipart"];
     jsonMaxKeys?: number;
     jsonMaxDepth?: number;
   },
+  bodyLimitBytes: number,
 ): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
   const hasHeadersSchema = !!def.request?.headers;
   const hasQuerySchema = !!def.request?.query;
@@ -7273,9 +7409,9 @@ function validateContext(
       const declaredBytes = Number(declared);
       if (
         Number.isFinite(declaredBytes) &&
-        declaredBytes > opts.bodyLimitBytes
+        declaredBytes > bodyLimitBytes
       ) {
-        throw new PayloadTooLargeError(opts.bodyLimitBytes);
+        throw new PayloadTooLargeError(bodyLimitBytes);
       }
     }
     (request as unknown as { [DALOY_REQUEST_BODY_SOLICIT]?: () => void })[
@@ -7284,7 +7420,7 @@ function validateContext(
     const raw = readBody(
       request,
       ct,
-      opts.bodyLimitBytes,
+      bodyLimitBytes,
       opts.multipart,
       opts.jsonMaxKeys,
       opts.jsonMaxDepth,
@@ -7773,6 +7909,13 @@ function abortRequest(request: Request, reason: unknown): void {
  *   before any byte is solicited, then reads through a counting stream that
  *   errors with a `PayloadTooLargeError` past the limit. The object keeps its
  *   identity, so connection info and the abort hook keyed on it still work.
+ * - Already wrapped (a global `onRequest` cap followed by the route's own
+ *   limit, or the post-`preBody` re-check): the existing wrap's limit is
+ *   retuned in place. Re-wrapping would read the native stream a second time,
+ *   which a hook's earlier `clone()` has already locked. Raising is safe
+ *   because the counting stream compares against the live limit; a cached
+ *   inflated body over the new limit still takes the fresh-wrap path so its
+ *   reads throw `413`.
  */
 function capRequestBody(request: Request, limit: number): void {
   const method = request.method;
@@ -7781,6 +7924,13 @@ function capRequestBody(request: Request, limit: number): void {
     DALOY_REQUEST_RAW_BODY
   ];
   if (cached instanceof Uint8Array && cached.byteLength <= limit) return;
+  const existing = (request as unknown as Record<symbol, unknown>)[
+    DALOY_REQUEST_BODY_CAP
+  ] as BodyCapState | undefined;
+  if (existing !== undefined && !(cached instanceof Uint8Array)) {
+    existing.limit = limit;
+    return;
+  }
   const declared = request.headers.get("content-length");
   const declaredBytes = declared === null ? undefined : Number(declared);
   // A declared `Content-Length: 0` is only trusted when there really is no
@@ -7789,17 +7939,19 @@ function capRequestBody(request: Request, limit: number): void {
   if (declaredBytes === 0 && cached === undefined && readOriginalBody(request) === null) return;
   const cachedOverLimit =
     cached instanceof Uint8Array && cached.byteLength > limit;
+  const state: BodyCapState = { limit };
+  (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_CAP] = state;
   let limited: ReadableStream<Uint8Array> | null | undefined;
   const stream = (): ReadableStream<Uint8Array> | null => {
     if (cachedOverLimit) {
-      throw new PayloadTooLargeError(limit);
+      throw new PayloadTooLargeError(state.limit);
     }
     if (limited !== undefined) return limited;
-    if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > limit) {
-      throw new PayloadTooLargeError(limit);
+    if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > state.limit) {
+      throw new PayloadTooLargeError(state.limit);
     }
     const original = readOriginalBody(request);
-    limited = original === null ? null : byteCappedStream(original, limit);
+    limited = original === null ? null : byteCappedStream(original, state);
     return limited;
   };
   const bytes = async (): Promise<Uint8Array> => {
@@ -7890,15 +8042,16 @@ function readOriginalBody(request: Request): ReadableStream<Uint8Array> | null {
 }
 
 /**
- * Wrap `source` in a stream that errors with a `413` once more than `limit`
- * bytes pass. Pull-based (`highWaterMark: 0`): nothing is read from the source
- * until a consumer reads, so creating it does not mark the body used (a
- * `pipeThrough` would start pumping at once and trip `bodyUsed` checks such as
- * idempotency's).
+ * Wrap `source` in a stream that errors with a `413` once more than
+ * `state.limit` bytes pass. The limit is read live so a later
+ * {@link capRequestBody} call can retune it without re-wrapping. Pull-based
+ * (`highWaterMark: 0`): nothing is read from the source until a consumer
+ * reads, so creating it does not mark the body used (a `pipeThrough` would
+ * start pumping at once and trip `bodyUsed` checks such as idempotency's).
  */
 function byteCappedStream(
   source: ReadableStream<Uint8Array>,
-  limit: number,
+  state: BodyCapState,
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let seen = 0;
@@ -7912,8 +8065,8 @@ function byteCappedStream(
           return;
         }
         seen += value.byteLength;
-        if (seen > limit) {
-          controller.error(new PayloadTooLargeError(limit));
+        if (seen > state.limit) {
+          controller.error(new PayloadTooLargeError(state.limit));
           reader.cancel().catch(() => { });
           return;
         }
