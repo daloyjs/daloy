@@ -691,6 +691,86 @@ the `behindProxy: "none"` boot refusal, `fetchGuard` pinning on non-Node runtime
 (needs Bun/Deno/workerd), and the v1.18.0 changes that landed after the audited
 ref.
 
+### Follow-up audit fixes (2026-11-07)
+
+A quick, scoped run of the Cloudflare security-audit workflow reviewed
+Node ingress, authentication/replay composition, and route body/deadline limits
+at `e44e8f5a`. It used a deterministic four-unit coverage ledger, one hunter wave,
+a coverage critic, independent candidate validation, and bounded offline Docker
+fixtures with dummy principals. It confirmed three medium-severity defects in
+opt-in compositions; the following fixes shipped in **1.21.1**:
+
+| Boundary | Fixed behavior | Regression tests |
+| --- | --- | --- |
+| Current scopes versus stored responses | Replay admission requires an own `user.scopes` property, matching ordinary `requireScopes()` authorization. Inherited scopes can no longer authorize a stored response that a fresh request rejects. | `tests/replay-own-scope-authorization.test.ts` |
+| Composed authentication versus earlier replay | Registration ordering expands an untouched `every()` bundle into its original layers, and opaque authentication-and-replay bundles run before replay-only bundles, so an earlier `responseCache()` cannot answer before a composed proof. The expansion is keyed on the merged `beforeHandle` function `every()` installed: a bundle whose `beforeHandle` was replaced by a wrapper (`markAuthHook()`, `except()`, `some()`, a spread) is ordered as one opaque hook, so the wrapper still runs. OR and path-exemption semantics remain intact, and MCP method-auth still rejects non-authentication middleware. | `tests/composed-auth-replay-order.test.ts`, `tests/mcp-method-auth.test.ts` |
+| Expired queued requests versus shared capacity | Queue cancellation and finalizers remove waiters before acquisition, and slot handoff skips abandoned requests. A late waiter can no longer acquire a slot after its cleanup grace and permanently block unrelated requests. Already-running handlers retain their existing deadline lease protection. | `tests/concurrency-queue-abandonment.test.ts` |
+
+The run also reproduced and fixed a **functional route-limit bug**, without
+claiming a demonstrated security impact: lowering a raw route's body cap after
+a global hook drains a clone now re-caps the retained tee branch. Direct body
+streams and convenience readers enforce the lowered limit; the app-wide cap,
+route raises, lazy reads, and authentication rejection remain intact. See
+`tests/body-cap-retuning.test.ts`.
+
+This is partial coverage, not a whole-framework clean bill of health. The
+scaffolder, website, other runtime adapters, and unrelated protocol/crypto
+internals were outside the hunting scope. Audit records and promoted fixture
+output are retained outside the repository. Full offline package-gate
+verification additionally needs a compatible Linux Git and esbuild toolchain;
+missing tools must not be mistaken for a framework test failure or bypassed by
+weakening a security gate.
+
+### Repeatable local audits with the Cloudflare skill
+
+The audit above used the upstream
+[Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill)
+(MIT). It is a coding-agent workflow, not framework code, so it is **not
+vendored in this repository**: install it at user level with the
+[Skills CLI](https://skills.sh), the same way as any other agent skill, and
+keep it current from upstream rather than from a copy here.
+
+```sh
+npx skills add https://github.com/cloudflare/security-audit-skill \
+  --skill security-audit \
+  --global
+```
+
+Reload the coding-agent session after installation so it discovers the skill,
+then request `Use security-audit to audit src/ and the Node adapter`. The run
+behind the fixes above was at upstream commit `c1c8a8c1`; record the upstream
+revision you used alongside any audit notes you keep.
+
+This is a **source-first agent workflow**, not a scanner to point at a URL.
+Follow its coverage ledger, candidate validation, independent verification, and
+reporting requirements for a full audit. Keep reports outside the repository;
+use dummy identities and secrets, and never send repository code or captured
+credentials to external services. Prior audit results are historical evidence,
+not proof that the current revision is secure.
+
+For runtime verification, run the existing commands **only inside the
+skill-required OS sandbox**, against dedicated local fixtures:
+
+```sh
+pnpm test:red-team
+pnpm red-team:live
+pnpm red-team:live:mcp
+pnpm red-team:live:wave2
+```
+
+The [live harness](red-team-live/README.md) starts its own Daloy targets; do not
+redirect availability probes at an existing shared server. The sandbox must
+block external networking, isolate loopback, allowlist the environment, expose
+source and toolchain read-only, restrict writes to assigned scratch space, and
+enforce CPU, memory, process, file, disk, and wall-clock limits. Use already
+installed tools and dependencies; do not fetch them during the audit.
+
+If those controls or a compatible local toolchain are unavailable, restrict the
+run to read-only source inspection and record runtime verification as blocked.
+Do not report an unexecuted probe as defended, an unresolved candidate as
+confirmed, or a partial review as a completed audit. After any resulting
+framework fix, add regression tests and run the repository's required gates.
+
 ### Hook phase decides what a short-circuiting middleware can preempt
 
 A hook that returns a `Response` ends the chain for its phase. Any gate in the

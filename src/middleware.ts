@@ -841,15 +841,41 @@ const REPLAY_RESPONSE_CACHE_MARKER = Symbol.for("daloyjs.response-cache.hook");
 const REPLAY_IDEMPOTENCY_MARKER = Symbol.for("daloyjs.idempotency.hook");
 
 /**
+ * Original `beforeHandle` layers of a transparent all-of composition
+ * (`every()`), keyed on the bundle under {@link COMBINED_BEFORE_HANDLE_LAYERS}.
+ * Registration ordering expands these layers so an inner replay cannot hide
+ * a later authentication gate.
+ *
+ * `beforeHandle` is the merged function `every()` installed. The expansion
+ * only applies while the bundle still carries that exact function: a wrapper
+ * that replaces it (`markAuthHook()` recording the auth pass, `except()`,
+ * `some()`, a user spread) makes the bundle opaque again, so the wrapper's
+ * own `beforeHandle` runs and its markers decide the ordering.
+ * @internal
+ */
+export interface CombinedBeforeHandleLayers {
+  beforeHandle: NonNullable<Hooks["beforeHandle"]>;
+  layers: readonly Hooks[];
+}
+
+/**
+ * Symbol under which `every()` records its {@link CombinedBeforeHandleLayers}.
+ * @internal
+ */
+export const COMBINED_BEFORE_HANDLE_LAYERS: unique symbol = Symbol.for("daloyjs.before-handle.layers");
+
+/**
  * Order `beforeHandle` hooks so a stored-response replay (`responseCache()`,
  * `idempotency()`) can never answer before a later `beforeHandle`
  * authentication hook (one stamped with {@link AUTH_HOOK_MARKER}, e.g. via
  * {@link markAuthHook} or {@link some}) has run.
  *
  * Only the span from the first replay hook to the last auth hook after it is
- * reordered: inside it, non-replay hooks keep their relative order and run
- * first, then the replay hooks. Hooks outside that span keep their position,
- * so the common case (auth registered before the cache) is untouched.
+ * reordered: transparent all-of bundles (see {@link CombinedBeforeHandleLayers})
+ * are expanded, non-replay hooks run first, then opaque auth-and-replay
+ * bundles, then replay-only hooks. Each partition preserves registration
+ * order. Hooks outside that span keep their position, so the common case
+ * (auth registered before the cache) is untouched.
  *
  * @param layers - Hook layers in registration order.
  * @returns The `beforeHandle` functions in execution order.
@@ -861,25 +887,42 @@ export function _orderBeforeHandleForReplay(
   const fns: NonNullable<Hooks["beforeHandle"]>[] = [];
   const replay: boolean[] = [];
   const auth: boolean[] = [];
-  for (const hooks of layers) {
-    if (typeof hooks.beforeHandle !== "function") continue;
+  const collect = (hooks: Hooks): void => {
+    if (typeof hooks.beforeHandle !== "function") return;
     const record = hooks as Record<PropertyKey, unknown>;
+    const combined = record[COMBINED_BEFORE_HANDLE_LAYERS] as
+      | CombinedBeforeHandleLayers
+      | undefined;
+    // Expand only while the bundle still runs the merged function every()
+    // installed; a wrapper that replaced it must stay opaque.
+    if (
+      combined !== undefined &&
+      combined !== null &&
+      combined.beforeHandle === hooks.beforeHandle &&
+      Array.isArray(combined.layers)
+    ) {
+      for (const layer of combined.layers) collect(layer);
+      return;
+    }
     fns.push(hooks.beforeHandle);
     replay.push(
       record[REPLAY_RESPONSE_CACHE_MARKER] === true || record[REPLAY_IDEMPOTENCY_MARKER] === true
     );
     auth.push(record[AUTH_HOOK_MARKER] === true);
-  }
+  };
+  for (const hooks of layers) collect(hooks);
   const firstReplay = replay.indexOf(true);
   if (firstReplay === -1) return fns;
   const lastAuth = auth.lastIndexOf(true);
   if (lastAuth <= firstReplay) return fns;
   const span = fns.slice(firstReplay, lastAuth + 1);
   const spanReplay = replay.slice(firstReplay, lastAuth + 1);
+  const spanAuth = auth.slice(firstReplay, lastAuth + 1);
   return [
     ...fns.slice(0, firstReplay),
     ...span.filter((_, i) => !spanReplay[i]),
-    ...span.filter((_, i) => spanReplay[i]),
+    ...span.filter((_, i) => spanReplay[i] && spanAuth[i]),
+    ...span.filter((_, i) => spanReplay[i] && !spanAuth[i]),
     ...fns.slice(lastAuth + 1),
   ];
 }

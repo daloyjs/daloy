@@ -4,8 +4,9 @@
  * @param context - Current request state, including requirements installed by
  *   App.mergeBeforeHandle and the user resolved by upstream authentication.
  * @returns True when no scope guard applies or the current user owns every
- *   required scope. False tells replay middleware to defer to the normal hook
- *   chain without reading, reserving, or capturing a stored response. The
+ *   required scope in an own `scopes` array; inherited scopes grant nothing,
+ *   matching `requireScopes()`. False tells replay middleware to defer to the
+ *   normal hook chain without reading, reserving, or capturing a stored response. The
  *   downstream requireScopes hook remains responsible for rejecting access.
  * @internal
  */
@@ -16,6 +17,7 @@ export function hasReplayScopes(context: {
   if (!Array.isArray(required) || required.length === 0) return true;
   const user = context.state.user;
   if (!user || typeof user !== "object") return false;
+  if (!Object.prototype.hasOwnProperty.call(user, "scopes")) return false;
   const owned = (user as { scopes?: unknown }).scopes;
   return (
     Array.isArray(owned) && required.every((scope) => owned.includes(scope))

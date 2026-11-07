@@ -1672,6 +1672,8 @@ export const DALOY_REQUEST_BODY_LIMIT: unique symbol = Symbol.for(
 /** Live limit shared by a request's body-cap wrap; see {@link capRequestBody}. */
 interface BodyCapState {
   limit: number;
+  /** Lazily initialized branch, retained after clone tees the counted stream. */
+  stream?: ReadableStream<Uint8Array> | null;
 }
 
 /** Module-private key under which {@link capRequestBody} keeps its {@link BodyCapState}. */
@@ -7911,9 +7913,10 @@ function abortRequest(request: Request, reason: unknown): void {
  *   identity, so connection info and the abort hook keyed on it still work.
  * - Already wrapped (a global `onRequest` cap followed by the route's own
  *   limit, or the post-`preBody` re-check): the existing wrap's limit is
- *   retuned in place. Re-wrapping would read the native stream a second time,
- *   which a hook's earlier `clone()` has already locked. Raising is safe
- *   because the counting stream compares against the live limit; a cached
+ *   retuned in place. Lowering also lazily re-caps the retained branch, so
+ *   bytes buffered by an earlier `clone()` obey the new limit without
+ *   reopening the locked native stream. Raising is safe because the
+ *   counting stream compares against the live limit; a cached
  *   inflated body over the new limit still takes the fresh-wrap path so its
  *   reads throw `413`.
  */
@@ -7928,6 +7931,9 @@ function capRequestBody(request: Request, limit: number): void {
     DALOY_REQUEST_BODY_CAP
   ] as BodyCapState | undefined;
   if (existing !== undefined && !(cached instanceof Uint8Array)) {
+    if (limit < existing.limit && existing.stream != null) {
+      existing.stream = byteCappedStream(existing.stream, existing);
+    }
     existing.limit = limit;
     return;
   }
@@ -7941,18 +7947,17 @@ function capRequestBody(request: Request, limit: number): void {
     cached instanceof Uint8Array && cached.byteLength > limit;
   const state: BodyCapState = { limit };
   (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_CAP] = state;
-  let limited: ReadableStream<Uint8Array> | null | undefined;
   const stream = (): ReadableStream<Uint8Array> | null => {
     if (cachedOverLimit) {
       throw new PayloadTooLargeError(state.limit);
     }
-    if (limited !== undefined) return limited;
     if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > state.limit) {
       throw new PayloadTooLargeError(state.limit);
     }
+    if (state.stream !== undefined) return state.stream;
     const original = readOriginalBody(request);
-    limited = original === null ? null : byteCappedStream(original, state);
-    return limited;
+    state.stream = original === null ? null : byteCappedStream(original, state);
+    return state.stream;
   };
   const bytes = async (): Promise<Uint8Array> => {
     const source = stream();
@@ -8010,7 +8015,7 @@ function capRequestBody(request: Request, limit: number): void {
         let theirs: ReadableStream<Uint8Array> | null = null;
         if (source !== null) {
           const [mine, other] = source.tee();
-          limited = mine;
+          state.stream = mine;
           theirs = other;
         }
         return new Request(request.url, {

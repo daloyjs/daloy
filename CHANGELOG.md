@@ -17,6 +17,44 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+Fixes from a quick, scoped run of the upstream Cloudflare security-audit
+agent skill (installed at user level, not vendored) over Node ingress,
+auth/replay composition and route limits (see
+[SECURITY.md](SECURITY.md#follow-up-audit-fixes-2026-11-07)). Each
+fix ships with regression tests.
+
+- **Replay admission requires an own `user.scopes` property.** `idempotency()`
+  and `responseCache()` now apply the same own-property rule as
+  `requireScopes()`, so a principal whose scopes are only inherited (a polluted
+  prototype, a class getter) can no longer be served a stored response that a
+  fresh request would be refused. (`tests/replay-own-scope-authorization.test.ts`)
+- **`every(gate, idempotency())` can no longer let an earlier replay answer
+  before the gate.** Registration ordering now expands an untouched `every()`
+  bundle into its original layers and runs opaque auth-and-replay bundles
+  before replay-only ones, so a `responseCache()` registered earlier cannot
+  serve a hit before the composed proof. A bundle whose `beforeHandle` was
+  replaced by a wrapper (`markAuthHook()`, `except()`, `some()`, a spread) is
+  ordered as one opaque hook, so the wrapper still runs. MCP `methodAuth` keeps
+  rejecting non-authentication middleware nested in such bundles.
+  (`tests/composed-auth-replay-order.test.ts`, `tests/mcp-method-auth.test.ts`)
+- **A deadline-abandoned or cancelled queued request no longer takes a
+  `concurrencyLimit()` slot it can never release.** Queue waiters are removed
+  on `request.signal` abort and by the request finalizer, and slot handoff
+  skips abandoned waiters, so a late waiter cannot acquire a slot after its
+  cleanup grace and block unrelated requests for the life of the process.
+  (`tests/concurrency-queue-abandonment.test.ts`)
+
+### Fixed
+
+- Lowering a raw route's `bodyLimitBytes` below the app limit after a global
+  hook drained `request.clone()` now re-caps the retained tee branch, so the
+  route's direct body stream and convenience readers enforce the lower limit
+  instead of the bytes the clone already buffered under the higher one.
+  Raising, lazy reads and the app-wide cap are unchanged.
+  (`tests/body-cap-retuning.test.ts`)
+
 ## [1.21.0] - 2026-11-06
 
 ### Added

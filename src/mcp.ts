@@ -2568,11 +2568,13 @@ const AUTH_WRAPPED_KEY = Symbol.for("daloyjs.auth.wrapped");
 const HOOKS_APP_PRODUCTION_KEY = Symbol.for("daloyjs.hooks.appProduction");
 /** Same string as middleware.ts REQUIRE_SCOPES_HOOK_MARKER (the scopes a bundle requires). */
 const REQUIRE_SCOPES_KEY = Symbol.for("daloyjs.middleware.requireScopes");
+const COMBINED_BEFORE_HANDLE_LAYERS_KEY = Symbol.for("daloyjs.before-handle.layers");
 const METHOD_AUTH_SYMBOLS: ReadonlySet<symbol> = new Set([
   AUTH_HOOK_KEY,
   AUTH_WRAPPED_KEY,
   HOOKS_APP_PRODUCTION_KEY,
   REQUIRE_SCOPES_KEY,
+  COMBINED_BEFORE_HANDLE_LAYERS_KEY,
 ]);
 /** Same string as middleware.ts REQUIRE_SCOPES_AGGREGATE_KEY (per-request scope list on ctx.state). */
 const REQUIRE_SCOPES_AGGREGATE_KEY = "__daloyRequiredScopes";

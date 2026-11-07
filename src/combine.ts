@@ -10,6 +10,8 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import {
   _mergePreBodyWithEarlyRejections,
   _orderBeforeHandleForReplay,
+  COMBINED_BEFORE_HANDLE_LAYERS,
+  type CombinedBeforeHandleLayers,
   CORS_ORIGIN_ALLOW_MARKER,
   DEFERRED_PRE_BODY_HOOK_MARKER,
   DEFERRED_PRE_BODY_ONLY_MARKER,
@@ -30,6 +32,8 @@ import { requestFinalizerMark, rollbackRequestFinalizers } from "./request-final
  *
  * Symbol-keyed security markers (CORS / CSRF / session / secure-headers)
  * are forwarded onto the merged bundle so boot-time guards still see them.
+ * Before-handler authentication remains ahead of stored-response replay,
+ * including when another all-of bundle encloses this stack.
  *
  * @example
  * ```ts
@@ -251,6 +255,7 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
     return hooks;
   const matches = compileExceptMatcher(when);
   const wrapped: Hooks = { ...hooks };
+  delete (wrapped as Record<PropertyKey, unknown>)[COMBINED_BEFORE_HANDLE_LAYERS];
   // The App applies a cors() response decorator ahead of every hook (so early
   // rejections carry CORS headers). Path patterns are checked synchronously
   // here so it still skips the exempted paths; a predicate can be async and
@@ -419,13 +424,23 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
   }
   const beforeHandle = _orderBeforeHandleForReplay(layers);
   if (beforeHandle.length > 0) {
-    merged.beforeHandle = async (ctx) => {
+    const run: NonNullable<Hooks["beforeHandle"]> = async (ctx) => {
       for (const fn of beforeHandle) {
         const r = await fn(ctx);
         if (r instanceof Response) return r;
       }
       return undefined;
     };
+    merged.beforeHandle = run;
+    // Snapshot the layers so App registration can order the original gates
+    // and replays individually. Keyed on `run`: once a wrapper replaces
+    // `merged.beforeHandle`, the snapshot no longer applies (see
+    // CombinedBeforeHandleLayers).
+    const combined: CombinedBeforeHandleLayers = {
+      beforeHandle: run,
+      layers: layers.map((layer) => ({ ...layer })),
+    };
+    (merged as Record<PropertyKey, unknown>)[COMBINED_BEFORE_HANDLE_LAYERS] = combined;
   }
   const afterHandle = pick("afterHandle");
   if (afterHandle.length > 0) {
@@ -472,6 +487,9 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
     const record = hooks as Record<PropertyKey, unknown>;
     for (const key of Object.getOwnPropertySymbols(record)) {
       if (key === DEFERRED_PRE_BODY_ONLY_MARKER) continue;
+      // An inner bundle's layer snapshot describes that bundle's merged
+      // function, never this one's; it is recorded above for this merge.
+      if (key === COMBINED_BEFORE_HANDLE_LAYERS) continue;
       if (key === DEFERRED_PRE_BODY_HOOK_MARKER) {
         const existing = (merged as Record<PropertyKey, unknown>)[key];
         const incoming = record[key];
