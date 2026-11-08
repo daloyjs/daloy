@@ -434,16 +434,18 @@ function embeddedIPv4s(ip: ParsedIp): ParsedIp[] | undefined {
  *
  * const safeFetch = fetchGuard();
  *
- * app.route({
- *   method: "POST", path: "/import", operationId: "import",
- *   request: { json: z.object({ url: z.string().url() }) },
- *   responses: { 200: { description: "ok" } },
- *   handler: async ({ request }) => {
- *     const { url } = await request.json();
- *     const upstream = await safeFetch(url); // refuses 169.254.169.254
+ * app.post(
+ *   "/import",
+ *   {
+ *     operationId: "import",
+ *     request: { body: z.object({ url: z.url() }) },
+ *     responses: { 200: { description: "ok" } },
+ *   },
+ *   async ({ body }) => {
+ *     const upstream = await safeFetch(body.url); // refuses 169.254.169.254
  *     return { status: 200 as const, body: await upstream.text() };
  *   },
- * });
+ * );
  * ```
  *
  * @param options - Guard configuration; see {@link FetchGuardOptions}. Omit

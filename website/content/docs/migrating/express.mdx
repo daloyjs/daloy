@@ -104,14 +104,12 @@ Hold these two pictures in your head. Everything else follows from the differenc
 ```text
 EXPRESS                              DALOYJS
 -------                              -------
-app.get(path, (req,res,next) => {    app.route({
-  // read from req                     method, path, operationId,
-  // mutate res                        request:  { params, query, body },  // schemas
-  // res.send() / res.json()           responses:{ 200: { body }, 404: {...} },
-  // or next(err)                      handler: async (ctx) => {
-})                                       // ctx.params/query/body are validated + typed
-                                         return { status: 200, body };       // you RETURN
-                                       },
+app.get(path, (req,res,next) => {    app.get(path, {
+  // read from req                     request:  { params, query, body },  // schemas
+  // mutate res                        responses:{ 200: { body }, 404: {...} },
+  // res.send() / res.json()         }, async (ctx) => {
+  // or next(err)                      // ctx.params/query/body are validated + typed
+})                                     return { status: 200, body };       // you RETURN
                                      })
 
 middleware chain (req,res,next)       hooks (onRequest, preBody, beforeHandle,

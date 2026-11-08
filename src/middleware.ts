@@ -2599,13 +2599,14 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  *
  * @example
  * ```ts
- * app.route({
- *   method: "POST",
- *   path: "/items",
- *   hooks: { ...bearerAuth({ validate }), ...requireScopes(["items:write"]) },
- *   responses: { 200: { description: "ok" } },
- *   handler: () => ({ status: 200 as const, body: { ok: true } }),
- * });
+ * app.post(
+ *   "/items",
+ *   {
+ *     hooks: { ...bearerAuth({ validate }), ...requireScopes(["items:write"]) },
+ *     responses: { 200: { description: "ok" } },
+ *   },
+ *   () => ({ status: 200 as const, body: { ok: true } }),
+ * );
  *
  * // Authorize before the body is read; any one listed scope is enough.
  * app.use(every(
@@ -2802,12 +2803,11 @@ function toRoleSet(value: unknown): ReadonlySet<string> {
  *
  * app.use(jwk({ jwks, algorithms: ["RS256"], issuer, audience }));
  *
- * app.route({
- *   method: "DELETE",
- *   path: "/books/:id",
- *   hooks: requireRoles(["Books.Admin"]),
- *   // ...
- * });
+ * app.delete(
+ *   "/books/:id",
+ *   { hooks: requireRoles(["Books.Admin"]), responses: { 204: { description: "Deleted" } } },
+ *   () => ({ status: 204 as const, body: undefined }),
+ * );
  *
  * // Keycloak realm roles, any one is enough:
  * requireRoles(["editor", "admin"], {

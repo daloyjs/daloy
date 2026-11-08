@@ -1867,16 +1867,17 @@ Object.setPrototypeOf(LightResponse.prototype, Response.prototype);
  *
  * app.use(secureHeaders());
  *
- * app.route({
- *   method: "GET",
- *   path: "/books/:id",
- *   operationId: "getBook",
- *   request: { params: z.object({ id: z.uuid() }) },
- *   responses: {
- *     200: { description: "OK", body: z.object({ id: z.string(), title: z.string() }) },
+ * app.get(
+ *   "/books/:id",
+ *   {
+ *     operationId: "getBook",
+ *     request: { params: z.object({ id: z.uuid() }) },
+ *     responses: {
+ *       200: { description: "OK", body: z.object({ id: z.string(), title: z.string() }) },
+ *     },
  *   },
- *   handler: ({ params }) => ({ status: 200, body: { id: params.id, title: "Dune" } }),
- * });
+ *   ({ params }) => ({ status: 200, body: { id: params.id, title: "Dune" } }),
+ * );
  *
  * // Node:
  * import { serve } from "@daloyjs/core/node";
@@ -3794,6 +3795,11 @@ export class App<
    * Generic parameters are inferred from `path`, `method`, `request`, and
    * `responses`; you should rarely need to specify them explicitly.
    *
+   * For a single route, prefer the shorter method shorthand
+   * (`app.get(path, contract, handler)`, `app.post(...)`, and so on). Use
+   * `route()` for reusable `defineRoute()` contracts, `OPTIONS` routes, or
+   * route objects built elsewhere.
+   *
    * @example
    * ```ts
    * app.route({
@@ -5182,12 +5188,11 @@ export class App<
    *
    * app.decorate("db", db);
    *
-   * app.route({
-   *   method: "GET",
-   *   path: "/health",
-   *   responses: { 200: { description: "OK" } },
-   *   handler: ({ state }) => ({ status: 200, body: state.db.ping() }),
-   * });
+   * app.get(
+   *   "/health",
+   *   { responses: { 200: { description: "OK" } } },
+   *   ({ state }) => ({ status: 200, body: state.db.ping() }),
+   * );
    * ```
    *
    * ### Scoping (Fastify-style encapsulation)

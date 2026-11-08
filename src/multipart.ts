@@ -26,26 +26,27 @@
  * import { z } from "zod";
  * import { App, fileField, multipartObject } from "@daloyjs/core";
  *
- * app.route({
- *   method: "POST",
- *   path: "/avatars",
- *   operationId: "uploadAvatar",
- *   request: {
- *     body: multipartObject({
- *       title: z.string().min(1),
- *       file: fileField({
- *         maxBytes: 1_000_000,
- *         accept: ["image/png", "image/jpeg"],
+ * app.post(
+ *   "/avatars",
+ *   {
+ *     operationId: "uploadAvatar",
+ *     request: {
+ *       body: multipartObject({
+ *         title: z.string().min(1),
+ *         file: fileField({
+ *           maxBytes: 1_000_000,
+ *           accept: ["image/png", "image/jpeg"],
+ *         }),
  *       }),
- *     }),
+ *     },
+ *     responses: { 201: { description: "Created" } },
  *   },
- *   responses: { 201: { description: "Created" } },
- *   handler: async ({ body }) => {
+ *   async ({ body }) => {
  *     // body.file is a File you can pipe somewhere.
  *     await uploadToS3(body.file.stream(), body.file.type);
  *     return { status: 201, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  */
 

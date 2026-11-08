@@ -51,7 +51,7 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
    schemas, and response schemas live in one place — `app.get(path,
 contract, handler)` (and the matching `app.post`/`put`/`patch`/
    `delete`/`head` shorthands), or `app.route({...})` when you need a
-   reusable `defineRoute()` contract or a metadata-heavy route. Both
+   reusable `defineRoute()` contract or an `OPTIONS` route. Both
    forms produce identical runtime behavior, validation, security, and
    OpenAPI output.
 3. **Validation schemas protect every boundary.** This template uses Zod,

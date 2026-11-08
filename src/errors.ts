@@ -287,17 +287,12 @@ export function httpError(opts: HttpErrorOptions): HttpError {
  * ```ts
  * import { HttpError } from "@daloyjs/core";
  *
- * app.route({
- *   method: "GET",
- *   path: "/teapot",
- *   responses: { 418: { description: "I'm a teapot" } },
- *   handler: () => {
- *     throw new HttpError(418, {
- *       type: "https://example.com/errors/teapot",
- *       title: "I'm a teapot",
- *       detail: "Short and stout",
- *     });
- *   },
+ * app.get("/teapot", { responses: { 418: { description: "I'm a teapot" } } }, () => {
+ *   throw new HttpError(418, {
+ *     type: "https://example.com/errors/teapot",
+ *     title: "I'm a teapot",
+ *     detail: "Short and stout",
+ *   });
  * });
  * ```
  *

@@ -333,8 +333,8 @@ const app = new App({ requireAuth: true });
 
 app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"] })); // register auth first
 
-app.route({ method: "GET", path: "/orders", /* ... */ });                  // ok: jwk() covers it
-app.route({ method: "GET", path: "/status", public: true, /* ... */ });   // ok: deliberately open
+app.get("/orders", { /* ... */ }, handler);                 // ok: jwk() covers it
+app.get("/status", { public: true, /* ... */ }, handler);   // ok: deliberately open
 ```
 
 Hooks apply to routes registered after them, so register auth before the routes it should cover. A route registered first is refused even if you add `app.use(auth)` later, which is the point: that route really would be unauthenticated. Framework routes that are public by design are already marked: docs, OpenAPI and AsyncAPI documents, health and metrics probes (which have their own `token`), the CSP report endpoint, the MCP and A2A `GET` / `OPTIONS` routes, and the A2A Agent Card. `mcpRoutes()` and `a2aRoutes()` with `{ public: true }` mark their JSON-RPC route public too.

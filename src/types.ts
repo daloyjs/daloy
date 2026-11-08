@@ -245,15 +245,14 @@ export interface AppState { }
  *
  * @example
  * ```ts
- * app.route({
- *   method: "GET",
- *   path: "/health",
- *   responses: { 200: { body: z.object({ ok: z.boolean() }) } },
- *   handler: ({ state }) => {
+ * app.get(
+ *   "/health",
+ *   { responses: { 200: { description: "OK", body: z.object({ ok: z.boolean() }) } } },
+ *   ({ state }) => {
  *     state.log.info({ requestId: state.requestId }, "health probe");
  *     return { status: 200 as const, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  *
  * @since 1.18.0
@@ -570,14 +569,15 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "GET",
-   *   path: "/v1/legacy",
-   *   deprecated: true,
-   *   sunset: "2026-12-31T00:00:00Z",
-   *   responses: { 200: { description: "OK" } },
-   *   handler: () => ({ status: 200, body: { ok: true } }),
-   * });
+   * app.get(
+   *   "/v1/legacy",
+   *   {
+   *     deprecated: true,
+   *     sunset: "2026-12-31T00:00:00Z",
+   *     responses: { 200: { description: "OK" } },
+   *   },
+   *   () => ({ status: 200, body: { ok: true } }),
+   * );
    * ```
    *
    * @since 0.37.0
@@ -603,14 +603,15 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "POST",
-   *   path: "/legacy-form",
-   *   accepts: ["application/x-www-form-urlencoded"],
-   *   request: { body: legacyFormSchema },
-   *   responses: { 200: { description: "OK" } },
-   *   handler: ({ body }) => ({ status: 200, body: { ok: true, body } }),
-   * });
+   * app.post(
+   *   "/legacy-form",
+   *   {
+   *     accepts: ["application/x-www-form-urlencoded"],
+   *     request: { body: legacyFormSchema },
+   *     responses: { 200: { description: "OK" } },
+   *   },
+   *   ({ body }) => ({ status: 200, body: { ok: true, body } }),
+   * );
    * ```
    *
    * @since 0.16.0
@@ -672,13 +673,11 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "POST",
-   *   path: "/__admin/reindex",
-   *   internal: true,
-   *   responses: { 204: { description: "Started" } },
-   *   handler: () => ({ status: 204, body: undefined }),
-   * });
+   * app.post(
+   *   "/__admin/reindex",
+   *   { internal: true, responses: { 204: { description: "Started" } } },
+   *   () => ({ status: 204, body: undefined }),
+   * );
    *
    * await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
    * ```

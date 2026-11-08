@@ -47,7 +47,7 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
    and response schemas live in one place. Use the method shorthand —
    `app.get(path, contract, handler)`, `app.post(...)`, etc. — for ordinary
    routes; use `app.route({...})` for reusable `defineRoute()` contracts,
-   metadata-heavy routes, or when composing many routes via
+   `OPTIONS` routes, or when composing many routes via
    `registerRoutes()`.
 2. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library.

@@ -494,17 +494,18 @@ export interface PaginationQuerySchema extends StandardSchemaV1<
  *
  * @example
  * ```ts
- * app.route({
- *   method: "GET",
- *   path: "/books",
- *   operationId: "listBooks",
- *   request: { query: paginationQuery({ defaultLimit: 25, maxLimit: 100 }) },
- *   responses: { 200: { description: "ok", body: pageSchema } },
- *   handler: async ({ query }) => {
+ * app.get(
+ *   "/books",
+ *   {
+ *     operationId: "listBooks",
+ *     request: { query: paginationQuery({ defaultLimit: 25, maxLimit: 100 }) },
+ *     responses: { 200: { description: "ok", body: pageSchema } },
+ *   },
+ *   async ({ query }) => {
  *     const { limit, cursor } = query; // fully typed + validated
  *     // ...
  *   },
- * });
+ * );
  * ```
  *
  * @param opts - Parameter names and page-size bounds.

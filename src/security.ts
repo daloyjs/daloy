@@ -816,10 +816,15 @@ function buildSignedPayloadBytes(
  * ```ts
  * import { verifyWebhookSignature } from "@daloyjs/core";
  *
- * app.route({
- *   method: "POST",
- *   path: "/webhook",
- *   handler: async ({ request }) => {
+ * app.post(
+ *   "/webhook",
+ *   {
+ *     responses: {
+ *       200: { description: "Accepted" },
+ *       401: { description: "Bad signature" },
+ *     },
+ *   },
+ *   async ({ request }) => {
  *     const raw = new Uint8Array(await request.arrayBuffer());
  *     const sig = request.headers.get("x-hub-signature-256") ?? "";
  *     if (!await verifyWebhookSignature({
@@ -828,8 +833,9 @@ function buildSignedPayloadBytes(
  *       return { status: 401 as const, body: { ok: false } };
  *     }
  *     // safe to parse
+ *     return { status: 200 as const, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  *
  * @param opts - Payload, expected signature, shared secret, and optional

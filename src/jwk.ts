@@ -347,13 +347,11 @@ function makeJwksLoader(
  *   audience: "books-api",
  * }));
  *
- * app.route({
- *   method: "POST",
- *   path: "/items",
- *   hooks: requireScopes(["items:write"]),
- *   responses: { 200: { description: "ok" } },
- *   handler: () => ({ status: 200 as const, body: { ok: true } }),
- * });
+ * app.post(
+ *   "/items",
+ *   { hooks: requireScopes(["items:write"]), responses: { 200: { description: "ok" } } },
+ *   () => ({ status: 200 as const, body: { ok: true } }),
+ * );
  * ```
  *
  * @param opts - JWKS source, algorithm allowlist, and claim checks; see

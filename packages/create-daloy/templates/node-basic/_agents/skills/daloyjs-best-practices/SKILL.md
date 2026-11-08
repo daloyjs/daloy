@@ -45,8 +45,8 @@ recommendation below follows from them:
 1. **The route definition is the contract.** Method, path, request schemas,
    and response schemas live in one place — `app.get(path, contract, handler)`
    (and the matching `app.post`/`put`/`patch`/`delete`/`head` shorthands), or
-   `app.route({...})` when you need a reusable `defineRoute()` contract or a
-   metadata-heavy route. Both forms produce identical runtime behavior,
+   `app.route({...})` when you need a reusable `defineRoute()` contract or an
+   `OPTIONS` route. Both forms produce identical runtime behavior,
    validation, security, and OpenAPI output. The OpenAPI spec, the typed
    client, and the runtime validation are all derived from the route
    definition. Never duplicate that information by hand-writing fetch calls,

@@ -83,7 +83,7 @@ The entry file must export an `App` instance. The CLI accepts a default export, 
 import { App } from "@daloyjs/core";
 
 export const app = new App();
-app.route({ /* ... */ });
+app.get("/", { /* ... */ }, handler);
 
 // Or:
 // export default app;
@@ -91,7 +91,7 @@ app.route({ /* ... */ });
 // Or:
 export function buildApp() {
   const app = new App();
-  app.route({ /* ... */ });
+  app.get("/", { /* ... */ }, handler);
   return app;
 }
 ```
