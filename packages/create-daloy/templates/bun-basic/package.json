@@ -19,7 +19,7 @@
     "hooks:install": "git config core.hooksPath .githooks"
   },
   "dependencies": {
-    "@daloyjs/core": "^1.22.0",
+    "@daloyjs/core": "^1.23.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {

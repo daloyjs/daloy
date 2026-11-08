@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-08
+
 ### Added
 
 - **TypeScript 6 is supported for apps.** The framework is still built with
@@ -89,6 +91,11 @@ For the forward-looking plan and the full thematic release log, see
   fails if any docs page installs the generator without the root pin. A new
   "TypeScript versions" section on the installation page explains the version
   matrix and the TypeScript 6 alternative.
+- Docs: the eight translations of the routing page (`ar`, `de`, `es`, `fr`,
+  `ja`, `pt`, `ru`, `zh`) still showed the old `app.route({...})` samples
+  after the English page moved to the `app.get` / `app.post` shorthands.
+  Their code samples now match the English page again, and the new
+  "object form" subsection is translated in each locale.
 
 ### Security
 
