@@ -10,11 +10,11 @@
     "hooks:install": "git config core.hooksPath .githooks"
   },
   "imports": {
-    "@daloyjs/core": "npm:@daloyjs/core@^1.21.1",
-    "@daloyjs/core/banner": "npm:@daloyjs/core@^1.21.1/banner",
-    "@daloyjs/core/contract": "npm:@daloyjs/core@^1.21.1/contract",
-    "@daloyjs/core/deno": "npm:@daloyjs/core@^1.21.1/deno",
-    "@daloyjs/core/openapi": "npm:@daloyjs/core@^1.21.1/openapi",
+    "@daloyjs/core": "npm:@daloyjs/core@^1.22.0",
+    "@daloyjs/core/banner": "npm:@daloyjs/core@^1.22.0/banner",
+    "@daloyjs/core/contract": "npm:@daloyjs/core@^1.22.0/contract",
+    "@daloyjs/core/deno": "npm:@daloyjs/core@^1.22.0/deno",
+    "@daloyjs/core/openapi": "npm:@daloyjs/core@^1.22.0/openapi",
     "zod": "npm:zod@^4.6.6"
   },
   "compilerOptions": {
