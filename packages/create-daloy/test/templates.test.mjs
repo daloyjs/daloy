@@ -3111,6 +3111,97 @@ test("dependabot npm cooldown stays aligned with the .npmrc release-age policy",
   });
 });
 
+test("Hey API snapshot pin and js-yaml override stay aligned with the repo root", async () => {
+  const repoRoot = path.resolve(pkgRoot, "../..");
+  const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
+  const rootPin = rootPkg.devDependencies["@hey-api/openapi-ts"];
+  // An exact pin: a range would let installs drift onto the stable 0.99.x
+  // line, which crashes `gen:client` on TypeScript 7.
+  assert.match(rootPin, /^0\.0\.0-next-\d{14}$/, "root must pin an exact Hey API snapshot");
+  const rootWorkspace = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const rootYaml = /^  js-yaml: "([^"]+)"\r?$/m.exec(rootWorkspace)?.[1];
+  assert.ok(rootYaml, "root pnpm-workspace.yaml must override js-yaml");
+  for (const t of ["node-basic", "bun-basic"]) {
+    const pkg = JSON.parse(await readFile(path.join(TEMPLATE_DIR(t), "package.json"), "utf8"));
+    assert.equal(pkg.devDependencies["@hey-api/openapi-ts"], rootPin, `${t} Hey API pin drifted from root`);
+    const workspace = await readFile(path.join(TEMPLATE_DIR(t), "pnpm-workspace.yaml"), "utf8");
+    assert.match(workspace, /^overrides:\r?\n  js-yaml: "([^"]+)"\r?$/m, `${t} must ship the js-yaml override`);
+    assert.equal(/^  js-yaml: "([^"]+)"\r?$/m.exec(workspace)?.[1], rootYaml, `${t} js-yaml override drifted from root`);
+  }
+  // Every docs page (all languages) that installs the generator must pin the
+  // same snapshot: an unpinned install resolves to the stable 0.99.x line,
+  // which crashes next to the latest `typescript` (7.x).
+  const contentDir = path.join(repoRoot, "website/content");
+  const pages = (await readdir(contentDir, { recursive: true })).filter((f) => f.endsWith(".mdx"));
+  let pinnedPages = 0;
+  for (const rel of pages) {
+    const mdx = await readFile(path.join(contentDir, rel), "utf8");
+    for (const match of mdx.matchAll(/@hey-api\/openapi-ts(@\S+)? prettier/g)) {
+      assert.equal(match[1], `@${rootPin}`, `${rel} installs Hey API without the ${rootPin} pin`);
+    }
+    if (mdx.includes(`@hey-api/openapi-ts@${rootPin}`)) pinnedPages++;
+  }
+  assert.ok(pinnedPages >= 4, "expected the install, typed-client, getting-started, and bookstore pages to pin Hey API");
+});
+
+test("security overrides follow the scaffold into each package manager's own field", async () => {
+  const pnpm = await scaffold("node-basic");
+  const npm = await scaffold("node-basic", ["--package-manager", "npm"]);
+  const yarn = await scaffold("node-basic", ["--package-manager", "yarn"]);
+  const bun = await scaffold("bun-basic", ["--package-manager", "bun"]);
+  const noBlock = await scaffold("cloudflare-worker", ["--package-manager", "npm"]);
+  const readPkg = async (s) => JSON.parse(await readFile(path.join(s.dir, "package.json"), "utf8"));
+  try {
+    // pnpm keeps the block where pnpm reads it and adds nothing to package.json.
+    const pnpmWorkspace = await readFile(path.join(pnpm.dir, "pnpm-workspace.yaml"), "utf8");
+    assert.match(pnpmWorkspace, /^  js-yaml: "\^5\.4\.2"\r?$/m);
+    assert.equal((await readPkg(pnpm)).overrides, undefined);
+    // npm and bun read package.json `overrides`; yarn reads `resolutions`.
+    for (const [s, field] of [
+      [npm, "overrides"],
+      [bun, "overrides"],
+      [yarn, "resolutions"],
+    ]) {
+      await assert.rejects(access(path.join(s.dir, "pnpm-workspace.yaml")), "pnpm-only file must be removed");
+      assert.deepEqual((await readPkg(s))[field], { "js-yaml": "^5.4.2" }, `${field} lost the js-yaml pin`);
+    }
+    assert.equal((await readPkg(yarn)).overrides, undefined, "yarn ignores `overrides`; don't write a dead field");
+    // A template without an overrides block must not grow empty fields.
+    const plain = await readPkg(noBlock);
+    assert.equal(plain.overrides, undefined);
+    assert.equal(plain.resolutions, undefined);
+  } finally {
+    for (const s of [pnpm, npm, yarn, bun, noBlock]) await rm(s.tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("scaffolded Dependabot never 'upgrades' the Hey API snapshot to the TS 6-only stable line", async () => {
+  await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
+    const dependabot = await readFile(path.join(projectDir, ".github/dependabot.yml"), "utf8");
+    assert.match(dependabot, /ignore:\s*\r?\n(?:\s*#.*\r?\n)*\s*- dependency-name: "@hey-api\/openapi-ts"/);
+  });
+});
+
+test("TypeScript 6 switch instructions are rewritten for the chosen package manager", async () => {
+  const cases = [
+    ["node-basic", "pnpm", "pnpm add -D typescript@^6.0.3"],
+    ["node-basic", "npm", "npm install -D typescript@^6.0.3"],
+    ["node-basic", "yarn", "yarn add -D typescript@^6.0.3"],
+    ["bun-basic", "bun", "bun add -d typescript@^6.0.3"],
+    ["cloudflare-worker", "npm", "npm install -D typescript@^6.0.3"],
+  ];
+  for (const [template, pm, expected] of cases) {
+    const s = await scaffold(template, ["--package-manager", pm]);
+    try {
+      const readme = await readFile(path.join(s.dir, "README.md"), "utf8");
+      assert.ok(readme.includes(expected), `${template}/${pm} README should say: ${expected}`);
+      if (pm !== "pnpm") assert.doesNotMatch(readme, /\bpnpm add -D\b/, `${template}/${pm} kept a pnpm-only command`);
+    } finally {
+      await rm(s.tmpDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("scorecard does not hard-code publish_results, which fails on private repos", async () => {
   await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
     const src = await readFile(path.join(projectDir, ".github/workflows/scorecard.yml"), "utf8");

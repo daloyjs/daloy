@@ -76,8 +76,10 @@ For consumers outside the monorepo or in other languages, generate a fully typed
         ]} />
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
+
+Pin that exact snapshot. It generates the same client on TypeScript 6 and 7, while the stable 0.99.x line crashes on TypeScript 7. See [TypeScript versions](/docs/installation#typescript-versions) for the details and the TypeScript 6 alternative. The generated client is self-contained (it imports nothing from `@hey-api/*`), so the generator stays a dev-only dependency.
 
 ```ts
 // openapi-ts.config.ts

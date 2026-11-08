@@ -38,3 +38,13 @@ verifyStoreIntegrity: true
 # Use the lockfile as-is whenever it satisfies package.json.
 preferFrozenLockfile: true
 autoInstallPeers: true
+
+# Security overrides for transitive dev-only dependencies. The Hey API code
+# generator (`@hey-api/openapi-ts`, used by `pnpm gen:client`) pins js-yaml
+# exactly, at a version with known denial-of-service advisories
+# (GHSA-r3ph-w7gj-g6xm and older). It never ships in your app, but pinning a
+# patched release keeps `pnpm audit` clean. Scaffolding with npm, yarn or bun
+# moves this block into package.json `overrides` / `resolutions`. Drop the
+# entry once the generator itself depends on js-yaml >= 5.4.2.
+overrides:
+  js-yaml: "^5.4.2"

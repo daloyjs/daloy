@@ -61,6 +61,7 @@ See [Scaffold a project](/docs/scaffolder) for templates and flags.
 ### Prerequisites
 
 - **Node.js** 24 LTS, or 26.0.0 and newer (Node.js 25 is not supported).
+- **TypeScript** 7 or 6. DaloyJS is built with TypeScript 7, and CI checks that apps on TypeScript 6 compile against the published types (see [TypeScript versions](#typescript-versions)).
 - A package manager. Any of these works, pnpm 11.x or newer is recommended for supply-chain hardening, but `npm`, `yarn`, and `bun` install `@daloyjs/core` cleanly because the package has no peer dependencies.
 
 To enable pnpm via [Corepack](https://nodejs.org/api/corepack.html):
@@ -75,11 +76,27 @@ pnpm --version
 
 <PackageInstall packages="@daloyjs/core zod" />
 
-Optional, only if you want to generate a typed SDK:
+Optional, only if you want to generate a typed SDK. Pin the Hey API generator to the exact snapshot below; the [next section](#typescript-versions) explains why:
 
-<PackageInstall packages="typescript @hey-api/openapi-ts prettier" dev />
+<PackageInstall packages="typescript @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier" dev />
 
 The framework package published to npm is [@daloyjs/core](https://www.npmjs.com/package/@daloyjs/core).
+
+## TypeScript versions [#typescript-versions]
+
+`@daloyjs/core` ships compiled JavaScript plus `.d.ts` files and has no `typescript` peer dependency, so the TypeScript version is your app's choice:
+
+| Your app | Status |
+| --- | --- |
+| TypeScript 7 (native compiler) | Supported. The framework is developed and type-checked on it, and `create-daloy` templates default to it. |
+| TypeScript 6 | Supported. The `verify:ts-consumer-compat` CI gate type-checks every public subpath and the type-level tests on TypeScript 6 against the TypeScript 7 build. |
+| TypeScript 5.9 | Used by the `vercel` template only, because Vercel's Node builder needs the TypeScript JavaScript API and its CLI declares a `typescript` 4 or 5 peer. |
+
+Choose TypeScript 6 when a tool in your stack loads `typescript` as a library. TypeScript 7 removed that JavaScript API, so those tools cannot run on it yet.
+
+<Callout type="warning" title="Hey API and TypeScript 7">
+The stable `@hey-api/openapi-ts` releases (0.99.x) drive the TypeScript compiler API and crash on TypeScript 7 with `Cannot read properties of undefined (reading 'AnyKeyword')`. The pinned `0.0.0-next-20260930190945` snapshot does not depend on TypeScript, generates the same client on TypeScript 6 and 7, and is what the templates use. Pin it exactly; a range or a Dependabot bump would move you to the stable line. If you stay on TypeScript 6 you may use stable `0.99.x` instead, but then pin `js-yaml` to `^4.3.2` (its bundled 4.2.0 has three high-severity advisories) and switch back to the snapshot before you upgrade to TypeScript 7.
+</Callout>
 
 ## Hardened install settings [#hardened-npmrc]
 

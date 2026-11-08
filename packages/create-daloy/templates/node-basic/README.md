@@ -44,6 +44,16 @@ pnpm gen
 # → generated/client/  (typed Hey API client)
 ```
 
+## TypeScript version
+
+This starter uses TypeScript 7, the native compiler. TypeScript 6 is supported too. Switch if a tool in your stack still needs the TypeScript JavaScript API, which TypeScript 7 removed:
+
+```bash
+pnpm add -D typescript@^6.0.3
+```
+
+Nothing else changes. The pinned Hey API code generator works on both versions, so keep that pin: the stable `@hey-api/openapi-ts` 0.99.x line crashes `pnpm gen:client` on TypeScript 7.
+
 ## Contract gate
 
 Check that your OpenAPI contract is internally consistent (operationIds present and unique, response examples matching their schemas, no dead routes):

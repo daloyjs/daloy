@@ -1,6 +1,10 @@
 packages:
   - "packages/*"
   - "workshop"
+  # Private, never-published holder for the TypeScript 6 compiler used by
+  # `pnpm verify:ts-consumer-compat`. A plain workspace package instead of
+  # an `npm:` alias, which `verify:known-dep-names` rejects by design.
+  - "compat/typescript-6"
   - "!website"
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -44,10 +48,13 @@ allowBuilds:
 # is part of the published `@daloyjs/core` surface:
 #   * esbuild (via tsx)            >=0.28.1 — GHSA-gv7w-rqvm-qjhr (High),
 #                                              GHSA-g7r4-m6w7-qqqr
-#   * js-yaml (via @hey-api/openapi-ts) >=4.3.1 — GHSA-5p4m-2wfm-xmqj (High),
-#                                              GHSA-h67p-54hq-rp68
+#   * js-yaml (via @hey-api/openapi-ts) >=5.4.2 — the Hey API snapshot pins
+#     js-yaml 5.3.0 exactly, which carries GHSA-r3ph-w7gj-g6xm; 5.2.x also
+#     carried GHSA-pm4m-ph32-ghv5 (High) and GHSA-724g-mxrg-4qvm. The override
+#     stays on the 5.x major the snapshot asks for. The create-daloy
+#     node-basic and bun-basic templates ship the same override.
 # Keep both at or above the fixed versions; drop an entry only once the
 # advisory no longer matches any version in range.
 overrides:
   esbuild: "^0.28.1"
-  js-yaml: "^4.3.1"
+  js-yaml: "^5.4.2"

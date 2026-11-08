@@ -33,6 +33,13 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # The Hey API code generator is pinned to a `next` snapshot because
+      # the stable line (0.99.x) drives the TypeScript compiler API, which
+      # TypeScript 7 removed: on TypeScript 7 `gen:client` crashes. Dependabot
+      # would "upgrade" the snapshot to that stable release. Remove this entry
+      # once a stable @hey-api/openapi-ts release supports TypeScript 7.
+      - dependency-name: "@hey-api/openapi-ts"
     commit-message:
       prefix: "chore(deps)"
 

@@ -337,6 +337,34 @@ publishing while upstream still supports them.
       decoupled from the npm publish jobs, so dropping it later is a
       `release.yml` and `jsr.json` change, not a framework change.
 
+### TypeScript 6/7 support and the Hey API snapshot pin
+
+Decision on 2026-11-08: develop on TypeScript 7, support apps on TypeScript 6
+and 7 (enforced by `pnpm verify:ts-consumer-compat`), keep TypeScript 7 as the
+template default, and keep `@hey-api/openapi-ts` on an exact `next` snapshot
+(`0.0.0-next-20260930190945`). Stable 0.99.0 (2026-06-22, the last stable
+release so far) crashes on TypeScript 7, and switching templates to TypeScript
+6 + 0.99.0 would mean two migrations for every project scaffolded in between.
+
+- [ ] **Move to stable Hey API once a stable release supports TypeScript 7**
+      (0.100, 1.0, or whichever comes first). Exit checklist: replace the
+      snapshot in the root, `workshop/`, `node-basic`, and `bun-basic`; remove
+      the Dependabot ignores in `.github/dependabot.yml` and
+      `packages/create-daloy/templates/_ci/node/_github/dependabot.yml`;
+      remove the `GHSA-hhx9-57xq-r5rw` entry in `osv-scanner.toml`; drop the
+      `js-yaml` overrides (root and templates) if the new release depends on
+      `js-yaml >= 5.4.2`; update the pin in
+      `website/content/docs/installation.mdx` and `typed-client.mdx`. Until
+      then, re-check the `next` channel monthly and bump the snapshot when a
+      newer one passes `pnpm gen` and a full `pnpm audit`.
+- [ ] **~2027-02-28 — OSV exception review.** The `GHSA-hhx9-57xq-r5rw`
+      exception expires; renew it with the then-current snapshot or delete it
+      if the stable move above has landed.
+- [ ] **Drop TypeScript 6 support** only when TypeScript 6 stops receiving
+      fixes upstream and the tools that need the JavaScript compiler API
+      (Vercel's builder, stable Hey API) run on TypeScript 7. Removing
+      `compat/typescript-6` and the CI gate is then a minor, documented change.
+
 ---
 
 ## Later — researching

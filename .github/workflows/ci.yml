@@ -154,6 +154,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Verify apps on TypeScript 6 can consume the TypeScript 7 build
+        run: pnpm verify:ts-consumer-compat
+
       - name: Build
         run: pnpm build
 

@@ -28,7 +28,7 @@
  * Policy:
  *   ALLOW   — permissive OSI licenses Daloy ships under or freely composes
  *             with (MIT, Apache-2.0, BSD-{2,3}-Clause, ISC, 0BSD, CC0-1.0,
- *             Unlicense, BlueOak-1.0.0, Python-2.0, MPL-2.0, WTFPL).
+ *             Unlicense, BlueOak-1.0.0, Python-2.0, PSF-2.0, MPL-2.0, WTFPL).
  *   DENY    — copyleft / source-available / non-commercial / unknown
  *             (GPL-*, AGPL-*, LGPL-*, BUSL-*, SSPL-*, Commons-Clause,
  *             CC-BY-NC-*, UNLICENSED, NOASSERTION, missing field).
@@ -62,6 +62,11 @@ export const ALLOWED_LICENSES: ReadonlySet<string> = new Set([
   "MIT",
   "MIT-0",
   "MPL-2.0",
+  // PSF-2.0 (Python Software Foundation License 2.0) is the permissive,
+  // OSI-approved licence inside the already-allowed Python-2.0 stack.
+  // argparse 3.x (via js-yaml 5.x via the dev-only Hey API generator)
+  // relabelled from Python-2.0 to PSF-2.0. Reviewed 2026-11-08; see SECURITY.md.
+  "PSF-2.0",
   "Python-2.0",
   "Unlicense",
   "WTFPL",

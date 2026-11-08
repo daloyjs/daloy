@@ -17,7 +17,46 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- **TypeScript 6 is supported for apps.** The framework is still built with
+  TypeScript 7, and apps can now use either 6 or 7. The new
+  `pnpm verify:ts-consumer-compat` gate, run in CI after the type check, keeps
+  that true. It type-checks the source and the type-level tests on TypeScript
+  6, then emits the release `.d.ts` files with TypeScript 7 and compiles a
+  consumer fixture with `skipLibCheck: false`, under `NodeNext` and `Bundler`
+  resolution, on TypeScript 6. The fixture imports every public subpath and
+  reruns the type-level tests against the built declarations. The TypeScript
+  6 compiler comes from a private `compat/typescript-6` workspace package, not
+  an `npm:` alias, so `verify:known-dep-names` stays strict.
+- create-daloy: the `node-basic`, `bun-basic`, and `cloudflare-worker` READMEs
+  gain a "TypeScript version" section with the one-line switch to TypeScript 6,
+  rewritten per package manager (`pnpm add -D`, `npm install -D`,
+  `yarn add -D`, `bun add -d`). Templates still default to TypeScript 7, and
+  `vercel` stays on 5.9.
+
 ### Changed
+
+- `@hey-api/openapi-ts` moves from snapshot `0.0.0-next-20260711024907` to
+  `0.0.0-next-20260930190945` in the root, the workshop, and the `node-basic`
+  and `bun-basic` templates. The generated client is byte-identical. Like the
+  old pin, the snapshot doesn't depend on TypeScript, so it generates the same
+  client on TypeScript 6 and 7. The stable 0.99.x line is not an option: it
+  drives the TypeScript compiler API and crashes on TypeScript 7.
+- The root `js-yaml` override moves from `^4.3.1` to `^5.4.2`, the 5.x major
+  the Hey API snapshot asks for. The old override pulled the generator down a
+  major, and its resolved 4.3.1 still carried GHSA-2883-xcg3-v3hh. The full
+  `pnpm audit` is now clean. The `GHSA-hhx9-57xq-r5rw` OSV exception (a
+  version-range false positive: snapshot versions sort below the 0.97.3 fix,
+  but the client they generate already uses null-prototype parameter slots)
+  now names the new snapshot and gets a fresh 2027-02-28 review date. The
+  old exception expired on 2026-08-31.
+- `verify:dep-licenses` adds `PSF-2.0` to its allowlist, with a review note
+  in `SECURITY.md`. `argparse` 3.x, which `js-yaml` 5.x pulls into the
+  dev-only generator tree, relabelled its licence from the already-allowed
+  `Python-2.0` to `PSF-2.0`, the permissive Python Software Foundation License
+  inside that same licence stack. A unit test pins exactly these two Python
+  ids and keeps the `CNRI-Python*` variants rejected.
 
 - Bumped the version-exact, SRI-pinned docs UI assets loaded from jsDelivr:
   Scalar `@scalar/api-reference` 1.62.5 → 1.77.0, Swagger UI
@@ -27,6 +66,29 @@ For the forward-looking plan and the full thematic release log, see
   standalone bundle is an ES module with no `window.Redoc` global, so the
   generated `Redoc.init(...)` page needs its own migration before it can
   move to 3.x. Apps that override `docs.assets` are unaffected.
+
+### Fixed
+
+- create-daloy: a fresh `node-basic` or `bun-basic` scaffold reported one
+  high and two moderate `js-yaml` advisories in a full `pnpm audit`. They came
+  through the Hey API generator, which pins `js-yaml` exactly. Both templates
+  now ship a `js-yaml: "^5.4.2"` override, and a fresh scaffold audits clean.
+- create-daloy: security overrides authored in a template's
+  `pnpm-workspace.yaml` were lost for npm, Yarn, and Bun scaffolds, because
+  that file is deleted for them. They now move into `package.json`
+  `overrides` (npm, Bun) or `resolutions` (Yarn).
+- create-daloy: the `--with-ci` Dependabot config now ignores
+  `@hey-api/openapi-ts`, as the repo's own config already did. Before, it
+  could "upgrade" the pinned snapshot to stable 0.99.x, which breaks
+  `gen:client` on the templates' default TypeScript 7.
+- Docs: the installation, typed-client, getting-started, and bookstore
+  tutorial pages, and their eight translations (36 install commands in all),
+  told readers to install `@hey-api/openapi-ts` unpinned. That resolves to
+  stable 0.99.x, which crashes `pnpm gen` next to the latest `typescript`
+  (7.x). Every install command now pins the snapshot, and a create-daloy test
+  fails if any docs page installs the generator without the root pin. A new
+  "TypeScript versions" section on the installation page explains the version
+  matrix and the TypeScript 6 alternative.
 
 ## [1.22.0] - 2026-11-07
 

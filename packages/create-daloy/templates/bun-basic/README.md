@@ -43,6 +43,16 @@ bun run gen:openapi
 bun run gen:client
 ```
 
+## TypeScript version
+
+`tsc` (used by `pnpm typecheck`) is TypeScript 7, the native compiler. TypeScript 6 is supported too. Switch if a tool in your stack still needs the TypeScript JavaScript API, which TypeScript 7 removed:
+
+```bash
+pnpm add -D typescript@^6.0.3
+```
+
+Nothing else changes. The pinned Hey API code generator works on both versions, so keep that pin: the stable `@hey-api/openapi-ts` 0.99.x line crashes `gen:client` on TypeScript 7.
+
 ## Test
 
 ```bash

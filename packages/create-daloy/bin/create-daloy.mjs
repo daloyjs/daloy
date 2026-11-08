@@ -747,6 +747,17 @@ async function patchPackageJson(dir, projectName, packageManager, template) {
   if (packageManager === "npm") {
     json.engines = { ...json.engines, npm: ">=12.0.0" };
   }
+  // Security overrides are authored once, in the template's
+  // pnpm-workspace.yaml. That file is deleted for every other manager (see
+  // normalizePackageManagerFiles, which runs after this), so carry the pins
+  // into the field that manager reads instead of silently dropping them.
+  if (packageManager && packageManager !== "pnpm") {
+    const overrides = await readWorkspaceOverrides(dir);
+    if (overrides) {
+      const field = packageManager === "yarn" ? "resolutions" : "overrides";
+      json[field] = { ...overrides, ...json[field] };
+    }
+  }
   if (packageManager === "pnpm") {
     json.engines = { ...json.engines, pnpm: `>=${MIN_PNPM_MAJOR}.0.0` };
     // Vercel otherwise picks pnpm from the lockfile format (9.x/10.x), which
@@ -756,6 +767,34 @@ async function patchPackageJson(dir, projectName, packageManager, template) {
     if (template === "vercel") json.packageManager = `pnpm@${PINNED_PNPM_VERSION}`;
   }
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+/**
+ * Read the flat `overrides:` map from a template's pnpm-workspace.yaml.
+ *
+ * Only the shape the templates author is accepted: an `overrides:` key at
+ * column 0 followed by indented `name: "range"` lines (comments and blank
+ * lines allowed). Anything else ends the block. This is not a general YAML
+ * parser, and it only ever reads files that ship inside create-daloy.
+ *
+ * @param {string} dir Scaffolded project directory.
+ * @returns {Promise<Record<string, string> | null>} The overrides, or `null`
+ *   when the file or block is absent or empty.
+ */
+async function readWorkspaceOverrides(dir) {
+  const file = path.join(dir, "pnpm-workspace.yaml");
+  if (!existsSync(file)) return null;
+  const lines = (await readFile(file, "utf8")).split(/\r?\n/);
+  const start = lines.findIndex((line) => /^overrides:\s*(#.*)?$/.test(line));
+  if (start === -1) return null;
+  const out = {};
+  for (const line of lines.slice(start + 1)) {
+    if (/^\s*(#.*)?$/.test(line)) continue;
+    const entry = /^\s+(["']?)([@\w./-]+)\1\s*:\s*(["']?)([^"'#\s]+)\3\s*(#.*)?$/.exec(line);
+    if (!entry) break;
+    out[entry[2]] = entry[4];
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 async function patchTemplateTextFiles(dir, packageManager) {
@@ -799,6 +838,11 @@ function rewritePackageManagerText(raw, packageManager) {
     )
     .replace("Package manager: pnpm.", `Package manager: ${packageManager}.`)
     .replace(/\bpnpm install\b/g, `${packageManager} install`)
+    .replace(
+      /\bpnpm add -D\b/g,
+      { npm: "npm install -D", yarn: "yarn add -D", bun: "bun add -d" }[packageManager] ??
+        `${packageManager} add -D`
+    )
     .replace(/\bpnpm gen:openapi\b/g, `${packageManager} run gen:openapi`)
     .replace(/\bpnpm gen:client\b/g, `${packageManager} run gen:client`)
     .replace(/\bpnpm typecheck\b/g, `${packageManager} run typecheck`)

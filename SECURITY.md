@@ -1137,6 +1137,8 @@ Closes the surface the **Miasma** worm (a Mini Shai-Hulud variant) weaponized in
 
 SPDX allowlist; rejects copyleft and unknown licenses.
 
+Review note (2026-11-08): `PSF-2.0` added. `argparse` 3.x relabelled its licence from `Python-2.0` (already allowed) to `PSF-2.0`, the permissive, OSI-approved Python Software Foundation License 2.0 inside that same licence stack. It reaches the tree only through `js-yaml` 5.x and the dev-only Hey API code generator, and never ships in `@daloyjs/core`, which has zero runtime dependencies. No other Python-family id (`CNRI-Python*`) was added.
+
 #### Parity / governance audits
 
 - `verify:parity-audits` — refuses public setters on `request.url` / `request.path` / `request.method`, `ctx.respond = false`-style bypasses, `Referer`-based redirects, `AES-CBC` / `SHA-1` / third-party crypto in the cookie module, `allowInternal: true` / `app.inject()` dispatch.

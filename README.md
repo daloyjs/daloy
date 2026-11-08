@@ -76,7 +76,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Portable supply-chain hardening** for the apps you build | [pnpm](https://pnpm.io/motivation) defaults + a zero-runtime-dep core | Hardened pnpm install settings, source-verified lockfiles, zero runtime deps, CycloneDX + SPDX SBOM, and npm provenance attestations.                                                                     |
 
 ```
-framework test suite passing · ≥90% line + function coverage / ≥92% branch coverage · typechecks on TypeScript 7 with `strict: true`
+framework test suite passing · ≥90% line + function coverage / ≥92% branch coverage · typechecks on TypeScript 7 with `strict: true` · apps on TypeScript 6 or 7
 runs on Node, Bun, Deno, Cloudflare (and self-hosted workerd), Vercel, Fastly, Lambda, Azure Functions
 ~25M static-route ops/sec · ~2.2M dynamic-route ops/sec on M-class CPU
 ```
@@ -635,6 +635,7 @@ Security fixes after `1.0.0` follow the published [patch SLA](SECURITY.md#patch-
 - Deno: the adapter and `deno-basic` template stay supported while the Deno runtime is in upstream maintenance mode; the docs cover moving off Deno Deploy (shutting down around April 2027) to Cloudflare Workers, a self-hosted container, or Node/Bun.
 - `daloy dev` watch loop delegates to the host runtime's native watcher (`node --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
 - `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening. The completion summary surfaces official install links (nodejs.org, pnpm.io, bun.sh) for any runtime or package manager your selections need but that is missing from `PATH`, and skips a doomed dependency install when the chosen package manager is absent.
+- TypeScript 6 and 7 are both supported in apps that use `@daloyjs/core`; the framework itself is developed on TypeScript 7. Templates default to TypeScript 7 (Vercel stays on 5.9 until its builder supports newer releases), and the README in each one shows the one-line switch to TypeScript 6. The templates pin a Hey API `next` snapshot that runs on both versions, because the stable 0.99.x generator crashes on TypeScript 7, and they ship a `js-yaml` security override, so a fresh scaffold passes `pnpm audit` cleanly. npm, Yarn and Bun scaffolds get the same override in `overrides` / `resolutions`.
 - Container-first templates: `HEALTHCHECK` to `/readyz`, `STOPSIGNAL SIGTERM`, non-root user, `tini` as PID 1; from 1.5.4 base images are pinned by digest.
 - 1.5.4 scaffold install hardening beyond pnpm: npm scaffolds get `ignore-scripts=true` and `min-release-age=1` (days) in `.npmrc`; Yarn scaffolds get a `.yarnrc.yml` with `enableScripts: false` and `npmMinimalAgeGate: "1d"`, plus a `.yarnrc` with `ignore-scripts true` for Yarn 1 (which has no release-age setting).
 - 1.5.4: several `daloy doctor` checks read option names that do not exist and so never fired; they now read the real options.
