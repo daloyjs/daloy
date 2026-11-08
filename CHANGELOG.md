@@ -17,6 +17,17 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the version-exact, SRI-pinned docs UI assets loaded from jsDelivr:
+  Scalar `@scalar/api-reference` 1.62.5 → 1.77.0, Swagger UI
+  `swagger-ui-dist` 5.32.8 → 5.34.1 (stylesheet and bundle), and Redoc
+  2.5.3 → 2.5.4. Each new `sha384-` integrity hash was computed from the
+  exact bytes jsDelivr serves. Redoc stays on the 2.x line: the Redoc 3
+  standalone bundle is an ES module with no `window.Redoc` global, so the
+  generated `Redoc.init(...)` page needs its own migration before it can
+  move to 3.x. Apps that override `docs.assets` are unaffected.
+
 ## [1.22.0] - 2026-11-07
 
 ### Security

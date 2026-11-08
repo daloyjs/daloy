@@ -27,7 +27,7 @@ DaloyJS ships version-exact default assets with matching **Subresource Integrity
 <FlowDiagram title="SRI-pinned docs asset" numbered steps={[
           {
             label: "Version-exact CDN asset",
-            detail: "@scalar/api-reference@1.62.5",
+            detail: "@scalar/api-reference@1.77.0",
             eyebrow: "jsDelivr",
           },
           {
@@ -67,7 +67,7 @@ const app = new App({
     assets: {
       // Override with the exact version you verified...
       scalarScriptUrl:
-        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
+        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
       // ...and the SRI hash of that exact file.
       scalarScriptIntegrity: "sha384-<base64-digest>",
     },
@@ -83,10 +83,10 @@ const app = new App({
     ui: "swagger",
     assets: {
       swaggerUiCssUrl:
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui.css",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui.css",
       swaggerUiCssIntegrity: "sha384-<css-digest>",
       swaggerUiBundleUrl:
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui-bundle.js",
       swaggerUiBundleIntegrity: "sha384-<bundle-digest>",
     },
   },
@@ -101,7 +101,7 @@ const app = new App({
     ui: "redoc",
     assets: {
       redocScriptUrl:
-        "https://cdn.jsdelivr.net/npm/redoc@2.5.3/bundles/redoc.standalone.js",
+        "https://cdn.jsdelivr.net/npm/redoc@2.5.4/bundles/redoc.standalone.js",
       redocScriptIntegrity: "sha384-<redoc-digest>",
     },
   },
@@ -113,7 +113,7 @@ const app = new App({
 Download the exact pinned file and hash it. The output is exactly what goes into the `*Integrity` field:
 
 ```sh
-curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5 \
+curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0 \
   | openssl dgst -sha384 -binary \
   | openssl base64 -A \
   | sed 's/^/sha384-/'
@@ -147,7 +147,7 @@ scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
     scalarScriptIntegrity: "md5-nope",
   },
 });
@@ -167,7 +167,7 @@ const html = scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
     scalarScriptIntegrity:
       "sha384-<primary> sha512-<fallback>",
     crossOrigin: "anonymous",
