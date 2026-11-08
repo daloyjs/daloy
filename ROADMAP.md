@@ -208,6 +208,21 @@ Open items for this track:
 
 - [x] **GeoIP / geo-blocking docs** — add a deployment-platform note once the GeoIP / geo-blocking hook (above) ships. _(Shipped in 0.37.0: the **GeoIP / geo-blocking** docs page covers the `lookupCountry` (MaxMind) and `resolveCountry` (edge-header) strategies and includes a deployment-platform header table — Cloudflare `CF-IPCountry`, AWS CloudFront `CloudFront-Viewer-Country`, Vercel `x-vercel-ip-country`, Fastly — plus the bare-runtime MaxMind fallback.)_
 - [x] **Per-surface freshness sweep** — keep provider SDK versions, env-var names, and webhook-signature notes current as upstreams change; re-run the docs build's link/anchor checks each minor. _(Shipped in 0.37.0: the new `pnpm verify:docs-links` gate (`scripts/verify-docs-links.ts`) statically checks every internal `/docs` link, sidebar nav entry, sitemap entry, and `#anchor` target against the real `website/app/docs/**/page.tsx` tree — failing on broken links, dangling nav/sitemap entries, pages missing from the sitemap, and nav↔sitemap drift. The first sweep across all 119 docs pages passed clean; the check is wired into CI so each minor re-runs it automatically.)_
+- [ ] **Redoc 3 migration for the `ui: "redoc"` docs page** — the pinned
+      default stays on Redoc `2.5.x` (bumped to `2.5.4` on 2026-11-08) because
+      the Redoc 3 `bundles/redoc.standalone.js` is an ES module
+      (`export { RedocStandalone, hydrate, init }`) with no `window.Redoc`
+      global. `redocHtml()` loads it with a classic `<script src>` and calls
+      `Redoc.init(...)`, so a straight pin bump would leave a blank page. The
+      migration needs: a `type="module"` loader that imports `init` from the
+      SRI-pinned URL (module scripts still honour `integrity` + `crossorigin`),
+      the CSP nonce carried onto the module script, a re-check that
+      `allowBlobWorkers` and `connect-src 'self'` still cover Redoc 3's search
+      worker and spec fetch, a review of `RedocHtmlOptions.configuration` keys
+      against Redoc 3's options, updated SRI tests plus an unhappy-path test
+      that a bad hash still throws, and the `docs-asset-integrity` docs page.
+      Keep 2.x until Redoc 2 stops receiving fixes or 3.x is needed for a
+      feature.
 
 ---
 
