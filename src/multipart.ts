@@ -316,11 +316,32 @@ function normalizeMagicBytesOption(
  * ImageMagick treat as code (SVG, MVG, MSL, PostScript / EPS). These are
  * deliberately fuzzy — they look at an ASCII prefix because the real files
  * are text and can be preceded by BOMs, UTF-16 encoding, whitespace, XML
- * prologues, or comments. Only the first 512 bytes are inspected, so treat
- * this as a backstop to `magicBytes`, not a replacement. Returning the
- * label here means "refuse this upload".
+ * prologues, or comments. The first 64 KiB are inspected, and a file whose
+ * entire probe window is XML-legal prolog material (whitespace, comments,
+ * processing instructions, DOCTYPE) while more bytes follow is refused as
+ * unverifiable — otherwise an attacker could pad the prolog past any fixed
+ * window to hide a scriptable root element. Treat this as a backstop to
+ * `magicBytes`, not a replacement. Returning the label here means "refuse
+ * this upload".
  */
-const SCRIPTABLE_IMAGE_PREFIX_BYTES = 512;
+const SCRIPTABLE_IMAGE_PREFIX_BYTES = 64 * 1024;
+
+/**
+ * Byte → folded byte table for {@link asciiPrefix}: printable ASCII and
+ * common whitespace pass through, everything else becomes a space so keyword
+ * searches still work across NULs / UTF-16 padding. Decoded in one shot
+ * instead of per-byte string concatenation because the probe window is
+ * 64 KiB per upload.
+ */
+const ASCII_FOLD_TABLE: Uint8Array = (() => {
+  const table = new Uint8Array(256).fill(0x20);
+  table[0x09] = 0x09;
+  table[0x0a] = 0x0a;
+  table[0x0d] = 0x0d;
+  for (let b = 0x20; b <= 0x7e; b++) table[b] = b;
+  return table;
+})();
+const ASCII_DECODER = new TextDecoder("utf-8");
 
 function asciiPrefix(bytes: Uint8Array): string {
   // Strip a UTF-8 / UTF-16 BOM so the trailing keyword sits at the start.
@@ -333,17 +354,10 @@ function asciiPrefix(bytes: Uint8Array): string {
   ) {
     start = 2;
   }
-  let out = "";
-  for (let i = start; i < bytes.length; i++) {
-    const byte = bytes[i]!;
-    // Keep printable ASCII + common whitespace; replace everything else with
-    // a space so keyword searches still work across NULs / UTF-16 padding.
-    out +=
-      byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e)
-        ? String.fromCharCode(byte)
-        : " ";
-  }
-  return out.toLowerCase();
+  const folded = new Uint8Array(bytes.length - start);
+  for (let i = 0; i < folded.length; i++) folded[i] = ASCII_FOLD_TABLE[bytes[start + i]!]!;
+  // Every folded byte is 7-bit ASCII, so UTF-8 decoding is exact.
+  return ASCII_DECODER.decode(folded).toLowerCase();
 }
 
 /**
@@ -379,10 +393,81 @@ function maybeDecodeUtf16(bytes: Uint8Array): Uint8Array {
 /** An SVG element with an optional namespace prefix (`<svg`, `<s:svg`). */
 const SVG_ELEMENT_RE = /<(?:[a-z0-9_.-]+:)?svg(?:[\s>/]|$)/;
 
-function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
+/**
+ * Find the index of the `>` closing a `<!doctype ...` declaration, skipping
+ * over any internal subset in `[ ... ]` (which may itself contain `>`).
+ * Returns `-1` when the declaration is unterminated within the string.
+ */
+function findDoctypeEnd(text: string): number {
+  let subsetDepth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "[") subsetDepth++;
+    else if (c === "]") subsetDepth = Math.max(0, subsetDepth - 1);
+    else if (c === ">" && subsetDepth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * `true` when the folded probe window consists entirely of XML-legal prolog
+ * material: whitespace, comments, processing instructions, and a DOCTYPE.
+ * Unterminated constructs count as prolog (they reach the window edge), so a
+ * file that continues past the window never gets its root element verified.
+ */
+function isAllXmlProlog(prefix: string): boolean {
+  let rest = prefix.trimStart();
+  for (;;) {
+    if (rest.startsWith("<!--")) {
+      const end = rest.indexOf("-->");
+      if (end === -1) return true;
+      rest = rest.slice(end + 3).trimStart();
+      continue;
+    }
+    if (rest.startsWith("<?")) {
+      const end = rest.indexOf("?>");
+      if (end === -1) return true;
+      rest = rest.slice(end + 2).trimStart();
+      continue;
+    }
+    if (rest.startsWith("<!doctype")) {
+      const end = findDoctypeEnd(rest);
+      if (end === -1) return true;
+      rest = rest.slice(end + 1).trimStart();
+      continue;
+    }
+    return rest.length === 0;
+  }
+}
+
+/**
+ * `true` when every byte (after an optional BOM) is XML whitespace
+ * (`\t`, `\n`, `\r`, space). Distinguishes a window of genuine whitespace
+ * padding — which XML allows ahead of the root element, so a scriptable
+ * root may follow — from a window of non-printable binary bytes that
+ * {@link asciiPrefix} also folds to spaces but which no XML parser would
+ * accept ahead of a root (so the file cannot be a scriptable text format).
+ */
+function isAllXmlWhitespace(bytes: Uint8Array): boolean {
+  let start = 0;
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3;
+  else if (
+    bytes.length >= 2 &&
+    ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))
+  )
+    start = 2;
+  for (let i = start; i < bytes.length; i++) {
+    const b = bytes[i]!;
+    if (b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) return false;
+  }
+  return true;
+}
+
+function detectScriptableImagePayload(bytes: Uint8Array, truncated: boolean): string | undefined {
   // Decode UTF-16, fold to lower-case ASCII, and collapse whitespace runs
   // so spacing / encoding variants of the keywords below still match.
-  const prefix = asciiPrefix(maybeDecodeUtf16(bytes)).replace(/\s+/g, " ");
+  const decoded = maybeDecodeUtf16(bytes);
+  const prefix = asciiPrefix(decoded).replace(/\s+/g, " ");
   const trimmed = prefix.trimStart();
   // PostScript / EPS — "%!PS" is the canonical Adobe header.
   if (trimmed.startsWith("%!ps") || prefix.includes("%!ps-adobe")) {
@@ -403,6 +488,15 @@ function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
   // rather than at the start, so leading comments, processing instructions
   // and DOCTYPEs cannot push the root out of an anchored match.
   if (prefix.includes("<!doctype svg") || SVG_ELEMENT_RE.test(prefix)) return "svg";
+  // Fail closed when the whole probe window is prolog material and the file
+  // continues past it: the root element is then unverifiable, and an
+  // over-long prolog is exactly how a scriptable root gets pushed out of a
+  // bounded prefix window. A window with no prolog construct at all only
+  // counts when it is genuine XML whitespace — folded binary bytes are not
+  // a prolog, and refusing them would reject legitimate zero-padded uploads.
+  if (truncated && isAllXmlProlog(prefix)) {
+    if (trimmed.length > 0 || isAllXmlWhitespace(decoded)) return "unverifiable-prolog";
+  }
   return undefined;
 }
 
@@ -534,7 +628,21 @@ export function fileField(
           const prefix = new Uint8Array(
             await file.slice(0, Math.min(probeLength, file.size)).arrayBuffer()
           );
-          const scriptable = detectScriptableImagePayload(prefix);
+          const scriptable = detectScriptableImagePayload(prefix, file.size > probeLength);
+          if (scriptable === "unverifiable-prolog") {
+            return {
+              issues: [
+                {
+                  message:
+                    `Refusing upload: the first ${probeLength} bytes are entirely XML prolog ` +
+                    `material (whitespace, comments, processing instructions, DOCTYPE) with more ` +
+                    `bytes following, so the root element cannot be verified inside the bounded ` +
+                    `probe window — a scriptable root could be hidden behind prolog padding. ` +
+                    `Pass rejectScriptableImages: false to opt out.`,
+                },
+              ],
+            };
+          }
           if (scriptable) {
             return {
               issues: [

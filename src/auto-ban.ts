@@ -29,7 +29,7 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
+import { ipRateLimitIdentity, resolveIpv6Subnet, type IpMatcher } from "./ip-match.js";
 
 /**
  * One client's auto-ban bookkeeping. A record tracks the current strike count
@@ -320,6 +320,17 @@ export interface AutoBanOptions {
    * @since 1.0.0-rc.8
    */
   onUnresolvedIdentity?: "peer" | "skip";
+  /**
+   * IPv6 prefix length the default key generator groups addresses into
+   * (default `64`, the block a single subscriber is normally assigned), so
+   * rotating across addresses inside one prefix keeps accumulating strikes
+   * instead of minting a fresh record per address. Applied to both the
+   * forwarded identity and the peer fallback. Ignored when
+   * {@link AutoBanOptions.keyGenerator} is supplied.
+   *
+   * @since 1.23.0
+   */
+  ipv6Subnet?: number;
   /** Pluggable ban store. Default: a shared in-memory store keyed by `groupId`. */
   store?: AutoBanStore;
   /**
@@ -464,13 +475,22 @@ function assertPositiveInteger(name: string, value: number): void {
  * behaviour; see {@link AutoBanOptions.onUnresolvedIdentity} for when that is
  * the right call.
  */
-function forwardedKey(hops: number, peerFallback: boolean, trustedPeers?: readonly IpMatcher[]) {
+function forwardedKey(
+  hops: number,
+  peerFallback: boolean,
+  trustedPeers?: readonly IpMatcher[],
+  ipv6Subnet = 64
+) {
   return (ctx: BaseContext<any, any>): string | undefined => {
     const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
-    if (forwarded !== undefined) return forwarded;
+    // Canonicalize through the same identity rateLimit() uses: textual
+    // variants (`::ffff:a.b.c.d`, compressed forms) collapse onto one key
+    // and IPv6 addresses group per `ipv6Subnet`, so rotating inside a /64
+    // cannot launder strike accounting into unlimited fresh identities.
+    if (forwarded !== undefined) return ipRateLimitIdentity(forwarded, ipv6Subnet);
     if (!peerFallback) return undefined;
     const peer = readRemoteAddress(ctx);
-    return peer === undefined ? undefined : `peer:${peer}`;
+    return peer === undefined ? undefined : `peer:${ipRateLimitIdentity(peer, ipv6Subnet)}`;
   };
 }
 
@@ -539,6 +559,7 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
 
   const hops = resolveForwardedTrust("autoBan()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("autoBan()", opts);
+  const ipv6Subnet = resolveIpv6Subnet("autoBan()", opts.ipv6Subnet);
   const onUnresolved = opts.onUnresolvedIdentity ?? "peer";
   if (onUnresolved !== "peer" && onUnresolved !== "skip") {
     throw new Error(
@@ -549,7 +570,7 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   if (opts.keyGenerator) {
     keyOf = opts.keyGenerator;
   } else if (hops !== undefined) {
-    keyOf = forwardedKey(hops, onUnresolved === "peer", proxyMatchers);
+    keyOf = forwardedKey(hops, onUnresolved === "peer", proxyMatchers, ipv6Subnet);
   } else {
     throw new Error(
       "autoBan(): provide keyGenerator, trustedHops, trustedProxies, or set trustProxyHeaders so clients can be identified; " +

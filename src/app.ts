@@ -139,6 +139,10 @@ import {
 } from "./conn-info.js";
 import { ipRateLimitIdentity, parseIp } from "./ip-match.js";
 import {
+  CLIENT_CERT_HEADER_MODE,
+  type ClientCertHeaderModeMarker,
+} from "./mtls.js";
+import {
   markRequestAbandoned,
   requestFinalizersEnabled,
   runRequestFinalizers,
@@ -1291,7 +1295,8 @@ export interface SecureConfigIssue {
   | "a2a-unauthenticated"
   | "cache-before-tenancy"
   | "replay-before-budget"
-  | "session-without-csrf";
+  | "session-without-csrf"
+  | "mtls-header-without-proxy";
   /** The first offending route, as `"METHOD /path"`. */
   route: string;
   /** The full refusal message, including how to fix it. */
@@ -1502,6 +1507,40 @@ interface BootGuardCache {
   checked: boolean;
   error?: Error;
 }
+
+/**
+ * Spoofable forwarded / client-IP / certificate-identity headers refused by
+ * {@link App.assertTrustProxyConfigured} when no proxy posture is declared.
+ * Platform-specific client-IP headers are just as spoofable as
+ * `X-Forwarded-*` when the app is not actually behind that platform's proxy,
+ * and a certificate-identity header is at least as spoofable: a forged XFCC
+ * authenticates an arbitrary allow-listed service, not just a forged
+ * rate-limit bucket. Module-level so the per-request guard never allocates.
+ */
+const SPOOFABLE_PROXY_HEADERS = [
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
+  "x-real-ip",
+  "cf-connecting-ip",
+  "fly-client-ip",
+  "true-client-ip",
+  "x-forwarded-client-cert",
+] as const;
+
+/**
+ * Boot-guard codes that refuse to boot even when the environment is
+ * indeterminate (no `env`/`production`/`NODE_ENV` signal, e.g. edge
+ * runtimes). Membership is limited to violations that produce a silent
+ * identity or data-isolation breach a log warning cannot undo; every other
+ * guard stays warn-only in the indeterminate branch so CI/staging surfaces
+ * keep iterating.
+ */
+const FAIL_CLOSED_WHEN_INDETERMINATE: ReadonlySet<SecureConfigIssue["code"]> = new Set([
+  "cache-before-tenancy",
+  "mtls-header-without-proxy",
+]);
 
 /**
  * Apply a topology-aware security preset on top of caller-supplied
@@ -2127,6 +2166,15 @@ export class App<
   private bootGuard: BootGuardCache = { checked: false };
 
   /**
+   * Header names that registered `clientCertAuth({ header })` middleware
+   * reads certificate identity from, reported via the
+   * {@link CLIENT_CERT_HEADER_MODE} marker at registration. Empty when no
+   * header-mode mTLS is in use. Feeds the `mtls-header-without-proxy` boot
+   * guard and the per-request spoofable-header refusal.
+   */
+  private clientCertHeaderModeNames = new Set<string>();
+
+  /**
    * Latched marker stamped after the framework has reported the first
    * unconfigured-proxy request. Logged once at `warn` level so production
    * dashboards see the misconfiguration without flooding on every retry.
@@ -2724,6 +2772,14 @@ export class App<
     if (typeof productionHook === "function") {
       (productionHook as (production: boolean) => void)(this.isProduction());
     }
+    // clientCertAuth({ header }) reports its identity-header names so the
+    // boot guards and the per-request spoofable-header refusal can treat
+    // them like the spoofable client-IP headers they are.
+    const clientCertHeaderMode = (hooks as Record<PropertyKey, unknown>)[CLIENT_CERT_HEADER_MODE];
+    if (clientCertHeaderMode !== undefined) {
+      const marker = clientCertHeaderMode as ClientCertHeaderModeMarker;
+      for (const name of marker.headerNames) this.clientCertHeaderModeNames.add(name);
+    }
     const behindProxyHook = (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK];
     if (typeof behindProxyHook === "function") {
       // In production, say so once when a guard cannot tell clients apart and
@@ -3000,10 +3056,24 @@ export class App<
     // staging surfaces that ship sample secrets / no CSRF token while
     // iterating do not pay the refuse-to-boot cost. With no environment signal
     // at all (edge runtimes have no NODE_ENV) the refusals cannot be told apart
-    // from a deploy, so every would-be refusal is logged instead of skipped.
+    // from a deploy, so every would-be refusal is logged instead of skipped —
+    // except the FAIL_CLOSED_WHEN_INDETERMINATE set, whose violations are
+    // silent identity / data-isolation breaches that a warning cannot undo.
     if (!this.isProduction()) {
       if (this.isEnvIndeterminate()) {
-        this.warnIndeterminateBootGuards(this.collectBootGuardIssues());
+        const issues = this.collectBootGuardIssues();
+        // Fail closed for guards whose violation is a silent identity or
+        // data-isolation breach that a log warning cannot undo: a shared
+        // cache keyed before tenant resolution leaks one tenant's body to
+        // another, and a certificate-identity header with no declared proxy
+        // posture authenticates a forged principal. Edge runtimes carry no
+        // NODE_ENV, so "indeterminate" there *is* the production deploy.
+        const fatal = issues.find((i) => FAIL_CLOSED_WHEN_INDETERMINATE.has(i.code));
+        if (fatal) {
+          this.bootGuard.error = new Error(fatal.message);
+          throw this.bootGuard.error;
+        }
+        this.warnIndeterminateBootGuards(issues);
       }
       return;
     }
@@ -3022,8 +3092,9 @@ export class App<
    *
    * The guards are the ones listed under "boot guards" in the docs: shadow
    * auth, unauthenticated MCP / A2A routes, `responseCache()` ahead of
-   * `tenancy()`, a stored-response layer ahead of `rateLimit()`, and
-   * `session()` without `csrf()`. They are skipped under
+   * `tenancy()`, a stored-response layer ahead of `rateLimit()`,
+   * `session()` without `csrf()`, and `clientCertAuth({ header })` without
+   * a declared proxy posture. They are skipped under
    * `secureDefaults: false`. The first-request check still runs, so routes
    * registered after this call are covered too.
    *
@@ -3031,8 +3102,12 @@ export class App<
    *   (pass `true` in CI to check a production config from a dev machine).
    * @returns Every violation found, in guard order; empty when the config is clean.
    * @throws Error listing every violation when the effective environment is
-   *   production. Outside production nothing is thrown; with no environment
-   *   signal at all the violations are logged once as a warning.
+   *   production. Also throws outside production when the environment signal
+   *   is indeterminate (no `env` / `production` / `NODE_ENV`) and a violation
+   *   is a silent identity or data-isolation breach
+   *   (`cache-before-tenancy`, `mtls-header-without-proxy`) — a warning cannot
+   *   undo a leaked response or a forged principal. Other violations with no
+   *   environment signal are logged once as a warning.
    * @since 1.5.3
    */
   assertSecureConfig(options: { production?: boolean } = {}): readonly SecureConfigIssue[] {
@@ -3046,6 +3121,16 @@ export class App<
       );
     }
     if (!production && options.production === undefined && this.isEnvIndeterminate()) {
+      // Same fail-closed class as assertBootGuards: refuse the silent
+      // identity / data-isolation breaches even without an environment
+      // signal, warn on the rest.
+      const fatal = issues.filter((i) => FAIL_CLOSED_WHEN_INDETERMINATE.has(i.code));
+      if (fatal.length > 0) {
+        throw new Error(
+          `Insecure configuration refused (${fatal.length} issue${fatal.length === 1 ? "" : "s"}):\n` +
+          fatal.map((issue, i) => `${i + 1}. ${issue.message}`).join("\n"),
+        );
+      }
       this.warnIndeterminateBootGuards(issues);
     }
     return issues;
@@ -3308,6 +3393,46 @@ export class App<
         );
       }
     }
+
+    // Guard 5: clientCertAuth({ header }) without a declared proxy posture.
+    // A certificate-identity header is at least as spoofable as
+    // X-Forwarded-For — the per-request guard below hard-refuses a spoofed
+    // client IP in production — yet the header path stamps a fully
+    // authenticated service principal. With no behindProxy / trustProxy:
+    // true declaration there is no trusted terminator that strips and
+    // replaces those headers, so a directly reachable origin would
+    // authenticate attacker-supplied identity.
+    // A declared posture that says "no proxy" (`behindProxy: "none"`,
+    // `trustProxy: false`) does not license reading identity from proxy
+    // headers — it asserts the very topology under which they are forged.
+    const mtlsProxyPostureDeclared =
+      this.options.trustProxy === true ||
+      (this.options.behindProxy !== undefined && this.options.behindProxy !== "none");
+    if (this.clientCertHeaderModeNames.size > 0 && !mtlsProxyPostureDeclared) {
+      // Name the posture that actually contradicts header mode so the fix is
+      // obvious — including when preset: "internal-service" set trustProxy:
+      // false implicitly (a mesh sidecar still needs behindProxy declared).
+      const posture =
+        this.options.behindProxy === "none"
+          ? 'app({ behindProxy: "none" }) says no proxy is in front'
+          : this.options.trustProxy === false
+            ? `app({ trustProxy: false })${
+              this.options.preset === "internal-service" ? ' (set by preset: "internal-service")' : ""
+            } says no proxy is in front`
+            : "the app declares no proxy posture";
+      add(
+        "mtls-header-without-proxy",
+        { method: "GLOBAL", path: "(app.use clientCertAuth)" },
+        `clientCertAuth({ header: ... }) is registered but ${posture}. ` +
+        `Certificate-identity headers (${[...this.clientCertHeaderModeNames].join(", ")}) are ` +
+        `client-controllable on any path that does not traverse a terminator which strips and ` +
+        `replaces them after verification, so the mTLS check would authenticate a forged ` +
+        `identity. Declare the topology with app({ behindProxy: { hops: 1 } | { cidrs: [...] } }) (or ` +
+        `app({ trustProxy: true }) when every request provably traverses a proxy you control), ` +
+        `or drop header mode and let the adapter attach the native TLS peer certificate. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
+      );
+    }
     return issues;
   }
 
@@ -3316,10 +3441,13 @@ export class App<
    * constructed without an explicit {@link AppOptions.trustProxy} value
    * and a request arrives carrying a spoofable forwarded / client-IP header
    * (`X-Forwarded-*`, `X-Real-IP`, or a vendor header like `CF-Connecting-IP`,
-   * `Fly-Client-IP`, `True-Client-IP`), refuse to
-   * dispatch it: the rate limiter, audit log, and request-id propagation
-   * would otherwise honour the attacker-supplied IP. Returns a structured
-   * `500 problem+json` so the failure is loud at the network boundary.
+   * `Fly-Client-IP`, `True-Client-IP`) or a spoofable certificate-identity
+   * header (`X-Forwarded-Client-Cert` plus any structured header names
+   * registered via `clientCertAuth({ header })`), refuse to
+   * dispatch it: the rate limiter, audit log, request-id propagation, and
+   * mTLS identity would otherwise honour attacker-supplied values. Returns a
+   * structured `500 problem+json` so the failure is loud at the network
+   * boundary.
    * Disabled when `secureDefaults: false` or when `trustProxy` is set to
    * `true` or `false` explicitly.
    */
@@ -3336,23 +3464,22 @@ export class App<
     if (!this.isProduction()) return;
     const headers = request.headers;
     let found: string | undefined;
-    for (const name of [
-      "x-forwarded-for",
-      "x-forwarded-host",
-      "x-forwarded-proto",
-      "x-forwarded-port",
-      "x-real-ip",
-      // Platform-specific client-IP headers are just as spoofable as
-      // X-Forwarded-* when the app is not actually behind that platform's
-      // proxy. Refuse them too so a client cannot forge its source IP via a
-      // vendor header the operator never configured trust for.
-      "cf-connecting-ip",
-      "fly-client-ip",
-      "true-client-ip",
-    ]) {
+    for (const name of SPOOFABLE_PROXY_HEADERS) {
       if (headers.has(name)) {
         found = name;
         break;
+      }
+    }
+    // Operator-configured structured certificate-identity header names (and a
+    // renamed XFCC header) registered through clientCertAuth({ header }) are
+    // refused identically. Checked separately so the common path never
+    // allocates: the Set is empty unless header-mode mTLS is in use.
+    if (found === undefined && this.clientCertHeaderModeNames.size > 0) {
+      for (const name of this.clientCertHeaderModeNames) {
+        if (headers.has(name)) {
+          found = name;
+          break;
+        }
       }
     }
     if (!found) return;

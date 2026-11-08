@@ -43,7 +43,7 @@ import { app } from "../src/server.ts";
 app.assertSecureConfig({ production: true });
 ```
 
-**No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning.
+**No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning. Two guards are exceptions that **refuse even with no environment signal** (1.23.0): `cache-before-tenancy` and `mtls-header-without-proxy`. Their violations are silent identity or cross-tenant data breaches that a log line cannot undo, and on an edge runtime "no signal" *is* the production deploy.
 
 **Unrecognized `NODE_ENV` (1.5.4).** A `NODE_ENV` other than `development`, `test` or `production` (for example `staging` or `prod`) is treated the same way: DaloyJS logs a one-time warning naming the value, and each would-be production refusal is logged instead of enforced. If `staging` should behave like production, set `app({ env: "production" })` there.
 
@@ -154,6 +154,8 @@ When `app({ behindProxy })` (or the older `trustProxy`) is not set and a request
 
 The same refusal now covers the platform-specific client-IP headers `cf-connecting-ip` (Cloudflare), `fly-client-ip` (Fly.io), and `true-client-ip`. They are exactly as spoofable as `X-Forwarded-*` when the app is not actually running behind that platform's proxy, so an unconfigured app refuses them too rather than letting a client forge its source IP through a vendor header the operator never opted into.
 
+Since 1.23.0 the refusal also covers certificate-identity headers: `x-forwarded-client-cert` plus any structured header names registered through `clientCertAuth({ header })`. A forged certificate header does not just poison a rate-limit bucket — it authenticates the caller as an allow-listed service, so it joins the same refuse-loudly list (see guard 13).
+
 ```ts
 // Pick exactly one in production:
 
@@ -244,7 +246,7 @@ Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `
 
 `idempotency()` partitions its store keys by tenant the same way, so the guard covers it too: an `idempotency()` mounted ahead of `tenancy()` would let one tenant replay another's stored response for a shared `Idempotency-Key`.
 
-In production with `secureDefaults` on, that ordering refuses to boot. The fix is registration order, not configuration:
+In production with `secureDefaults` on, that ordering refuses to boot. Since 1.23.0 it also refuses with **no environment signal** (edge runtimes carry no `NODE_ENV`): a warn-only log cannot undo a cross-tenant response already served. The fix is registration order, not configuration:
 
 ```ts
 import { App, responseCache, tenancy, tenantFromSubdomain } from "@daloyjs/core";
@@ -367,6 +369,28 @@ app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER }));
 app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER, audience: "api://orders" }));
 ```
 
+## 13. `clientCertAuth({ header })` without a proxy posture [#13-mtls-header-without-proxy]
+
+`clientCertAuth({ header: ... })` reads the client-certificate identity from a header such as `X-Forwarded-Client-Cert`, which is only meaningful when a TLS-terminating proxy verified the certificate and *replaced* any client-supplied value. The header path is documented for that topology, but before 1.23.0 nothing enforced it: an app that forgot the posture authenticated whatever identity headers a direct client invented, while the same app hard-refused a spoofed `X-Forwarded-For` (guard 4).
+
+Since 1.23.0, registering header-mode `clientCertAuth` without a declared proxy posture is refused in production and in the no-environment-signal case (edge runtimes), alongside the fail-closed guards listed above. A declared posture means `app({ behindProxy: { hops: ... } })`, `{ cidrs: [...] }`, `"loopback"`, or `trustProxy: true`. The explicitly proxy-less postures — `behindProxy: "none"` and `trustProxy: false` — contradict header mode and are refused as well.
+
+```ts
+// (a) WRONG - refuses to boot: header mode with no declared terminator.
+const bad = new App({ env: "production" });
+bad.use(clientCertAuth({ header: { format: "xfcc" }, allowSubjectCNs: ["svc-a"] }));
+
+// (b) RIGHT - the topology that makes XFCC trustworthy is declared.
+const good = new App({ env: "production", behindProxy: { hops: 1 } });
+good.use(clientCertAuth({ header: { format: "xfcc" }, allowSubjectCNs: ["svc-a"] }));
+
+// (c) RIGHT - native TLS termination needs no headers or posture at all.
+const alsoGood = new App({ env: "production" });
+alsoGood.use(clientCertAuth({ allowSubjectCNs: ["svc-a"] }));
+```
+
+The per-request spoofable-header refusal (guard 4) also covers `x-forwarded-client-cert` and any configured structured header names, so the misconfiguration fails loudly per request too.
+
 ## Checks that apply in every environment [#every-environment]
 
 These are construction-time refusals that do not wait for a production signal, because there is no development use for the configuration:
@@ -398,3 +422,4 @@ app.use(cors({ origin: () => true, credentials: true }));
 - For every route that declares `auth:`, confirm a built-in auth middleware covers it, or wrap your custom hook with `markAuthHook(...)`.
 - Add an auth middleware in front of every `mcpRoutes()` endpoint, or pass `mcpRoutes(path, handler, { public: true })` for a deliberately public MCP server.
 - 1.5.4: give every `jwk()` / `createJwtVerifier()` an `audience` (or `allowAnyAudience: true` for a single-tenant private provider), parse numeric env vars with a fallback instead of a bare `Number(...)`, and set `env: "production"` explicitly where `NODE_ENV` is something like `staging`.
+- 1.23.0: if you use `clientCertAuth({ header: ... })`, declare the terminating-proxy topology with `app({ behindProxy: ... })` (or `trustProxy: true`) — header mode without a posture now refuses, including on edge runtimes with no `NODE_ENV`. If you mount `responseCache()` / `idempotency()` ahead of `tenancy()`, reorder: that misorder now also refuses with no environment signal, not only in production.

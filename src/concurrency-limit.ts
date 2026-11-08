@@ -59,7 +59,7 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
+import { ipRateLimitIdentity, resolveIpv6Subnet, type IpMatcher } from "./ip-match.js";
 import { isRequestAbandoned, registerRequestFinalizer } from "./request-finalizers.js";
 
 /**
@@ -149,6 +149,17 @@ export interface ConcurrencyLimitOptions {
    * request (fail-open).
    */
   keyGenerator?: (ctx: BaseContext<any, any>) => string | undefined;
+  /**
+   * IPv6 prefix length the default `scope: "client"` key groups addresses
+   * into (default `64`, the block a single subscriber is normally assigned),
+   * so rotating across addresses inside one prefix shares one budget instead
+   * of minting a fresh bucket per address. Applied to both the forwarded
+   * identity and the peer fallback. Ignored when
+   * {@link ConcurrencyLimitOptions.keyGenerator} is supplied.
+   *
+   * @since 1.23.0
+   */
+  ipv6Subnet?: number;
   /** `Retry-After` seconds on the `503` rejection. Default `1`. `0` omits the header. */
   retryAfterSeconds?: number;
   /** `detail` for the `503` problem+json. Default `"Concurrency limit exceeded"`. */
@@ -197,11 +208,16 @@ function assertNonNegativeInteger(name: string, value: number): void {
  * TCP peer so a missing/spoofed XFF cannot skip the limit entirely (undefined
  * would fail open). Peer-less platforms still return `undefined` (skip).
  */
-function forwardedKey(hops: number, trustedPeers?: readonly IpMatcher[]) {
+function forwardedKey(hops: number, trustedPeers?: readonly IpMatcher[], ipv6Subnet = 64) {
   return (ctx: BaseContext<any, any>): string | undefined => {
     const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
-    if (forwarded !== undefined) return forwarded;
-    return getConnInfo(ctx.request)?.remoteAddress;
+    // Canonicalize through the same identity rateLimit() uses: textual
+    // variants (`::ffff:a.b.c.d`, compressed forms) collapse onto one key
+    // and IPv6 addresses group per `ipv6Subnet`, so rotating inside a /64
+    // cannot mint unlimited per-client concurrency budgets.
+    if (forwarded !== undefined) return ipRateLimitIdentity(forwarded, ipv6Subnet);
+    const peer = getConnInfo(ctx.request)?.remoteAddress;
+    return peer === undefined ? undefined : ipRateLimitIdentity(peer, ipv6Subnet);
   };
 }
 
@@ -247,11 +263,12 @@ function buildScopeResolver(
   // scope === "client"
   const hops = resolveForwardedTrust("concurrencyLimit()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("concurrencyLimit()", opts);
+  const ipv6Subnet = resolveIpv6Subnet("concurrencyLimit()", opts.ipv6Subnet);
   let resolve: (ctx: BaseContext<any, any>) => string | undefined;
   if (opts.keyGenerator) {
     resolve = opts.keyGenerator;
   } else if (hops !== undefined) {
-    resolve = forwardedKey(hops, proxyMatchers);
+    resolve = forwardedKey(hops, proxyMatchers, ipv6Subnet);
   } else {
     throw new Error(
       'concurrencyLimit(): scope "client" requires keyGenerator, trustedHops, trustedProxies, or ' +

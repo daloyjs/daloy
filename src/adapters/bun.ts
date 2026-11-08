@@ -338,15 +338,22 @@ function buildBunWebSocketConfig(app: App) {
         invokeBunMessage(app, data, msg, isBinary, undefined);
         return;
       }
-      data.gate ??= new WebSocketMessageGate(schema, (result, payload, binary) => {
-        const conn = data.conn!;
-        if (conn.readyState !== WS_READY_STATE.OPEN) return;
-        if (!result.ok) {
-          conn.close(result.code, result.reason);
-          return;
+      data.gate ??= new WebSocketMessageGate(
+        schema,
+        (result, payload, binary) => {
+          const conn = data.conn!;
+          if (conn.readyState !== WS_READY_STATE.OPEN) return;
+          if (!result.ok) {
+            conn.close(result.code, result.reason);
+            return;
+          }
+          invokeBunMessage(app, data, payload, binary, result.value);
+        },
+        {
+          maxQueuedMessages: options.maxQueuedMessages,
+          maxQueuedBytes: options.maxQueuedBytes,
         }
-        invokeBunMessage(app, data, payload, binary, result.value);
-      });
+      );
       data.gate.push(msg, isBinary);
     },
     close(ws: BunNativeWebSocket, code: number, reason: string) {

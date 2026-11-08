@@ -57,7 +57,14 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-match.js";
+import {
+  compileCidrMatcher,
+  matchesMatcher,
+  normalizeFamily,
+  parseIp,
+  type IpMatcher,
+  type ParsedIp,
+} from "./ip-match.js";
 
 /**
  * A pluggable source of abusive IP / CIDR entries. Implementations return the
@@ -494,10 +501,26 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
   const matchingFeeds = (ip: string): string[] => {
     const parsed = parseIp(ip);
     if (!parsed) return [];
+    // An IPv4-mapped IPv6 client (`::ffff:a.b.c.d`, the form dual-stack
+    // sockets report for IPv4 peers) must also be tested against the v4
+    // list, otherwise listed IPv4 bad actors walk straight through whenever
+    // the platform delivers the mapped form. Fold it to a v4 address ONCE
+    // here (not per matcher inside matchesMatcher, which would allocate for
+    // every entry of every feed on each request); a non-mapped v6 address
+    // folds to nothing and never matches v4 entries.
+    let asV4: ParsedIp | undefined;
+    if (parsed.family === 6) {
+      const v4 = normalizeFamily(parsed, 4);
+      if (v4 !== undefined) asV4 = { bytes: v4, family: 4 };
+    }
     const hits: string[] = [];
     for (const feed of compiled) {
-      const list = parsed.family === 4 ? feed.v4 : feed.v6;
-      if (list.some((m) => matchesMatcher(parsed, m))) hits.push(feed.name);
+      const primary = parsed.family === 4 ? feed.v4 : feed.v6;
+      if (primary.some((m) => matchesMatcher(parsed, m))) {
+        hits.push(feed.name);
+        continue;
+      }
+      if (asV4 !== undefined && feed.v4.some((m) => matchesMatcher(asV4!, m))) hits.push(feed.name);
     }
     return hits;
   };

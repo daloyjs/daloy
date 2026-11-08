@@ -148,3 +148,68 @@ test("fileField magicBytes: declared-MIME mismatch message is echo-safe", async 
   const ok = await schema["~standard"].validate(new File([png], "a.png", { type: "image/png" }));
   assert.equal(ok.issues, undefined);
 });
+
+// --- Cloudflare security-audit run-1 (2026-11-08): the probe window was 512 ---
+// bytes, so a >512-byte XML prolog hid a scriptable root. The probe now reads
+// a bounded 64 KiB window and fails closed when the window is entirely prolog
+// material while the file continues.
+// Fingerprint: daloy-core:multipart-scriptable-image-probe-window-bypass
+
+test("rejectScriptableImages: SVG hidden behind a >512-byte comment prolog is rejected", async () => {
+  const padded = `<?xml version="1.0"?>\n<!-- ${"pad ".repeat(300)} -->\n${SVG}`;
+  assert.ok(padded.length > 512 && padded.length < 64 * 1024);
+  await assertRejected(padded, "svg root beyond the old 512-byte window");
+});
+
+test("rejectScriptableImages: a prolog longer than the 64 KiB window fails closed", async () => {
+  const schema = fileField({ accept: ["image/*"], rejectScriptableImages: true });
+  // The whole probe window is XML-legal prolog (a giant comment) and the
+  // scriptable root sits beyond it — the root is unverifiable, so the
+  // upload must be refused rather than admitted on an unread suffix.
+  const huge = `<?xml version="1.0"?>\n<!-- ${"x".repeat(70 * 1024)} -->\n${SVG}`;
+  const r = await schema["~standard"].validate(new File([huge], "a.svg", { type: "image/svg+xml" }));
+  assert.ok(r.issues, "all-prolog window with a continuing file must be refused");
+  assert.match(r.issues![0]!.message, /prolog/);
+});
+
+test("rejectScriptableImages: a giant but complete prolog within the window still detects the root", async () => {
+  // 40 KB of comment fits inside the 64 KiB window: not truncated, so the
+  // scriptable root IS probed and rejected by the normal svg rule.
+  await assertRejected(`<!-- ${"y".repeat(40 * 1024)} -->\n${SVG}`, "40k comment then svg");
+});
+
+test("rejectScriptableImages: small in-window prolog-only files are not newly rejected", async () => {
+  // Not truncated → the fail-closed prolog rule does not apply; a tiny XML
+  // fragment with no scriptable content passes exactly as before.
+  const r = await check('<?xml version="1.0"?>\n<!-- just a note -->\n', "image/svg+xml");
+  assert.equal(r.issues, undefined);
+});
+
+test("rejectScriptableImages: large binary uploads are unaffected by the prolog rule", async () => {
+  // A >64 KiB binary payload is truncated by the probe window but is not
+  // prolog material, so it must not be refused by the new rule.
+  const png = new Uint8Array(80 * 1024);
+  png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  const r = await check(png, "image/png");
+  assert.equal(r.issues, undefined, "truncated binary probe must not fail closed");
+});
+
+test("rejectScriptableImages: >64 KiB of genuine whitespace padding ahead of a root fails closed", async () => {
+  // XML allows whitespace ahead of the root element, so whitespace padding
+  // is as much a window-evasion vector as a giant comment.
+  const r = await check(`${" \n\t".repeat(24 * 1024)}${SVG}`, "image/svg+xml");
+  assert.ok(r.issues, "whitespace-only window with a continuing file must be refused");
+  assert.match(r.issues![0]!.message, /prolog/);
+});
+
+test("rejectScriptableImages: a >64 KiB zero-padded binary is NOT mistaken for a blank XML prolog", async () => {
+  // asciiPrefix folds non-printable bytes to spaces; a window of binary
+  // padding is not XML whitespace and must not trip the fail-closed rule.
+  const zeroPadded = new Uint8Array(96 * 1024);
+  zeroPadded.set([0x89, 0x50, 0x4e, 0x47], 80 * 1024);
+  const r = await check(zeroPadded, "image/png");
+  assert.equal(r.issues, undefined, "non-printable padding is not an XML prolog");
+  const highBytes = new Uint8Array(96 * 1024).fill(0xff);
+  const r2 = await check(highBytes, "image/png");
+  assert.equal(r2.issues, undefined);
+});

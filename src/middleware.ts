@@ -24,7 +24,7 @@ import {
   resolveTrustedProxyMatchers,
   type BehindProxyConfig,
 } from "./conn-info.js";
-import { ipRateLimitIdentity, type IpMatcher } from "./ip-match.js";
+import { ipRateLimitIdentity, resolveIpv6Subnet, type IpMatcher } from "./ip-match.js";
 import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 // ---------- Request ID ----------
@@ -1764,15 +1764,6 @@ function assertPositiveInteger(name: string, value: number, owner = "loginThrott
 function peerRateLimitKey(ctx: RateLimitContext, ipv6Subnet: number): string {
   const peer = getConnInfo(ctx.request)?.remoteAddress;
   return peer !== undefined ? `peer:${ipRateLimitIdentity(peer, ipv6Subnet)}` : "global";
-}
-
-/** Validate an `ipv6Subnet` option, returning the default `64` when unset. */
-function resolveIpv6Subnet(where: string, value: number | undefined): number {
-  if (value === undefined) return 64;
-  if (!Number.isInteger(value) || value < 1 || value > 128) {
-    throw new Error(`${where}: ipv6Subnet must be an integer between 1 and 128.`);
-  }
-  return value;
 }
 
 /**

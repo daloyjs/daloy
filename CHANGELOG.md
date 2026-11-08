@@ -90,6 +90,81 @@ For the forward-looking plan and the full thematic release log, see
   "TypeScript versions" section on the installation page explains the version
   matrix and the TypeScript 6 alternative.
 
+### Security
+
+Findings from a run of the Cloudflare `security-audit` agent skill against
+the framework, each reproduced locally and then independently reviewed
+before the fix landed. Regression tests live in
+`tests/audit-2026-11-cloudflare-audit.test.ts` and
+`tests/audit-2026-11-multipart.test.ts`.
+
+- **`clientCertAuth({ header })` now requires a declared proxy posture
+  (high).** Header mode authenticated `X-Forwarded-Client-Cert` / structured
+  identity headers without any tie to `behindProxy` / `trustProxy`, so a
+  directly reachable origin accepted a forged service identity — while the
+  same app hard-refused a spoofed `X-Forwarded-For`. The new
+  `mtls-header-without-proxy` boot guard refuses to boot without a proxy
+  posture (in production and when no environment signal exists); the
+  explicitly proxy-less postures (`behindProxy: "none"`, `trustProxy: false`
+  — which `preset: "internal-service"` sets implicitly, so a mesh service
+  reading a sidecar's XFCC must add `behindProxy: { hops: 1 }`) are rejected
+  as contradictions and named in the error; and the per-request
+  spoofable-header refusal now covers `x-forwarded-client-cert` plus any
+  configured structured header names. The header-name marker unions across
+  `every()` / `some()` composition, so a second composed bundle's names are
+  covered too.
+- **The cache-before-tenancy boot guard now fails closed with no environment
+  signal (low).** Edge runtimes carry no `NODE_ENV`, and the guard's
+  warn-only indeterminate branch let a `responseCache()`-before-`tenancy()`
+  misorder serve one tenant's cached body to another after two log lines.
+  The guard (and the new mTLS one) refuse even in the indeterminate branch;
+  all other guards stay warn-only there.
+- **The WebSocket async-validation queue is bounded per connection
+  (medium).** `WebSocketMessageGate` chained each inbound message behind the
+  pending schema validation with no depth or byte cap, so one client —
+  including an unauthenticated one on a public WS route — could retain
+  unbounded traffic in process memory until OOM. New per-route
+  `maxQueuedMessages` (default `64`) and `maxQueuedBytes` (default
+  `2 * maxPayloadLength`) options; overflow closes the connection with
+  `1009`. FIFO ordering is preserved for the bounded queue.
+- **IPv6 rotation no longer evades `autoBan()` and `concurrencyLimit()`
+  (medium).** Both keyed on the raw client-IP string, so rotating source
+  addresses inside one IPv6 `/64` minted unlimited strike records and
+  concurrency budgets. Both now canonicalize through the same
+  `ipRateLimitIdentity()` used by `rateLimit()` (with a new `ipv6Subnet`
+  option, default `64`), which also collapses `::ffff:a.b.c.d` onto the
+  IPv4 key.
+- **`ipReputation()` matches IPv4 feed entries for IPv4-mapped IPv6 clients
+  (medium).** Feed matching pre-filtered by parsed family, so a client
+  reported as `::ffff:a.b.c.d` (the form dual-stack sockets produce for IPv4
+  peers) never matched v4 feed entries. Mapped-form clients are now folded
+  to their IPv4 address once per lookup and tested against the v4 list as
+  well (no per-entry allocation on the request path).
+- **`some()` branch rollback now reconciles the dependency cache (medium).**
+  `restoreState()` only restored snapshot values by reference, so a denied
+  auth branch's in-place `defineDependency` cache mutations survived the
+  rollback and the winning branch could be served the denied branch's
+  derived value. Rollback now reconciles the per-request results Map
+  entry-by-entry.
+- **The scriptable-image upload guard probes 64 KiB and fails closed on
+  prolog padding (low).** `rejectScriptableImages` inspected only the first
+  512 bytes, so an SVG/MVG payload hidden behind a longer XML prolog
+  (whitespace, comments, processing instructions, DOCTYPE) was admitted. The
+  probe window is now 64 KiB, and a file whose entire window is prolog
+  material (or genuine XML whitespace) while more bytes follow is refused as
+  unverifiable. Binary padding that merely folds to blanks (zero bytes, high
+  bytes) is not treated as a prolog, so zero-padded uploads are unaffected.
+  The probe's ASCII fold was rewritten as a table + single `TextDecoder`
+  pass so the larger window costs roughly half of the naive per-byte
+  concatenation.
+
+One lead from the run stays open as needs-validation (not a confirmed
+finding): the release workflow's publish-actor allowlist is read from the
+tag checkout being published, which is only a barrier independent of the
+tag-pusher when the `npm-publish` environment's required-reviewers and tag
+protection rules hold — both GitHub-side settings that source cannot
+establish. Verify them in the repository settings.
+
 ## [1.22.0] - 2026-11-07
 
 ### Security

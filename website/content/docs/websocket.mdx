@@ -113,6 +113,8 @@ A message that fails is not delivered, and the connection closes:
 
 The close reasons are fixed strings, so validator issue details never reach the peer. Messages queued behind a rejected one are dropped. Async schemas are supported, and messages still reach `message()` in arrival order.
 
+The arrival-order queue is bounded per connection (since 1.23.0): while an async validation is pending, at most `maxQueuedMessages` (default `64`) and `maxQueuedBytes` (default `2 * maxPayloadLength`) accumulate behind it. A peer that sends faster than validation drains is closed with `1009` (message too big) instead of retaining its traffic in server memory without limit. Both caps must be positive integers.
+
 Routes without `request.body` behave as before: `message()` gets the raw string or bytes and `body` is `undefined`. Leave it off for binary protocols, validate inside `message()` yourself, and use `meta.receive` to document the format in [AsyncAPI](/docs/asyncapi).
 
 ## Connection API

@@ -627,8 +627,15 @@ export interface ClientCertAuthOptions {
   /**
    * Read the certificate from a trusted-proxy header instead of (or in
    * addition to) the native adapter source. **Spoofable** unless the app is
-   * only reachable through the terminating proxy — pair with a strict
-   * `behindProxy` posture.
+   * only reachable through the terminating proxy. Enforced: under
+   * `secureDefaults`, the App refuses to boot (`serve()`, the first request,
+   * or `assertSecureConfig()`) unless it declares a proxy posture
+   * (`app({ behindProxy: { hops: ... } })` — the documented pairing — or
+   * `app({ trustProxy: true })`), because otherwise a directly reachable
+   * origin would authenticate attacker-supplied identity headers. The
+   * explicitly proxy-less postures (`behindProxy: "none"`,
+   * `trustProxy: false`, which `preset: "internal-service"` sets implicitly)
+   * contradict header mode and are refused as well.
    */
   header?: ClientCertHeaderConfig;
   /**
@@ -708,6 +715,38 @@ const MISSING_CERT_BODY = JSON.stringify({
   title: "Client certificate required",
   status: 401,
 });
+
+/**
+ * Well-known symbol stamped on the {@link Hooks} returned by
+ * {@link clientCertAuth} when header mode is configured. The App reads it at
+ * registration to learn that a spoofable certificate-identity header is in
+ * play (and which header names), so the boot guards can refuse the
+ * combination when no proxy posture is declared and the per-request
+ * spoofable-header guard can cover the configured names. Data-only marker;
+ * the same pattern as `daloyjs.hooks.appBehindProxy`.
+ *
+ * @internal
+ */
+export const CLIENT_CERT_HEADER_MODE: unique symbol = Symbol.for(
+  "daloyjs.hooks.clientCertHeaderMode"
+);
+
+/** Payload of the {@link CLIENT_CERT_HEADER_MODE} marker. @internal */
+export interface ClientCertHeaderModeMarker {
+  /** Effective header names the certificate identity is read from. */
+  readonly headerNames: readonly string[];
+}
+
+/** Effective header names a {@link ClientCertHeaderConfig} reads. */
+function headerModeMarker(cfg: ClientCertHeaderConfig): ClientCertHeaderModeMarker {
+  if (cfg.format === "xfcc") {
+    return { headerNames: [(cfg.name ?? "x-forwarded-client-cert").toLowerCase()] };
+  }
+  const names = [cfg.subjectDN, cfg.issuerDN, cfg.fingerprint, cfg.serialNumber, cfg.san, cfg.verify]
+    .filter((n): n is string => typeof n === "string" && n.length > 0)
+    .map((n) => n.toLowerCase());
+  return { headerNames: names };
+}
 
 /**
  * Middleware enforcing mutual-TLS client-certificate authentication. Reads the
@@ -821,6 +860,15 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
   // the middleware module out of this bundle): lets the route-auth boot guard
   // recognize that a route declaring `auth:` is actually enforced here.
   stampAuthHook(authHooks, true);
+  if (headerConfig !== undefined) {
+    // Report header mode to the App at registration: a certificate-identity
+    // header is at least as spoofable as X-Forwarded-For, so the framework
+    // refuses the combination when no proxy posture (behindProxy /
+    // trustProxy: true) is declared, instead of silently authenticating
+    // client-supplied identity headers on a directly reachable origin.
+    (authHooks as Record<PropertyKey, unknown>)[CLIENT_CERT_HEADER_MODE] =
+      headerModeMarker(headerConfig);
+  }
   return authHooks;
 }
 

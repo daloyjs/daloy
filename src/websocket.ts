@@ -124,6 +124,8 @@ export const WS_MAX_CONTROL_PAYLOAD = 125;
 export const DEFAULT_WS_BACKPRESSURE_LIMIT = 1024 * 1024;
 /** Default maximum inbound frame/message payload length (1 MiB). */
 export const DEFAULT_WS_MAX_PAYLOAD_LENGTH = 1024 * 1024;
+/** Default maximum messages queued behind a pending async validation per connection. */
+export const DEFAULT_WS_MAX_QUEUED_MESSAGES = 64;
 /** Default idle timeout applied to WebSocket routes (seconds). */
 export const DEFAULT_WS_IDLE_TIMEOUT_SECONDS = 120;
 /**
@@ -280,6 +282,26 @@ export interface WebSocketHandler<
   /** Maximum inbound message payload length in bytes. Default: 1 MiB. */
   maxPayloadLength?: number;
   /**
+   * Maximum messages per connection that may queue behind a pending
+   * asynchronous `request.body` schema validation before the connection is
+   * closed with `1009`. Default: `64`. The queue exists only to preserve
+   * arrival order for async validators; without a bound a peer could retain
+   * unlimited traffic in server memory by sending faster than validation
+   * drains.
+   *
+   * @since 1.23.0
+   */
+  maxQueuedMessages?: number;
+  /**
+   * Maximum aggregate bytes per connection that may queue behind a pending
+   * asynchronous `request.body` schema validation before the connection is
+   * closed with `1009`. Default: `2 * maxPayloadLength`. String messages
+   * count by code-unit length, binary messages by byte length.
+   *
+   * @since 1.23.0
+   */
+  maxQueuedBytes?: number;
+  /**
    * Explicitly mark this WebSocket route as intentionally public.
    * In production with `secureDefaults` enabled, routes without a
    * `beforeUpgrade` decision hook are refused at registration unless this is
@@ -382,6 +404,10 @@ export interface NormalizedWebSocketOptions {
   idleTimeout: number;
   /** Maximum inbound message payload length in bytes. Defaults to 1 MiB. */
   maxPayloadLength: number;
+  /** Maximum messages queued behind a pending async validation per connection. Defaults to `64`. */
+  maxQueuedMessages: number;
+  /** Maximum aggregate bytes queued behind a pending async validation per connection. Defaults to `2 * maxPayloadLength`. */
+  maxQueuedBytes: number;
 }
 
 function assertPositiveWebSocketInteger(name: string, value: number): void {
@@ -453,10 +479,14 @@ export function normalizeWebSocketOptions(
   const perMessageDeflate = handler.perMessageDeflate ?? false;
   const idleTimeout = handler.idleTimeout ?? DEFAULT_WS_IDLE_TIMEOUT_SECONDS;
   const maxPayloadLength = handler.maxPayloadLength ?? DEFAULT_WS_MAX_PAYLOAD_LENGTH;
+  const maxQueuedMessages = handler.maxQueuedMessages ?? DEFAULT_WS_MAX_QUEUED_MESSAGES;
+  const maxQueuedBytes = handler.maxQueuedBytes ?? 2 * maxPayloadLength;
 
   assertPositiveWebSocketInteger("backpressureLimit", backpressureLimit);
   assertPositiveWebSocketInteger("idleTimeout", idleTimeout);
   assertPositiveWebSocketInteger("maxPayloadLength", maxPayloadLength);
+  assertPositiveWebSocketInteger("maxQueuedMessages", maxQueuedMessages);
+  assertPositiveWebSocketInteger("maxQueuedBytes", maxQueuedBytes);
   if (typeof closeOnBackpressureLimit !== "boolean") {
     throw new Error("app.ws(): closeOnBackpressureLimit must be a boolean.");
   }
@@ -482,6 +512,8 @@ export function normalizeWebSocketOptions(
     perMessageDeflate,
     idleTimeout,
     maxPayloadLength,
+    maxQueuedMessages,
+    maxQueuedBytes,
   };
 }
 
@@ -635,6 +667,10 @@ export function validateWebSocketMessage(
  */
 export class WebSocketMessageGate {
   private pending: Promise<void> | undefined;
+  private queuedMessages = 0;
+  private queuedBytes = 0;
+  private readonly maxQueuedMessages: number;
+  private readonly maxQueuedBytes: number;
 
   constructor(
     private readonly schema: StandardSchemaV1,
@@ -642,29 +678,63 @@ export class WebSocketMessageGate {
       result: WebSocketMessageValidation,
       data: string | Uint8Array | ArrayBuffer,
       isBinary: boolean
-    ) => void
-  ) {}
+    ) => void,
+    opts: { maxQueuedMessages?: number; maxQueuedBytes?: number } = {}
+  ) {
+    this.maxQueuedMessages = opts.maxQueuedMessages ?? DEFAULT_WS_MAX_QUEUED_MESSAGES;
+    this.maxQueuedBytes = opts.maxQueuedBytes ?? 2 * DEFAULT_WS_MAX_PAYLOAD_LENGTH;
+  }
 
   /**
    * Validate one inbound message and hand the outcome to `deliver`, in order.
+   *
+   * The ordering queue is bounded: while an async validation pends, at most
+   * `maxQueuedMessages` / `maxQueuedBytes` accumulate behind it. A peer that
+   * sends faster than validation drains is answered with a `1009` failure
+   * result (adapters close the connection) instead of retaining its traffic
+   * in process memory without limit.
    *
    * @param data The reassembled message payload.
    * @param isBinary Whether the message arrived in binary frames.
    */
   push(data: string | Uint8Array | ArrayBuffer, isBinary: boolean): void {
+    // String messages count by code-unit length (their retained JS size);
+    // binary by byte length.
+    const size = typeof data === "string" ? data.length : data.byteLength;
+    const queued = this.pending !== undefined;
+    if (
+      queued &&
+      (this.queuedMessages + 1 > this.maxQueuedMessages ||
+        this.queuedBytes + size > this.maxQueuedBytes)
+    ) {
+      this.deliver(
+        { ok: false, code: WS_CLOSE_CODE.MESSAGE_TOO_BIG, reason: "message validation queue full" },
+        data,
+        isBinary
+      );
+      return;
+    }
+    if (queued) {
+      this.queuedMessages += 1;
+      this.queuedBytes += size;
+    }
     const run = (): void | Promise<void> => {
+      if (queued) {
+        this.queuedMessages -= 1;
+        this.queuedBytes -= size;
+      }
       const result = validateWebSocketMessage(this.schema, data, isBinary);
       if (result instanceof Promise) {
         return result.then((r) => this.deliver(r, data, isBinary));
       }
       this.deliver(result, data, isBinary);
     };
-    if (this.pending === undefined) {
+    if (!queued) {
       const out = run();
       if (out instanceof Promise) this.track(out);
       return;
     }
-    this.track(this.pending.then(run));
+    this.track(this.pending!.then(run));
   }
 
   private track(p: Promise<void>): void {
@@ -778,6 +848,8 @@ export class WebSocketRegistry {
         perMessageDeflate: false,
         idleTimeout: DEFAULT_WS_IDLE_TIMEOUT_SECONDS,
         maxPayloadLength: DEFAULT_WS_MAX_PAYLOAD_LENGTH,
+        maxQueuedMessages: DEFAULT_WS_MAX_QUEUED_MESSAGES,
+        maxQueuedBytes: 2 * DEFAULT_WS_MAX_PAYLOAD_LENGTH,
       };
     }
     return {
@@ -788,6 +860,8 @@ export class WebSocketRegistry {
       perMessageDeflate: this.entries.some((entry) => entry.options.perMessageDeflate),
       idleTimeout: Math.min(...this.entries.map((entry) => entry.options.idleTimeout)),
       maxPayloadLength: Math.max(...this.entries.map((entry) => entry.options.maxPayloadLength)),
+      maxQueuedMessages: Math.max(...this.entries.map((entry) => entry.options.maxQueuedMessages)),
+      maxQueuedBytes: Math.max(...this.entries.map((entry) => entry.options.maxQueuedBytes)),
     };
   }
 }

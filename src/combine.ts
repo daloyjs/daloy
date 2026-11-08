@@ -159,7 +159,9 @@ export function some(...layers: Hooks[]): Hooks {
     // Each candidate is a transaction over ctx.state: a branch that denies
     // must not leave its identity (a revoked token's `user`, the AUTH_RAN
     // record of an auth hook that passed before a later gate in the same
-    // branch denied) for the winning branch or the handler to read. Leases
+    // branch denied, or a dependency value it resolved into the shared
+    // per-request RESULTS_KEY cache — see restoreState) for the winning
+    // branch or the handler to read. Leases
     // the branch acquired are released first, while their bookkeeping is
     // still on ctx.state, so the rollback cannot orphan a slot.
     const state = ctx.state as Record<PropertyKey, unknown>;
@@ -221,17 +223,35 @@ export function some(...layers: Hooks[]): Hooks {
   };
 }
 
+/**
+ * Global-registry symbol under which `defineDependency()` keeps its
+ * per-request results Map (the same `Symbol.for` key used in
+ * `dependency.ts`). The Map is mutated in place (`cache.set(...)`), so a
+ * reference-compare snapshot cannot see a denied branch's writes — they must
+ * be reconciled entry-by-entry on rollback.
+ */
+const DEPENDENCY_RESULTS_KEY = Symbol.for("daloyjs.dependency.results");
+
 /** Own string and symbol keys of `ctx.state` with their values, taken before a `some()` candidate runs. */
 interface StateSnapshot {
   keys: PropertyKey[];
   values: unknown[];
+  /**
+   * Shallow copy of the pre-existing dependency-results Map, used to undo
+   * in-place mutations a denied branch made to it. `undefined` when no Map
+   * existed at snapshot time (a branch-created Map is dropped wholesale by
+   * the key sweep in {@link restoreState}).
+   */
+  dependencyResults?: Map<string, unknown>;
 }
 
 function snapshotState(state: Record<PropertyKey, unknown>): StateSnapshot {
   const keys = Reflect.ownKeys(state);
   const values = new Array<unknown>(keys.length);
   for (let i = 0; i < keys.length; i++) values[i] = state[keys[i] as PropertyKey];
-  return { keys, values };
+  const results = state[DEPENDENCY_RESULTS_KEY];
+  const dependencyResults = results instanceof Map ? new Map(results) : undefined;
+  return { keys, values, dependencyResults };
 }
 
 /** Put `state` back to `snapshot`: drop keys a failed branch added, reset the ones it changed. */
@@ -242,6 +262,24 @@ function restoreState(state: Record<PropertyKey, unknown>, snapshot: StateSnapsh
   for (let i = 0; i < snapshot.keys.length; i++) {
     const key = snapshot.keys[i] as PropertyKey;
     if (state[key] !== snapshot.values[i]) state[key] = snapshot.values[i];
+  }
+  // Reconcile in-place mutations of the dependency-results Map. The generic
+  // passes above only compare references, and a denied branch's
+  // `cache.set(name, value)` keeps the same Map identity — without this
+  // pass, a value derived under a *denied* auth branch would be served to
+  // the winning branch from the shared per-request cache.
+  if (snapshot.dependencyResults !== undefined) {
+    const live = state[DEPENDENCY_RESULTS_KEY];
+    if (live instanceof Map) {
+      for (const key of [...live.keys()]) {
+        if (!snapshot.dependencyResults.has(key)) live.delete(key);
+      }
+      for (const [key, value] of snapshot.dependencyResults) {
+        if (!live.has(key) || live.get(key) !== value) live.set(key, value);
+      }
+    } else {
+      state[DEPENDENCY_RESULTS_KEY] = new Map(snapshot.dependencyResults);
+    }
   }
 }
 
@@ -464,6 +502,8 @@ const APP_PRODUCTION_HOOK = Symbol.for("daloyjs.hooks.appProduction");
 const APP_BEHIND_PROXY_HOOK = Symbol.for("daloyjs.hooks.appBehindProxy");
 /** Registration-time body-limit receiver (idempotency); see internal-replay.ts. */
 const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
+/** Data marker stamped by `clientCertAuth({ header })` (see mtls.ts CLIENT_CERT_HEADER_MODE). */
+const CLIENT_CERT_HEADER_MODE = Symbol.for("daloyjs.hooks.clientCertHeaderMode");
 
 /**
  * Registration callbacks the App calls once with its own settings. Every
@@ -625,6 +665,24 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
           }
         }
         (merged as Record<PropertyKey, unknown>)[key] = union;
+        continue;
+      }
+      if (key === CLIENT_CERT_HEADER_MODE) {
+        // Union the certificate-identity header names of every composed
+        // clientCertAuth({ header }) bundle: the App's boot guard and
+        // per-request spoofable-header refusal must cover each configured
+        // name, not just the first bundle's.
+        const existing = (merged as Record<PropertyKey, unknown>)[key] as
+          | { headerNames: readonly string[] }
+          | undefined;
+        const incoming = record[key] as { headerNames?: readonly string[] } | undefined;
+        const names = existing ? [...existing.headerNames] : [];
+        if (Array.isArray(incoming?.headerNames)) {
+          for (const name of incoming.headerNames) {
+            if (typeof name === "string" && !names.includes(name)) names.push(name);
+          }
+        }
+        (merged as Record<PropertyKey, unknown>)[key] = { headerNames: names };
         continue;
       }
       if (CHAINED_REGISTRATION_HOOKS.has(key)) {
