@@ -43,7 +43,7 @@ const app = new App()
 
 ## 定义路由 [#defining-routes]
 
-路由声明是匹配、请求校验、响应校验、OpenAPI 输出和类型化客户端的唯一事实来源。用 `route()` 定义希望出现在类型化客户端或生成的 SDK 中的公开路由时，请提供 `operationId`。HTTP 简写会自动推导一个。DaloyJS 在注册时会拒绝重复的 `operationId`。
+路由声明是匹配、请求校验、响应校验、OpenAPI 输出和类型化客户端的唯一事实来源。请使用方法简写编写路由（`app.get(path, contract, handler)`、`app.post(...)`、`app.put(...)`、`app.patch(...)`、`app.delete(...)`、`app.head(...)`）。它们会自动推导 `operationId`，显式指定的仍然优先。DaloyJS 在注册时会拒绝重复的 `operationId`。
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // params、query 和 headers 的类型都从上面的 schema 推断而来。
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### 对象形式：`app.route({...})` [#route-object-form]
+
+`app.route({ method, path, ...contract, handler })` 以单个对象接收同一份契约。运行时行为、校验、安全和 OpenAPI 输出与简写完全一致。只有在需要把路由当作值使用时才用它：可复用的 `defineRoute()` 契约（见[跨文件类型推断](#multi-file-type-inference)）、`OPTIONS` 路由（没有简写）或由其他代码构建的路由对象。使用 `route()` 时，希望出现在类型化客户端中的公开路由需要你自己提供 `operationId`。
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ export const app = new App().registerRoutes([
 ## 路径参数 [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 路径值会在校验之前解码。如果省略 `request.params` schema，`ctx.params` 会从路径推断为原始字符串。同一 trie 位置上相互冲突的参数名（例如 `/a/:x` 和 `/a/:y`）会在注册时抛出错误。
@@ -167,16 +186,17 @@ app.route({
 末尾的 `*name` 分段会把剩余路径捕获为一个解码后的字符串，并且要求至少还剩一个分段。单独的 `*` 使用名称 `wildcard`。通配符必须位于末尾：`/assets/*path/private` 会在注册时抛出错误，而不是悄悄匹配一个更宽的路径。当捕获名一致时，多个方法可以共用同一条通配符路由。重复的方法和相互冲突的通配符名称会抛出错误。
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ app.route({
 解码出编码的 `/` 或 `\`（`%2F`、`%5C`）的捕获默认也会以 `404` 拒绝，因为这样一个捕获值就会对下游的任何文件系统、URL 或代理使用方跨越多个路径分段。如果某条路由确实使用带斜杠的 id，请按路由单独开启：
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 开启后也绝不会重新放行 `..` 组成部分或控制字符。解码后的参数仍是不可信数据，并不是经过清理的文件系统路径，因此请单独校验文件系统访问。
@@ -203,15 +224,16 @@ app.route({
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // 最终路径：/api/v1/health
 ```
@@ -268,17 +290,18 @@ Hook 在固定的生命周期节点上附加行为：
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## 用 `onSend` 转换响应 [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // 在响应发出之前去掉内部实现细节。
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // 在响应发出之前去掉内部实现细节。
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 `onSend` 在响应校验*之后*运行，也在包括 `x-request-id` 在内的请求作用域响应头合并之后运行。它在 `onResponse` *之前*运行，日志和指标仍应放在 `onResponse` 中。

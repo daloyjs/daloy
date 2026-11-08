@@ -43,7 +43,7 @@ const app = new App()
 
 ## تعريف المسارات [#defining-routes]
 
-تصريح المسار هو المصدر الوحيد للحقيقة في المطابقة، والتحقق من الطلب، والتحقق من الاستجابة، ومخرجات OpenAPI، والعملاء مكتوبي الأنواع. وفّر `operationId` عند استخدام `route()` لمسار عام تريده في العميل مكتوب الأنواع أو في SDK المولَّد. أما اختصارات HTTP فتشتقه تلقائيًا. ويرفض DaloyJS قيم `operationId` المكررة عند التسجيل.
+تصريح المسار هو المصدر الوحيد للحقيقة في المطابقة، والتحقق من الطلب، والتحقق من الاستجابة، ومخرجات OpenAPI، والعملاء مكتوبي الأنواع. اكتب المسارات باختصارات الطرق (`app.get(path, contract, handler)`، `app.post(...)`، `app.put(...)`، `app.patch(...)`، `app.delete(...)`، `app.head(...)`). فهي تشتق `operationId` تلقائيًا، ويبقى للقيمة الصريحة الأولوية. ويرفض DaloyJS قيم `operationId` المكررة عند التسجيل.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // تُستنتج أنواع params وquery وheaders من المخططات أعلاه.
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### صيغة الكائن: `app.route({...})` [#route-object-form]
+
+تستقبل `app.route({ method, path, ...contract, handler })` العقد نفسه ككائن واحد. سلوك وقت التشغيل والتحقق والأمان ومخرجات OpenAPI مطابقة تمامًا للاختصارات. الجأ إليها فقط عندما تحتاج إلى المسار كقيمة: عقد `defineRoute()` قابل لإعادة الاستخدام (انظر [استنتاج الأنواع عبر ملفات متعددة](#multi-file-type-inference))، أو مسار `OPTIONS` (الذي لا اختصار له)، أو كائن مسار يبنيه كود آخر. مع `route()`، وفّر `operationId` بنفسك لأي مسار عام تريده في العميل مكتوب الأنواع.
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ export const app = new App().registerRoutes([
 ## معاملات المسار [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 تُفك قيم المسار قبل التحقق. إذا حذفت مخطط `request.params`، يُستنتج `ctx.params` من المسار كنصوص خام. وأسماء المعاملات المتعارضة في الموضع نفسه من الشجرة، مثل `/a/:x` و`/a/:y`، ترمي خطأً عند التسجيل.
@@ -167,16 +186,17 @@ app.route({
 يلتقط المقطع الأخير `*name` بقية المسار في نص واحد مفكوك الترميز، ويتطلب مقطعًا واحدًا متبقيًا على الأقل. ويستخدم `*` المجرد الاسم `wildcard`. يجب أن تكون أحرف البدل في النهاية: يرمي `/assets/*path/private` خطأً أثناء التسجيل بدلًا من مطابقة مسار أوسع بصمت. ويمكن لطرق متعددة مشاركة مسار بحرف بدل عندما يتفق اسم الالتقاط. أما الطرق المكررة وأسماء أحرف البدل المتعارضة فترمي خطأً.
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ app.route({
 ويُرفض افتراضيًا بالرمز `404` أيضًا الالتقاط الذي يفك `/` أو `\` مرمّزًا (`%2F`، `%5C`)، لأن قيمة ملتقطة واحدة ستمتد حينها عبر عدة مقاطع مسار لدى أي مستهلك لاحق من نظام ملفات أو URL أو وكيل. إذا كان مسار ما يستخدم فعلًا معرّفات تحتوي على شرطة مائلة، ففعّل ذلك لكل مسار على حدة:
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 التفعيل لا يعيد أبدًا قبول مكوّنات `..` أو محارف التحكم. وتبقى المعاملات المفكوكة بيانات غير موثوقة وليست مسارات نظام ملفات منقّاة، لذا تحقق من الوصول إلى نظام الملفات بشكل منفصل.
@@ -203,15 +224,16 @@ app.route({
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // المسار النهائي: /api/v1/health
 ```
@@ -268,17 +290,18 @@ app.group("/api/v1", { tags: ["v1"] }, (v1) => {
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## تحويل الاستجابات باستخدام `onSend` [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // احذف تفاصيل التنفيذ الداخلية قبل أن تغادر الاستجابة.
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // احذف تفاصيل التنفيذ الداخلية قبل أن تغادر الاستجابة.
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 يعمل `onSend` *بعد* التحقق من الاستجابة وبعد دمج الترويسات الخاصة بنطاق الطلب، بما فيها `x-request-id`. ويعمل *قبل* `onResponse`، الذي يبقى المكان الصحيح للتسجيل والمقاييس.

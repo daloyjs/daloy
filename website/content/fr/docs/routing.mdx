@@ -43,7 +43,7 @@ Les raccourcis conservent la même validation, le même OpenAPI, la même sécur
 
 ## Définir des routes [#defining-routes]
 
-Une déclaration de route est la source de vérité pour la correspondance, la validation des requêtes, la validation des réponses, la sortie OpenAPI et les clients typés. Fournissez un `operationId` lorsque vous utilisez `route()` pour une route publique que vous voulez voir dans le client typé ou dans le SDK généré. Les raccourcis HTTP en dérivent un automatiquement. DaloyJS rejette les valeurs `operationId` en double à l’enregistrement.
+Une déclaration de route est la source de vérité pour la correspondance, la validation des requêtes, la validation des réponses, la sortie OpenAPI et les clients typés. Écrivez les routes avec les raccourcis par méthode (`app.get(path, contract, handler)`, `app.post(...)`, `app.put(...)`, `app.patch(...)`, `app.delete(...)`, `app.head(...)`). Ils dérivent automatiquement un `operationId`, et un `operationId` explicite reste prioritaire. DaloyJS rejette les valeurs `operationId` en double à l’enregistrement.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // params, query et headers sont inférés à partir des schémas ci-dessus.
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### La forme objet : `app.route({...})` [#route-object-form]
+
+`app.route({ method, path, ...contract, handler })` prend le même contrat sous la forme d’un seul objet. Le comportement à l’exécution, la validation, la sécurité et la sortie OpenAPI sont identiques à ceux des raccourcis. N’y recourez que lorsque vous avez besoin de la route comme valeur : un contrat `defineRoute()` réutilisable (voir [Inférence de types sur plusieurs fichiers](#multi-file-type-inference)), une route `OPTIONS` (qui n’a pas de raccourci) ou un objet de route construit par un autre code. Avec `route()`, fournissez vous-même un `operationId` pour toute route publique que vous voulez dans le client typé.
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ Des méthodes raccourcies existent pour `GET`, `POST`, `PUT`, `PATCH`, `DELETE` 
 ## Paramètres de chemin [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 Les valeurs de chemin sont décodées avant la validation. Si vous omettez le schéma `request.params`, `ctx.params` est inféré à partir du chemin sous forme de chaînes brutes. Des noms de paramètres en conflit à la même position du trie, comme `/a/:x` et `/a/:y`, lèvent une erreur à l’enregistrement.
@@ -167,16 +186,17 @@ Les noms de capture doivent être non vides et uniques au sein d’une route. Le
 Un segment final `*name` capture le reste du chemin dans une seule chaîne décodée et exige au moins un segment restant. Un `*` seul utilise le nom `wildcard`. Les jokers doivent être terminaux : `/assets/*path/private` lève une erreur à l’enregistrement au lieu de correspondre silencieusement à un chemin plus large. Plusieurs méthodes peuvent partager une route joker si le nom de capture concorde. Les méthodes en double et les noms de joker en conflit lèvent une erreur.
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ Les segments bruts de traversée de chemin (`..`), les segments vides `//` et le
 Une capture qui décode un `/` ou un `\` encodé (`%2F`, `%5C`) est aussi refusée par défaut avec un `404`, car une seule valeur capturée couvrirait alors plusieurs segments de chemin pour tout consommateur en aval (système de fichiers, URL ou proxy). Si une route utilise réellement des identifiants contenant une barre oblique, activez l’option route par route :
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 Cette option ne réadmet jamais les composants `..` ni les caractères de contrôle. Les paramètres décodés restent des données non fiables et ne sont pas des chemins de système de fichiers assainis : validez donc séparément les accès au système de fichiers.
@@ -203,15 +224,16 @@ Les adaptateurs maintiennent aussi le routeur et le middleware sur une même vue
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // chemin final : /api/v1/health
 ```
@@ -268,17 +290,18 @@ Les hooks attachent un comportement à des points fixes du cycle de vie :
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## Transformer les réponses avec `onSend` [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // Retire un détail d’implémentation interne avant que la réponse parte.
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // Retire un détail d’implémentation interne avant que la réponse parte.
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 `onSend` s’exécute *après* la validation de la réponse et après la fusion des en-têtes propres à la requête, dont `x-request-id`. Il s’exécute *avant* `onResponse`, qui reste le bon endroit pour les logs et les métriques.
