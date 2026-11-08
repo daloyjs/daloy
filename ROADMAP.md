@@ -290,6 +290,40 @@ and a waived maturity gate is the kind of thing an auditor asks about):
 
 ---
 
+## Scheduled reviews — runtime & registry support
+
+Dated decision points driven by upstream changes, not by our own feature work.
+
+### Deno runtime, `deno-basic` template, and JSR publishing
+
+Context: on 2026-10-09 the Deno team announced it is joining Cloudflare
+([deno.com/blog/cloudflare](https://deno.com/blog/cloudflare)). Deno Deploy
+shuts down around April 2027. The Deno runtime gets monthly bug-fix and
+security releases until around October 2027, after which the Deno team ends
+development (it stays open source). JSR keeps operating, with its
+infrastructure moving to Cloudflare. Decision on 2026-11-08: **keep** the Deno
+adapter, the `deno-basic` template, the `_ci/deno` CI templates, and JSR
+publishing while upstream still supports them.
+
+- [ ] **~2027-04 — Deno Deploy shutdown sweep.** Confirm no template, docs
+      page, or example still points users at Deno Deploy, and that
+      [Moving off Deno Deploy](https://daloyjs.dev/docs/adapters/deno#moving-off-deno-deploy)
+      is still accurate (Cloudflare migration path, container route).
+- [ ] **~2027-10 — Deno runtime end-of-support decision.** Check whether a
+      community fork or other maintainer has picked up the runtime, and look
+      at Deno usage signals (JSR downloads, `deno-basic` scaffolds, Deno
+      issues). If Deno is unmaintained, deprecate the adapter and `deno-basic`
+      in a minor release, then remove them in the next major (adapter export,
+      template, `_ci/deno`, `create-daloy` tests, runtime smoke test, docs and
+      the README Status table).
+- [ ] **Ongoing — JSR.** Keep publishing `@daloyjs/daloy` while JSR operates.
+      Re-evaluate only if Cloudflare changes JSR's terms, governance, OIDC
+      GitHub Actions publishing, or Sigstore provenance support. JSR is
+      decoupled from the npm publish jobs, so dropping it later is a
+      `release.yml` and `jsr.json` change, not a framework change.
+
+---
+
 ## Later — researching
 
 Items we want but don't yet have a concrete design for. Fair game to prototype; nothing here blocks `1.0.0`.
