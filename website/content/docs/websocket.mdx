@@ -113,6 +113,8 @@ A message that fails is not delivered, and the connection closes:
 
 The close reasons are fixed strings, so validator issue details never reach the peer. Messages queued behind a rejected one are dropped. Async schemas are supported, and messages still reach `message()` in arrival order.
 
+The arrival-order queue is bounded per connection (since 1.23.0): while an async validation is pending, at most `maxQueuedMessages` (default `64`) and `maxQueuedBytes` (default `2 * maxPayloadLength`) accumulate behind it. A peer that sends faster than validation drains is closed with `1009` (message too big) instead of retaining its traffic in server memory without limit. Both caps must be positive integers.
+
 Routes without `request.body` behave as before: `message()` gets the raw string or bytes and `body` is `undefined`. Leave it off for binary protocols, validate inside `message()` yourself, and use `meta.receive` to document the format in [AsyncAPI](/docs/asyncapi).
 
 ## Connection API
@@ -191,6 +193,30 @@ app.ws("/api", {
   },
 });
 ```
+
+### `requireAuth` and group auth [#require-auth]
+
+Because app and group hooks skip the upgrade, `app({ requireAuth: true })` and a `group(prefix, { auth })` cannot authenticate a socket for you. Since 1.20.0, `app.ws()` in either scope throws at registration, in every environment, unless the route's `beforeUpgrade` is wrapped with `markWebSocketAuth()` or the route passes `acknowledgeUnauthenticated: true`. Any other `beforeUpgrade` (for example `wsRateLimit()` on its own) does not count.
+
+```ts
+import { App, markWebSocketAuth } from "@daloyjs/core";
+
+const app = new App({ requireAuth: true });
+
+app.ws("/feed", {
+  allowedOrigins: "same-origin",
+  beforeUpgrade: markWebSocketAuth(async (req) => {
+    if (!(await verifyToken(req.headers.get("authorization")))) {
+      return new Response(null, { status: 401 });
+    }
+  }),
+  open(c) { c.send("hello"); },
+});
+
+app.ws("/lobby", { acknowledgeUnauthenticated: true, allowedOrigins: "same-origin", open() {} }); // deliberately public
+```
+
+Mark only a hook that really rejects unauthenticated callers before the 101 response.
 
 ## Origin policy and CSWSH
 

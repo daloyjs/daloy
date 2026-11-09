@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/core",
-  "version": "1.18.0",
+  "version": "1.23.0",
   "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops \u2014 distributed via pnpm.",
   "type": "module",
   "publishConfig": {
@@ -258,7 +258,7 @@
     }
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.0.0-next-20260711024907",
+    "@hey-api/openapi-ts": "0.0.0-next-20260930190945",
     "@types/node": "^26.0.1",
     "fast-check": "^4.8.0",
     "prettier": "^3.8.3",
@@ -315,6 +315,7 @@
     "verify:no-redos-patterns": "node --import tsx scripts/verify-no-redos-patterns.ts",
     "verify:dep-licenses": "node --import tsx scripts/verify-dep-licenses.ts",
     "verify:known-dep-names": "node --import tsx scripts/verify-known-dep-names.ts",
+    "verify:ts-consumer-compat": "node --import tsx scripts/verify-ts-consumer-compat.ts",
     "verify:runtime-eol": "node --import tsx scripts/verify-runtime-eol.ts",
     "verify:actions-pinned": "node --import tsx scripts/verify-actions-pinned.ts",
     "verify:parity-audits": "node --import tsx scripts/verify-parity-audits.ts",

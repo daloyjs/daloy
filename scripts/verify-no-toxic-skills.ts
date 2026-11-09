@@ -63,8 +63,6 @@
  *
  *   - Standard generated / vendored dirs (mirrors other verify gates).
  *   - `tests/**` — the gate's own test fixtures must contain the IOCs.
- *   - `otherdocs/**` — internal security-research notes that quote
- *     ToxicSkills attack samples verbatim.
  *   - `SECURITY.md`, `ROADMAP.md`, `CODE_REVIEW.md`
  *     — disclosure / release documentation that names the campaign and
  *     may reproduce payload examples.
@@ -202,7 +200,7 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /** Repo-relative path prefixes that are skipped (use POSIX separators). */
-const SKIP_PATH_PREFIXES: readonly string[] = ["tests/", "otherdocs/"];
+const SKIP_PATH_PREFIXES: readonly string[] = ["tests/"];
 
 /** Repo-relative exact paths that are skipped. */
 const SKIP_EXACT_PATHS: ReadonlySet<string> = new Set([

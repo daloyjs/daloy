@@ -123,6 +123,15 @@ test("ALLOWED_LICENSES contains the permissive OSI core", () => {
   }
 });
 
+test("ALLOWED_LICENSES accepts both SPDX ids of the Python licence stack, and only those", () => {
+  // argparse 2.x declares Python-2.0; argparse 3.x relabelled to PSF-2.0.
+  for (const id of ["Python-2.0", "PSF-2.0"]) assert.ok(ALLOWED_LICENSES.has(id), id);
+  // Neighbouring ids that are not reviewed must stay rejected.
+  for (const id of ["CNRI-Python", "CNRI-Python-GPL-Compatible", "PSF-2.0-or-later"]) {
+    assert.ok(!ALLOWED_LICENSES.has(id), id);
+  }
+});
+
 test("iteratePnpmManifests yields nothing for a missing store dir", async () => {
   let count = 0;
   for await (const _ of iteratePnpmManifests("this/dir/does/not/exist")) count += 1;

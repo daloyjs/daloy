@@ -43,7 +43,7 @@ const app = new App()
 
 ## ルートを定義する [#defining-routes]
 
-ルートの宣言は、マッチング、リクエストの検証、レスポンスの検証、OpenAPI の出力、型付きクライアントの唯一の情報源です。型付きクライアントや生成 SDK に含めたい公開ルートを `route()` で定義する場合は、`operationId` を指定してください。HTTP の省略記法では自動で導き出されます。DaloyJS は重複した `operationId` を登録時に拒否します。
+ルートの宣言は、マッチング、リクエストの検証、レスポンスの検証、OpenAPI の出力、型付きクライアントの唯一の情報源です。ルートはメソッドの省略記法（`app.get(path, contract, handler)`、`app.post(...)`、`app.put(...)`、`app.patch(...)`、`app.delete(...)`、`app.head(...)`）で書いてください。`operationId` は自動で導き出され、明示的に指定したものが優先されます。DaloyJS は重複した `operationId` を登録時に拒否します。
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // params、query、headers は上のスキーマから推論されます。
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### オブジェクト形式: `app.route({...})` [#route-object-form]
+
+`app.route({ method, path, ...contract, handler })` は同じ契約を 1 つのオブジェクトとして受け取ります。実行時の挙動、検証、セキュリティ、OpenAPI の出力は省略記法と同一です。ルートを値として扱う必要があるときだけ使ってください。再利用できる `defineRoute()` の契約（[複数ファイルにまたがる型推論](#multi-file-type-inference)を参照）、省略記法のない `OPTIONS` ルート、他のコードが組み立てるルートオブジェクトなどです。`route()` では、型付きクライアントに含めたい公開ルートの `operationId` を自分で指定してください。
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ export const app = new App().registerRoutes([
 ## パスパラメーター [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 パスの値は検証の前にデコードされます。`request.params` のスキーマを省略すると、`ctx.params` はパスから生の文字列として推論されます。`/a/:x` と `/a/:y` のように、トライの同じ位置でパラメーター名が衝突すると、登録時に例外がスローされます。
@@ -167,16 +186,17 @@ app.route({
 末尾の `*name` セグメントは、パスの残りを 1 つのデコード済み文字列としてキャプチャし、少なくとも 1 つのセグメントが残っていることを要求します。名前のない `*` は `wildcard` という名前を使います。ワイルドカードは末尾に置く必要があります。`/assets/*path/private` は、より広いパスに黙って一致するのではなく、登録時に例外をスローします。キャプチャ名が一致していれば、複数のメソッドで 1 つのワイルドカードルートを共有できます。メソッドの重複やワイルドカード名の衝突は例外をスローします。
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ app.route({
 エンコードされた `/` や `\`（`%2F`、`%5C`）をデコードするキャプチャも、デフォルトでは `404` で拒否されます。後段のファイルシステム、URL、プロキシのどの利用者にとっても、1 つのキャプチャ値が複数のパスセグメントにまたがってしまうからです。ルートが本当にスラッシュを含む id を使う場合は、ルートごとにオプトインしてください：
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 オプトインしても、`..` の要素や制御文字が再び許可されることはありません。デコードされたパラメーターは引き続き信頼できないデータであり、サニタイズ済みのファイルシステムパスではないため、ファイルシステムへのアクセスは別途検証してください。
@@ -203,15 +224,16 @@ app.route({
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // 最終的なパス：/api/v1/health
 ```
@@ -268,17 +290,18 @@ app.group("/api/v1", { tags: ["v1"] }, (v1) => {
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## `onSend` でレスポンスを変換する [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // レスポンスが出ていく前に内部の実装詳細を取り除きます。
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // レスポンスが出ていく前に内部の実装詳細を取り除きます。
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 `onSend` は、レスポンスの検証のあと、そして `x-request-id` を含むリクエストスコープのヘッダーがマージされた*あと*に実行されます。`onResponse` の*前*に実行され、ログやメトリクスには引き続き `onResponse` が適しています。

@@ -23,7 +23,7 @@ sitemap:
             detail: "app.get(path, contract, handler)",
             tone: "accent",
           },
-          { label: "Добавить OpenAPI и интерфейс документации", detail: "docs: true" },
+          { label: "Добавить OpenAPI и интерфейс документации", detail: 'docs: "auto"' },
           {
             label: "Вызвать типизированный клиент",
             detail: "createClient(app)",
@@ -201,7 +201,7 @@ console.log(r.status, r.body);
 Для потребителей вне монорепозитория сгенерируйте полностью типизированный fetch SDK:
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
 
 ```ts

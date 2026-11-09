@@ -1,5 +1,5 @@
 export { App } from "./app.js";
-export { createApp } from "./app.js";
+export { createApp, markWebSocketAuth } from "./app.js";
 export { defineRoute } from "./types.js";
 export { findRoutesMissingResponseBodySchema } from "./app.js";
 export { _resetCrashHandlersForTests } from "./app.js";
@@ -21,6 +21,7 @@ export type {
   ShutdownEvent,
   SecurityPreset,
   SecureConfigIssue,
+  RouteLimitOverride,
 } from "./app.js";
 export {
   getConnInfo,
@@ -734,6 +735,7 @@ export {
   DEFAULT_WS_BACKPRESSURE_LIMIT,
   DEFAULT_WS_MAX_PAYLOAD_LENGTH,
   DEFAULT_WS_MAX_MESSAGE_FRAGMENTS,
+  DEFAULT_WS_MAX_QUEUED_MESSAGES,
   DEFAULT_WS_IDLE_TIMEOUT_SECONDS,
   computeAcceptKey,
   parseSubprotocols,

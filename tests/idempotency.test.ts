@@ -220,8 +220,9 @@ test("a custom IdempotencyStore is used for reserve/complete", async () => {
   };
   const { app } = makeApp({ store });
   await app.request("/pay", payInit("custom-1"));
-  assert.deepEqual(reserved, ["custom-1"]);
-  assert.deepEqual(completed, ["custom-1"]);
+  // Stores receive an opaque, labeled namespaced key (tenant | scope | client key).
+  assert.deepEqual(reserved, ["t=|s=|k=custom-1"]);
+  assert.deepEqual(completed, ["t=|s=|k=custom-1"]);
 });
 
 test("a custom store may be async", async () => {

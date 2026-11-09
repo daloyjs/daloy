@@ -262,6 +262,8 @@ A cache hit returns a response from `beforeHandle`, which ends the hook chain. A
 
 This matters for a hand-written gate. A custom auth hook stamped with `markAuthHook()` (or composed with `some()`) that runs in `beforeHandle` is moved ahead of the cache automatically, both with `app.use()` and inside `every()`, so a hit cannot skip it. An unmarked custom guard in `beforeHandle` *can* still be preempted by a cache hit mounted ahead of it: put it in `preBody`, mark it with `markAuthHook()`, or register it before the cache.
 
+Scope checks hold on a hit too. When the route carries `requireScopes()`, a stored response is served only to a caller whose `ctx.state.user` has an **own** `scopes` array holding every required scope; anyone else skips the cache and meets `requireScopes()` as usual. Since 1.21.1 scopes that are only inherited (a polluted prototype, a class getter) grant nothing here, the same own-property rule `requireScopes()` applies, and `idempotency()` replays follow the same rule.
+
 ## Other security notes [#security-notes]
 
 - Responses carrying `Set-Cookie` or `Cache-Control: private | no-store | no-cache` are never stored, the same skip posture as `etag()`.

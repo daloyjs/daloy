@@ -222,33 +222,33 @@ test("swaggerUiHtml persists authorization and forwards JSON configuration safel
 
 test("docs helpers pin default CDN assets with SRI", () => {
   const scalar = scalarHtml({ specUrl: "/openapi.json" });
-  assert.match(scalar, /@scalar\/api-reference@1\.62\.5/);
+  assert.match(scalar, /@scalar\/api-reference@1\.77\.0/);
   assert.ok(
     scalar.includes(
-      'integrity="sha384-jVBCKhcCfx34USN27x4iQK1SBNdL/HxKq3KuBAxTS4WPaP5w80K4fjpwB+DezJL5"'
+      'integrity="sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4"'
     )
   );
   assert.match(scalar, /crossorigin="anonymous"/);
 
   const swagger = swaggerUiHtml({ specUrl: "/openapi.json" });
-  assert.match(swagger, /swagger-ui-dist@5\.32\.8/);
+  assert.match(swagger, /swagger-ui-dist@5\.34\.1/);
   assert.ok(
     swagger.includes(
-      'integrity="sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT"'
+      'integrity="sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF"'
     )
   );
   assert.ok(
     swagger.includes(
-      'integrity="sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C"'
+      'integrity="sha384-XFYN47VzPiDY6qPtxYKg0nqUeW/upo20xf1j2SUE7gT/i35FJB4cuS/71Iegzk8Z"'
     )
   );
   assert.equal((swagger.match(/crossorigin="anonymous"/g) ?? []).length, 2);
 
   const redoc = redocHtml({ specUrl: "/openapi.json" });
-  assert.match(redoc, /redoc@2\.5\.3/);
+  assert.match(redoc, /redoc@2\.5\.4/);
   assert.ok(
     redoc.includes(
-      'integrity="sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96"'
+      'integrity="sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5"'
     )
   );
 
@@ -562,7 +562,7 @@ test("built-in docs render through Cloudflare and Vercel adapter shapes", async 
     assert.match(response.headers.get("content-type") ?? "", /^text\/html/);
     const html = await response.text();
     assert.match(html, /Portable Docs/);
-    assert.match(html, /@scalar\/api-reference@1\.62\.5/);
+    assert.match(html, /@scalar\/api-reference@1\.77\.0/);
     assert.match(html, /integrity="sha384-/);
   }
 });

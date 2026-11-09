@@ -190,9 +190,15 @@ From 1.5.4 every package manager gets lifecycle scripts off and a release-age co
 | Yarn | `.yarnrc.yml` (Yarn 2+), `.yarnrc` (Yarn 1) | `enableScripts: false` and `npmMinimalAgeGate: "1d"`; Yarn 1 gets `ignore-scripts true` (it has no release-age setting) |
 | Bun | `bunfig.toml` | `minimumReleaseAge = 86400` (seconds, Bun 1.3+) |
 
+Security overrides for transitive dependencies are authored once, in the template's `pnpm-workspace.yaml` `overrides:` block. `node-basic` and `bun-basic` use it to pin `js-yaml` to `^5.4.2`, because the Hey API code generator bundles a release with known denial-of-service advisories. pnpm reads the block in place. npm and Bun scaffolds get the same pins in `package.json` `overrides`, and Yarn scaffolds in `resolutions`, so a fresh project passes a full `audit` with any package manager. With `--with-ci`, the generated Dependabot config also ignores `@hey-api/openapi-ts`, so it never replaces the pinned snapshot with the stable line, which crashes on TypeScript 7.
+
 Template Dockerfiles also pin their base images by digest, so a retagged base image cannot change what your container build pulls; update the digest deliberately (Dependabot can do it with the `--with-ci` bundle).
 
 Blocking lifecycle scripts stops install-script payloads, not a payload that runs when your code imports a package. The cooldown helps only against bad versions that are caught within the window. See [Supply-chain security](/docs/security/supply-chain) for what each control covers.
+
+## TypeScript version [#typescript-version]
+
+Templates default to TypeScript 7. `vercel` stays on 5.9 until Vercel's builder supports newer releases. `node-basic`, `bun-basic`, and `cloudflare-worker` also type-check on TypeScript 6; their READMEs show the one-line switch, rewritten for your package manager (for example `pnpm add -D typescript@^6.0.3`). See [TypeScript versions](/docs/installation#typescript-versions).
 
 ## Next
 

@@ -60,7 +60,7 @@
       "name": "verify",
       "type": "BearerAuthVerifyHook<string>",
       "required": false,
-      "description": "Optional per-request revalidation hook. Called after `validate` accepts the token. Returning `false` rejects the request with `403`; returning `true` or `undefined` accepts. Use for revocation lists, token-version counters, etc.",
+      "description": "Optional per-request revalidation hook. Called after `validate` accepts the token. Returning `false` rejects the request with `403`; returning `true` or `undefined` accepts. Use for revocation lists, token-version counters, etc. Since 1.20.0 it runs before the `validate` object is stamped on `ctx.state.user`, so a revoked token never sets it.",
       "since": "0.22.0"
     }
   ],

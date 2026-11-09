@@ -229,7 +229,7 @@ Daloy owns the application-framework controls in this checklist. Cloud-account c
 ## A 60-second checklist for your own deploy
 
 1. `new App()` with no overrides, you already have body limits, request timeouts, problem+json redaction in production, and prototype-pollution-safe JSON.
-2. Add `secureHeaders()`, `rateLimit()`, `loadShedding()`, and `fetchGuard()`: four lines, four layers.
+2. `secureHeaders()` is already auto-installed by `new App()` (pass your own only to tune it). Add `rateLimit()`, `loadShedding()`, and `fetchGuard()`: three lines, three layers.
 3. Wire `jwk()` to your IdP's JWKS. Don't pass a static secret. Pin `audience` and `issuer`.
 4. Mount admin under `/admin` with `ipRestriction()` + `basicAuth()` (or move it off the public app entirely).
 5. Turn on the structured logger and point your SIEM at stdout.

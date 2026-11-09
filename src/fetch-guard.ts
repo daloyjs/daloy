@@ -434,16 +434,18 @@ function embeddedIPv4s(ip: ParsedIp): ParsedIp[] | undefined {
  *
  * const safeFetch = fetchGuard();
  *
- * app.route({
- *   method: "POST", path: "/import", operationId: "import",
- *   request: { json: z.object({ url: z.string().url() }) },
- *   responses: { 200: { description: "ok" } },
- *   handler: async ({ request }) => {
- *     const { url } = await request.json();
- *     const upstream = await safeFetch(url); // refuses 169.254.169.254
+ * app.post(
+ *   "/import",
+ *   {
+ *     operationId: "import",
+ *     request: { body: z.object({ url: z.url() }) },
+ *     responses: { 200: { description: "ok" } },
+ *   },
+ *   async ({ body }) => {
+ *     const upstream = await safeFetch(body.url); // refuses 169.254.169.254
  *     return { status: 200 as const, body: await upstream.text() };
  *   },
- * });
+ * );
  * ```
  *
  * @param options - Guard configuration; see {@link FetchGuardOptions}. Omit
@@ -938,31 +940,43 @@ async function pinnedHttpFetch(
       (res) => {
         upstream = res;
         res.once("close", () => signal.removeEventListener("abort", onAbort));
-        const responseHeaders = new Headers();
-        for (const [key, value] of Object.entries(res.headers)) {
-          if (Array.isArray(value)) {
-            for (const v of value) responseHeaders.append(key, v);
-          } else if (typeof value === "string") {
-            responseHeaders.set(key, value);
+        try {
+          const responseHeaders = new Headers();
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (Array.isArray(value)) {
+              for (const v of value) responseHeaders.append(key, v);
+            } else if (typeof value === "string") {
+              responseHeaders.set(key, value);
+            }
           }
-        }
-        const status = res.statusCode ?? 502;
-        // 204/304 and HEAD responses must carry a null body per the spec.
-        const nullBody = status === 204 || status === 304 || method === "HEAD";
-        if (nullBody) {
-          res.resume(); // drain so the socket can be released
+          const status = res.statusCode ?? 502;
+          // 204/205/304 and HEAD responses must carry a null body (WHATWG
+          // Fetch "null body status"); the Response constructor throws for a
+          // non-null body there.
+          const nullBody = status === 204 || status === 205 || status === 304 || method === "HEAD";
+          if (nullBody) {
+            res.resume(); // drain so the socket can be released
+            resolve(
+              new Response(null, { status, statusText: res.statusMessage, headers: responseHeaders })
+            );
+            return;
+          }
           resolve(
-            new Response(null, { status, statusText: res.statusMessage, headers: responseHeaders })
+            new Response(toWeb(res) as unknown as ReadableStream, {
+              status,
+              statusText: res.statusMessage,
+              headers: responseHeaders,
+            })
           );
-          return;
+        } catch (err) {
+          // Anything the Response constructor refuses (a status outside
+          // 200-599, a header value it rejects) must fail this fetch, not the
+          // process: a throw here would otherwise be an uncaught exception
+          // inside Node's `'response'` callback.
+          signal.removeEventListener("abort", onAbort);
+          res.destroy();
+          reject(err);
         }
-        resolve(
-          new Response(toWeb(res) as unknown as ReadableStream, {
-            status,
-            statusText: res.statusMessage,
-            headers: responseHeaders,
-          })
-        );
       }
     );
     clientReq.on("error", (err) => {

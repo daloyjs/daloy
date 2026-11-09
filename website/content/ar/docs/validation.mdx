@@ -206,6 +206,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 - مطابقة Content-Type لقائمة `accepts` الخاصة بالمسار، أو لـ `allowedContentTypes` العامة إن ضُبطت -\> **415**.
 - أنواع الأجسام المقبولة افتراضيًا: `application/json` و`application/x-www-form-urlencoded` و`multipart/form-data`.
 - تحليل آمن من تلويث النماذج الأولية لـ JSON وسلاسل الاستعلام ونماذج urlencoded ونماذج multipart.
+- فك ترميز UTF-8 صارم لأجسام JSON وurlencoded والنصوص (منذ 1.16.0): أي تسلسل UTF-8 غير صالح أو مُطوَّل يُجاب عنه بـ **400** `Request body is not valid UTF-8` بدلًا من التحقق منه بعد استبداله بـ `U+FFFD` (RFC 8259 §8.1). تبقى الأحرف غير ASCII السليمة وعلامة BOM في البداية قابلة للتحليل، ويحتفظ `ctx.request.text()` بفك الترميز المتساهل الخاص بالمنصة.
 
 تُحلَّل أجسام JSON إلى كائنات، وأجسام urlencoded عبر `URLSearchParams`، وأجسام multipart عبر واجهة المنصة `Request.formData()`. وإذا فعّلت لمسار ما نوع وسائط نصيًا مخصصًا، يمرر DaloyJS النص المفكوك إلى مخطط الجسم لديك.
 

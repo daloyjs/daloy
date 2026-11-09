@@ -120,7 +120,10 @@ Semantics worth knowing:
 
 - The first bundle that resolves without throwing or returning a `Response` wins. Its context mutations, including headers and `ctx.state`, are preserved.
 - A bundle that returns a `Response` is treated as a denial, and the next bundle gets a chance. If every bundle returns a denial, the first `Response` is sent.
+- Since 1.20.0 each bundle runs as a transaction over `ctx.state`. When it throws or returns a `Response`, every string or symbol key it added or changed is rolled back before the next bundle runs. A revoked token's `ctx.state.user`, or the "auth passed" record of a `bearerAuth()` that passed inside an `every(bearerAuth(...), requireScopes([...]))` branch whose scope check then denied, never reaches the winning branch, `requireScopes()`, `requireRoles()`, `tenantFromClaim()` or the handler. `bearerAuth()` and `jwk()` also set `ctx.state.user` only after their `verify` revocation hook accepts.
 - When every bundle fails and the first denial was a thrown error, that error is rethrown. Put the auth method whose status and `WWW-Authenticate` challenge you want clients to see first.
+- Since 1.22.0 a bundle in `optional` mode (for example `httpSignatureAuth({ optional: true })`) that sees **no** credential does not win the selection: the remaining bundles still run, so a caller presenting a bearer token for a later bundle is authenticated by it instead of being passed through anonymously. The unauthenticated pass-through is honoured only when no bundle denies the request; any denial wins over it. The usual rule still applies afterwards: a route that declares `auth:` answers `401` to a pass-through, routes without one proceed.
+- Since 1.22.0 `requireScopes()` inside a bundle applies to that bundle only. `some()` no longer advertises an all-of union of every bundle's scopes, so `some(every(bearerAuth(a), requireScopes(["a"])), every(bearerAuth(b), requireScopes(["b"])))` accepts a caller holding either scope. The conditional scope gate is still ordered ahead of `responseCache()` / `idempotency()` replays, so a stored response is never served past it. When a bundle pairs a `preBody` auth hook with a default-phase `requireScopes()`, the whole `some()` selects in `preBody`, ahead of body parsing and `requestDecompression()`.
 - Only the `preBody`/`beforeHandle` selection strategy changes. `afterHandle`, `onSend`, `onResponse`, and `onError` from every bundle still compose normally.
 
 ## `except()`: apply everywhere but a few paths
@@ -151,6 +154,23 @@ Path matching uses the same `new URL(request.url).pathname` view the router sees
 Since 1.3.7 the Node and AWS Lambda adapters make this view and the router agree. A request-target such as `/admin/%2e%2e/health` or `/admin\..\health` is canonicalized by the Node adapter before routing, so `except()` and the router both see `/health`. A `Host` header carrying `\ / ? # @ %` or whitespace (for example `h\health?`) is refused with `400` by the Node and AWS Lambda adapters instead of shifting bytes into the path an exemption matches on. Router params and wildcards never bind `.` or `..`.
 
 The wrapped bundle's `preBody` and `beforeHandle` gates are skipped. Its `onRequest`, `afterHandle`, `onSend`, and `onResponse` phases still run. Wrap each bundle with `except()` individually if you need to gate different phases with different rules.
+
+A wrapped `cors()` policy is off on the exempted paths. It adds no CORS headers there, and since 1.20.0 it no longer lets the [cross-origin write guard](/docs/security/secure-defaults#2-cross-origin-post-put-patch-delete-require-cors) accept a `POST`, `PUT`, `PATCH` or `DELETE` from its origins there:
+
+```ts
+app.use(except(["/admin/**"], cors({ origin: ["https://partner.example.com"] })));
+
+// POST /api/orders from https://partner.example.com -> allowed
+// POST /admin/users from https://partner.example.com -> 403, the policy is off here
+```
+
+The guard runs before any hook, so it cannot evaluate a function `when`. With a predicate, the wrapped `cors()` never relaxes the guard on any path. Use path patterns when an exempted `cors()` must still accept cross-origin writes elsewhere.
+
+`every()` and `some()` also hand App settings that bundles learn at registration (the `behindProxy` posture for `rateLimit()` and `loginThrottle()`, the body limit for `idempotency()`, the production flag) to every composed bundle. Before 1.20.0 only the first bundle received them, so in `every(rateLimit(...), loginThrottle(...))` behind a proxy the throttle keyed every client onto the proxy's address.
+
+Since 1.22.0 a request budget inside `every()` is also visible to the rest of the chain. In `app.use(every(requestId(), rateLimit({ max: 2 })))` followed by `app.use(bearerAuth(...))`, a `401` from `bearerAuth()` charges the limiter like any other failed attempt (previously the bundle hid the budget from later rejections). A budget is charged **at most once per request**, however the bundles nest or are wrapped (`markAuthHook(every(...))`, `except(path, every(...))`, a spread). `except(path, requireScopes([...]))` likewise stops advertising its scopes on the exempted paths: the gate still runs, and still runs ahead of a replay, on every other path.
+
+The [boot guards](/docs/security/boot-guards) that catch `responseCache()` / `idempotency()` mounted ahead of `tenancy()`, `rateLimit()` or `loginThrottle()` look inside `every()` bundles too since 1.22.0, and compare the earliest replay against the *latest* tenancy or budget layer, so a route-level `rateLimit()` registered after a global `responseCache()` is reported.
 
 <Callout type="warning">Security markers survive composition, so the [boot guards](/docs/security/boot-guards#5-route-auth-declared-but-not-enforced) can only see that an auth-marked hook is present in a route's chain. `except(() => true, bearerAuth(...))` skips authentication on every request, and `some(auth, permissiveHook)` lets requests through the permissive branch. From 1.5.4 a request-time check catches both on routes that require auth (`auth:`, MCP, A2A, `requireAuth`): production answers `500` instead of running the handler. Routes that don't declare an auth requirement aren't covered, so keep `except()` predicates narrow and test protected routes without credentials.</Callout>
 

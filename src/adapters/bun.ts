@@ -12,6 +12,8 @@ import {
   WS_CLOSE_CODE,
   WebSocketMessageGate,
   WS_MAX_CONTROL_PAYLOAD,
+  buildWebSocketHeaders,
+  buildWebSocketQuery,
   encodeSendPayload,
   parseSubprotocols,
   validateSelectedSubprotocol,
@@ -263,8 +265,8 @@ async function tryBunUpgrade(
   const ctx: WebSocketContext = {
     request: req,
     params: match.params as any,
-    query: Object.fromEntries(url.searchParams.entries()),
-    headers: Object.fromEntries(req.headers.entries()),
+    query: buildWebSocketQuery(url.searchParams),
+    headers: buildWebSocketHeaders(req.headers),
     state: match.handler.createState() as any,
     protocols: parseSubprotocols(req.headers.get("sec-websocket-protocol")),
   };
@@ -336,15 +338,22 @@ function buildBunWebSocketConfig(app: App) {
         invokeBunMessage(app, data, msg, isBinary, undefined);
         return;
       }
-      data.gate ??= new WebSocketMessageGate(schema, (result, payload, binary) => {
-        const conn = data.conn!;
-        if (conn.readyState !== WS_READY_STATE.OPEN) return;
-        if (!result.ok) {
-          conn.close(result.code, result.reason);
-          return;
+      data.gate ??= new WebSocketMessageGate(
+        schema,
+        (result, payload, binary) => {
+          const conn = data.conn!;
+          if (conn.readyState !== WS_READY_STATE.OPEN) return;
+          if (!result.ok) {
+            conn.close(result.code, result.reason);
+            return;
+          }
+          invokeBunMessage(app, data, payload, binary, result.value);
+        },
+        {
+          maxQueuedMessages: options.maxQueuedMessages,
+          maxQueuedBytes: options.maxQueuedBytes,
         }
-        invokeBunMessage(app, data, payload, binary, result.value);
-      });
+      );
       data.gate.push(msg, isBinary);
     },
     close(ws: BunNativeWebSocket, code: number, reason: string) {

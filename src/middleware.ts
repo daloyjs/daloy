@@ -24,7 +24,7 @@ import {
   resolveTrustedProxyMatchers,
   type BehindProxyConfig,
 } from "./conn-info.js";
-import { ipRateLimitIdentity, type IpMatcher } from "./ip-match.js";
+import { ipRateLimitIdentity, resolveIpv6Subnet, type IpMatcher } from "./ip-match.js";
 import { markAuthPassed, stampAuthHook } from "./internal-auth.js";
 
 // ---------- Request ID ----------
@@ -204,7 +204,7 @@ function generateCspNonce(): string {
   if (!cryptoApi?.getRandomValues) {
     throw new Error(
       "secureHeaders(): WebCrypto is required to generate a CSP nonce. " +
-        "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel."
+      "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel."
     );
   }
   const nonceBytes = new Uint8Array(16);
@@ -358,9 +358,9 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
     if (!cspProvidesFrameAncestors) {
       throw new Error(
         "secureHeaders(): refusing to construct with both frameOptions: false " +
-          "AND no CSP frame-ancestors directive — that disables every clickjacking " +
-          "defense the helper provides. Set frameOptions: 'DENY' / 'SAMEORIGIN', " +
-          "or add a `frame-ancestors` directive to contentSecurityPolicy."
+        "AND no CSP frame-ancestors directive — that disables every clickjacking " +
+        "defense the helper provides. Set frameOptions: 'DENY' / 'SAMEORIGIN', " +
+        "or add a `frame-ancestors` directive to contentSecurityPolicy."
       );
     }
   }
@@ -677,7 +677,8 @@ export const CORS_ORIGIN_ALLOW_MARKER: unique symbol = Symbol.for(
 
 /**
  * Marker stamped on the `Hooks` object returned by {@link cors} when the
- * configured `origin` permits the wildcard `"*"`. Used by the
+ * configured `origin` permits the wildcard `"*"`, or (since 1.20.0) is a
+ * predicate that accepts any origin. Used by the
  * boot-time refuse-to-boot guard: a wildcard CORS origin in production is
  * almost always a misconfiguration, so `App` constructed with
  * `secureDefaults: true` (the 0.16+ default) and resolved to
@@ -726,6 +727,51 @@ export const AUTH_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.auth.hook");
  */
 export const EARLY_REJECTION_HOOK_MARKER: unique symbol = Symbol.for(
   "daloyjs.middleware.earlyRejectionHooks"
+);
+
+/**
+ * Marks a composed `preBody` function (from {@link _mergePreBodyWithEarlyRejections})
+ * as already wiring its own layers' {@link EARLY_REJECTION_HOOK_MARKER} callbacks,
+ * so an outer composition only adds those callbacks to its pending list after the
+ * inner `preBody` succeeds.
+ * @internal
+ */
+export const PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS: unique symbol = Symbol.for(
+  "daloyjs.middleware.preBodyHandlesOwnEarlyRejections"
+);
+
+/**
+ * `ctx.state` key holding the set of {@link EARLY_REJECTION_HOOK_MARKER}
+ * callbacks already charged for this request. A wrapper that replaces a
+ * composed `preBody` (`markAuthHook()`, a user spread) loses the
+ * {@link PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS} function marker, so an outer
+ * composition would otherwise bill the same `rateLimit()` / `loginThrottle()`
+ * budget a second time for one rejected request. Allocated only on the
+ * rejection path.
+ * @internal
+ */
+const EARLY_REJECTIONS_CHARGED: unique symbol = Symbol.for(
+  "daloyjs.middleware.earlyRejectionsCharged"
+);
+
+/**
+ * Marks a `beforeHandle` hook (such as default-phase {@link requireScopes}) as
+ * safe to run during `preBody` when composed inside {@link some} alongside
+ * `preBody` authentication branches.
+ * @internal
+ */
+export const PRE_BODY_SAFE_HOOK_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.preBodySafeHook"
+);
+
+/**
+ * Marks a conditional `beforeHandle` gate ({@link some} or {@link except}
+ * wrapping {@link requireScopes}) so {@link _orderBeforeHandleForReplay}
+ * runs it ahead of `responseCache()` / `idempotency()`.
+ * @internal
+ */
+export const CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.conditionalScopesBeforeReplay"
 );
 
 /**
@@ -788,43 +834,92 @@ export function _mergePreBodyWithEarlyRejections(
     }
   }
   if (!hasNormal && deferred.length === 0) return undefined;
-  return async (ctx) => {
-    const pending: EarlyRejectionHook[] = [];
-    for (const hooks of layers) {
-      const record = hooks as Record<PropertyKey, unknown>;
-      const early = record[EARLY_REJECTION_HOOK_MARKER];
-      if (Array.isArray(early)) {
-        for (const candidate of early) {
-          if (typeof candidate === "function") pending.push(candidate as EarlyRejectionHook);
-        }
+  // Per-layer plan, computed once: the early-rejection hooks a layer carries,
+  // whether its preBody runs at this level, and whether that preBody is itself
+  // a composition that bills its own layers' budgets when it rejects (then its
+  // hooks join this level's pending list only after it has passed, so a later
+  // rejection here still charges them exactly once).
+  interface PreBodyStep {
+    readonly preBody: NonNullable<Hooks["preBody"]> | undefined;
+    readonly early: readonly EarlyRejectionHook[];
+    readonly handlesOwnEarly: boolean;
+  }
+  const steps: PreBodyStep[] = [];
+  for (const hooks of layers) {
+    const record = hooks as Record<PropertyKey, unknown>;
+    const early: EarlyRejectionHook[] = [];
+    const list = record[EARLY_REJECTION_HOOK_MARKER];
+    if (Array.isArray(list)) {
+      for (const candidate of list) {
+        if (typeof candidate === "function") early.push(candidate as EarlyRejectionHook);
       }
-      if (hooks.preBody === undefined || record[DEFERRED_PRE_BODY_ONLY_MARKER] === true) {
+    }
+    const preBody =
+      hooks.preBody === undefined || record[DEFERRED_PRE_BODY_ONLY_MARKER] === true
+        ? undefined
+        : hooks.preBody;
+    const handlesOwnEarly =
+      preBody !== undefined &&
+      (preBody as unknown as Record<PropertyKey, unknown>)[
+        PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+      ] === true;
+    if (preBody === undefined && early.length === 0) continue;
+    steps.push({ preBody, early, handlesOwnEarly });
+  }
+  // Charge each pending budget at most once per request, however the
+  // compositions nest (see EARLY_REJECTIONS_CHARGED). A budget that is
+  // exhausted throws (429) or returns a Response, which replaces the original
+  // rejection.
+  const chargePending = async (
+    ctx: PreBodyContext<any>,
+    pending: readonly EarlyRejectionHook[]
+  ): Promise<Response | undefined> => {
+    if (pending.length === 0) return undefined;
+    const state = ctx.state as Record<PropertyKey, unknown>;
+    let charged = state[EARLY_REJECTIONS_CHARGED] as Set<EarlyRejectionHook> | undefined;
+    if (!(charged instanceof Set)) {
+      charged = new Set();
+      state[EARLY_REJECTIONS_CHARGED] = charged;
+    }
+    let replaced: Response | undefined;
+    for (const hook of pending) {
+      if (charged.has(hook)) continue;
+      charged.add(hook);
+      const replacement = await hook(ctx);
+      if (replacement instanceof Response) replaced = replacement;
+    }
+    return replaced;
+  };
+  const composed: NonNullable<Hooks["preBody"]> = async (ctx) => {
+    const pending: EarlyRejectionHook[] = [];
+    for (const step of steps) {
+      if (step.preBody === undefined) {
+        for (const hook of step.early) pending.push(hook);
         continue;
+      }
+      if (!step.handlesOwnEarly) {
+        for (const hook of step.early) pending.push(hook);
       }
       let result: Awaited<ReturnType<NonNullable<Hooks["preBody"]>>>;
       try {
-        result = await hooks.preBody(ctx);
+        result = await step.preBody(ctx);
       } catch (err) {
         // A guard that *throws* (bearerAuth's 403, a markAuthHook's 401) is a
         // failed attempt too: charge the pending request budgets so a limiter
-        // registered first still counts it. A budget that is exhausted throws
-        // (429) or returns a Response, replacing the original rejection;
-        // otherwise the original error is rethrown unchanged.
-        let replaced: Response | undefined;
-        for (const hook of pending) {
-          const replacement = await hook(ctx);
-          if (replacement instanceof Response) replaced = replacement;
-        }
+        // registered first still counts it. Otherwise the original error is
+        // rethrown unchanged.
+        const replaced = await chargePending(ctx, pending);
         if (replaced !== undefined) return replaced;
         throw err;
       }
-      if (!(result instanceof Response)) continue;
-      let response = result;
-      for (const hook of pending) {
-        const replacement = await hook(ctx);
-        if (replacement instanceof Response) response = replacement;
+      if (!(result instanceof Response)) {
+        if (step.handlesOwnEarly) {
+          for (const hook of step.early) pending.push(hook);
+        }
+        continue;
       }
-      return response;
+      const replaced = await chargePending(ctx, pending);
+      return replaced ?? result;
     }
     for (const fn of deferred) {
       const result = await fn(ctx);
@@ -832,6 +927,10 @@ export function _mergePreBodyWithEarlyRejections(
     }
     return undefined;
   };
+  (composed as unknown as Record<PropertyKey, unknown>)[
+    PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS
+  ] = true;
+  return composed;
 }
 
 // Same global-registry keys `responseCache()` and `idempotency()` stamp. Kept
@@ -840,15 +939,41 @@ const REPLAY_RESPONSE_CACHE_MARKER = Symbol.for("daloyjs.response-cache.hook");
 const REPLAY_IDEMPOTENCY_MARKER = Symbol.for("daloyjs.idempotency.hook");
 
 /**
+ * Original `beforeHandle` layers of a transparent all-of composition
+ * (`every()`), keyed on the bundle under {@link COMBINED_BEFORE_HANDLE_LAYERS}.
+ * Registration ordering expands these layers so an inner replay cannot hide
+ * a later authentication gate.
+ *
+ * `beforeHandle` is the merged function `every()` installed. The expansion
+ * only applies while the bundle still carries that exact function: a wrapper
+ * that replaces it (`markAuthHook()` recording the auth pass, `except()`,
+ * `some()`, a user spread) makes the bundle opaque again, so the wrapper's
+ * own `beforeHandle` runs and its markers decide the ordering.
+ * @internal
+ */
+export interface CombinedBeforeHandleLayers {
+  beforeHandle: NonNullable<Hooks["beforeHandle"]>;
+  layers: readonly Hooks[];
+}
+
+/**
+ * Symbol under which `every()` records its {@link CombinedBeforeHandleLayers}.
+ * @internal
+ */
+export const COMBINED_BEFORE_HANDLE_LAYERS: unique symbol = Symbol.for("daloyjs.before-handle.layers");
+
+/**
  * Order `beforeHandle` hooks so a stored-response replay (`responseCache()`,
  * `idempotency()`) can never answer before a later `beforeHandle`
  * authentication hook (one stamped with {@link AUTH_HOOK_MARKER}, e.g. via
  * {@link markAuthHook} or {@link some}) has run.
  *
  * Only the span from the first replay hook to the last auth hook after it is
- * reordered: inside it, non-replay hooks keep their relative order and run
- * first, then the replay hooks. Hooks outside that span keep their position,
- * so the common case (auth registered before the cache) is untouched.
+ * reordered: transparent all-of bundles (see {@link CombinedBeforeHandleLayers})
+ * are expanded, non-replay hooks run first, then opaque auth-and-replay
+ * bundles, then replay-only hooks. Each partition preserves registration
+ * order. Hooks outside that span keep their position, so the common case
+ * (auth registered before the cache) is untouched.
  *
  * @param layers - Hook layers in registration order.
  * @returns The `beforeHandle` functions in execution order.
@@ -860,25 +985,47 @@ export function _orderBeforeHandleForReplay(
   const fns: NonNullable<Hooks["beforeHandle"]>[] = [];
   const replay: boolean[] = [];
   const auth: boolean[] = [];
-  for (const hooks of layers) {
-    if (typeof hooks.beforeHandle !== "function") continue;
+  const collect = (hooks: Hooks): void => {
+    if (typeof hooks.beforeHandle !== "function") return;
     const record = hooks as Record<PropertyKey, unknown>;
+    const combined = record[COMBINED_BEFORE_HANDLE_LAYERS] as
+      | CombinedBeforeHandleLayers
+      | undefined;
+    // Expand only while the bundle still runs the merged function every()
+    // installed; a wrapper that replaced it must stay opaque.
+    if (
+      combined !== undefined &&
+      combined !== null &&
+      combined.beforeHandle === hooks.beforeHandle &&
+      Array.isArray(combined.layers)
+    ) {
+      for (const layer of combined.layers) collect(layer);
+      return;
+    }
     fns.push(hooks.beforeHandle);
     replay.push(
       record[REPLAY_RESPONSE_CACHE_MARKER] === true || record[REPLAY_IDEMPOTENCY_MARKER] === true
     );
-    auth.push(record[AUTH_HOOK_MARKER] === true);
-  }
+    auth.push(
+      record[AUTH_HOOK_MARKER] === true ||
+        (hooks.beforeHandle as unknown as Record<PropertyKey, unknown>)[
+          CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
+        ] === true
+    );
+  };
+  for (const hooks of layers) collect(hooks);
   const firstReplay = replay.indexOf(true);
   if (firstReplay === -1) return fns;
   const lastAuth = auth.lastIndexOf(true);
   if (lastAuth <= firstReplay) return fns;
   const span = fns.slice(firstReplay, lastAuth + 1);
   const spanReplay = replay.slice(firstReplay, lastAuth + 1);
+  const spanAuth = auth.slice(firstReplay, lastAuth + 1);
   return [
     ...fns.slice(0, firstReplay),
     ...span.filter((_, i) => !spanReplay[i]),
-    ...span.filter((_, i) => spanReplay[i]),
+    ...span.filter((_, i) => spanReplay[i] && spanAuth[i]),
+    ...span.filter((_, i) => spanReplay[i] && !spanAuth[i]),
     ...fns.slice(lastAuth + 1),
   ];
 }
@@ -916,15 +1063,25 @@ export function markAuthHook(hooks: Hooks): Hooks {
   return stampAuthHook(hooks);
 }
 
-/** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
-export type CorsOriginAllow = (origin: string) => boolean;
+/**
+ * Predicate stamped on a CORS `Hooks` object that returns `true` for allowed
+ * origins. The cross-origin write guard also passes the request (since
+ * 1.20.0), so a path-scoped policy, such as a `cors()` wrapped in `except()`,
+ * can decline on the paths it does not cover. Predicates that ignore the
+ * second argument keep working.
+ */
+export type CorsOriginAllow = (origin: string, request?: Request) => boolean;
 
 /** Options for {@link cors}. */
 export interface CorsOptions {
   /**
    * Allowed cross-origin caller(s): a single origin string, an array of
    * origins, or a predicate. `"*"` is rejected with `credentials: true`
-   * and refused at boot on production `secureDefaults` apps.
+   * and refused at boot on production `secureDefaults` apps. Since 1.20.0 a
+   * predicate that accepts any origin (probed with a canary origin no real
+   * allowlist contains, such as `() => true`) counts as `"*"` and is refused
+   * at boot the same way; the escape hatch is the same as for `"*"`
+   * (`app({ secureDefaults: false, acknowledgeInsecureDefaults: true })`).
    */
   origin: string | string[] | ((origin: string) => boolean);
   /**
@@ -991,6 +1148,17 @@ export const CORS_RESPONSE_DECORATOR = Symbol.for("daloyjs.cors.decorate");
 const CORS_CANARY_ORIGIN = "https://daloy-cors-canary.invalid";
 
 export function cors(opts: CorsOptions): Hooks {
+  // A predicate that accepts an origin no real allowlist contains (the canary)
+  // allows every site, exactly like "*": probe it once here so the production
+  // wildcard refusal and the credentials refusal below both see it.
+  let predicateAllowsAny = false;
+  if (typeof opts.origin === "function") {
+    try {
+      predicateAllowsAny = !!opts.origin(CORS_CANARY_ORIGIN);
+    } catch {
+      // A predicate that throws on an unexpected origin is not permissive.
+    }
+  }
   // Reject the classic CORS footgun up front. Browsers will refuse to attach
   // credentials to a wildcard origin (the spec literally forbids
   // `Access-Control-Allow-Origin: *` together with
@@ -1003,7 +1171,7 @@ export function cors(opts: CorsOptions): Hooks {
     if (includesWildcard) {
       throw new Error(
         'cors(): origin: "*" cannot be combined with credentials: true. ' +
-          "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
+        "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
       );
     }
     // The same footgun without the literal "*": a predicate that returns true
@@ -1013,22 +1181,21 @@ export function cors(opts: CorsOptions): Hooks {
     // local files, which any attacker page can produce. Probe both.
     const allowsNull =
       opts.origin === "null" || (Array.isArray(opts.origin) && opts.origin.includes("null"));
-    let allowsAny = false;
+    let predicateAllowsNull = false;
     if (typeof opts.origin === "function") {
-      for (const canary of [CORS_CANARY_ORIGIN, "null"]) {
-        try {
-          if (opts.origin(canary)) allowsAny = true;
-        } catch {
-          // A predicate that throws on an unexpected origin is not permissive.
-        }
+      try {
+        predicateAllowsNull = !!opts.origin("null");
+      } catch {
+        // A predicate that throws on an unexpected origin is not permissive.
       }
     }
+    const allowsAny = predicateAllowsAny || predicateAllowsNull;
     if (allowsNull || allowsAny) {
       throw new Error(
         `cors(): credentials: true with an origin policy that allows ${allowsNull ? '"null"' : "any origin"} ` +
-          `would let every website read responses with the user's cookies. ` +
-          `The policy accepted ${allowsNull ? 'the opaque origin "null"' : `the test origin ${CORS_CANARY_ORIGIN}`}. ` +
-          "List the exact origins you trust (or a predicate that checks them exactly)."
+        `would let every website read responses with the user's cookies. ` +
+        `The policy accepted ${allowsNull ? 'the opaque origin "null"' : `the test origin ${CORS_CANARY_ORIGIN}`}. ` +
+        "List the exact origins you trust (or a predicate that checks them exactly)."
       );
     }
   }
@@ -1041,7 +1208,7 @@ export function cors(opts: CorsOptions): Hooks {
   if (opts.methods?.some((m) => m === "*" || m.trim() === "*")) {
     throw new Error(
       'cors(): methods cannot include "*". Declare each verb explicitly ' +
-        '(e.g. ["GET", "HEAD", "POST"]).'
+      '(e.g. ["GET", "HEAD", "POST"]).'
     );
   }
   const allow = (origin: string | null): string | null => {
@@ -1119,8 +1286,15 @@ export function cors(opts: CorsOptions): Hooks {
   });
   (hooks as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER] = (origin: string) =>
     allow(origin) !== null;
+  // An allow-everything predicate counts as a wildcard, so the production
+  // boot refusal (and its `secureDefaults: false` escape hatch) applies to it
+  // too; otherwise `origin: () => true` would silently open every
+  // state-changing route to every site. A predicate that only adds the opaque
+  // origin "null" is left alone, like a literal "null" entry.
   const hasWildcard =
-    opts.origin === "*" || (Array.isArray(opts.origin) && opts.origin.includes("*"));
+    opts.origin === "*" ||
+    (Array.isArray(opts.origin) && opts.origin.includes("*")) ||
+    predicateAllowsAny;
   if (hasWildcard) {
     (hooks as Record<PropertyKey, unknown>)[CORS_WILDCARD_ORIGIN_MARKER] = true;
   }
@@ -1359,8 +1533,8 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   if (!Number.isInteger(opts.max) || opts.max < 0) {
     throw new Error(
       `rateLimit(): max must be a non-negative integer (got ${String(opts.max)}). ` +
-        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
-        `would otherwise disable the limit.`,
+      `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+      `would otherwise disable the limit.`,
     );
   }
   if (opts.standardHeaders !== undefined && opts.standardHeaders !== "draft-8") {
@@ -1580,8 +1754,8 @@ function assertPositiveInteger(name: string, value: number, owner = "loginThrott
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(
       `${owner}: ${name} must be a positive integer (got ${String(value)}). ` +
-        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
-        `would otherwise disable the limit.`,
+      `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+      `would otherwise disable the limit.`,
     );
   }
 }
@@ -1590,15 +1764,6 @@ function assertPositiveInteger(name: string, value: number, owner = "loginThrott
 function peerRateLimitKey(ctx: RateLimitContext, ipv6Subnet: number): string {
   const peer = getConnInfo(ctx.request)?.remoteAddress;
   return peer !== undefined ? `peer:${ipRateLimitIdentity(peer, ipv6Subnet)}` : "global";
-}
-
-/** Validate an `ipv6Subnet` option, returning the default `64` when unset. */
-function resolveIpv6Subnet(where: string, value: number | undefined): number {
-  if (value === undefined) return 64;
-  if (!Number.isInteger(value) || value < 1 || value > 128) {
-    throw new Error(`${where}: ipv6Subnet must be an integer between 1 and 128.`);
-  }
-  return value;
 }
 
 /**
@@ -1821,7 +1986,8 @@ export interface BearerAuthOptions {
    * Optional per-request revalidation hook. Called after `validate`
    * accepts the token. Returning `false` rejects the request with `403`;
    * returning `true` or `undefined` accepts. Use for revocation lists,
-   * token-version counters, etc.
+   * token-version counters, etc. Since 1.20.0 it runs before the `validate`
+   * object is stamped on `ctx.state.user`, so a revoked token never sets it.
    *
    * @since 0.22.0
    */
@@ -1896,11 +2062,13 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
       }
       const ok = await options.validate(token);
       if (!ok) throw new ForbiddenError("Invalid token");
-      if (typeof ok === "object") (ctx.state as Record<string, unknown>).user = ok;
       if (options.verify) {
         const verified = await options.verify(token, ctx);
         if (verified === false) throw new ForbiddenError("Token revoked");
       }
+      // Stamp the principal only once verify() accepted it, so a revoked
+      // token never leaves an identity on ctx.state for later hooks to read.
+      if (typeof ok === "object") (ctx.state as Record<string, unknown>).user = ok;
       markAuthPassed(ctx);
       return undefined;
     },
@@ -2051,7 +2219,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     if (ignore.has(method)) {
       throw new Error(
         `csrf(): ignoreMethods must not include ${method}. State-changing requests are the ones ` +
-          `CSRF protection is for; exempt a specific route with except() instead.`
+        `CSRF protection is for; exempt a specific route with except() instead.`
       );
     }
   }
@@ -2065,7 +2233,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     if (acceptsAny) {
       throw new Error(
         `csrf(): the allowedOrigins predicate accepted the test origin ${CORS_CANARY_ORIGIN}, so it ` +
-          "would trust every site and switch the origin check off. Check origins exactly."
+        "would trust every site and switch the origin check off. Check origins exactly."
       );
     }
   }
@@ -2422,13 +2590,14 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  *
  * @example
  * ```ts
- * app.route({
- *   method: "POST",
- *   path: "/items",
- *   hooks: { ...bearerAuth({ validate }), ...requireScopes(["items:write"]) },
- *   responses: { 200: { description: "ok" } },
- *   handler: () => ({ status: 200 as const, body: { ok: true } }),
- * });
+ * app.post(
+ *   "/items",
+ *   {
+ *     hooks: { ...bearerAuth({ validate }), ...requireScopes(["items:write"]) },
+ *     responses: { 200: { description: "ok" } },
+ *   },
+ *   () => ({ status: 200 as const, body: { ok: true } }),
+ * );
  *
  * // Authorize before the body is read; any one listed scope is enough.
  * app.use(every(
@@ -2470,7 +2639,7 @@ export function requireScopes(
   if (match === "any" && phase !== "preBody") {
     throw new Error(
       'requireScopes(): match "any" requires phase "preBody", so the check runs before ' +
-        "stored-response replays (idempotency(), responseCache())."
+      "stored-response replays (idempotency(), responseCache())."
     );
   }
   const anyOf = match === "any";
@@ -2519,6 +2688,9 @@ export function requireScopes(
     }
     return undefined;
   };
+  if (phase === "beforeHandle" && options.phase === undefined) {
+    (check as unknown as Record<PropertyKey, unknown>)[PRE_BODY_SAFE_HOOK_MARKER] = true;
+  }
   const hooks: Hooks = phase === "preBody" ? { preBody: check } : { beforeHandle: check };
   if (!anyOf) (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = required;
   return hooks;
@@ -2622,12 +2794,11 @@ function toRoleSet(value: unknown): ReadonlySet<string> {
  *
  * app.use(jwk({ jwks, algorithms: ["RS256"], issuer, audience }));
  *
- * app.route({
- *   method: "DELETE",
- *   path: "/books/:id",
- *   hooks: requireRoles(["Books.Admin"]),
- *   // ...
- * });
+ * app.delete(
+ *   "/books/:id",
+ *   { hooks: requireRoles(["Books.Admin"]), responses: { 204: { description: "Deleted" } } },
+ *   () => ({ status: 204 as const, body: undefined }),
+ * );
  *
  * // Keycloak realm roles, any one is enough:
  * requireRoles(["editor", "admin"], {

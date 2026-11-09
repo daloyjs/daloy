@@ -485,18 +485,18 @@ export interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
 }
 
 const JSDELIVR_ORIGIN = "https://cdn.jsdelivr.net";
-const DEFAULT_SCALAR_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference@1.62.5`;
+const DEFAULT_SCALAR_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference@1.77.0`;
 const DEFAULT_SCALAR_SCRIPT_INTEGRITY =
-  "sha384-jVBCKhcCfx34USN27x4iQK1SBNdL/HxKq3KuBAxTS4WPaP5w80K4fjpwB+DezJL5";
-const DEFAULT_SWAGGER_CSS_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.32.8/swagger-ui.css`;
+  "sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4";
+const DEFAULT_SWAGGER_CSS_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.34.1/swagger-ui.css`;
 const DEFAULT_SWAGGER_CSS_INTEGRITY =
-  "sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT";
-const DEFAULT_SWAGGER_BUNDLE_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.32.8/swagger-ui-bundle.js`;
+  "sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF";
+const DEFAULT_SWAGGER_BUNDLE_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.34.1/swagger-ui-bundle.js`;
 const DEFAULT_SWAGGER_BUNDLE_INTEGRITY =
-  "sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C";
-const DEFAULT_REDOC_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/redoc@2.5.3/bundles/redoc.standalone.js`;
+  "sha384-XFYN47VzPiDY6qPtxYKg0nqUeW/upo20xf1j2SUE7gT/i35FJB4cuS/71Iegzk8Z";
+const DEFAULT_REDOC_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/redoc@2.5.4/bundles/redoc.standalone.js`;
 const DEFAULT_REDOC_SCRIPT_INTEGRITY =
-  "sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96";
+  "sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5";
 const DEFAULT_ASYNCAPI_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component@3.1.4/browser/standalone/index.js`;
 const DEFAULT_ASYNCAPI_SCRIPT_INTEGRITY =
   "sha384-ZI+8twyvBIiWAquvsA8HFRvWjFn7l9/JlCHI3sekdQ6s7xK8ZDT6TDQOickRDQ0t";

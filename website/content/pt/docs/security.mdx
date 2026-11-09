@@ -97,7 +97,7 @@ Essas verificações acontecem no próprio `App` ou no adaptador de runtime. Os 
 
 ## Middlewares de segurança oficiais [#first-party-security-middleware]
 
-Eles fazem parte do DaloyJS e são documentados juntos, mas continuam explícitos porque CSP, CORS, chaves de rate limit, segredos de sessão e adoção de CSRF são decisões de deploy.
+Eles fazem parte do DaloyJS e são documentados juntos. `new App()` já aplica `secureHeaders()` e um id de requisição a toda resposta (`new App({ secureHeaders: false })` desliga os cabeçalhos automáticos); registre-os você mesmo só para mudar as opções, e um `secureHeaders()` instalado por você substitui o automático. O restante continua explícito porque CORS, chaves de rate limit, segredos de sessão e adoção de CSRF são decisões de deploy.
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // propagação de x-request-id
-app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
+app.use(requestId());           // opcional: ajusta o tratamento de x-request-id (um id de requisição já é definido por padrão)
+app.use(secureHeaders());       // opcional: substitui CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ... aplicados automaticamente
 app.use(cors({                  // lista explícita de permitidos; nunca * com credenciais
   origin: ["https://app.example.com"],
   credentials: true,

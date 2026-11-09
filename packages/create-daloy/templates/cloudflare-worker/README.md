@@ -36,6 +36,16 @@ For a localhost-only gate that runs before code leaves your machine, enable the 
 pnpm hooks:install   # points core.hooksPath at .githooks
 ```
 
+## TypeScript version
+
+This starter type-checks with TypeScript 7, the native compiler. TypeScript 6 is supported too. Switch if a tool in your stack still needs the TypeScript JavaScript API, which TypeScript 7 removed:
+
+```bash
+pnpm add -D typescript@^6.0.3
+```
+
+Nothing else changes. Wrangler bundles the Worker itself, so the TypeScript version only affects `pnpm typecheck`.
+
 ## What's included
 
 - `@daloyjs/core/cloudflare` with starter security middleware: `secureHeaders` and `requestId`.

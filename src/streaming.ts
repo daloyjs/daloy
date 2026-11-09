@@ -11,19 +11,17 @@
  * ```ts
  * import { sseStream } from "@daloyjs/core";
  *
- * app.route({
- *   method: "GET",
- *   path: "/events",
- *   operationId: "events",
- *   responses: { 200: { description: "SSE stream" } },
- *   handler: ({ request }) => ({
+ * app.get(
+ *   "/events",
+ *   { operationId: "events", responses: { 200: { description: "SSE stream" } } },
+ *   ({ request }) => ({
  *     status: 200,
  *     headers: { "content-type": "text/event-stream" },
  *     body: sseStream(async function* () {
  *       yield { event: "ping", data: { now: Date.now() } };
  *     }, { signal: request.signal }),
  *   }),
- * });
+ * );
  * ```
  *
  * For NDJSON, each yielded value is JSON-encoded and terminated with `\n`.

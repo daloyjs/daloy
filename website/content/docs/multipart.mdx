@@ -15,7 +15,7 @@ keywords:
 
 DaloyJS treats `multipart/form-data` as a first-class request shape. Two helpers, `fileField()` and `multipartObject()`, let you describe an upload contract once, get runtime validation (size caps, MIME allowlists, filename matchers), an end-to-end-typed handler, and a correct OpenAPI document with `multipart/form-data` media type and `format: "binary"` file fields.
 
-Handlers receive each file as the runtime's own `File` or `Blob`, so they can pass it on with `file.stream()` to S3, disk, or another upstream. The request itself is read into memory first, capped at `bodyLimitBytes` (1 MiB by default), and then parsed with the standard `formData()` parser. Raise `bodyLimitBytes` on the App to accept larger uploads, and for very large files have clients upload straight to object storage with a presigned URL instead.
+Handlers receive each file as the runtime's own `File` or `Blob`, so they can pass it on with `file.stream()` to S3, disk, or another upstream. The request itself is read into memory first, capped at `bodyLimitBytes` (1 MiB by default), and then parsed with the standard `formData()` parser. Raise `bodyLimitBytes` on the upload route itself (see [per-route body limits and timeouts](/docs/security/route-limits)) so the rest of the API keeps the default, and for very large files have clients upload straight to object storage with a presigned URL instead.
 
 <FlowDiagram title="How an upload is validated" numbered steps={[
           {
@@ -91,7 +91,7 @@ app.post(
 - `filename(name)`: predicate for filename validation, useful for forcing extensions. When it rejects a file, the error message echoes the name with control, bidi and invisible characters removed and the length capped at 128 characters, so a crafted name cannot spoof logs or error UIs. The `name` passed to your predicate is the raw, untouched value, after the built-in check below has accepted it.
 - `allowUnsafeFilenames`: by default (since 1.16.0) a file name containing a path separator (`/`, `\`), a NUL or other control character, equal to `.` or `..`, or longer than 255 characters fails validation with a `422`, so a handler that joins `file.name` onto an upload directory cannot be steered outside it (`../../.ssh/authorized_keys`). Browsers and curl only ever send a basename, so real clients are unaffected; a nameless `Blob` passes. Set `true` only when the name is never used as a path and you need the raw value.
 - `magicBytes`: verify file signatures before the handler receives the upload. `true` derives known signatures from `accept` for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP. Custom signatures support domain-specific formats.
-- `rejectScriptableImages`: reject SVG, MVG, MSL, PostScript, and EPS payloads that can execute inside renderers such as ImageMagick. This is enabled automatically when `magicBytes` is configured. Set it to `false` only when the renderer is sandboxed.
+- `rejectScriptableImages`: reject SVG, MVG, MSL, PostScript, and EPS payloads that can execute inside renderers such as ImageMagick. This is enabled automatically when `magicBytes` is configured. Set it to `false` only when the renderer is sandboxed. The check reads a bounded prefix of the file (64 KiB since 1.23.0, previously 512 bytes) and sees through UTF-16 encoding (with or without a BOM), leading XML comments, processing instructions and DOCTYPEs, namespace-prefixed roots such as `<s:svg>`, and extra whitespace in MVG keywords. It also fails closed: a file whose entire probe window is XML prolog material (whitespace, comments, processing instructions, a DOCTYPE) with more bytes following is refused as unverifiable, so padding the prolog cannot push a scriptable root out of view. It is a backstop, not a parser: keep `magicBytes` on as the primary control, since a signature allowlist refuses every text format outright.
 - `optional`: when `true`, accept `undefined`/`null` values without raising.
 - `format`: OpenAPI hint, defaults to `"binary"`.
 
@@ -116,7 +116,7 @@ fileField({
 
 ## Strict form fields
 
-By default, `multipartObject()` validates the fields you declare and ignores extra form fields. Pass `{ strict: true }` to reject undeclared fields and emit `additionalProperties: false` in OpenAPI.
+By default, `multipartObject()` validates the fields you declare and drops extra form fields, so only declared fields reach the handler. Pass `{ strict: true }` to reject undeclared fields and emit `additionalProperties: false` in OpenAPI. Strict mode matches field names against the shape's own keys, so a field named `toString` or `constructor` is reported as unknown.
 
 ```ts
 const UploadBody = multipartObject(
@@ -134,16 +134,23 @@ The framework already enforces `bodyLimitBytes` on every request. For multipart 
 
 ```ts
 new App({
-  bodyLimitBytes: 10 * 1024 * 1024,
+  bodyLimitBytes: 1024 * 1024, // 1 MiB stays the default for every route
   multipart: {
     maxFileBytes: 5_000_000, // single-file cap
     maxFields:    32,        // total fields (file + non-file)
     maxFiles:     4,         // total file uploads
   },
 });
+
+// Only the upload route accepts 10 MiB (since 1.21.0).
+app.post(
+  "/avatars",
+  { bodyLimitBytes: 10 * 1024 * 1024, requestTimeoutMs: 120_000, request: { body: UploadBody }, responses },
+  handler,
+);
 ```
 
-These caps are evaluated as soon as the body is parsed, so a request that exceeds them is rejected with `413 Payload Too Large` (size) or `400 Bad Request` (counts) before the handler runs.
+These caps are evaluated as soon as the body is parsed, so a request that exceeds them is rejected with `413 Payload Too Large` (size) or `400 Bad Request` (counts) before the handler runs. The `multipart` caps are App-wide; a per-route body cap is `bodyLimitBytes` on the route, and a per-route per-file cap is `fileField({ maxBytes })`.
 
 ## OpenAPI emission
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   App,
   ipReputation,
+  setConnInfo,
   urlFeed,
   type IpReputationFeed,
   type IpReputationMatch,
@@ -259,7 +260,8 @@ test("default resolver fails open (no IP source configured)", async () => {
   });
   await ctrl.ready;
   const app = appWith(ctrl);
-  // Default resolver ignores proxy headers, so even a listed IP passes.
+  // Default resolver ignores proxy headers and this request carries no TCP
+  // peer, so a listed X-Forwarded-For value is not believed.
   const res = await app.fetch(req("10.0.0.1"));
   assert.equal(res.status, 200);
   ctrl.stop();
@@ -331,4 +333,168 @@ test("urlFeed defaults to an SSRF-hardened fetch that blocks cloud metadata", as
   // the AWS/GCP/Azure metadata IP before any network call.
   const feed = urlFeed("http://169.254.169.254/latest/meta-data/");
   await assert.rejects(() => feed.fetch(new AbortController().signal), /SSRF blocked/);
+});
+
+// ---------- unresolved identity falls back to the peer (audit run-2, 2026-11-05) ----------
+
+const LISTED = "198.51.100.7";
+const CLEAN = "203.0.113.9";
+
+function peerReq(peer: string | undefined, xff?: string): Request {
+  const r = new Request("http://x/", { headers: xff ? { "x-forwarded-for": xff } : {} });
+  if (peer) setConnInfo(r, { remoteAddress: peer });
+  return r;
+}
+
+async function guarded(
+  opts: Partial<Parameters<typeof ipReputation>[0]>,
+  appOpts: ConstructorParameters<typeof App>[0] = {}
+) {
+  const ctrl = ipReputation({
+    feeds: [staticFeed("deny", ["198.51.100.0/24"])],
+    refreshIntervalMs: 0,
+    ...opts,
+  });
+  await ctrl.ready;
+  const app = new App({ env: "development", ...appOpts });
+  app.use(ctrl.hooks);
+  app.route({
+    method: "GET",
+    path: "/",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return { ctrl, app };
+}
+
+test("no trust options: a listed TCP peer is blocked", async () => {
+  const { ctrl, app } = await guarded({});
+  assert.equal((await app.fetch(peerReq(LISTED))).status, 403);
+  assert.equal((await app.fetch(peerReq(CLEAN))).status, 200);
+  ctrl.stop();
+});
+
+test("no trust options: a spoofed X-Forwarded-For cannot frame or launder the peer", async () => {
+  const { ctrl, app } = await guarded({});
+  // Clean peer claiming a listed IP is not blocked; listed peer claiming a clean IP is.
+  assert.equal((await app.fetch(peerReq(CLEAN, LISTED))).status, 200);
+  assert.equal((await app.fetch(peerReq(LISTED, CLEAN))).status, 403);
+  ctrl.stop();
+});
+
+test("no trust options: follows app({ behindProxy: { cidrs } })", async () => {
+  const { ctrl, app } = await guarded({}, { behindProxy: { cidrs: ["10.0.0.0/8"] } });
+  assert.equal((await app.fetch(peerReq("10.1.1.1", LISTED))).status, 403);
+  assert.equal((await app.fetch(peerReq("10.1.1.1", CLEAN))).status, 200);
+  // A direct caller outside the proxy range is checked by its peer, XFF ignored.
+  assert.equal((await app.fetch(peerReq(LISTED, CLEAN))).status, 403);
+  ctrl.stop();
+});
+
+test("explicit trustProxyHeaders: false keeps the peer and ignores behindProxy", async () => {
+  const { ctrl, app } = await guarded(
+    { trustProxyHeaders: false },
+    { behindProxy: { cidrs: ["10.0.0.0/8"] } }
+  );
+  assert.equal((await app.fetch(peerReq("10.1.1.1", LISTED))).status, 200);
+  assert.equal((await app.fetch(peerReq(LISTED))).status, 403);
+  ctrl.stop();
+});
+
+test("trustedProxies: a listed client going direct-to-origin is blocked by its peer", async () => {
+  const { ctrl, app } = await guarded({ trustedProxies: ["10.0.0.0/8"] });
+  assert.equal((await app.fetch(peerReq(LISTED, CLEAN))).status, 403);
+  // Through the trusted proxy the forwarded identity still decides.
+  assert.equal((await app.fetch(peerReq("10.1.1.1", LISTED))).status, 403);
+  assert.equal((await app.fetch(peerReq("10.1.1.1", CLEAN))).status, 200);
+  ctrl.stop();
+});
+
+test("trustedHops: a chain shorter than declared falls back to the peer", async () => {
+  const { ctrl, app } = await guarded({ trustedHops: 2 });
+  assert.equal((await app.fetch(peerReq(LISTED))).status, 403);
+  assert.equal((await app.fetch(peerReq(CLEAN))).status, 200);
+  ctrl.stop();
+});
+
+test("onUnresolvedIp: 'allow' restores the unchecked pass-through", async () => {
+  const { ctrl, app } = await guarded({ trustedProxies: ["10.0.0.0/8"], onUnresolvedIp: "allow" });
+  assert.equal((await app.fetch(peerReq(LISTED, CLEAN))).status, 200);
+  ctrl.stop();
+});
+
+test("ipReputation() rejects an invalid onUnresolvedIp", () => {
+  assert.throws(
+    () =>
+      ipReputation({
+        feeds: [staticFeed("f", [])],
+        refreshIntervalMs: 0,
+        onUnresolvedIp: "skip" as never,
+      }),
+    /onUnresolvedIp/
+  );
+});
+
+test("a custom resolveIp still overrides the peer fallback", async () => {
+  const { ctrl, app } = await guarded({ resolveIp: () => undefined });
+  assert.equal((await app.fetch(peerReq(LISTED))).status, 200);
+  ctrl.stop();
+});
+
+// ---------- urlFeed headers never follow a cross-origin redirect (audit run-2) ----------
+
+function redirectingFetch(seen: Array<[string, string | null, string | null]>) {
+  return (async (input: RequestInfo | URL) => {
+    const r = input as Request;
+    seen.push([r.url, r.headers.get("x-api-key"), r.headers.get("x-feed-version")]);
+    if (r.url === "https://feed.example/list") {
+      return new Response(null, { status: 302, headers: { location: "https://other.example/x" } });
+    }
+    if (r.url === "https://feed.example/same") {
+      return new Response(null, { status: 302, headers: { location: "https://feed.example/list2" } });
+    }
+    return new Response("198.51.100.0/24\n");
+  }) as typeof fetch;
+}
+
+const publicResolve = async () => ["93.184.216.34"];
+
+test("urlFeed strips its custom headers on a cross-origin redirect", async () => {
+  const seen: Array<[string, string | null, string | null]> = [];
+  const feed = urlFeed("https://feed.example/list", {
+    headers: { "x-api-key": "feed-token", "x-feed-version": "2" },
+    guard: { fetch: redirectingFetch(seen), resolve: publicResolve, pinDns: false },
+  });
+  assert.deepEqual(await feed.fetch(), ["198.51.100.0/24"]);
+  assert.deepEqual(seen, [
+    ["https://feed.example/list", "feed-token", "2"],
+    ["https://other.example/x", null, null],
+  ]);
+});
+
+test("urlFeed keeps its headers on a same-origin redirect", async () => {
+  const seen: Array<[string, string | null, string | null]> = [];
+  const feed = urlFeed("https://feed.example/same", {
+    headers: { "x-api-key": "feed-token" },
+    guard: { fetch: redirectingFetch(seen), resolve: publicResolve, pinDns: false },
+  });
+  await feed.fetch();
+  assert.deepEqual(seen[1], ["https://feed.example/list2", "feed-token", null]);
+});
+
+test("urlFeed guard options cannot drop the header strip or re-allow metadata", async () => {
+  const seen: Array<[string, string | null, string | null]> = [];
+  const feed = urlFeed("https://feed.example/list", {
+    headers: { "x-api-key": "feed-token" },
+    guard: {
+      fetch: redirectingFetch(seen),
+      resolve: publicResolve,
+      pinDns: false,
+      sensitiveHeaders: [],
+    },
+  });
+  await feed.fetch();
+  assert.equal(seen[1]![1], null);
+  const meta = urlFeed("http://169.254.169.254/latest", { guard: { pinDns: false } });
+  await assert.rejects(() => meta.fetch());
 });

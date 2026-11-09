@@ -37,6 +37,12 @@ export const app = new App({
   bodyLimitBytes: 256 * 1024,
   requestTimeoutMs: 5_000,
   production: process.env.NODE_ENV === "production",
+  // Vercel, Cloudflare, and most load balancers send X-Forwarded-For. In
+  // production that header gets a 500 unless the App declares its proxy hop,
+  // so set TRUST_PROXY_HOPS=1 there (leave it unset where clients connect directly).
+  ...(process.env.TRUST_PROXY_HOPS
+    ? { behindProxy: { hops: Number(process.env.TRUST_PROXY_HOPS) } }
+    : {}),
   // Mounts /openapi.json + /docs (off by default); the receipts below hash it.
   docs: true,
 });
@@ -51,7 +57,7 @@ app.route({
   responses: {
     200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
   },
-  handler: async () => ({ status: 200, body: { status: "ok" } }),
+  handler: async () => ({ status: 200, body: { status: "ok" as const } }),
 });
 
 app.route({

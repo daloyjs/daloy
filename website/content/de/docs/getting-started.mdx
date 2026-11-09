@@ -23,7 +23,7 @@ Bauen Sie einen kleinen DaloyJS-Server, rufen Sie ihn mit dem typisierten Client
             detail: "app.get(path, contract, handler)",
             tone: "accent",
           },
-          { label: "OpenAPI und Doku-Oberfläche hinzufügen", detail: "docs: true" },
+          { label: "OpenAPI und Doku-Oberfläche hinzufügen", detail: 'docs: "auto"' },
           {
             label: "Typisierten Client aufrufen",
             detail: "createClient(app)",
@@ -201,7 +201,7 @@ Die Methoden des Clients werden aus dem Routen-Tupel der Anwendung abgeleitet. V
 Für Consumer außerhalb des Monorepos generieren Sie ein vollständig typisiertes fetch-SDK:
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
 
 ```ts

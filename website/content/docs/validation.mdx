@@ -199,13 +199,14 @@ When a response schema is declared, DaloyJS validates the handler return before 
 
 ## Body limits and content types
 
-The `bodyLimitBytes` App option (default 1 MiB) caps the declared Content-Length and the streamed size of every request body -\> **413**. Since 1.5.4 this applies on every route, including bodies a handler reads itself from `ctx.request`; the cap is checked lazily, when the body is read.
+The `bodyLimitBytes` App option (default 1 MiB) caps the declared Content-Length and the streamed size of every request body -\> **413**. Since 1.5.4 this applies on every route, including bodies a handler reads itself from `ctx.request`; the cap is checked lazily, when the body is read. Since 1.21.0 a route can set its own `bodyLimitBytes` (and `requestTimeoutMs`) to raise or lower the cap for itself only; see [per-route body limits and timeouts](/docs/security/route-limits).
 
 When a route declares `request.body`, DaloyJS also enforces:
 
 - Content-Type against the route's `accepts` list, or global `allowedContentTypes` if set -\> **415**.
 - Default accepted body types: `application/json`, `application/x-www-form-urlencoded`, and `multipart/form-data`.
 - Prototype-pollution-safe parsing for JSON, query strings, urlencoded forms, and multipart forms.
+- Strict UTF-8 decoding for JSON, urlencoded, and text bodies (since 1.16.0): an invalid or overlong UTF-8 sequence answers **400** `Request body is not valid UTF-8` instead of being validated with `U+FFFD` substituted (RFC 8259 §8.1). Well-formed non-ASCII and a leading BOM still parse; `ctx.request.text()` keeps the platform's lenient decode.
 
 JSON bodies parse to objects, urlencoded bodies parse through `URLSearchParams`, and multipart bodies parse through the platform `Request.formData()` API. If you opt a route into a custom text media type, DaloyJS passes the decoded text into your body schema.
 

@@ -92,7 +92,7 @@ Per-knob options you pass alongside the preset still win. If you want headers ba
 - `secureHeaders` auto-install, HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read them.
 - `corsCrossOriginGuard`, rejects state-changing requests carrying a cross-origin `Origin` header. Service-to-service callers do not send `Origin`.
 - `csrf` boot guard, refuses to start when `session()` is registered alongside a state-changing route without `csrf()`. Internal callers authenticate with bearer tokens or mTLS, not cookies.
-- unconfigured `X-Forwarded-*` guard, the first-request 500 when `trustProxy` / `behindProxy` is unset. The mesh terminates TLS and the immediate peer inside the mesh *is* the caller.
+- unconfigured `X-Forwarded-*` guard, the first-request 500 when `trustProxy` / `behindProxy` is unset. The mesh terminates TLS and the immediate peer inside the mesh *is* the caller. The preset does this by setting `trustProxy: false` when neither option is given — so if the service reads its caller identity from a sidecar header with `clientCertAuth({ header: { format: "xfcc" } })`, declare that sidecar explicitly with `behindProxy: { hops: 1 }` alongside the preset; header-mode mTLS under a proxy-less posture [refuses to boot](/docs/security/boot-guards#13-mtls-header-without-proxy) (1.23.0).
 
 ## What the preset KEEPS on (non-negotiable)
 

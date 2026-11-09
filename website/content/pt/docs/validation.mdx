@@ -206,6 +206,7 @@ Quando uma rota declara `request.body`, o DaloyJS também aplica:
 - Content-Type conferido com a lista `accepts` da rota, ou com `allowedContentTypes` global, se definido -\> **415**.
 - Tipos de corpo aceitos por padrão: `application/json`, `application/x-www-form-urlencoded` e `multipart/form-data`.
 - Parsing protegido contra poluição de protótipo para JSON, query strings, formulários urlencoded e formulários multipart.
+- Decodificação UTF-8 estrita para corpos JSON, urlencoded e de texto (desde 1.16.0): uma sequência UTF-8 inválida ou overlong responde **400** `Request body is not valid UTF-8` em vez de ser validada com `U+FFFD` substituído (RFC 8259 §8.1). Texto não ASCII bem formado e um BOM inicial continuam sendo parseados; `ctx.request.text()` mantém a decodificação permissiva da plataforma.
 
 Corpos JSON viram objetos, corpos urlencoded passam por `URLSearchParams` e corpos multipart passam pela API `Request.formData()` da plataforma. Se você habilitar um media type de texto personalizado em uma rota, o DaloyJS passa o texto decodificado para o seu schema de corpo.
 

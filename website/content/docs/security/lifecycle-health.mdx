@@ -97,7 +97,7 @@ app.readinesscheck({
 });
 ```
 
-Pass `rateLimit: false` to disable the per-IP cap entirely (sidecar-only probes that arrive directly from the orchestrator). The limiter deliberately does **not** honour `X-Forwarded-For`: probes typically arrive from a sidecar so spoofing the header should not bypass the cap.
+Pass `rateLimit: false` to disable the per-IP cap entirely (sidecar-only probes that arrive directly from the orchestrator). The client IP comes from `resolveClientIp()` under your app's `behindProxy` posture: the TCP peer when `behindProxy` is unset or `"none"`, and a forwarded address only from a verified proxy peer (`hops`, `cidrs`, or `"loopback"`). Raw `X-Real-IP`, `Fly-Client-IP` and `X-Forwarded-For` headers are never read directly, so rotating them does not bypass the cap. IPv6 clients are grouped per `/64`, as in `rateLimit()`. Only when the runtime exposes no peer at all (some edge platforms) do probes share one `"global"` bucket. The CSP report receiver uses the same identity, and its `onReport` sink receives that resolved address (or `null`), never a header value.
 
 ### Dependency checks (database, cache, queue) [#readiness-dependency-checks]
 

@@ -10,16 +10,19 @@
     "hooks:install": "git config core.hooksPath .githooks"
   },
   "imports": {
-    "@daloyjs/core": "npm:@daloyjs/core@^1.17.2",
-    "@daloyjs/core/banner": "npm:@daloyjs/core@^1.17.2/banner",
-    "@daloyjs/core/contract": "npm:@daloyjs/core@^1.17.2/contract",
-    "@daloyjs/core/deno": "npm:@daloyjs/core@^1.17.2/deno",
-    "@daloyjs/core/openapi": "npm:@daloyjs/core@^1.17.2/openapi",
+    "@daloyjs/core": "npm:@daloyjs/core@^1.22.0",
+    "@daloyjs/core/banner": "npm:@daloyjs/core@^1.22.0/banner",
+    "@daloyjs/core/contract": "npm:@daloyjs/core@^1.22.0/contract",
+    "@daloyjs/core/deno": "npm:@daloyjs/core@^1.22.0/deno",
+    "@daloyjs/core/openapi": "npm:@daloyjs/core@^1.22.0/openapi",
     "zod": "npm:zod@^4.6.6"
   },
   "compilerOptions": {
     "strict": true,
-    "lib": ["deno.window", "deno.unstable"]
+    "lib": [
+      "deno.window",
+      "deno.unstable"
+    ]
   },
   "fmt": {
     "lineWidth": 100

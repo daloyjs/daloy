@@ -35,8 +35,8 @@
 import { BadRequestError, ConflictError, HttpError, PayloadTooLargeError } from "./errors.js";
 import { isDisconnectResponse, markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
-import { APP_BODY_LIMIT_HOOK, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
-import { registerRequestFinalizer } from "./request-finalizers.js";
+import { APP_BODY_LIMIT_HOOK, effectiveBodyReadCap, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
+import { isRequestAbandoned, registerRequestFinalizer } from "./request-finalizers.js";
 import type { BaseContext, Hooks } from "./types.js";
 
 const enc = new TextEncoder();
@@ -112,6 +112,15 @@ export interface IdempotencyRecord {
  * The {@link reserve} method MUST be atomic ("set if absent") so two
  * concurrent requests carrying the same key cannot both win the reservation —
  * exactly the `SET key value NX` semantics of a Redis backend.
+ *
+ * Keys arrive already namespaced as
+ * `[<groupId>:]t=<tenantHash>|s=<scopeHash>|k=<Idempotency-Key>`, where each
+ * hash is empty or 64 hex characters, so no client key can address another
+ * caller's or tenant's slot. Implementations must treat the key as opaque:
+ * store and look it up verbatim, never parse it. Since 1.20.0 (earlier builds concatenated the
+ * hashes without labels): records an external store persisted under the old
+ * format simply no longer match after an upgrade, so a retry in flight across
+ * the upgrade runs as a fresh request.
  */
 export interface IdempotencyStore {
   /**
@@ -477,6 +486,10 @@ const BODY_SOLICIT_SYMBOL = Symbol.for("daloyjs.request.bodySolicit");
  * body schema), its raw bytes are read from a bounded clone and hashed
  * together with the content type, so a reused key with a different payload is
  * detected. Body-less requests keep the historical `"null"` material.
+ *
+ * A declared `Content-Length: 0` is not trusted to mean "no body": the body
+ * stream decides, so a mismatched header cannot make a non-empty payload
+ * fingerprint like an empty one.
  */
 async function bodyMaterial(ctx: BaseContext<any, any>, maxBytes: number): Promise<string> {
   if (ctx.body !== undefined) return stableStringify(ctx.body);
@@ -492,10 +505,6 @@ async function bodyMaterial(ctx: BaseContext<any, any>, maxBytes: number): Promi
   const cached = (request as unknown as Record<symbol, unknown>)[RAW_BODY_SYMBOL];
   if (cached instanceof Uint8Array) {
     bytes = cached.byteLength > maxBytes ? null : cached;
-  } else if (declared === "0") {
-    // HTTP/2 and in-process `app.fetch()` requests may omit Content-Length, so
-    // only an explicit zero short-circuits; otherwise the body stream decides.
-    return "null";
   } else if (request.body === null) {
     // No body at all (e.g. a bodiless in-process `app.request()` POST).
     return "null";
@@ -504,8 +513,8 @@ async function bodyMaterial(ctx: BaseContext<any, any>, maxBytes: number): Promi
     // would ignore the payload and replay a different request's response.
     throw new Error(
       "idempotency(): the request body was consumed before idempotency() could fingerprint it. " +
-        "Mount idempotency() ahead of the hook that reads ctx.request, or declare a request body " +
-        "schema so the parsed body is fingerprinted."
+      "Mount idempotency() ahead of the hook that reads ctx.request, or declare a request body " +
+      "schema so the parsed body is fingerprinted."
     );
   } else {
     // Expect: 100-continue — invite the body we are about to read, exactly as
@@ -747,7 +756,11 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       const key = rawKey.trim();
       validateKey(key, headerName, maxKeyLength);
 
-      const fingerprint = await computeFingerprint(method, ctx, fingerprintCap);
+      const fingerprint = await computeFingerprint(
+        method,
+        ctx,
+        effectiveBodyReadCap(ctx.request, maxFingerprintBodyBytes, fingerprintCap),
+      );
       // Namespace the key by the calling principal so client B can never
       // replay client A's stored response by reusing the same Idempotency-Key
       // (CWE-524). Defaults to the Authorization header plus any mTLS /
@@ -790,20 +803,24 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       ) {
         throw new Error(
           "idempotency(): cannot determine the calling principal for a cookie-bearing request. " +
-            "The default scope reads the Authorization header, which this request does not carry with a non-empty value, " +
-            "so every cookie-authenticated caller would share one idempotency namespace and could " +
-            "replay another caller's stored response (CWE-524). Pass " +
-            "`scope: (ctx) => ctx.state.session?.id` (or another stable per-caller id), or set " +
-            "`allowUnscopedCallers: true` if these callers are genuinely interchangeable."
+          "The default scope reads the Authorization header, which this request does not carry with a non-empty value, " +
+          "so every cookie-authenticated caller would share one idempotency namespace and could " +
+          "replay another caller's stored response (CWE-524). Pass " +
+          "`scope: (ctx) => ctx.state.session?.id` (or another stable per-caller id), or set " +
+          "`allowUnscopedCallers: true` if these callers are genuinely interchangeable."
         );
       }
       const tenant = (ctx.state as Record<PropertyKey, unknown>)[TENANCY_RESOLVED_MARKER];
-      const tenantTag =
+      const tenantHex =
         typeof tenant === "string" && tenant.length > 0
-          ? `${await sha256Hex(`tenant:${tenant}`)}:`
+          ? await sha256Hex(`tenant:${tenant}`)
           : "";
-      const scopeTag = scopeRaw ? `${await sha256Hex(scopeRaw)}:` : "";
-      const storeKey = `${keyPrefix}${tenantTag}${scopeTag}${key}`;
+      const scopeHex = scopeRaw ? await sha256Hex(scopeRaw) : "";
+      // Labeled, positional fields: each hash is empty or 64 hex chars, so it
+      // can never contain `|`, and the client key is always last. An unscoped
+      // caller sending `<scopeHash>:K` therefore lands in `t=|s=|k=<scopeHash>:K`,
+      // never in the scoped slot `t=|s=<scopeHash>|k=K`.
+      const storeKey = `${keyPrefix}t=${tenantHex}|s=${scopeHex}|k=${key}`;
       const now = Date.now();
       const token = Symbol("idempotencyReservation");
       const record: IdempotencyRecord = {
@@ -863,6 +880,12 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       const state = ctx.state as Record<string, unknown>;
       const pending = state[PENDING_STATE_KEY] as PendingReservation | undefined;
       if (!pending) return undefined;
+      const mustRelease = isDisconnectResponse(res) || !cacheableStatus(res.status);
+      // A deadline response that will not be stored leaves the handler running.
+      // Keep the reservation so a same-key retry gets 409 instead of re-running
+      // the side effect; the request finalizer releases it once the handler
+      // settles (the dispatcher defers it until then).
+      if (mustRelease && isRequestAbandoned(ctx)) return undefined;
       // Consume once: a replayed response on a later retry must not re-store.
       delete state[PENDING_STATE_KEY];
 
@@ -877,7 +900,7 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       // A dispatcher-built disconnect response (`disconnectStatusCode`) is
       // not a handler outcome. Release so the client's retry runs again
       // instead of replaying an empty 499 for the whole TTL.
-      if (isDisconnectResponse(res) || !cacheableStatus(res.status)) {
+      if (mustRelease) {
         await releasePending();
         return undefined;
       }
@@ -891,11 +914,11 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
 
       const now = Date.now();
       const completedRecord: IdempotencyRecord = {
-          fingerprint: pending.fingerprint,
-          status: "completed",
-          response: captured,
-          createdAt: now,
-          expiresAt: now + ttlMs,
+        fingerprint: pending.fingerprint,
+        status: "completed",
+        response: captured,
+        createdAt: now,
+        expiresAt: now + ttlMs,
       };
       (completedRecord as unknown as Record<symbol, unknown>)[RESERVATION_TOKEN] = pending.token;
       const completeResult = store.complete(pending.storeKey, completedRecord, ttlMs);

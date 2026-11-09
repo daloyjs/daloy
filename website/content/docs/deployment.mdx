@@ -73,9 +73,9 @@ gcloud run deploy my-api --source . --region europe-north1 --allow-unauthenticat
 ## Production checklist
 
 - Set `NODE_ENV=production` (or `env: "production"`). 5xx `detail` is already redacted when `NODE_ENV` is unset, but production mode also turns on the refuse-to-boot guards and turns off auto-mounted docs.
-- Set a sane `bodyLimitBytes` per route group (don't default to 1 MiB everywhere).
+- Keep the app-wide `bodyLimitBytes` small and raise it only on the routes that need more, with a [per-route `bodyLimitBytes`](/docs/security/route-limits) (since 1.21.0).
 - Set `requestTimeoutMs` to less than your load balancer's idle timeout.
-- Mount `secureHeaders()`, `requestId()`, and `rateLimit()` globally.
+- Mount `rateLimit()` globally. `new App()` already applies `secureHeaders()` and a request id to every response; register your own `secureHeaders()` only to change its options.
 - Declare `behindProxy` for your platform (see [Reverse proxy](#reverse-proxy)). Behind any proxy, leaving it unset makes production answer `500` to the first request that carries `X-Forwarded-For`.
 - Register health and readiness probes with [`app.healthcheck()` and `app.readinesscheck()`](/docs/security/lifecycle-health#3-app-healthcheck-and-app-readinesscheck) and point your platform's checks at them.
 - Wire your structured logger and propagate `request-id` to downstream calls.

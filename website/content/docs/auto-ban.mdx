@@ -112,12 +112,18 @@ Two details worth knowing when you declare more than one hop. First, `X-Real-IP`
 
 Resolving to no identity is right for *identity*, but discarding such a request is wrong for *abuse accounting*: an attacker who reaches your origin directly would get unlimited strikes by omitting a header. So `autoBan` falls back to the **immediate TCP peer** address, in its own `peer:` keyspace. The peer cannot be spoofed (it is the socket actually talking to your server), and in exactly the direct-to-origin case that produced the bypass, the peer *is* the attacker, so accounting becomes precise rather than absent.
 
+Since 1.23.0 the resolved address — forwarded or peer — is canonicalized with the same identity function `rateLimit()` uses: textual variants collapse onto one key (`::ffff:203.0.113.7` shares its record with `203.0.113.7`), and IPv6 addresses are grouped per `/64`, so rotating source addresses inside the block a single subscriber is assigned keeps accumulating strikes instead of minting a fresh identity per address. Tune the grouping with `ipv6Subnet` (1–128, default `64`):
+
 ```ts
 // Default. An unresolvable forwarded identity falls back to the TCP peer.
 app.use(autoBan({ trustedHops: 2 }));
 
 // Opt out: never count or ban a request whose identity cannot be resolved.
 app.use(autoBan({ trustedHops: 2, onUnresolvedIdentity: "skip" }));
+
+// Group IPv6 strikes per /56 instead of /64 (for example on a network where
+// subscribers are assigned shorter prefixes).
+app.use(autoBan({ trustProxyHeaders: true, ipv6Subnet: 56 }));
 ```
 
 Choose `"skip"` only when unresolved requests are known-benign and arrive from a shared address (a load balancer that does not always set `X-Forwarded-For`, say, where every such request would otherwise share that balancer's single `peer:` bucket and a few `401`s could ban the lot). Fixing the proxy configuration is the better answer. On edge runtimes that expose no peer socket there is nothing to attribute to, and the request is skipped either way. A custom `keyGenerator` owns its own posture. Returning `undefined` still means skip.
