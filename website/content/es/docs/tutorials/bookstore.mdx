@@ -1,28 +1,28 @@
 ---
 title: "Tutorial: crea la API de una librería"
-description: "Tutorial paso a paso de DaloyJS: crea una API REST tipada para una librería con rutas basadas en contratos, validación con Zod, OpenAPI y un cliente TypeScript."
+description: "Tutorial paso a paso de DaloyJS: crea la API REST tipada de una librería con rutas contract-first, validación con Zod, documentación OpenAPI y un cliente de TypeScript generado automáticamente."
 keywords:
-  - tutorial DaloyJS
-  - tutorial API librería
-  - tutorial API REST TypeScript
-  - tutorial OpenAPI
+  - tutorial de DaloyJS
+  - tutorial de API para una librería
+  - tutorial de API REST con TypeScript
+  - tutorial de OpenAPI
 ---
 
 # Tutorial: crea la API de una librería
 
-Vamos a construir de principio a fin un pequeño servicio para una librería: rutas, validación, seguridad, OpenAPI, un SDK tipado con Hey API y pruebas de contrato. Al terminar tendrás una aplicación DaloyJS con forma de producción.
+Vamos a crear de principio a fin un pequeño servicio para una librería: rutas, validación, seguridad, OpenAPI, un SDK tipado con Hey API y pruebas de contrato. Al terminar, tendrás una aplicación de DaloyJS con una estructura pensada para producción.
 
 <FlowDiagram
-  title="Lo que vas a construir"
+  title="Lo que vas a crear"
   numbered
   steps={[
-    { label: "Crear el proyecto", detail: "pnpm add @daloyjs/core zod" },
+    { label: "Prepara el proyecto", detail: "pnpm add @daloyjs/core zod" },
     {
-      label: "Fábrica buildApp",
+      label: "Función buildApp",
       detail: "rutas · Zod · hooks de seguridad",
       tone: "accent",
     },
-    { label: "Servir", detail: "serve(app) en Node" },
+    { label: "Sirve la aplicación", detail: "serve(app) en Node" },
     { label: "Especificación OpenAPI", detail: "generateOpenAPI(app)" },
     { label: "SDK tipado", detail: "Hey API openapi-ts" },
     {
@@ -31,7 +31,7 @@ Vamos a construir de principio a fin un pequeño servicio para una librería: ru
       tone: "success",
     },
   ]}
-  caption="Una única fábrica buildApp la comparten el servidor, el volcado de OpenAPI y las pruebas, así que la especificación, el cliente tipado y las pruebas de contrato nunca pueden desincronizarse."
+  caption="El servidor, la exportación de OpenAPI y las pruebas comparten una misma función buildApp, así que la especificación, el cliente tipado y las pruebas de contrato no pueden desincronizarse."
 />
 
 ## 1. Crea el proyecto
@@ -83,9 +83,9 @@ prefer-frozen-lockfile=true
 verify-store-integrity=true
 ```
 
-## 2. Crea una fábrica `buildApp` compartida
+## 2. Crea una función de fábrica `buildApp` compartida
 
-Comparte la App entre el servidor, la generación de código y las pruebas para que la especificación, el cliente y las pruebas sigan alineados:
+Comparte la `App` entre el servidor, la generación de código y las pruebas para que la especificación, el cliente y las pruebas se mantengan sincronizados:
 
 ```ts
 // src/build-app.ts
@@ -158,7 +158,7 @@ export function buildApp() {
 }
 ```
 
-## 3. Arranca el servidor
+## 3. Inicia el servidor
 
 ```ts
 // src/server.ts
@@ -224,7 +224,7 @@ pnpm gen
 # generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
 ```
 
-## 6. Usa el SDK desde cualquier consumidor en TS
+## 6. Usa el SDK desde cualquier aplicación en TS
 
 ```ts
 import { client } from "../generated/client/client.gen.js";
@@ -272,8 +272,8 @@ pnpm test
 ## Lo que has construido
 
 - Una API HTTP tipada, validada y protegida.
-- Un documento OpenAPI 3.1 real y un SDK tipado generado, ambos sincronizados.
-- Pruebas de contrato que vigilan las discrepancias en la CI.
-- Un proceso de instalación reforzado con pnpm y un `.npmrc` cerrado a cal y canto.
+- Un documento OpenAPI 3.1 real y un SDK tipado generado a partir de él, siempre sincronizados entre sí.
+- Pruebas de contrato que detectan las desincronizaciones en CI.
+- Un proceso de instalación reforzado con pnpm y un `.npmrc` restringido.
 
 Sigue con la guía de [Seguridad](/es/docs/security), o con el [tutorial de autorización multiusuario](/docs/tutorials/multi-user-api), [Adapters](/docs/adapters) o la [referencia de la API](/docs/api-reference), estos tres en inglés.
