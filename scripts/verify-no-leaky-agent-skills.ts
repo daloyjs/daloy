@@ -85,7 +85,6 @@ const SKIP_DIR_PREFIXES: readonly string[] = [
   "coverage/",
   "temp_tarball/",
   "generated/",
-  "otherdocs/",
 ];
 
 /**

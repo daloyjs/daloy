@@ -1020,7 +1020,7 @@ Items kept here briefly when shipped so the history remains auditable.
 
 ## Supply-chain security (how DaloyJS is built and published)
 
-We treat the package supply chain as an attack surface. Most controls below were designed against patterns documented in [`otherdocs/security-incidence.md`](otherdocs/security-incidence.md), most recently the TanStack 2026-05-11 worm ([postmortem](https://tanstack.com/blog/npm-supply-chain-compromise-postmortem)) and the chalk/debug/node-ipc phishing campaigns.
+We treat the package supply chain as an attack surface. Most controls below were designed against real npm supply-chain incidents, most recently the TanStack 2026-05-11 worm ([postmortem](https://tanstack.com/blog/npm-supply-chain-compromise-postmortem)) and the chalk/debug/node-ipc phishing campaigns.
 
 ### CI/CD
 
@@ -1283,4 +1283,3 @@ Optional defense-in-depth at the developer's keyboard:
 | `security.txt`                  | [https://daloyjs.dev/.well-known/security.txt](https://daloyjs.dev/.well-known/security.txt)                         |
 | GHSA list                       | [https://github.com/daloyjs/daloy/security/advisories](https://github.com/daloyjs/daloy/security/advisories)         |
 | Private report form             | [https://github.com/daloyjs/daloy/security/advisories/new](https://github.com/daloyjs/daloy/security/advisories/new) |
-| Incident archive                | [`otherdocs/security-incidence.md`](otherdocs/security-incidence.md)                                                 |

@@ -71,8 +71,6 @@
  *                            convention used by
  *                            `verify-no-registry-exfiltration` and
  *                            `verify-no-remote-exec`.
- *   - `otherdocs/**`       — internal security-research notes that
- *                            cite the campaign by name.
  *   - `SECURITY.md`,
  *     `ROADMAP.md`,
  *     `CODE_REVIEW.md`     — security-disclosure / release-notes
@@ -242,7 +240,6 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
 /** Repo-relative path prefixes that are skipped (use POSIX separators). */
 const SKIP_PATH_PREFIXES: readonly string[] = [
   "tests/",
-  "otherdocs/",
   "memory/",
   ".github/copilot-instructions.md",
 ];

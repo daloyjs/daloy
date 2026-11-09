@@ -1,6 +1,6 @@
 # DaloyJS CI — hardened against supply-chain attack patterns.
 #
-# Hardening notes (see otherdocs/security-incidence.md and
+# Hardening notes (see SECURITY.md "Supply-chain security" and
 # https://tanstack.com/blog/incident-followup):
 #   * CI does not use `pull_request_target`: fork PRs run with the safe
 #     `pull_request` trigger and have no write access to repo secrets, caches,

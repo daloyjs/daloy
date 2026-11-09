@@ -2,7 +2,7 @@
 
 Source of truth for what's shipped, what's next, and the order we plan to ship it. Complements the [README](./README.md) (the pitch). Update this file when scope changes — never let it drift behind reality.
 
-> **Release-slice naming.** Each shipped release is identified by its semver tag (e.g. `0.15.0`) plus a short thematic descriptor. The original per-release planning breakdown lives in [`otherdocs/secure-by-default-plan.md`](./otherdocs/secure-by-default-plan.md) for archaeological reference.
+> **Release-slice naming.** Each shipped release is identified by its semver tag (e.g. `0.15.0`) plus a short thematic descriptor.
 
 ## Versioning policy
 
@@ -295,9 +295,8 @@ and a waived maturity gate is the kind of thing an auditor asks about):
       `SECURITY.md` § "Evidence per advisory" requires now exists — including
       "Patch available", which was the blocker. What has not happened is the
       publication itself: no GitHub Security Advisory has been created and no CVE
-      requested, so the disclosure process remains untested. The draft body is
-      maintainer-local at `otherdocs/advisories/GHSA-DRAFT-forwarded-ip.md`
-      (`otherdocs/` is not tracked) with a proposed CVSS v3.1 vector of
+      requested, so the disclosure process remains untested. The draft advisory
+      is kept outside the repository, with a proposed CVSS v3.1 vector of
       `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:L` (6.5 Medium). Remaining action:
       publish the advisory, request the CVE through GitHub's CNA, then tick this
       box with the GHSA id. Tracked as the one stabilization criterion `1.0.0`

@@ -13,7 +13,7 @@ packages:
 # These complement `.npmrc` (the legacy mirror) and `package.json#pnpm` (the
 # pre-v11 build allowlist). They block the install-time attack paths used in
 # the 2025–2026 npm worm campaigns (chalk/debug, node-ipc, Shai-Hulud,
-# TanStack). See otherdocs/security-claims-briefing.md and SECURITY.md.
+# TanStack). See SECURITY.md.
 #
 # Settings intentionally NOT enabled at the root today:
 #   * trustPolicy: no-downgrade — needs a clean cold-install validation

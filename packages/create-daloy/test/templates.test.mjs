@@ -2500,8 +2500,8 @@ test("non-minimal scaffolds keep sentinel comments (so --minimal stays opt-in)",
 });
 
 test("every template ships AGENTS.md and SKILL.md helper files for AI coding agents", async () => {
-  // Both files are an open convention (see otherdocs/agents-doc.md and
-  // otherdocs/skill-doc.md). Keeping them in every template means a freshly
+  // Both files are an open convention (AGENTS.md and agent skills).
+  // Keeping them in every template means a freshly
   // scaffolded project gives Copilot/Claude/Cursor/etc. immediate context
   // without the user having to write anything.
   //
@@ -3435,7 +3435,6 @@ test("secret files stay out of git, images, and uploads", async () => {
       assert.match(file, /^\*\.pem$/m, `${t} ${name} *.pem`);
       assert.match(file, /^\*\.key$/m, `${t} ${name} *.key`);
     }
-    assert.doesNotMatch(dockerignore, /^otherdocs$/m, `${t}: framework-repo entry leaked into the template`);
   }
   const cf = await readFile(path.join(TEMPLATE_DIR("cloudflare-worker"), "_dockerignore"), "utf8");
   assert.match(cf, /^\.dev\.vars$/m, "wrangler local secrets must not be baked into the image");

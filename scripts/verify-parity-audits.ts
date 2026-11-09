@@ -1,8 +1,8 @@
 /**
  * Pattern-agnostic-framework parity audits.
  *
- * Converts the head-to-head feature comparison in
- * `otherdocs/security_task.txt` into a standing CI gate so the framework
+ * Converts a head-to-head feature comparison against other frameworks
+ * into a standing CI gate so the framework
  * never silently regresses against another TS / Bun / Node ergonomic
  * framework's documented defaults. Each numbered audit below is a check,
  * not a one-time change. This file carries the static grep gates that scan
