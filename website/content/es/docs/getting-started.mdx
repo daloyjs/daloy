@@ -170,9 +170,9 @@ const app = new App({
 });
 ```
 
-La misma URL (`GET /docs`), los mismos endpoints `/openapi.json` y `/openapi.yaml` con la especificación actualizada y el mismo manejo de la CSP; solo cambia el HTML que se muestra. También puedes mantener las dos: deja la ruta montada automáticamente con Scalar y expón tú mismo una segunda ruta con Swagger usando `swaggerUiHtml()` (consulta la [guía de OpenAPI](/docs/openapi) para ver cómo hacerlo manualmente).
+La misma URL (`GET /docs`), los mismos endpoints `/openapi.json` y `/openapi.yaml` con la especificación actualizada y el mismo manejo de la CSP; solo cambia el HTML que se muestra. También puedes mantener las dos: deja la ruta montada automáticamente con Scalar y expón tú mismo una segunda ruta con Swagger usando `swaggerUiHtml()` (consulta la [guía de OpenAPI](/es/docs/openapi) para ver cómo hacerlo manualmente).
 
-¿Quieres una ruta personalizada? Define `docs` como objeto: `docs: { ui: "swagger", path: "/reference" }`. Cuando `docs` es un objeto, la documentación solo se monta fuera de producción, a menos que añadas `enabled: true` (desde la versión 1.5.5). Es el mismo comportamiento que `docs: "auto"`, que no monta las rutas cuando `production: true`. ¿Necesitas control total? Define `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml()` o `scalarHtml()`; consulta la [guía de OpenAPI](/docs/openapi).
+¿Quieres una ruta personalizada? Define `docs` como objeto: `docs: { ui: "swagger", path: "/reference" }`. Cuando `docs` es un objeto, la documentación solo se monta fuera de producción, a menos que añadas `enabled: true` (desde la versión 1.5.5). Es el mismo comportamiento que `docs: "auto"`, que no monta las rutas cuando `production: true`. ¿Necesitas control total? Define `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml()` o `scalarHtml()`; consulta la [guía de OpenAPI](/es/docs/openapi).
 
 Tanto `swaggerUiHtml()` como `scalarHtml()` cargan sus recursos predeterminados desde la CDN de jsDelivr, así que una Content-Security-Policy estricta debe permitir esos recursos; de lo contrario, la interfaz de documentación puede mostrarse en blanco. La ruta montada automáticamente y `htmlResponse()` añaden una CSP compatible de forma automática. Si construyes tu propia respuesta, importa `docsContentSecurityPolicy` desde `@daloyjs/core/docs` y pasa el resultado como encabezado de la respuesta:
 
@@ -236,7 +236,7 @@ La autenticación demuestra quién hizo la llamada, pero no demuestra que tenga 
 
 ## Siguientes pasos
 
-- [Enrutamiento](/docs/routing)
-- [Validación con Standard Schema](/docs/validation)
-- [Salvaguardas de seguridad y middleware](/docs/security)
-- [Tutorial: API de una librería](/docs/tutorials/bookstore)
+- [Enrutamiento](/es/docs/routing)
+- [Validación con Standard Schema](/es/docs/validation)
+- [Salvaguardas de seguridad y middleware](/es/docs/security)
+- [Tutorial: API de una librería](/es/docs/tutorials/bookstore)
