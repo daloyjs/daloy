@@ -206,6 +206,7 @@ App の `bodyLimitBytes` オプション（デフォルト 1 MiB）は、宣言�
 - Content-Type をルートの `accepts` リスト（設定されていればグローバルの `allowedContentTypes`）と照合し、一致しなければ **415** になります。
 - デフォルトで受け付けるボディの型：`application/json`、`application/x-www-form-urlencoded`、`multipart/form-data`。
 - JSON、クエリ文字列、urlencoded フォーム、multipart フォームのプロトタイプ汚染に強いパース。
+- JSON、urlencoded、テキストのボディに対する厳格な UTF-8 デコード（1.16.0 以降）: 不正または冗長な UTF-8 シーケンスは `U+FFFD` に置き換えて検証されるのではなく、**400** `Request body is not valid UTF-8` で応答します（RFC 8259 §8.1）。正しい形式の非 ASCII 文字と先頭の BOM は引き続きパースされます。`ctx.request.text()` はプラットフォームの寛容なデコードのままです。
 
 JSON のボディはオブジェクトにパースされ、urlencoded のボディは `URLSearchParams` で、multipart のボディはプラットフォームの `Request.formData()` API でパースされます。ルートで独自のテキスト系メディアタイプを許可した場合、DaloyJS はデコード済みのテキストをボディのスキーマに渡します。
 

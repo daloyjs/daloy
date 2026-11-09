@@ -114,14 +114,22 @@ interface FetchGuardOptions {
   denyAddresses?:  readonly string[];   // wins over allow + class flags
   allowHosts?:     readonly string[];
   allowProtocols?: readonly string[];   // default: ["http:", "https:"]
+  allowPorts?:     readonly number[];   // default: any port except the Fetch "bad port" list (1.14.0)
   maxRedirects?:   number;              // default: 5; each hop re-validated
-  resolve?: (host: string) => Promise<string[]>;
+  allowProtocolDowngrade?: boolean;     // default: false; https: -> http: redirects refused (1.16.0)
+  sensitiveHeaders?: readonly string[]; // extra headers stripped on a cross-origin redirect (1.14.0)
+  maxReplayBodyBytes?: number;          // default: 1 MiB; largest body a 307/308 can replay
+  timeoutMs?:      number;              // default: 30_000; whole call incl. body read; 0 disables (1.14.0)
+  maxResponseBytes?: number;            // default: 10 MiB; Infinity disables (1.14.0)
+  pinDns?:         boolean;             // default: true on Node, false elsewhere; connects to the validated IP
+  resolve?: (host: string) => Promise<readonly string[]>;
 }
 
 type SsrfBlockReason =
   | "protocol-not-allowed" | "host-not-allowed" | "dns-resolution-failed"
   | "address-not-allowed"  | "too-many-redirects" | "credentials-in-url"
-  | "invalid-url" | "redirect-body-not-replayable";
+  | "invalid-url" | "redirect-body-not-replayable"
+  | "port-not-allowed" | "response-too-large" | "protocol-downgrade";
 
 class SsrfBlockedError extends Error { readonly url; readonly reason: SsrfBlockReason; readonly address?: string }
 
@@ -268,6 +276,7 @@ interface JwkOptions {
   allowAnyAudience?: boolean;            // 1.5.4: opt out of the production audience requirement
   maxLifetimeSeconds?: number;           // positive integer; requires exp; default: no cap
   clockSkewSeconds?: number;             // default: 0
+  now?: () => number;                    // injectable Unix-seconds clock, forwarded to the verifier (1.18.0)
   realm?: string;                        // WWW-Authenticate realm; default: "api"
   fetchTtlSeconds?: number;              // default: 300; URL sources only
   maxStaleSeconds?: number;              // default: 3600; 0 disables; URL sources only

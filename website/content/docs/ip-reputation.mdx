@@ -176,6 +176,7 @@ const reputation = ipReputation({
 ## Security notes
 
 - Defense in depth. A denylist complements (never replaces) authentication, rate limiting, and `ipRestriction()` allowlists.
+- IPv4-mapped clients match IPv4 entries. A dual-stack socket reports an IPv4 peer as `::ffff:a.b.c.d`; since 1.23.0 the guard folds that form to its IPv4 address and checks it against the IPv4 feed entries too, so a listed IPv4 client cannot pass by arriving over a dual-stack listener.
 - Trust your feeds. A compromised feed can deny legitimate clients. Prefer reputable sources and watch `onError` / match volume.
 - SSRF. `urlFeed()`'s outbound fetch is SSRF-hardened by default: it routes through a [`fetchGuard()`](/docs/security/fetch-guard) instance (per-hop redirect re-validation, cloud-metadata and internal IPs blocked), so a compromised feed host can't redirect the request into internal space. Override `fetchImpl` only for a non-standard runtime, or with `fetchGuard({ allowPrivate: true })` for an intentionally internal feed mirror.
 - Feed credentials stay on the feed's origin. Every header you pass in `urlFeed(url, { headers })` (an `x-api-key`, say) is removed when a redirect leaves the feed's origin, on top of the `Authorization` / `Cookie` strip that `fetchGuard()` always applies. Tune the default guard with `guard` (for example `urlFeed(url, { guard: { allowHosts: ["feeds.internal"] } })`); the header strip always applies. A custom `fetchImpl` must strip them itself.

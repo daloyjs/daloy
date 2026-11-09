@@ -97,7 +97,7 @@ sitemap:
 
 ## البرمجيات الوسيطة الأمنية الرسمية [#first-party-security-middleware]
 
-هذه جزء من DaloyJS وموثقة معًا، لكنها تبقى صريحة لأن CSP وCORS ومفاتيح تحديد المعدل وأسرار الجلسات وطرح CSRF قرارات تخص النشر.
+هذه جزء من DaloyJS وموثقة معًا. يطبّق `new App()` مسبقًا `secureHeaders()` ومعرّف طلب على كل استجابة (ويُوقف `new App({ secureHeaders: false })` الترويسات التلقائية)؛ سجّلها بنفسك فقط لتغيير خياراتها، وأي `secureHeaders()` تثبّته بنفسك يحل محل النسخة التلقائية. أما البقية فتبقى صريحة لأن CORS ومفاتيح تحديد المعدل وأسرار الجلسات وطرح CSRF قرارات تخص النشر.
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // نشر x-request-id
-app.use(secureHeaders());       // CSP وHSTS وX-Frame-Options وCOOP وCORP وno-sniff ...
+app.use(requestId());           // اختياري: لضبط معالجة x-request-id (يُعيَّن معرّف طلب افتراضيًا)
+app.use(secureHeaders());       // اختياري: يحل محل CSP وHSTS وX-Frame-Options وCOOP وCORP وno-sniff المطبّقة تلقائيًا ...
 app.use(cors({                  // قائمة سماح صريحة؛ لا * مع بيانات الاعتماد أبدًا
   origin: ["https://app.example.com"],
   credentials: true,

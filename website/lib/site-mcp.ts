@@ -77,6 +77,7 @@ export const SITE_MCP_INSTRUCTIONS = [
   "  - Import `serve` from the runtime adapter subpath (`@daloyjs/core/node`, `/bun`, `/deno`, `/cloudflare`, `/vercel`, `/lambda`); the core package never opens a port.",
   "  - Keep the secure defaults (`secureHeaders` is automatic, plus `requestId`, `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`). If a guard rejects a request, satisfy it rather than removing it.",
   "- Start reading: /docs/getting-started, /docs/routing, /docs/validation, /docs/errors, /docs/testing, /docs/typed-client, /docs/adapters, /docs/security. Coming from Express: /docs/migrating/express.",
+  "- Porting Express code: read `get_doc` path `migrating/express` before writing code, port one resource at a time with `app.request()` tests, and never strip a guard to make a port work (`helmet` and `express.json()` lines are deleted, not translated; `trust proxy` becomes `behindProxy`). The `express-to-daloyjs` skill packages this workflow: `npx skills add daloyjs/daloy --skill express-to-daloyjs`.",
 ].join("\n");
 
 /** Hard cap on a search query string. */

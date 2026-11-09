@@ -107,7 +107,7 @@ app.post("/upload", {
   const name = sanitizeFilename(body.file.name ?? "upload"); // strips .., /, \, NUL, control chars
   assertSafeRelativePath(name);               // throws on any escape sequence
   // safe to join with your storage root now
-  return { status: 204 };
+  return { status: 204, body: undefined };
 });
 ```
 

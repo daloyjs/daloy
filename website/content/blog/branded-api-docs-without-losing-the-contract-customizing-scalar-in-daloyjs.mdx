@@ -193,17 +193,18 @@ app.get("/docs", {
   // scalarHtml() takes the same configuration shape, but here you can
   // also assemble the page yourself (extra <link>, an extra <script>
   // that registers a Scalar plugin, etc).
+  const nonce = ctx.state.cspNonce as string | undefined; // set by secureHeaders({ contentSecurityPolicy: { nonce: true } })
   const html = scalarHtml({
     specUrl: "/openapi.json",
     title: "Bookstore API",
-    scriptNonce: ctx.state.cspNonce,   // works with secureHeaders() CSP
+    scriptNonce: nonce,   // works with secureHeaders() CSP
     configuration: {
       theme: "deepSpace",
       layout: "modern",
       customCss: brandCss,
     },
   });
-  return htmlResponse(html, { scriptNonce: ctx.state.cspNonce });
+  return htmlResponse(html, { scriptNonce: nonce });
 });`;
 
 export const TEST = `// tests/docs-scalar.test.ts, the regression test I copy into every

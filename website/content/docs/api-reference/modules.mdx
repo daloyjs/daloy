@@ -429,14 +429,16 @@ type UploadedFile = Blob & { readonly name?: string };
 
 interface FileFieldOptions {
   maxBytes?: number;
-  accept?: string | readonly string[];      // MIME or extension allowlist
-  filename?: { maxLength?: number; pattern?: RegExp };
+  accept?: string[];                        // MIME allowlist, exact ("image/png") or wildcard ("image/*")
+  filename?: (name: string) => boolean;     // runs after the built-in unsafe-filename check
+  allowUnsafeFilenames?: boolean;           // default: false; path separators, NUL/control chars, "." / "..", >255 chars refused with 422 (1.16.0)
   magicBytes?: FileMagicBytesOption;        // refuses content-type spoofing
-  optional?: boolean;
-  format?: string;
+  rejectScriptableImages?: boolean;         // default: on when magicBytes is set; refuses SVG/MVG/MSL/PS/EPS
+  optional?: boolean;                       // default: false
+  format?: "binary" | "byte";               // OpenAPI hint; default: "binary"
 }
 
-interface MultipartObjectOptions { strict?: boolean }  // refuses unknown fields by default
+interface MultipartObjectOptions { strict?: boolean }  // default: false (extras dropped); true refuses unknown fields, inherited names such as toString included (1.20.0)
 ```
 
 ## `@daloyjs/core/websocket` [#daloyjs-core-websocket]
@@ -444,19 +446,33 @@ interface MultipartObjectOptions { strict?: boolean }  // refuses unknown fields
 ```ts
 defineWebSocket<P, S, TData>(handler: WebSocketHandler<P, S, TData>): WebSocketHandler<P, S, TData>;
 
-interface WebSocketHandler<P, S = AppState, TData = unknown> {
-  beforeUpgrade?: (ctx: WebSocketContext<P, S>) => void | Response | Promise<void | Response>;
-  open?:    (conn: WebSocketConnection<TData>, ctx) => void | Promise<void>;
-  message?: (conn, msg: MessageEvent, ctx) => void | Promise<void>;
-  close?:   (conn, code: number, reason: string, ctx) => void | Promise<void>;
-  error?:   (conn, err: Error, ctx) => void | Promise<void>;
+interface WebSocketHandler<P, S = AppState, TData = unknown, B = StandardSchemaV1 | undefined> {
+  request?: { body?: B };              // validate every inbound message before message() (1.6.0)
+  meta?: WebSocketMeta;                // AsyncAPI metadata
+  beforeUpgrade?(request: Request, ctx: WebSocketContext<P, S>):
+    Response | string | undefined | Promise<Response | string | undefined>; // Response rejects, string picks a subprotocol
+  open?(conn: WebSocketConnection<TData>, ctx: WebSocketContext<P, S>): void | Promise<void>;
+  message?(conn, data: string | Uint8Array | ArrayBuffer, isBinary: boolean, body): void | Promise<void>;
+  close?(conn, code: number, reason: string): void | Promise<void>;
+  error?(conn, err: unknown): void | Promise<void>;
+  drain?(conn): void | Promise<void>;
   // limits
-  maxPayloadLength?:       number;   // default: 1 MiB
-  backpressureLimit?:      number;   // default: 1 MiB
-  idleTimeoutSeconds?:     number;   // default: 120
-  allowedSubprotocols?:    readonly string[];
-  origin?:                 string | readonly string[] | ((origin) => boolean);
+  maxPayloadLength?:         number;   // default: 1 MiB
+  backpressureLimit?:        number;   // default: 1 MiB
+  closeOnBackpressureLimit?: boolean;  // default: true
+  idleTimeout?:              number;   // seconds; default: 120; 0 is refused
+  perMessageDeflate?:        boolean;  // default: false; refused in production secureDefaults
+  maxQueuedMessages?:        number;   // default: 64; messages queued behind an async validation, overflow closes 1009 (1.23.0)
+  maxQueuedBytes?:           number;   // default: 2 * maxPayloadLength (1.23.0)
+  // origin and auth posture
+  allowedOrigins?: "same-origin" | readonly string[] | ((origin: string | null, request: Request) => boolean);
+  acknowledgeCrossOriginUpgrade?: boolean;       // required in production when allowedOrigins is unset
+  acknowledgeUnauthenticated?: boolean;          // intentionally public route (also satisfies requireAuth / group auth)
+  acknowledgeHeaderMutatingMiddleware?: boolean;
 }
+
+// from "@daloyjs/core" (root export):
+markWebSocketAuth(fn): fn;  // marks a beforeUpgrade hook as authenticating for requireAuth / group auth (1.20.0)
 
 wsRateLimit(opts: { windowMs; max; groupId?; keyGenerator?; store? }): WebSocketBeforeUpgrade;
   // store / keyGenerator failures are rethrown and answered with a generic 500,

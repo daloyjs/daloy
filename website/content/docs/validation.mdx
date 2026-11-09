@@ -206,6 +206,7 @@ When a route declares `request.body`, DaloyJS also enforces:
 - Content-Type against the route's `accepts` list, or global `allowedContentTypes` if set -\> **415**.
 - Default accepted body types: `application/json`, `application/x-www-form-urlencoded`, and `multipart/form-data`.
 - Prototype-pollution-safe parsing for JSON, query strings, urlencoded forms, and multipart forms.
+- Strict UTF-8 decoding for JSON, urlencoded, and text bodies (since 1.16.0): an invalid or overlong UTF-8 sequence answers **400** `Request body is not valid UTF-8` instead of being validated with `U+FFFD` substituted (RFC 8259 §8.1). Well-formed non-ASCII and a leading BOM still parse; `ctx.request.text()` keeps the platform's lenient decode.
 
 JSON bodies parse to objects, urlencoded bodies parse through `URLSearchParams`, and multipart bodies parse through the platform `Request.formData()` API. If you opt a route into a custom text media type, DaloyJS passes the decoded text into your body schema.
 

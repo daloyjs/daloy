@@ -36,7 +36,9 @@ Do **not** use this skill for frontend UI, infra-only work, or unrelated
 docs. Rare topics live under `references/`: **read**
 [references/mcp.md](references/mcp.md) only when adding an MCP endpoint,
 and **read** [references/ci-workflows.md](references/ci-workflows.md) only
-when editing `.github/` or a `--with-ci` workflow. Do not load those files
+when editing `.github/` or a `--with-ci` workflow, and **read**
+[references/migrating-from-express.md](references/migrating-from-express.md)
+only when porting Express.js code into this project. Do not load those files
 up front.
 
 ## Core principles

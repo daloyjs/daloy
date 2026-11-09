@@ -28,7 +28,7 @@ The guards on this page are gated on the resolved environment being `production`
 
 ## When the guards run [#when-the-guards-run]
 
-The route-table guards (sections 3 and 5 to 9) need every route registered before they can judge the app, so they run in three places:
+The route-table guards (sections 3, 5 to 9, and 13) need every route registered before they can judge the app, so they run in three places:
 
 - **At adapter startup.** `serve()` (Node, Bun, Deno), `toFetchHandler()` (Cloudflare, Vercel), `toWebHandler()`, `toLambdaHandler()` and the Fastly helpers call `app.assertSecureConfig()` before serving. In production a violation throws there, so the process or the cold start fails instead of live traffic. Cloudflare validates Worker startup on deploy, so there the deploy itself fails.
 - **On the first request**, as before. This still covers routes registered after the adapter was created.

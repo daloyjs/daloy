@@ -17,6 +17,29 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- New standalone agent skill `express-to-daloyjs` at
+  `skills/express-to-daloyjs/SKILL.md`, installable into an existing Express
+  repo with `npx skills add daloyjs/daloy --skill express-to-daloyjs`. It gives
+  coding agents an inventory-first porting workflow, an Express-to-DaloyJS
+  translation table, and the list of security guards they must satisfy rather
+  than strip.
+- create-daloy: every template's `daloyjs-best-practices` skill ships the same
+  playbook as `references/migrating-from-express.md`, read only when porting
+  Express code. A template test keeps it byte-identical to the standalone skill.
+
+### Changed
+
+- Docs: the Express migration guide now covers Express 4 and 5 differences,
+  drops the explicit `secureHeaders()` line (it is auto-installed), maps
+  `trust proxy` to `behindProxy`, `x-powered-by` and user-supplied redirects to
+  their DaloyJS equivalents, adds the `preBody` hook, uses `docs: "auto"`, and
+  gains a "Secure defaults that change behavior after the cut-over" table and a
+  "Migrating with an AI coding agent" section (docs MCP server, skill,
+  AGENTS.md). The docs MCP server's primer now points Express migrations at
+  `get_doc("migrating/express")` and the skill.
+
 ## [1.23.0] - 2026-11-08
 
 ### Added

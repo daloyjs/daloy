@@ -97,7 +97,7 @@ sitemap:
 
 ## 公式のセキュリティミドルウェア [#first-party-security-middleware]
 
-これらは DaloyJS の一部であり、まとめてドキュメント化されていますが、CSP、CORS、レート制限のキー、セッションのシークレット、CSRF の導入はデプロイ時の判断なので、明示的に設定する形のままにしています。
+これらは DaloyJS の一部であり、まとめてドキュメント化されています。`new App()` はすべてのレスポンスに `secureHeaders()` とリクエスト ID をすでに適用しています（自動ヘッダーは `new App({ secureHeaders: false })` で無効化できます）。自分で登録するのはオプションを変えたいときだけで、自分で導入した `secureHeaders()` は自動のものを置き換えます。それ以外は、CORS、レート制限のキー、セッションのシークレット、CSRF の導入がデプロイ時の判断なので、明示的に設定する形のままにしています。
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // x-request-id の伝播
-app.use(secureHeaders());       // CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff など
+app.use(requestId());           // 任意: x-request-id の扱いを調整（リクエスト ID はデフォルトで設定済み）
+app.use(secureHeaders());       // 任意: 自動適用の CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff などを置き換え
 app.use(cors({                  // 明示的な許可リスト。credentials と * は決して併用しない
   origin: ["https://app.example.com"],
   credentials: true,

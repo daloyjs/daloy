@@ -296,7 +296,7 @@ And on WebSockets, the framework closes the Cross-Site WebSocket Hijacking class
 
 ## Same code, every runtime
 
-Because the core is just `Request` to `Response`, deployment is a one-line import swap. No rewrite when your platform decision changes, and platform decisions always change.
+Because the core is just `Request` to `Response`, deployment is a one-line import swap (behind a platform proxy like Cloudflare, Vercel, or Lambda, also declare `behindProxy: { hops: 1 }` on the App). No rewrite when your platform decision changes, and platform decisions always change.
 
 ```ts
 import { serve } from "@daloyjs/core/node";        // Node: Railway, Render, Fly, Heroku

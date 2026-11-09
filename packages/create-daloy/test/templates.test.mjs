@@ -2590,6 +2590,11 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
       /references\/ci-workflows\.md/,
       `${template} SKILL.md should point at references/ci-workflows.md`
     );
+    assert.match(
+      skill,
+      /\*\*read\*\*\s+\[references\/migrating-from-express\.md\]/,
+      `${template} SKILL.md should point at references/migrating-from-express.md with an explicit "read"`
+    );
     await access(
       path.join(
         pkgRoot,
@@ -2606,6 +2611,35 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
         "_agents/skills/daloyjs-best-practices/references/ci-workflows.md"
       )
     );
+    // The Express migration playbook is the body of the standalone
+    // skills/express-to-daloyjs/SKILL.md at the repo root (installable with
+    // `npx skills add daloyjs/daloy --skill express-to-daloyjs`). Keep the two
+    // byte-identical so scaffolded projects and Express repos get one playbook.
+    const migration = await readFile(
+      path.join(
+        pkgRoot,
+        "templates",
+        template,
+        "_agents/skills/daloyjs-best-practices/references/migrating-from-express.md"
+      ),
+      "utf8"
+    );
+    const standalone = await readFile(
+      path.join(pkgRoot, "..", "..", "skills", "express-to-daloyjs", "SKILL.md"),
+      "utf8"
+    );
+    const standaloneBody = standalone.replace(/^---\n[\s\S]*?\n---\n\n/, "");
+    assert.notEqual(standaloneBody, standalone, "standalone skill must carry frontmatter");
+    assert.equal(
+      migration,
+      standaloneBody,
+      `${template} references/migrating-from-express.md drifted from skills/express-to-daloyjs/SKILL.md`
+    );
+    // The playbook is the security tripwire for migrations: it must keep
+    // forbidding the "make it work" weakenings.
+    assert.match(migration, /Never strip these/);
+    assert.match(migration, /secureDefaults: false/);
+    assert.doesNotMatch(migration, /app\.use\(helmet\(\)\)/);
   }
 });
 
@@ -2658,6 +2692,13 @@ test("scaffolded projects include AGENTS.md and SKILL.md at the conventional pat
           tmpDir,
           projectName,
           ".agents/skills/daloyjs-best-practices/references/ci-workflows.md"
+        )
+      );
+      await access(
+        path.join(
+          tmpDir,
+          projectName,
+          ".agents/skills/daloyjs-best-practices/references/migrating-from-express.md"
         )
       );
       // The `_agents` placeholder must be renamed to `.agents` on copy.

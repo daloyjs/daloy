@@ -97,7 +97,7 @@ sitemap:
 
 ## Собственный middleware безопасности [#first-party-security-middleware]
 
-Он входит в DaloyJS и документирован вместе с остальным, но остаётся явным, потому что CSP, CORS, ключи ограничения частоты, секреты сессий и внедрение CSRF являются решениями уровня деплоя.
+Эти middleware входят в DaloyJS и документированы вместе. `new App()` уже применяет `secureHeaders()` и идентификатор запроса к каждому ответу (`new App({ secureHeaders: false })` отключает автоматические заголовки); регистрируйте их сами только чтобы изменить параметры, причём установленный вами `secureHeaders()` заменяет автоматический. Остальные остаются явными, потому что CORS, ключи ограничения частоты, секреты сессий и внедрение CSRF являются решениями уровня деплоя.
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // передача x-request-id
-app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
+app.use(requestId());           // необязательно: настройка обработки x-request-id (идентификатор запроса задаётся по умолчанию)
+app.use(secureHeaders());       // необязательно: заменяет автоматически применённые CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
 app.use(cors({                  // явный список разрешённых; никогда * с credentials
   origin: ["https://app.example.com"],
   credentials: true,

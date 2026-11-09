@@ -54,11 +54,15 @@ interface AppOptions {
   requestTimeoutMs?: number;           // default: 30_000; 0 disables; covers hooks + body read + handler (1.5.4); a route may override (1.21.0)
   requestTimeoutStatus?: 408 | 503 | 504; // default: 408; status the requestTimeoutMs deadline answers with (1.10.0)
   maxHeaderCount?: number;             // default: 100; 0 disables. Node also 431s at the parser cap (HTTP + WS upgrade); usable budget is 99 at default
+  jsonMaxKeys?: number;                // default: 10_000 keys per JSON object; 0 disables
+  jsonMaxDepth?: number;               // default: 50 levels of JSON nesting; 0 disables
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
 
   // Environment & logging
   production?: boolean;                // defaults from NODE_ENV
-  env?: "development" | "production" | "test";  // "production" also forces mcpRoutes() error redaction
+  env?: "development" | "production" | "test";  // any other value throws at construction (1.20.0); "production" also forces mcpRoutes() error redaction
+  allowedHosts?: readonly string[];    // Host allowlist, 400 before routing; unset accepts every host
+  requireAuth?: boolean;               // refuse to register a route with no auth hook unless it sets public: true
   logger?: Logger | { level?: LogLevel } | false;
   stripServerHeaders?: boolean;        // default: true
   poweredBy?: boolean | string;        // default: off; true → X-Powered-By: DaloyJS
@@ -68,12 +72,14 @@ interface AppOptions {
   corsCrossOriginGuard?: boolean;      // default: true
   csrf?: "off";                        // opt-out for the session+CSRF boot guard
   trustProxy?: boolean;                // legacy tri-state guard (undefined refuses X-Forwarded-*)
-  behindProxy?: BehindProxyConfig;     // "none" | "loopback" | { hops: N } | { cidrs: [...] } (a /0 cidr throws, 1.5.4)
+  behindProxy?: BehindProxyConfig;     // "none" | "loopback" | { hops: N, header? } | { cidrs: [...], header? } (a /0 cidr throws, 1.5.4)
+                                       // header: "x-forwarded-for" (default) | "forwarded" | "cf-connecting-ip" (1.16.0)
 
   // Operational
   disconnectStatusCode?: number;       // default: 499 (client-disconnect log code)
   crashOnUnhandledRejection?: boolean; // default: true in production
   loadShedding?: boolean | LoadSheddingOptions;
+  telemetry?: boolean | TelemetryOptions; // OTLP export from OTEL_EXPORTER_OTLP_* env vars; no-op without an endpoint
 
   // Validation, hooks, mock mode
   validateResponses?: boolean;         // default: true
@@ -82,7 +88,8 @@ interface AppOptions {
 
   // OpenAPI / docs auto-mount
   openapi?: AppOpenAPIOptions;
-  docs?: boolean | "auto" | DocsRouteOptions;  // default: false (create-daloy templates set true)
+  docs?: boolean | "auto" | DocsRouteOptions;  // default: false; "auto" mounts outside production (create-daloy templates set "auto")
+  asyncapi?: boolean | "auto" | AsyncAPIRouteOptions; // AsyncAPI document + UI for app.ws() routes
 }
 
 // Routing
@@ -149,6 +156,13 @@ interface AuthSpec {
 // Plugin-extensible - augment via "declare module"
 interface AppState {}
 
+// Framework-written request state, declared on every HTTP context (1.18.0)
+interface RequestState {
+  requestId: string;
+  log: Logger;
+}
+type ContextState = AppState & RequestState & Record<string, unknown>;
+
 type AuthScheme = "bearer" | "basic" | "jwt" | "jwk" | "webhook" | "session" | "apiKey";
 interface AuthContext<TCredentials = unknown> {
   readonly scheme: AuthScheme;
@@ -161,7 +175,7 @@ interface BaseContext<P extends string, R extends RequestSchemas | undefined> {
   query:   InferRequest<R, P>["query"];
   headers: InferRequest<R, P>["headers"];
   body:    InferRequest<R, P>["body"];
-  state:   AppState & Record<string, unknown>;
+  state:   ContextState; // AppState & RequestState & Record<string, unknown> (1.18.0)
   set:     { status?: number; headers: Headers };
 }
 
@@ -171,7 +185,7 @@ interface PreBodyContext<P extends string = string> {
   query: Record<string, string | string[] | undefined>;
   headers: Record<string, string | undefined>;
   body: undefined;
-  state: AppState & Record<string, unknown>;
+  state: ContextState;
   set: { status?: number; headers: Headers };
 }
 

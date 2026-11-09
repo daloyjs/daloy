@@ -97,7 +97,7 @@ These checks happen in `App` or the runtime adapter itself. Applications get the
 
 ## First-party security middleware
 
-These are part of DaloyJS and documented together, but they stay explicit because CSP, CORS, rate-limit keys, session secrets, and CSRF rollout are deployment decisions.
+These are part of DaloyJS and documented together. `new App()` already applies `secureHeaders()` and a request id to every response (`new App({ secureHeaders: false })` turns the automatic headers off); register them yourself only to change their options, and a user-installed `secureHeaders()` replaces the automatic one. The rest stay explicit because CORS, rate-limit keys, session secrets, and CSRF rollout are deployment decisions.
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // x-request-id propagation
-app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
+app.use(requestId());           // optional: tune x-request-id handling (a request id is set by default)
+app.use(secureHeaders());       // optional: replaces the auto-applied CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
 app.use(cors({                  // explicit allowlist; never * with credentials
   origin: ["https://app.example.com"],
   credentials: true,

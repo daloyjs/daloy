@@ -29,7 +29,7 @@ footerLinks:
 ---
 
 export const SESSION_BASIC = `// src/app.ts, the smallest useful session setup
-import { App, session, type SessionContext } from "@daloyjs/core";
+import { App, csrf, session, type SessionContext } from "@daloyjs/core";
 
 // Add the session shape to your AppState so handlers get full typing.
 declare module "@daloyjs/core" {
@@ -52,7 +52,11 @@ app.use(
     //   rolling:     true   (sliding expiration)
     //   saveUninitialized: false  (no cookie until something is actually written)
   }),
-);`;
+);
+
+// session() plus any POST/PUT/PATCH/DELETE route needs csrf(), or the app
+// refuses to boot in production.
+app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://app.example.com"] }));`;
 
 export const SESSION_USAGE = `// src/routes/auth.ts, read and write session data
 import { z } from "zod";
@@ -92,7 +96,7 @@ app.route({
   responses: { 204: { description: "bye" } },
   handler: async ({ state }) => {
     state.session.destroy();
-    return { status: 204 };
+    return { status: 204, body: undefined };
   },
 });`;
 
