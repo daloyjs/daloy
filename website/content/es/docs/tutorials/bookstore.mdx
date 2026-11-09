@@ -83,7 +83,7 @@ prefer-frozen-lockfile=true
 verify-store-integrity=true
 ```
 
-## 2. Crea una función de fábrica `buildApp` compartida
+## 2. Crea una función de fábrica `buildApp` compartida [#2-crea-una-fábrica-buildapp-compartida]
 
 Comparte la `App` entre el servidor, la generación de código y las pruebas para que la especificación, el cliente y las pruebas se mantengan sincronizados:
 
@@ -158,7 +158,7 @@ export function buildApp() {
 }
 ```
 
-## 3. Inicia el servidor
+## 3. Inicia el servidor [#3-arranca-el-servidor]
 
 ```ts
 // src/server.ts
@@ -224,7 +224,7 @@ pnpm gen
 # generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}
 ```
 
-## 6. Usa el SDK desde cualquier aplicación en TS
+## 6. Usa el SDK desde cualquier aplicación en TS [#6-usa-el-sdk-desde-cualquier-consumidor-en-ts]
 
 ```ts
 import { client } from "../generated/client/client.gen.js";
