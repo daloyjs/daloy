@@ -10,6 +10,7 @@ import {
   computeAcceptKey,
   DEFAULT_WS_BACKPRESSURE_LIMIT,
   DEFAULT_WS_IDLE_TIMEOUT_SECONDS,
+  DEFAULT_WS_MAX_QUEUED_MESSAGES,
   DEFAULT_WS_MAX_PAYLOAD_LENGTH,
   decodeClosePayload,
   defineWebSocket,
@@ -621,6 +622,8 @@ test("App.ws applies safe defaults and validates unsafe overrides", () => {
     perMessageDeflate: false,
     idleTimeout: DEFAULT_WS_IDLE_TIMEOUT_SECONDS,
     maxPayloadLength: DEFAULT_WS_MAX_PAYLOAD_LENGTH,
+    maxQueuedMessages: DEFAULT_WS_MAX_QUEUED_MESSAGES,
+    maxQueuedBytes: 2 * DEFAULT_WS_MAX_PAYLOAD_LENGTH,
   });
 
   assert.throws(
@@ -679,6 +682,8 @@ test("WebSocketRegistry runtimeOptions aggregates route limits", () => {
     perMessageDeflate: true,
     idleTimeout: 5,
     maxPayloadLength: 20,
+    maxQueuedMessages: DEFAULT_WS_MAX_QUEUED_MESSAGES,
+    maxQueuedBytes: 40,
   });
 });
 

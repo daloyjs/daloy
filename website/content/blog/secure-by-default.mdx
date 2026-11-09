@@ -134,12 +134,13 @@ app.group("/admin", {
 });`;
 
 export const SESSION_EXAMPLE = `// src/app.ts
-import { App, session } from "@daloyjs/core";
+import { App, csrf, session } from "@daloyjs/core";
 
 export const app = new App();
 
-// Pair this with csrf() from the section above: in production, session()
-// plus a state-changing route without csrf() refuses to boot.
+// csrf() is required here: in production, session() plus a
+// state-changing route without csrf() refuses to boot.
+app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://app.example.com"] }));
 app.use(
   session({
     // Provide MORE than one to rotate signing keys without logging users out.
@@ -158,7 +159,7 @@ app.route({
   handler: async ({ state }) => {
     state.session.set("uid", "user_42");
     await state.session.regenerate(); // rotate sid on privilege change
-    return { status: 204 };
+    return { status: 204, body: undefined };
   },
 });`;
 

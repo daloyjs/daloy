@@ -24,6 +24,8 @@ import {
 import { setConnInfo } from "../conn-info.js";
 import {
   FrameSink,
+  buildWebSocketHeaders,
+  buildWebSocketQuery,
   encodeFrame,
   encodeClosePayload,
   encodeSendPayload,
@@ -1350,8 +1352,8 @@ async function handleUpgrade(
   const ctx: WebSocketContext = {
     request,
     params: match.params as any,
-    query: Object.fromEntries(url.searchParams.entries()),
-    headers: Object.fromEntries(headers.entries()),
+    query: buildWebSocketQuery(url.searchParams),
+    headers: buildWebSocketHeaders(headers),
     state: match.handler.createState() as any,
     protocols: result.protocols,
   };
@@ -1607,14 +1609,21 @@ class NodeWebSocketConnection implements WebSocketConnection {
       void this._invokeMessage(data, isBinary, undefined);
       return;
     }
-    this.gate ??= new WebSocketMessageGate(schema, (result, d, binary) => {
-      if (this.readyState !== WS_READY_STATE.OPEN) return;
-      if (!result.ok) {
-        this.close(result.code, result.reason);
-        return;
+    this.gate ??= new WebSocketMessageGate(
+      schema,
+      (result, d, binary) => {
+        if (this.readyState !== WS_READY_STATE.OPEN) return;
+        if (!result.ok) {
+          this.close(result.code, result.reason);
+          return;
+        }
+        void this._invokeMessage(d, binary, result.value);
+      },
+      {
+        maxQueuedMessages: this.options.maxQueuedMessages,
+        maxQueuedBytes: this.options.maxQueuedBytes,
       }
-      void this._invokeMessage(d, binary, result.value);
-    });
+    );
     this.gate.push(data, isBinary);
   }
 

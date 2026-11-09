@@ -63,7 +63,7 @@ await client.getBookById({ params: { id: ".." } });
 For consumers outside the monorepo or in other languages, generate a fully typed fetch SDK with [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
 
 <FlowDiagram title="Codegen pipeline" numbered caption="pnpm gen runs the whole chain: dump the spec from your routes, then let Hey API turn it into a typed fetch SDK. Re-run it whenever a route changes and the client stays in lockstep with the contract." steps={[
-          { label: "Routes", detail: "app.route(...)", tone: "accent" },
+          { label: "Routes", detail: "app.get(...)", tone: "accent" },
           { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
           { label: "openapi.json", detail: "OpenAPI 3.1 spec on disk" },
           { label: "openapi-ts", detail: "Hey API generator" },
@@ -76,8 +76,10 @@ For consumers outside the monorepo or in other languages, generate a fully typed
         ]} />
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
+
+Pin that exact snapshot. It generates the same client on TypeScript 6 and 7, while the stable 0.99.x line crashes on TypeScript 7. See [TypeScript versions](/docs/installation#typescript-versions) for the details and the TypeScript 6 alternative. The generated client is self-contained (it imports nothing from `@hey-api/*`), so the generator stays a dev-only dependency.
 
 ```ts
 // openapi-ts.config.ts

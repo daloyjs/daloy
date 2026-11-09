@@ -527,7 +527,7 @@ A tool may ask clients to mirror a primitive parameter into an `Mcp-Param-{Name}
 }
 ```
 
-DaloyJS validates the contract in both directions on every `tools/call`: a value present in the arguments requires the matching header, an absent value forbids it, and integers compare numerically. Any disagreement is a `-32020`. Invalid annotations (empty, non-token, duplicated case-insensitively, or on a non-primitive property) throw at `createMcpHandler()` construction, so a misconfigured tool fails at boot rather than in front of a model.
+DaloyJS validates the contract in both directions on every `tools/call`: a value present in the arguments requires the matching header, an absent value forbids it, and integers compare numerically. Since 1.20.0 an integer header must also be written in decimal (`42`, `-7`, or `3.0`). Forms that JavaScript's `Number()` would coerce to the same value, such as `0x2A`, `4.2e1`, `+42`, `042`, or an empty or padded value, are refused, because a gateway reading the header as text or with `parseInt` would see a different number than the tool runs on. Any disagreement is a `-32020`. Invalid annotations (empty, non-token, duplicated case-insensitively, or on a non-primitive property) throw at `createMcpHandler()` construction, so a misconfigured tool fails at boot rather than in front of a model.
 
 **Do not mirror secrets.** Header values are visible to every intermediary on the path, so passwords, API keys, tokens, and PII must never carry an `x-mcp-header` annotation.
 

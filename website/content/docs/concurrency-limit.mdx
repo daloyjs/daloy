@@ -35,6 +35,7 @@ Each request:
 - if all slots are busy, waits in a bounded FIFO queue (`maxQueue`) for up to `queueTimeoutMs`;
 - is rejected with a fast `503 Service Unavailable` (+ `Retry-After`) once the queue is full or the wait times out;
 - releases its slot when the response is finalized: on success, error, and short-circuit paths alike, so a slot is never leaked. The release also runs as a per-request finalizer in the dispatcher's `finally` block, so the slot comes back even when another middleware's `onSend` or `onError` hook throws, and it is never released twice (since 1.3.7).
+- keeps its slot after a `requestTimeoutMs` timeout until the handler actually settles (since 1.20.0). The deadline answers the client and aborts `ctx.request.signal`, but it cannot stop a handler that ignores the signal, so releasing on the `408` would let `maxConcurrent` count open responses instead of running work. A handler that never settles gives its slot back after 10 x `requestTimeoutMs` (5 minutes at the 30s default), so a hung call cannot pin a slot for the life of the process. Graceful shutdown waits for these handlers the same way.
 
 <FlowDiagram title="Acquire, queue, or shed" steps={[
           {
@@ -85,7 +86,7 @@ app.use(concurrencyLimit({
 
 - `"global"` (default): one shared budget across the whole mount.
 - `"route"`: a separate budget per `method + matched route template` (`ctx.routePath`, for example `GET /reports/:id`), so one hot endpoint can't starve the others mounted under the same guard. Because the key is the template, not the concrete path, `/reports/1`, `/reports/2`, and `/reports/1/` all share one budget: varying a path parameter or a trailing slash cannot mint a fresh one (since 1.3.7). Requests that matched no route fall back to the concrete pathname.
-- `"client"`: a separate budget per client identity (requires `trustProxyHeaders`, `trustedHops`, `trustedProxies`, or a `keyGenerator`), so a heavy client can't consume everyone else's slots. The identity is the **rightmost** `X-Forwarded-For` entry (the one your proxy appended), so rotating spoofed left entries cannot hop buckets. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
+- `"client"`: a separate budget per client identity (requires `trustProxyHeaders`, `trustedHops`, `trustedProxies`, or a `keyGenerator`), so a heavy client can't consume everyone else's slots. The identity is the **rightmost** `X-Forwarded-For` entry (the one your proxy appended), so rotating spoofed left entries cannot hop buckets. Since 1.23.0 the address is canonicalized like `rateLimit()`'s key: textual variants collapse (`::ffff:203.0.113.7` shares its budget with `203.0.113.7`) and IPv6 addresses group per `/64` — tune with `ipv6Subnet` (1–128, default `64`) — so rotating source addresses inside one subscriber block cannot mint unlimited budgets. When the origin itself can be reached, set `trustedProxies` so the peer socket is verified against a CIDR allowlist before any forwarded header is read (see [the autoBan note](/docs/auto-ban#verify-the-peer-trustedproxies)).
 - a **function**: return a custom bucket key, or `undefined` to skip limiting for that request (fail-open).
 
 ```ts

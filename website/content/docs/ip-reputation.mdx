@@ -112,7 +112,8 @@ Reputation is layered defense, so an unavailable feed must never block legitimat
 
 - A failed **initial** load leaves an empty (permissive) denylist, so requests flow.
 - A failed **refresh** keeps the previous, last-known-good entries for that feed. The other feeds are unaffected.
-- An **unresolvable client IP** is treated as not-listed.
+- A request that **skipped your proxy chain** is checked by its TCP peer. When `trustProxyHeaders`, `trustedHops` or `trustedProxies` resolve no forwarded IP (the peer is not one of your `trustedProxies`, or `X-Forwarded-For` is missing or shorter than `trustedHops`), the guard checks the socket the request actually arrived on, so a listed client cannot pass just by going direct-to-origin. A denylist can only block, so this fallback never admits anyone. Set `onUnresolvedIp: "allow"` to let such requests through unchecked instead.
+- Only a request with **no resolvable IP at all** (a peer-less edge runtime with no `behindProxy`) is treated as not-listed.
 
 Observe feed health with `onError`:
 
@@ -161,7 +162,9 @@ reputation.has("203.0.113.7");       // probe without side effects
 
 ## Custom IP resolution
 
-By default the client IP is resolved from the socket-supplied value. Set `trustProxyHeaders: true` or `trustedProxies` to read `X-Forwarded-For` / `X-Real-IP` (only behind a proxy you trust to overwrite them. Prefer `trustedProxies` when the origin can be reached directly), or pass your own `resolveIp`:
+With no trust option, the guard follows the App's [`behindProxy`](/docs/security/boot-guards) posture, and checks the unspoofable TCP peer when the App declares none. So `ipReputation({ feeds })` on its own blocks listed peers, and behind `app({ behindProxy: { cidrs } })` it checks the forwarded client only when the request came through one of those proxies. An explicit `trustProxyHeaders: false` keeps the TCP peer and ignores the App's posture.
+
+Set `trustProxyHeaders: true`, `trustedHops` or `trustedProxies` to give the guard its own forwarded-header trust (only behind a proxy you trust to overwrite `X-Forwarded-For` / `X-Real-IP`; prefer `trustedProxies` when the origin can be reached directly), or pass your own `resolveIp`. A custom resolver that returns `undefined` lets the request through:
 
 ```ts
 const reputation = ipReputation({
@@ -173,5 +176,7 @@ const reputation = ipReputation({
 ## Security notes
 
 - Defense in depth. A denylist complements (never replaces) authentication, rate limiting, and `ipRestriction()` allowlists.
+- IPv4-mapped clients match IPv4 entries. A dual-stack socket reports an IPv4 peer as `::ffff:a.b.c.d`; since 1.23.0 the guard folds that form to its IPv4 address and checks it against the IPv4 feed entries too, so a listed IPv4 client cannot pass by arriving over a dual-stack listener.
 - Trust your feeds. A compromised feed can deny legitimate clients. Prefer reputable sources and watch `onError` / match volume.
 - SSRF. `urlFeed()`'s outbound fetch is SSRF-hardened by default: it routes through a [`fetchGuard()`](/docs/security/fetch-guard) instance (per-hop redirect re-validation, cloud-metadata and internal IPs blocked), so a compromised feed host can't redirect the request into internal space. Override `fetchImpl` only for a non-standard runtime, or with `fetchGuard({ allowPrivate: true })` for an intentionally internal feed mirror.
+- Feed credentials stay on the feed's origin. Every header you pass in `urlFeed(url, { headers })` (an `x-api-key`, say) is removed when a redirect leaves the feed's origin, on top of the `Authorization` / `Cookie` strip that `fetchGuard()` always applies. Tune the default guard with `guard` (for example `urlFeed(url, { guard: { allowHosts: ["feeds.internal"] } })`); the header strip always applies. A custom `fetchImpl` must strip them itself.

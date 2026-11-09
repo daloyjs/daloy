@@ -28,6 +28,15 @@ export const AUTH_RAN = Symbol.for("daloyjs.auth.ran");
 export const AUTH_OPTIONAL_PASS = Symbol.for("daloyjs.auth.optionalPass");
 /** Set on a bundle once its functions are wrapped, so stamping is idempotent. */
 const AUTH_WRAPPED = Symbol.for("daloyjs.auth.wrapped");
+/**
+ * Same string as middleware.ts PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS: a
+ * composed `preBody` (from `every()`) that bills its own layers' request
+ * budgets when it rejects. The wrapper installed here must keep it, or an
+ * outer composition would charge those budgets a second time.
+ */
+const PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS = Symbol.for(
+  "daloyjs.middleware.preBodyHandlesOwnEarlyRejections"
+);
 
 type HookFn = (ctx: { state: Record<PropertyKey, unknown> }, ...rest: unknown[]) => unknown;
 
@@ -37,13 +46,17 @@ function recordPass(ctx: { state: Record<PropertyKey, unknown> }, result: unknow
 }
 
 function wrap(fn: HookFn): HookFn {
-  return (ctx, ...rest) => {
+  const wrapped: HookFn = (ctx, ...rest) => {
     const result = fn(ctx, ...rest);
     if (result !== null && typeof result === "object" && typeof (result as PromiseLike<unknown>).then === "function") {
       return (result as PromiseLike<unknown>).then((resolved) => recordPass(ctx, resolved));
     }
     return recordPass(ctx, result);
   };
+  if ((fn as unknown as Record<PropertyKey, unknown>)[PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS] === true) {
+    (wrapped as unknown as Record<PropertyKey, unknown>)[PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS] = true;
+  }
+  return wrapped;
 }
 
 /**

@@ -17,6 +17,447 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- New standalone agent skill `express-to-daloyjs` at
+  `skills/express-to-daloyjs/SKILL.md`, installable into an existing Express
+  repo with `npx skills add daloyjs/daloy --skill express-to-daloyjs`. It gives
+  coding agents an inventory-first porting workflow, an Express-to-DaloyJS
+  translation table, and the list of security guards they must satisfy rather
+  than strip.
+- create-daloy: every template's `daloyjs-best-practices` skill ships the same
+  playbook as `references/migrating-from-express.md`, read only when porting
+  Express code. A template test keeps it byte-identical to the standalone skill.
+
+### Changed
+
+- Docs: the Express migration guide now covers Express 4 and 5 differences,
+  drops the explicit `secureHeaders()` line (it is auto-installed), maps
+  `trust proxy` to `behindProxy`, `x-powered-by` and user-supplied redirects to
+  their DaloyJS equivalents, adds the `preBody` hook, uses `docs: "auto"`, and
+  gains a "Secure defaults that change behavior after the cut-over" table and a
+  "Migrating with an AI coding agent" section (docs MCP server, skill,
+  AGENTS.md). The docs MCP server's primer now points Express migrations at
+  `get_doc("migrating/express")` and the skill.
+
+## [1.23.0] - 2026-11-08
+
+### Added
+
+- **TypeScript 6 is supported for apps.** The framework is still built with
+  TypeScript 7, and apps can now use either 6 or 7. The new
+  `pnpm verify:ts-consumer-compat` gate, run in CI after the type check, keeps
+  that true. It type-checks the source and the type-level tests on TypeScript
+  6, then emits the release `.d.ts` files with TypeScript 7 and compiles a
+  consumer fixture with `skipLibCheck: false`, under `NodeNext` and `Bundler`
+  resolution, on TypeScript 6. The fixture imports every public subpath and
+  reruns the type-level tests against the built declarations. The TypeScript
+  6 compiler comes from a private `compat/typescript-6` workspace package, not
+  an `npm:` alias, so `verify:known-dep-names` stays strict.
+- create-daloy: the `node-basic`, `bun-basic`, and `cloudflare-worker` READMEs
+  gain a "TypeScript version" section with the one-line switch to TypeScript 6,
+  rewritten per package manager (`pnpm add -D`, `npm install -D`,
+  `yarn add -D`, `bun add -d`). Templates still default to TypeScript 7, and
+  `vercel` stays on 5.9.
+
+### Changed
+
+- `@hey-api/openapi-ts` moves from snapshot `0.0.0-next-20260711024907` to
+  `0.0.0-next-20260930190945` in the root, the workshop, and the `node-basic`
+  and `bun-basic` templates. The generated client is byte-identical. Like the
+  old pin, the snapshot doesn't depend on TypeScript, so it generates the same
+  client on TypeScript 6 and 7. The stable 0.99.x line is not an option: it
+  drives the TypeScript compiler API and crashes on TypeScript 7.
+- The root `js-yaml` override moves from `^4.3.1` to `^5.4.2`, the 5.x major
+  the Hey API snapshot asks for. The old override pulled the generator down a
+  major, and its resolved 4.3.1 still carried GHSA-2883-xcg3-v3hh. The full
+  `pnpm audit` is now clean. The `GHSA-hhx9-57xq-r5rw` OSV exception (a
+  version-range false positive: snapshot versions sort below the 0.97.3 fix,
+  but the client they generate already uses null-prototype parameter slots)
+  now names the new snapshot and gets a fresh 2027-02-28 review date. The
+  old exception expired on 2026-08-31.
+- `verify:dep-licenses` adds `PSF-2.0` to its allowlist, with a review note
+  in `SECURITY.md`. `argparse` 3.x, which `js-yaml` 5.x pulls into the
+  dev-only generator tree, relabelled its licence from the already-allowed
+  `Python-2.0` to `PSF-2.0`, the permissive Python Software Foundation License
+  inside that same licence stack. A unit test pins exactly these two Python
+  ids and keeps the `CNRI-Python*` variants rejected.
+
+- Bumped the version-exact, SRI-pinned docs UI assets loaded from jsDelivr:
+  Scalar `@scalar/api-reference` 1.62.5 → 1.77.0, Swagger UI
+  `swagger-ui-dist` 5.32.8 → 5.34.1 (stylesheet and bundle), and Redoc
+  2.5.3 → 2.5.4. Each new `sha384-` integrity hash was computed from the
+  exact bytes jsDelivr serves. Redoc stays on the 2.x line: the Redoc 3
+  standalone bundle is an ES module with no `window.Redoc` global, so the
+  generated `Redoc.init(...)` page needs its own migration before it can
+  move to 3.x. Apps that override `docs.assets` are unaffected.
+
+### Fixed
+
+- create-daloy: a fresh `node-basic` or `bun-basic` scaffold reported one
+  high and two moderate `js-yaml` advisories in a full `pnpm audit`. They came
+  through the Hey API generator, which pins `js-yaml` exactly. Both templates
+  now ship a `js-yaml: "^5.4.2"` override, and a fresh scaffold audits clean.
+- create-daloy: security overrides authored in a template's
+  `pnpm-workspace.yaml` were lost for npm, Yarn, and Bun scaffolds, because
+  that file is deleted for them. They now move into `package.json`
+  `overrides` (npm, Bun) or `resolutions` (Yarn).
+- create-daloy: the `--with-ci` Dependabot config now ignores
+  `@hey-api/openapi-ts`, as the repo's own config already did. Before, it
+  could "upgrade" the pinned snapshot to stable 0.99.x, which breaks
+  `gen:client` on the templates' default TypeScript 7.
+- Docs: the installation, typed-client, getting-started, and bookstore
+  tutorial pages, and their eight translations (36 install commands in all),
+  told readers to install `@hey-api/openapi-ts` unpinned. That resolves to
+  stable 0.99.x, which crashes `pnpm gen` next to the latest `typescript`
+  (7.x). Every install command now pins the snapshot, and a create-daloy test
+  fails if any docs page installs the generator without the root pin. A new
+  "TypeScript versions" section on the installation page explains the version
+  matrix and the TypeScript 6 alternative.
+- Docs: the eight translations of the routing page (`ar`, `de`, `es`, `fr`,
+  `ja`, `pt`, `ru`, `zh`) still showed the old `app.route({...})` samples
+  after the English page moved to the `app.get` / `app.post` shorthands.
+  Their code samples now match the English page again, and the new
+  "object form" subsection is translated in each locale.
+
+### Security
+
+Findings from a run of the Cloudflare `security-audit` agent skill against
+the framework, each reproduced locally and then independently reviewed
+before the fix landed. Regression tests live in
+`tests/audit-2026-11-cloudflare-audit.test.ts` and
+`tests/audit-2026-11-multipart.test.ts`.
+
+- **`clientCertAuth({ header })` now requires a declared proxy posture
+  (high).** Header mode authenticated `X-Forwarded-Client-Cert` / structured
+  identity headers without any tie to `behindProxy` / `trustProxy`, so a
+  directly reachable origin accepted a forged service identity — while the
+  same app hard-refused a spoofed `X-Forwarded-For`. The new
+  `mtls-header-without-proxy` boot guard refuses to boot without a proxy
+  posture (in production and when no environment signal exists); the
+  explicitly proxy-less postures (`behindProxy: "none"`, `trustProxy: false`
+  — which `preset: "internal-service"` sets implicitly, so a mesh service
+  reading a sidecar's XFCC must add `behindProxy: { hops: 1 }`) are rejected
+  as contradictions and named in the error; and the per-request
+  spoofable-header refusal now covers `x-forwarded-client-cert` plus any
+  configured structured header names. The header-name marker unions across
+  `every()` / `some()` composition, so a second composed bundle's names are
+  covered too.
+- **The cache-before-tenancy boot guard now fails closed with no environment
+  signal (low).** Edge runtimes carry no `NODE_ENV`, and the guard's
+  warn-only indeterminate branch let a `responseCache()`-before-`tenancy()`
+  misorder serve one tenant's cached body to another after two log lines.
+  The guard (and the new mTLS one) refuse even in the indeterminate branch;
+  all other guards stay warn-only there.
+- **The WebSocket async-validation queue is bounded per connection
+  (medium).** `WebSocketMessageGate` chained each inbound message behind the
+  pending schema validation with no depth or byte cap, so one client —
+  including an unauthenticated one on a public WS route — could retain
+  unbounded traffic in process memory until OOM. New per-route
+  `maxQueuedMessages` (default `64`) and `maxQueuedBytes` (default
+  `2 * maxPayloadLength`) options; overflow closes the connection with
+  `1009`. FIFO ordering is preserved for the bounded queue.
+- **IPv6 rotation no longer evades `autoBan()` and `concurrencyLimit()`
+  (medium).** Both keyed on the raw client-IP string, so rotating source
+  addresses inside one IPv6 `/64` minted unlimited strike records and
+  concurrency budgets. Both now canonicalize through the same
+  `ipRateLimitIdentity()` used by `rateLimit()` (with a new `ipv6Subnet`
+  option, default `64`), which also collapses `::ffff:a.b.c.d` onto the
+  IPv4 key.
+- **`ipReputation()` matches IPv4 feed entries for IPv4-mapped IPv6 clients
+  (medium).** Feed matching pre-filtered by parsed family, so a client
+  reported as `::ffff:a.b.c.d` (the form dual-stack sockets produce for IPv4
+  peers) never matched v4 feed entries. Mapped-form clients are now folded
+  to their IPv4 address once per lookup and tested against the v4 list as
+  well (no per-entry allocation on the request path).
+- **`some()` branch rollback now reconciles the dependency cache (medium).**
+  `restoreState()` only restored snapshot values by reference, so a denied
+  auth branch's in-place `defineDependency` cache mutations survived the
+  rollback and the winning branch could be served the denied branch's
+  derived value. Rollback now reconciles the per-request results Map
+  entry-by-entry.
+- **The scriptable-image upload guard probes 64 KiB and fails closed on
+  prolog padding (low).** `rejectScriptableImages` inspected only the first
+  512 bytes, so an SVG/MVG payload hidden behind a longer XML prolog
+  (whitespace, comments, processing instructions, DOCTYPE) was admitted. The
+  probe window is now 64 KiB, and a file whose entire window is prolog
+  material (or genuine XML whitespace) while more bytes follow is refused as
+  unverifiable. Binary padding that merely folds to blanks (zero bytes, high
+  bytes) is not treated as a prolog, so zero-padded uploads are unaffected.
+  The probe's ASCII fold was rewritten as a table + single `TextDecoder`
+  pass so the larger window costs roughly half of the naive per-byte
+  concatenation.
+
+One lead from the run stays open as needs-validation (not a confirmed
+finding): the release workflow's publish-actor allowlist is read from the
+tag checkout being published, which is only a barrier independent of the
+tag-pusher when the `npm-publish` environment's required-reviewers and tag
+protection rules hold — both GitHub-side settings that source cannot
+establish. Verify them in the repository settings.
+
+## [1.22.0] - 2026-11-07
+
+### Security
+
+A second scoped run of the upstream Cloudflare security-audit agent skill over
+hook composition, boot guards, request parsing, outbound fetch and route body
+limits (see [SECURITY.md](SECURITY.md#follow-up-audit-fixes-2026-11-07-second-pass)).
+Every finding was re-verified during review; two follow-up regressions found in
+that review are fixed in the same change. Each fix ships with regression
+tests in `tests/audit-2026-11-combinators.test.ts`.
+
+- **`pinnedHttpFetch()` no longer crashes the process on a `205` upstream.**
+  `fetchGuard({ pinDns: true })` built a `Response` with a body for `205 Reset
+  Content`, which the WHATWG constructor refuses; the `TypeError` fired inside
+  `node:http`'s `'response'` callback as an **uncaught exception** (process
+  exit, and the pending fetch never settled). `205` now takes the null-body
+  path with `204` / `304` / `HEAD`, and anything else the constructor refuses
+  (a status outside 200–599, a rejected header) rejects that fetch instead of
+  escaping.
+- **A request budget inside `every()` is visible to later rejections.**
+  `every(requestId(), rateLimit({ max }))` dropped its `rateLimit()` /
+  `loginThrottle()` early-rejection hook from the merged bundle, so a `401`
+  from a later `bearerAuth()` never charged the limiter and credential
+  guessing was not throttled. The hook is now forwarded, and the composed
+  `preBody` records that it already bills its own layers so the outer
+  composition does not bill them again.
+- **Review follow-up: a budget is charged at most once per request however
+  bundles nest.** Forwarding the hook made `markAuthHook(every(rateLimit(),
+  auth))` (whose wrapper replaces the composed `preBody`) bill the limiter
+  twice per rejection — the second failed attempt answered `429`. Early-
+  rejection hooks are now de-duplicated per request on `ctx.state`, and
+  `markAuthHook()` keeps the composed-`preBody` marker on its wrapper.
+- **An `optional`-mode branch no longer short-circuits `some()`.** In
+  `some(httpSignatureAuth({ optional: true }), bearerAuth(...))` an unsigned
+  request won the selection as an anonymous pass-through before `bearerAuth()`
+  ran, so a valid bearer token could never authenticate (`401` on `auth:`
+  routes). The pass-through now defers to the remaining branches and is
+  honoured only when no branch denies. Review follow-up: a pass-through already
+  recorded by an *earlier* optional hook is cleared while the branches run (and
+  restored afterwards), so it cannot hide a later branch either.
+- **`requireScopes()` inside `some()` / `except()` no longer leaks an all-of
+  union.** `some(every(auth, requireScopes(["a"])), every(auth2,
+  requireScopes(["b"])))` advertised `["a", "b"]` as the route's requirement,
+  so a caller holding only `a` was refused (`403`) by its own branch; and
+  `except("/public", requireScopes(["admin"]))` imposed `admin` on `/public`
+  through the per-request aggregate other scope guards enforce. Both wrappers
+  now drop the static marker; the conditional gate is stamped so registration
+  ordering runs it ahead of `responseCache()` / `idempotency()` replays, and
+  revocation still refuses a stored response (tested for both replays).
+- **`some()` selects in `preBody` when a branch pairs `preBody` auth with a
+  default-phase `requireScopes()`.** Previously that mix forced the whole
+  selection into `beforeHandle`, after `requestDecompression()` and body
+  parsing, so an unauthenticated caller could trigger inflation. A default
+  `requireScopes()` is marked safe to run early; an explicit `phase:
+  "beforeHandle"` or any other `beforeHandle` gate still defers.
+- **Boot guards look inside `every()`.** The cache-before-tenancy and
+  replay-before-budget guards expand `every()` bundles and compare the earliest
+  replay against the *latest* tenancy / budget layer, so
+  `every(responseCache(), tenancy())` and a route-level `rateLimit()` after a
+  global `responseCache()` are now refused in production.
+- **Prototype-pollution keys are dropped from every attacker-shaped record.**
+  The cold-path (`404` / `405`) `ctx.query`, `ctx.headers`, and the Node / Bun
+  WebSocket upgrade `ctx.query` / `ctx.headers` skip `__proto__`,
+  `constructor` and `prototype`; cold-path `ctx.query` also uses the same
+  repeated-key array shape as matched routes.
+
+### Fixed
+
+- A per-route `bodyLimitBytes` *raised* above the App default refused an
+  adapter-pre-buffered body that fit the route limit with `413`: the first cap
+  captured "over limit" against the App default and the raised route cap
+  returned early without retuning it. The cap now compares the buffered body
+  against the live limit.
+
+## [1.21.1] - 2026-11-07
+
+### Security
+
+Fixes from a quick, scoped run of the upstream Cloudflare security-audit
+agent skill (installed at user level, not vendored) over Node ingress,
+auth/replay composition and route limits (see
+[SECURITY.md](SECURITY.md#follow-up-audit-fixes-2026-11-07)). Each
+fix ships with regression tests.
+
+- **Replay admission requires an own `user.scopes` property.** `idempotency()`
+  and `responseCache()` now apply the same own-property rule as
+  `requireScopes()`, so a principal whose scopes are only inherited (a polluted
+  prototype, a class getter) can no longer be served a stored response that a
+  fresh request would be refused. (`tests/replay-own-scope-authorization.test.ts`)
+- **`every(gate, idempotency())` can no longer let an earlier replay answer
+  before the gate.** Registration ordering now expands an untouched `every()`
+  bundle into its original layers and runs opaque auth-and-replay bundles
+  before replay-only ones, so a `responseCache()` registered earlier cannot
+  serve a hit before the composed proof. A bundle whose `beforeHandle` was
+  replaced by a wrapper (`markAuthHook()`, `except()`, `some()`, a spread) is
+  ordered as one opaque hook, so the wrapper still runs. MCP `methodAuth` keeps
+  rejecting non-authentication middleware nested in such bundles.
+  (`tests/composed-auth-replay-order.test.ts`, `tests/mcp-method-auth.test.ts`)
+- **A deadline-abandoned or cancelled queued request no longer takes a
+  `concurrencyLimit()` slot it can never release.** Queue waiters are removed
+  on `request.signal` abort and by the request finalizer, and slot handoff
+  skips abandoned waiters, so a late waiter cannot acquire a slot after its
+  cleanup grace and block unrelated requests for the life of the process.
+  (`tests/concurrency-queue-abandonment.test.ts`)
+
+### Fixed
+
+- Lowering a raw route's `bodyLimitBytes` below the app limit after a global
+  hook drained `request.clone()` now re-caps the retained tee branch, so the
+  route's direct body stream and convenience readers enforce the lower limit
+  instead of the bytes the clone already buffered under the higher one.
+  Raising, lazy reads and the app-wide cap are unchanged.
+  (`tests/body-cap-retuning.test.ts`)
+
+## [1.21.0] - 2026-11-06
+
+### Added
+
+- Per-route `bodyLimitBytes` and `requestTimeoutMs` on `RouteDefinition` (and
+  the `get` / `post` / ... shorthands). A route raises or lowers either value
+  for itself; the app options stay the default for every other route, so one
+  upload route no longer forces a wider body limit or a longer deadline on
+  login, search and webhooks. Same finite-non-negative-integer validation as
+  the app options, at `app.route()` time. The route limit reaches the schema
+  parser and its `Content-Length` precheck, raw `ctx.request` reads, `preBody`
+  hooks, the pre-route global-`onRequest` cap (retuned once the route is
+  matched), the `requestDecompression()` re-check and the `idempotency()`
+  raw-body fingerprint. `getSecurityPosture().routeOverrides` lists the
+  overriding routes (`RouteLimitOverride`, with an `authenticated` flag) and
+  `daloy doctor` adds `audit.bodyLimit.routeRaisedUnauthenticated`,
+  `audit.bodyLimit.routeBlanket` and `audit.requestTimeout.routeZero`.
+
+### Fixed
+
+- A route without a body schema whose `preBody` hook read `ctx.request.clone()`
+  handed its handler a locked stream (`500 Invalid state: ReadableStream is
+  locked`): the post-`preBody` body-limit re-check re-wrapped the native body
+  the clone had already locked. The body cap now retunes its limit in place
+  instead of wrapping twice.
+
+## [1.20.0] - 2026-11-06
+
+### Added
+
+- `markWebSocketAuth(fn)` marks a `beforeUpgrade` hook as authenticating for
+  `requireAuth` and group `auth` checks.
+- `ipReputation({ onUnresolvedIp })` chooses between the TCP peer (default)
+  and an unchecked pass-through when no forwarded client IP resolves, and
+  `urlFeed(url, { guard })` configures the default `fetchGuard()` transport.
+
+### Security
+
+Fixes from a coverage-led source audit of `src/` (see
+[SECURITY.md](SECURITY.md#source-first-audit-2026-11-04)) and its follow-up
+run over the units that audit deferred. Each fix ships with regression tests
+in `tests/audit-2026-11-*.test.ts` and `tests/ip-reputation.test.ts`.
+
+- **`some()` rolls back a rejected branch's state.** A candidate that throws or
+  returns a `Response` no longer leaves `ctx.state` changes (including `user`
+  and the auth-ran record) behind for the winning branch, and any lease that
+  branch acquired (a `concurrencyLimit()` slot, an `idempotency()`
+  reservation) is released at the same time rather than orphaned. `bearerAuth()` and
+  `jwk()` now set `ctx.state.user` only after `verify()` accepts, so a revoked
+  token can no longer lend its scopes, roles or tenant claim to a
+  lower-privilege credential presented alongside it. A `verify()` hook no
+  longer sees `ctx.state.user`; it still receives the token or payload.
+- **Header-mode mTLS parses forwarded DNs per RFC 4514.** An escaped comma in
+  another attribute (`OU=x\,CN=admin`) can no longer be read as the CN, and a
+  DN with several CNs or a malformed escape yields no CN, so
+  `allowSubjectCNs` / `allowIssuerCNs` fail closed. XFCC `subjectDN` now keeps
+  its RFC 4514 escapes. A typed `allowSANs` entry matches only an identical SAN.
+- **The request deadline no longer releases leases early.** When
+  `requestTimeoutMs` answers while a handler or hook is still running,
+  `concurrencyLimit()` slots, `idempotency()` reservations and the
+  graceful-shutdown drain stay held until that work settles (at most
+  10 × `requestTimeoutMs`), so `maxConcurrent` bounds running work and a
+  same-key retry after a `503`/`504` timeout gets `409` instead of re-running
+  the side effect.
+- **`every()` / `some()` chain every app-registration receiver.** The App's
+  `behindProxy` posture (and the production and body-limit hooks) now reach
+  every composed guard, so `every(rateLimit(), loginThrottle())` behind a
+  declared proxy keys each guard on the real client instead of the proxy.
+- **The body cap is installed before user hooks.** `onRequest` hooks, and
+  `preBody` hooks on routes with a body schema, can no longer read past
+  `bodyLimitBytes`. A declared `Content-Length: 0` no longer skips the cap when
+  a body is present.
+- **`app.ws()` honors `requireAuth` and group `auth`.** Under either, a
+  WebSocket route is refused at registration unless its `beforeUpgrade` is
+  wrapped with the new `markWebSocketAuth()` or the route sets
+  `acknowledgeUnauthenticated: true`. See
+  [WebSocket auth](https://daloyjs.dev/docs/websocket#require-auth).
+- **Outbound webhooks sign the message id.** `createWebhookSender()` signs
+  `"<id>.<timestamp>.<body>"` (Standard Webhooks layout), and
+  `signWebhookPayload()` / `verifyWebhookSignature()` accept an optional `id`.
+  Receivers of `createWebhookSender()` deliveries must now pass the
+  `webhook-id` header as `id` when verifying, and should dedupe only on that
+  verified id. `verifyWebhookSignature()` returns `false` instead of throwing
+  for an empty or missing secret.
+- **Probe limiters key on the client.** `healthcheck()`, `readinesscheck()`,
+  `metrics()` and `cspReportRoute()` resolve the caller with the App's
+  `behindProxy` posture, the same identity `rateLimit()` uses, and never read
+  raw `X-Real-IP` / `Fly-Client-IP`. One client can no longer lock the probe
+  for everyone or rotate a header to escape the cap, and `cspReportRoute`'s
+  `onReport` receives a validated address or `null`. `trustProxy: true` without
+  `behindProxy` now keys on the TCP peer.
+- **`app({ env })` is validated.** A value other than `"development"`,
+  `"production"` or `"test"` now throws at construction instead of silently
+  disabling production guards and 5xx redaction.
+- **`except(paths, cors())` keeps the cross-origin write guard on exempted
+  paths.** The CORS allow predicate is now path-gated like the CORS response
+  decorator. `CorsOriginAllow` receives the request as an optional second
+  argument.
+- **An allow-all `cors()` origin predicate counts as a wildcard.** It is refused
+  in production like `origin: "*"`, whether or not `credentials` is set.
+- **RFC 9421 `@query-param` values are percent-encoded** (§2.2.8) before they
+  enter the signature base, and component values containing a line break are
+  refused, so one signature cannot verify a boundary-shifted query string.
+- **Idempotency store keys are namespaced unambiguously**
+  (`t=<tenant>|s=<scope>|k=<key>`), so an unscoped client key can no longer name
+  a scoped or tenant slot. Keys are opaque to `IdempotencyStore`
+  implementations. Records stored under the previous format stop matching
+  after the upgrade. The body fingerprint no longer trusts a declared
+  `Content-Length: 0`.
+- **`rejectScriptableImages` detects more SVG/MVG forms.** It decodes UTF-16,
+  ignores comments, processing instructions and whitespace, and recognizes
+  namespace-prefixed SVG roots. `multipartObject({ strict: true })` now treats
+  inherited names such as `toString` as unknown fields, and client values in
+  its error messages are echo-safe.
+- **Lambda adapter refuses re-routable event paths.** A path with a `.`/`..`
+  segment in any spelling, `\`, `?` or `#` now answers `400` instead of being
+  resolved onto a different route than the one API Gateway authorized. A
+  `sourceIp` that is not an IP address is no longer attached as the peer.
+- **Integer `Mcp-Param-*` headers must be decimal.** Forms such as `0x2A`,
+  `4.2e1`, `+42`, `042` or an empty value are refused with `-32020`.
+- **`ipReputation()` checks the TCP peer when it cannot resolve a forwarded
+  IP.** With `trustedProxies`, `trustedHops` or `trustProxyHeaders`, a listed
+  client that went direct-to-origin (untrusted peer, or an `X-Forwarded-For`
+  chain shorter than declared) used to pass unchecked. It is now checked by its
+  socket address; `onUnresolvedIp: "allow"` restores the pass-through.
+- **`ipReputation()` with no trust option now blocks.** It used to resolve no
+  client IP at all, so `ipReputation({ feeds })` never blocked anyone, despite
+  the docs saying it read the socket address. It now follows the App's
+  `behindProxy` posture and otherwise checks the TCP peer. An explicit
+  `trustProxyHeaders: false` keeps the peer and ignores the App's posture.
+- **`urlFeed()` keeps feed credentials on the feed's origin.** Every header
+  passed in `headers` is removed on a cross-origin redirect, so a custom
+  credential such as `x-api-key` no longer follows a redirect to another host.
+
+## [1.19.0] - 2026-11-05
+
+### Added
+
+- **Opt-in `poweredBy` app option for technology detection.** `new App({ poweredBy: true })`
+  sends `X-Powered-By: DaloyJS` (no version) so profilers such as the
+  Wappalyzer browser extension can recognise the framework; a string sends that
+  exact value. Off by default, so `stripServerHeaders` still removes every
+  stack header. The value is stamped after the strip pass and after `onSend`,
+  so it is the only `X-Powered-By` on the wire. Unsafe values (control
+  characters, non-ASCII, empty, over 128 characters) and the combination with
+  `stripServerHeaders: false` throw at construction.
+  `getSecurityPosture().poweredBy` reports it. See
+  [technology detection](https://daloyjs.dev/docs/security/technology-detection).
+
 ## [1.18.0] - 2026-11-03
 
 ### Added

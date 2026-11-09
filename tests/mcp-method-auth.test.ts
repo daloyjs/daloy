@@ -65,6 +65,15 @@ function mount(
 
 const defaultAuth = (): McpMethodAuthOptions => ({ discovery: serviceAuth(), call: userAuth() });
 
+test("methodAuth still rejects replay middleware inside nested all-of auth bundles", () => {
+  assert.throws(() => mcpRoutes("/mcp", createHandler().handler, {
+    methodAuth: {
+      discovery: serviceAuth(),
+      call: every(every(userAuth(), idempotency())),
+    },
+  }), /authentication gates only|other than authentication/);
+});
+
 /**
  * Send a spec-compliant 2026-07-28 request. `headers` overrides (null deletes)
  * the mirrored standard headers to exercise spoofing.

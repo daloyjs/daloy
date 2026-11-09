@@ -615,14 +615,14 @@ export function assertStrongSecret(secret: unknown, scope: string): void {
   if (WEAK_SECRET_SET.has(lower)) {
     throw new Error(
       `${scope}(): production secret matches a well-known placeholder (${secret.slice(0, 4)}…). ` +
-        `Replace it with a real random value loaded from an env var or secret manager.`
+      `Replace it with a real random value loaded from an env var or secret manager.`
     );
   }
   const bytes = new TextEncoder().encode(secret).byteLength;
   if (bytes < MIN_PROD_SECRET_BYTES) {
     throw new Error(
       `${scope}(): production secret is too short (${bytes} bytes; require >= ${MIN_PROD_SECRET_BYTES}). ` +
-        `Generate one with \`openssl rand -base64 48\` and load it from an env var.`
+      `Generate one with \`openssl rand -base64 48\` and load it from an env var.`
     );
   }
   // Reject all-identical-character secrets ("aaaaaaaa…", "00000000…").
@@ -765,12 +765,26 @@ function normalizeWebhookTimestamp(
   return { seconds, canonical: String(seconds) };
 }
 
+/**
+ * Webhook message ids bound into the signature must be 1-256 printable
+ * ASCII characters with no `.`, so `"<id>.<timestamp>.<body>"` has exactly
+ * one parse and a header value can never smuggle a separator.
+ */
+const WEBHOOK_ID_RE = /^[\x21-\x2d\x2f-\x7e]{1,256}$/;
+
+function isValidWebhookId(id: unknown): id is string {
+  return typeof id === "string" && WEBHOOK_ID_RE.test(id);
+}
+
 function buildSignedPayloadBytes(
   payload: Uint8Array,
-  timestamp: { canonical: string } | null
+  timestamp: { canonical: string } | null,
+  id?: string
 ): Uint8Array {
   if (!timestamp) return payload;
-  const prefix = new TextEncoder().encode(`${timestamp.canonical}.`);
+  const prefix = new TextEncoder().encode(
+    id === undefined ? `${timestamp.canonical}.` : `${id}.${timestamp.canonical}.`
+  );
   const out = new Uint8Array(prefix.length + payload.length);
   out.set(prefix, 0);
   out.set(payload, prefix.length);
@@ -787,18 +801,30 @@ function buildSignedPayloadBytes(
  *  - Matching GitHub-style prefixed (`"sha256=..."`, `"sha384=..."`, `"sha512=..."`)
  *  - A `Uint8Array` of raw signature bytes
  *
- * Returns `false` for every malformed input — never throws on bad
- * signatures so the caller cannot distinguish "wrong format" from "wrong
- * key" through exception side channels.
+ * Returns `false` for every malformed input, including an empty or
+ * missing secret — never throws on bad signatures so the caller cannot
+ * distinguish "wrong format" from "wrong key" through exception side
+ * channels.
+ *
+ * Pass `id` (the `webhook-id` header) together with `timestamp` to verify
+ * a Standard Webhooks style `"<id>.<timestamp>.<body>"` signature, such as
+ * the ones `createWebhookSender()` emits. Only dedupe on an id that was
+ * verified this way: an id outside the signature can be swapped by anyone
+ * replaying a captured delivery inside the tolerance window.
  *
  * @example
  * ```ts
  * import { verifyWebhookSignature } from "@daloyjs/core";
  *
- * app.route({
- *   method: "POST",
- *   path: "/webhook",
- *   handler: async ({ request }) => {
+ * app.post(
+ *   "/webhook",
+ *   {
+ *     responses: {
+ *       200: { description: "Accepted" },
+ *       401: { description: "Bad signature" },
+ *     },
+ *   },
+ *   async ({ request }) => {
  *     const raw = new Uint8Array(await request.arrayBuffer());
  *     const sig = request.headers.get("x-hub-signature-256") ?? "";
  *     if (!await verifyWebhookSignature({
@@ -807,15 +833,16 @@ function buildSignedPayloadBytes(
  *       return { status: 401 as const, body: { ok: false } };
  *     }
  *     // safe to parse
+ *     return { status: 200 as const, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  *
  * @param opts - Payload, expected signature, shared secret, and optional
  *   `algorithm` (defaults to `"sha256"`), `timestamp`, `toleranceSeconds`,
  *   and `now` clock for replay-window checks.
  * @returns `true` only when the signature matches the HMAC of the (optionally
- *   timestamp-prefixed) payload and the timestamp is within tolerance.
+ *   id- and timestamp-prefixed) payload and the timestamp is within tolerance.
  * @since 0.15.0
  */
 export async function verifyWebhookSignature(opts: {
@@ -836,6 +863,16 @@ export async function verifyWebhookSignature(opts: {
    */
   timestamp?: string | number;
   /**
+   * Optional message id (the `webhook-id` header). When supplied, the HMAC
+   * is computed over `"<id>.<timestamp>.<payload>"` (the Standard Webhooks
+   * convention), so a replay with a different id fails verification.
+   * Requires `timestamp`. Must be 1-256 printable ASCII characters with no
+   * `.`; anything else (or an id without a timestamp) returns `false`.
+   *
+   * @since 1.20.0
+   */
+  id?: string;
+  /**
    * Maximum drift (in seconds) between `timestamp` and `now()` before the
    * signature is rejected as a likely replay. Only consulted when
    * `timestamp` is supplied. Defaults to
@@ -855,6 +892,17 @@ export async function verifyWebhookSignature(opts: {
 }): Promise<boolean> {
   const algo = resolveWebhookAlgorithm(opts.algorithm ?? "sha256");
   if (!algo) return false;
+  // An empty or missing secret would make WebCrypto throw; refuse quietly.
+  const secret: unknown = opts.secret;
+  if (
+    !(typeof secret === "string" || secret instanceof Uint8Array) ||
+    secret.length === 0
+  ) {
+    return false;
+  }
+  if (opts.id !== undefined && (opts.timestamp === undefined || !isValidWebhookId(opts.id))) {
+    return false;
+  }
 
   let timestamp: { seconds: number; canonical: string } | null = null;
   if (opts.timestamp !== undefined) {
@@ -879,7 +927,7 @@ export async function verifyWebhookSignature(opts: {
   const providedBytes = decodeWebhookSignature(opts.signature, algo.name, algo.signatureBytes);
   if (!providedBytes) return false;
 
-  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
+  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp, opts.id);
 
   const c: Crypto | undefined = (globalThis as any).crypto;
   if (!c?.subtle) return false;
@@ -900,10 +948,11 @@ export async function verifyWebhookSignature(opts: {
  * outbound webhook senders, and for diffing implementations.
  *
  * @param opts - Payload, shared secret, optional `algorithm` (defaults to
- *   `"sha256"`), and optional `timestamp` to bind the signature to.
+ *   `"sha256"`), and optional `timestamp` and `id` to bind the signature to.
  * @returns The hex-encoded HMAC digest.
- * @throws TypeError on an unsupported algorithm or malformed timestamp;
- *   Error when WebCrypto is unavailable.
+ * @throws TypeError on an unsupported algorithm, a malformed timestamp, or
+ *   a malformed `id` (or an `id` without a `timestamp`); Error when
+ *   WebCrypto is unavailable.
  * @since 0.15.0
  */
 export async function signWebhookPayload(opts: {
@@ -919,9 +968,28 @@ export async function signWebhookPayload(opts: {
    * @since 0.21.0
    */
   timestamp?: string | number;
+  /**
+   * Optional message id. When supplied, the HMAC is computed over
+   * `"<id>.<timestamp>.<payload>"` (the Standard Webhooks convention) so
+   * the receiver can dedupe on an id the signature covers. Requires
+   * `timestamp`; must be 1-256 printable ASCII characters with no `.`.
+   *
+   * @since 1.20.0
+   */
+  id?: string;
 }): Promise<string> {
   const algo = resolveWebhookAlgorithm(opts.algorithm ?? "sha256");
   if (!algo) throw new TypeError("unsupported webhook HMAC algorithm");
+  if (opts.id !== undefined) {
+    if (opts.timestamp === undefined) {
+      throw new TypeError("signWebhookPayload(): id requires a timestamp");
+    }
+    if (!isValidWebhookId(opts.id)) {
+      throw new TypeError(
+        "signWebhookPayload(): id must be 1-256 printable ASCII characters with no '.'"
+      );
+    }
+  }
   let timestamp: { seconds: number; canonical: string } | null = null;
   if (opts.timestamp !== undefined) {
     timestamp = normalizeWebhookTimestamp(opts.timestamp);
@@ -944,7 +1012,7 @@ export async function signWebhookPayload(opts: {
     false,
     ["sign"]
   );
-  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
+  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp, opts.id);
   const computed = new Uint8Array(await c.subtle.sign("HMAC", key, signedBytes as BufferSource));
   return bytesToHex(computed);
 }

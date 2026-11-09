@@ -206,6 +206,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 - Content-Type по списку `accepts` маршрута или по глобальному `allowedContentTypes`, если он задан -\> **415**.
 - Типы тела, принимаемые по умолчанию: `application/json`, `application/x-www-form-urlencoded` и `multipart/form-data`.
 - Разбор JSON, строк запроса, urlencoded-форм и multipart-форм с защитой от загрязнения прототипов.
+- Строгое декодирование UTF-8 для тел JSON, urlencoded и текстовых тел (начиная с 1.16.0): на недопустимую или избыточно длинную последовательность UTF-8 возвращается **400** `Request body is not valid UTF-8`, а не валидация с подставленным `U+FFFD` (RFC 8259 §8.1). Корректный не-ASCII текст и начальный BOM по-прежнему разбираются; `ctx.request.text()` сохраняет нестрогое декодирование платформы.
 
 Тела JSON разбираются в объекты, urlencoded-тела через `URLSearchParams`, а multipart-тела через платформенный API `Request.formData()`. Если вы разрешите маршруту собственный текстовый тип содержимого, DaloyJS передаст декодированный текст в вашу схему тела.
 

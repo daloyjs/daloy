@@ -36,7 +36,9 @@ Do **not** use this skill for frontend UI, npm/pnpm `package.json` work,
 or unrelated docs. Rare topics live under `references/`: **read**
 [references/mcp.md](references/mcp.md) only when adding an MCP endpoint,
 and **read** [references/ci-workflows.md](references/ci-workflows.md) only
-when editing `.github/` or a `--with-ci` workflow. Do not load those files
+when editing `.github/` or a `--with-ci` workflow, and **read**
+[references/migrating-from-express.md](references/migrating-from-express.md)
+only when porting Express.js code into this project. Do not load those files
 up front.
 
 ## Core principles
@@ -47,7 +49,7 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
    and response schemas live in one place. Use the method shorthand —
    `app.get(path, contract, handler)`, `app.post(...)`, etc. — for ordinary
    routes; use `app.route({...})` for reusable `defineRoute()` contracts,
-   metadata-heavy routes, or when composing many routes via
+   `OPTIONS` routes, or when composing many routes via
    `registerRoutes()`.
 2. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library.

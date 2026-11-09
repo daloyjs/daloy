@@ -12,6 +12,7 @@ import {
   PROMETHEUS_CONTENT_TYPE,
   createLogger,
 } from "../src/index.js";
+import { setConnInfo } from "../src/conn-info.js";
 
 // ---------- MetricsRegistry: counters ----------
 
@@ -555,24 +556,25 @@ test("app.metrics() rate limit ignores spoofed X-Real-IP without trustProxy", as
   assert.equal(second.status, 429);
 });
 
-test("app.metrics() rate limit may key on X-Real-IP when trustProxy is true", async () => {
-  const app = new App({ env: "development", trustProxy: true });
+/** A /metrics request forwarded by a trusted proxy at 10.9.0.2 for `client`. */
+function viaTrustedProxy(client: string): Request {
+  const req = new Request("http://x/metrics", { headers: { "x-forwarded-for": client } });
+  setConnInfo(req, { remoteAddress: "10.9.0.2", remotePort: 1 });
+  return req;
+}
+
+test("app.metrics() rate limit keys on the forwarded client behind a declared proxy", async () => {
+  const app = new App({ env: "development", behindProxy: { cidrs: ["10.9.0.0/16"] } });
   app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
-  const a = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
-  );
+  const a = await app.fetch(viaTrustedProxy("1.1.1.1"));
   assert.equal(a.status, 200);
-  const b = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } }),
-  );
+  const b = await app.fetch(viaTrustedProxy("2.2.2.2"));
   assert.equal(
     b.status,
     200,
     "distinct trusted-proxy client IPs get distinct buckets",
   );
-  const a2 = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
-  );
+  const a2 = await app.fetch(viaTrustedProxy("1.1.1.1"));
   assert.equal(a2.status, 429);
 });
 
@@ -625,9 +627,9 @@ test("app.metrics() does not warn about auto-mounted docs routes", () => {
 });
 
 test("app.metrics() rate-limit buckets are bounded: a flood of fresh proxy identities evicts the oldest", async () => {
-  const app = new App({ env: "development", trustProxy: true });
+  const app = new App({ env: "development", behindProxy: { cidrs: ["10.9.0.0/16"] } });
   app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
-  const hit = (ip: string) => app.fetch(new Request("http://x/metrics", { headers: { "x-real-ip": ip } }));
+  const hit = (ip: string) => app.fetch(viaTrustedProxy(ip));
   assert.equal((await hit("10.0.0.1")).status, 200);
   // Second hit from the same identity trips the limit while its bucket lives.
   assert.equal((await hit("10.0.0.1")).status, 429);

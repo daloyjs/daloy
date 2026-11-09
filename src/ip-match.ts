@@ -108,7 +108,17 @@ export function parseIp(input: string): ParsedIp | undefined {
   return parseIPv4(trimmed);
 }
 
-function normalizeFamily(ip: ParsedIp, family: 4 | 6): Uint8Array | undefined {
+/**
+ * Normalize a parsed address to the requested family. IPv4-mapped IPv6
+ * addresses (`::ffff:a.b.c.d`) fold to their 4-byte IPv4 form; every other
+ * cross-family request returns `undefined`.
+ *
+ * @param ip Parsed address from {@link parseIp}.
+ * @param family Target family (`4` or `6`).
+ * @returns The address bytes in the target family, or `undefined`.
+ * @internal
+ */
+export function normalizeFamily(ip: ParsedIp, family: 4 | 6): Uint8Array | undefined {
   if (ip.family === family) return ip.bytes;
   if (ip.family === 6 && family === 4) {
     // IPv4-mapped IPv6 (::ffff:a.b.c.d) — accept as IPv4.
@@ -178,6 +188,25 @@ function parseIPv6(input: string): ParsedIp | undefined {
     bytes[index * 2 + 1] = n & 0xff;
   }
   return { bytes, family: 6 };
+}
+
+/**
+ * Validate an `ipv6Subnet`-style option shared by the client-keyed guards
+ * (`rateLimit`, `loginThrottle`, `autoBan`, `concurrencyLimit`), returning
+ * the default `64` when unset.
+ *
+ * @param where Error-message prefix naming the calling middleware.
+ * @param value The option value to validate.
+ * @returns `value` when supplied, otherwise `64`.
+ * @throws Error when `value` is not an integer in `1`-`128`.
+ * @internal
+ */
+export function resolveIpv6Subnet(where: string, value: number | undefined): number {
+  const subnet = value ?? 64;
+  if (!Number.isInteger(subnet) || subnet < 1 || subnet > 128) {
+    throw new Error(`${where}: ipv6Subnet must be an integer between 1 and 128.`);
+  }
+  return subnet;
 }
 
 /**

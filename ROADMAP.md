@@ -2,7 +2,7 @@
 
 Source of truth for what's shipped, what's next, and the order we plan to ship it. Complements the [README](./README.md) (the pitch). Update this file when scope changes — never let it drift behind reality.
 
-> **Release-slice naming.** Each shipped release is identified by its semver tag (e.g. `0.15.0`) plus a short thematic descriptor. The original per-release planning breakdown lives in [`otherdocs/secure-by-default-plan.md`](./otherdocs/secure-by-default-plan.md) for archaeological reference.
+> **Release-slice naming.** Each shipped release is identified by its semver tag (e.g. `0.15.0`) plus a short thematic descriptor.
 
 ## Versioning policy
 
@@ -208,6 +208,21 @@ Open items for this track:
 
 - [x] **GeoIP / geo-blocking docs** — add a deployment-platform note once the GeoIP / geo-blocking hook (above) ships. _(Shipped in 0.37.0: the **GeoIP / geo-blocking** docs page covers the `lookupCountry` (MaxMind) and `resolveCountry` (edge-header) strategies and includes a deployment-platform header table — Cloudflare `CF-IPCountry`, AWS CloudFront `CloudFront-Viewer-Country`, Vercel `x-vercel-ip-country`, Fastly — plus the bare-runtime MaxMind fallback.)_
 - [x] **Per-surface freshness sweep** — keep provider SDK versions, env-var names, and webhook-signature notes current as upstreams change; re-run the docs build's link/anchor checks each minor. _(Shipped in 0.37.0: the new `pnpm verify:docs-links` gate (`scripts/verify-docs-links.ts`) statically checks every internal `/docs` link, sidebar nav entry, sitemap entry, and `#anchor` target against the real `website/app/docs/**/page.tsx` tree — failing on broken links, dangling nav/sitemap entries, pages missing from the sitemap, and nav↔sitemap drift. The first sweep across all 119 docs pages passed clean; the check is wired into CI so each minor re-runs it automatically.)_
+- [ ] **Redoc 3 migration for the `ui: "redoc"` docs page** — the pinned
+      default stays on Redoc `2.5.x` (bumped to `2.5.4` on 2026-11-08) because
+      the Redoc 3 `bundles/redoc.standalone.js` is an ES module
+      (`export { RedocStandalone, hydrate, init }`) with no `window.Redoc`
+      global. `redocHtml()` loads it with a classic `<script src>` and calls
+      `Redoc.init(...)`, so a straight pin bump would leave a blank page. The
+      migration needs: a `type="module"` loader that imports `init` from the
+      SRI-pinned URL (module scripts still honour `integrity` + `crossorigin`),
+      the CSP nonce carried onto the module script, a re-check that
+      `allowBlobWorkers` and `connect-src 'self'` still cover Redoc 3's search
+      worker and spec fetch, a review of `RedocHtmlOptions.configuration` keys
+      against Redoc 3's options, updated SRI tests plus an unhappy-path test
+      that a bad hash still throws, and the `docs-asset-integrity` docs page.
+      Keep 2.x until Redoc 2 stops receiving fixes or 3.x is needed for a
+      feature.
 
 ---
 
@@ -280,13 +295,74 @@ and a waived maturity gate is the kind of thing an auditor asks about):
       `SECURITY.md` § "Evidence per advisory" requires now exists — including
       "Patch available", which was the blocker. What has not happened is the
       publication itself: no GitHub Security Advisory has been created and no CVE
-      requested, so the disclosure process remains untested. The draft body is
-      maintainer-local at `otherdocs/advisories/GHSA-DRAFT-forwarded-ip.md`
-      (`otherdocs/` is not tracked) with a proposed CVSS v3.1 vector of
+      requested, so the disclosure process remains untested. The draft advisory
+      is kept outside the repository, with a proposed CVSS v3.1 vector of
       `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:L` (6.5 Medium). Remaining action:
       publish the advisory, request the CVE through GitHub's CNA, then tick this
       box with the GHSA id. Tracked as the one stabilization criterion `1.0.0`
       shipped without, rather than back-dated to look satisfied.)_
+
+---
+
+## Scheduled reviews — runtime & registry support
+
+Dated decision points driven by upstream changes, not by our own feature work.
+
+### Deno runtime, `deno-basic` template, and JSR publishing
+
+Context: on 2026-10-09 the Deno team announced it is joining Cloudflare
+([deno.com/blog/cloudflare](https://deno.com/blog/cloudflare)). Deno Deploy
+shuts down around April 2027. The Deno runtime gets monthly bug-fix and
+security releases until around October 2027, after which the Deno team ends
+development (it stays open source). JSR keeps operating, with its
+infrastructure moving to Cloudflare. Decision on 2026-11-08: **keep** the Deno
+adapter, the `deno-basic` template, the `_ci/deno` CI templates, and JSR
+publishing while upstream still supports them.
+
+- [ ] **~2027-04 — Deno Deploy shutdown sweep.** Confirm no template, docs
+      page, or example still points users at Deno Deploy, and that
+      [Moving off Deno Deploy](https://daloyjs.dev/docs/adapters/deno#moving-off-deno-deploy)
+      is still accurate (Cloudflare migration path, container route).
+- [ ] **~2027-10 — Deno runtime end-of-support decision.** Check whether a
+      community fork or other maintainer has picked up the runtime, and look
+      at Deno usage signals (JSR downloads, `deno-basic` scaffolds, Deno
+      issues). If Deno is unmaintained, deprecate the adapter and `deno-basic`
+      in a minor release, then remove them in the next major (adapter export,
+      template, `_ci/deno`, `create-daloy` tests, runtime smoke test, docs and
+      the README Status table).
+- [ ] **Ongoing — JSR.** Keep publishing `@daloyjs/daloy` while JSR operates.
+      Re-evaluate only if Cloudflare changes JSR's terms, governance, OIDC
+      GitHub Actions publishing, or Sigstore provenance support. JSR is
+      decoupled from the npm publish jobs, so dropping it later is a
+      `release.yml` and `jsr.json` change, not a framework change.
+
+### TypeScript 6/7 support and the Hey API snapshot pin
+
+Decision on 2026-11-08: develop on TypeScript 7, support apps on TypeScript 6
+and 7 (enforced by `pnpm verify:ts-consumer-compat`), keep TypeScript 7 as the
+template default, and keep `@hey-api/openapi-ts` on an exact `next` snapshot
+(`0.0.0-next-20260930190945`). Stable 0.99.0 (2026-06-22, the last stable
+release so far) crashes on TypeScript 7, and switching templates to TypeScript
+6 + 0.99.0 would mean two migrations for every project scaffolded in between.
+
+- [ ] **Move to stable Hey API once a stable release supports TypeScript 7**
+      (0.100, 1.0, or whichever comes first). Exit checklist: replace the
+      snapshot in the root, `workshop/`, `node-basic`, and `bun-basic`; remove
+      the Dependabot ignores in `.github/dependabot.yml` and
+      `packages/create-daloy/templates/_ci/node/_github/dependabot.yml`;
+      remove the `GHSA-hhx9-57xq-r5rw` entry in `osv-scanner.toml`; drop the
+      `js-yaml` overrides (root and templates) if the new release depends on
+      `js-yaml >= 5.4.2`; update the pin in
+      `website/content/docs/installation.mdx` and `typed-client.mdx`. Until
+      then, re-check the `next` channel monthly and bump the snapshot when a
+      newer one passes `pnpm gen` and a full `pnpm audit`.
+- [ ] **~2027-02-28 — OSV exception review.** The `GHSA-hhx9-57xq-r5rw`
+      exception expires; renew it with the then-current snapshot or delete it
+      if the stable move above has landed.
+- [ ] **Drop TypeScript 6 support** only when TypeScript 6 stops receiving
+      fixes upstream and the tools that need the JavaScript compiler API
+      (Vercel's builder, stable Hey API) run on TypeScript 7. Removing
+      `compat/typescript-6` and the CI gate is then a minor, documented change.
 
 ---
 

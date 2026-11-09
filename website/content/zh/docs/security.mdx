@@ -97,7 +97,7 @@ sitemap:
 
 ## 官方安全中间件 [#first-party-security-middleware]
 
-这些中间件是 DaloyJS 的一部分，并在一起编写文档，但它们保持显式，因为 CSP、CORS、限流键、会话密钥和 CSRF 推行都是部署层面的决定。
+这些中间件是 DaloyJS 的一部分，并在一起编写文档。`new App()` 已经为每个响应应用 `secureHeaders()` 和请求 ID（`new App({ secureHeaders: false })` 可关闭自动安全头）；只有在需要修改选项时才自行注册，并且你自行安装的 `secureHeaders()` 会替换自动安装的实例。其余中间件保持显式，因为 CORS、限流键、会话密钥和 CSRF 推行都是部署层面的决定。
 
 ```ts
 import {
@@ -109,8 +109,8 @@ import {
   timing,
 } from "@daloyjs/core";
 
-app.use(requestId());           // 传播 x-request-id
-app.use(secureHeaders());       // CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff ...
+app.use(requestId());           // 可选：调整 x-request-id 的处理（默认已设置请求 ID）
+app.use(secureHeaders());       // 可选：替换自动应用的 CSP、HSTS、X-Frame-Options、COOP、CORP、no-sniff ...
 app.use(cors({                  // 显式允许列表；带凭据时绝不使用 *
   origin: ["https://app.example.com"],
   credentials: true,

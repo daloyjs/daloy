@@ -132,7 +132,8 @@ serve(app, { port: 3000 });
 import { serve } from "@daloyjs/core/bun";
 serve(app, { port: 3000 });
 
-// cloudflare worker
+// cloudflare worker (behind Cloudflare or Vercel, also pass
+// behindProxy: { hops: 1 } to new App(), or production answers 500)
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
 export default toFetchHandler(app);
 

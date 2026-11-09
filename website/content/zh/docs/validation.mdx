@@ -206,6 +206,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 - 根据路由的 `accepts` 列表（如果设置了全局 `allowedContentTypes` 则用它）检查 Content-Type -\> **415**。
 - 默认接受的请求体类型：`application/json`、`application/x-www-form-urlencoded` 和 `multipart/form-data`。
 - 对 JSON、查询字符串、urlencoded 表单和 multipart 表单进行防原型污染的解析。
+- 对 JSON、urlencoded 和文本请求体进行严格的 UTF-8 解码（自 1.16.0 起）：无效或超长的 UTF-8 序列会返回 **400** `Request body is not valid UTF-8`，而不是替换为 `U+FFFD` 后再校验（RFC 8259 §8.1）。格式正确的非 ASCII 字符和开头的 BOM 仍可正常解析；`ctx.request.text()` 保留平台的宽松解码。
 
 JSON 请求体解析为对象，urlencoded 请求体通过 `URLSearchParams` 解析，multipart 请求体通过平台的 `Request.formData()` API 解析。如果你让某条路由接受自定义的文本媒体类型，DaloyJS 会把解码后的文本传给你的请求体 schema。
 

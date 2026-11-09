@@ -59,8 +59,8 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
-import { registerRequestFinalizer } from "./request-finalizers.js";
+import { ipRateLimitIdentity, resolveIpv6Subnet, type IpMatcher } from "./ip-match.js";
+import { isRequestAbandoned, registerRequestFinalizer } from "./request-finalizers.js";
 
 /**
  * Details of a request rejected by {@link concurrencyLimit}, passed to
@@ -100,7 +100,8 @@ export interface ConcurrencyLimitOptions {
   /**
    * Maximum time, in ms, a request may wait in the queue before being rejected
    * with `503`. Default `0`, which means "wait indefinitely" — only meaningful
-   * when {@link maxQueue} `> 0`. Set a finite value to bound tail latency.
+   * when {@link maxQueue} `> 0`. Cancellation or request-deadline cleanup still
+   * removes the waiter. Set a finite value to bound tail latency.
    */
   queueTimeoutMs?: number;
   /**
@@ -148,6 +149,17 @@ export interface ConcurrencyLimitOptions {
    * request (fail-open).
    */
   keyGenerator?: (ctx: BaseContext<any, any>) => string | undefined;
+  /**
+   * IPv6 prefix length the default `scope: "client"` key groups addresses
+   * into (default `64`, the block a single subscriber is normally assigned),
+   * so rotating across addresses inside one prefix shares one budget instead
+   * of minting a fresh bucket per address. Applied to both the forwarded
+   * identity and the peer fallback. Ignored when
+   * {@link ConcurrencyLimitOptions.keyGenerator} is supplied.
+   *
+   * @since 1.23.0
+   */
+  ipv6Subnet?: number;
   /** `Retry-After` seconds on the `503` rejection. Default `1`. `0` omits the header. */
   retryAfterSeconds?: number;
   /** `detail` for the `503` problem+json. Default `"Concurrency limit exceeded"`. */
@@ -161,6 +173,8 @@ interface Waiter {
   resolve: () => void;
   reject: (err: unknown) => void;
   timer: ReturnType<typeof setTimeout> | undefined;
+  isAbandoned: () => boolean;
+  abortReason: () => unknown;
 }
 
 /** Per-bucket semaphore + FIFO wait queue. */
@@ -194,11 +208,16 @@ function assertNonNegativeInteger(name: string, value: number): void {
  * TCP peer so a missing/spoofed XFF cannot skip the limit entirely (undefined
  * would fail open). Peer-less platforms still return `undefined` (skip).
  */
-function forwardedKey(hops: number, trustedPeers?: readonly IpMatcher[]) {
+function forwardedKey(hops: number, trustedPeers?: readonly IpMatcher[], ipv6Subnet = 64) {
   return (ctx: BaseContext<any, any>): string | undefined => {
     const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
-    if (forwarded !== undefined) return forwarded;
-    return getConnInfo(ctx.request)?.remoteAddress;
+    // Canonicalize through the same identity rateLimit() uses: textual
+    // variants (`::ffff:a.b.c.d`, compressed forms) collapse onto one key
+    // and IPv6 addresses group per `ipv6Subnet`, so rotating inside a /64
+    // cannot mint unlimited per-client concurrency budgets.
+    if (forwarded !== undefined) return ipRateLimitIdentity(forwarded, ipv6Subnet);
+    const peer = getConnInfo(ctx.request)?.remoteAddress;
+    return peer === undefined ? undefined : ipRateLimitIdentity(peer, ipv6Subnet);
   };
 }
 
@@ -244,11 +263,12 @@ function buildScopeResolver(
   // scope === "client"
   const hops = resolveForwardedTrust("concurrencyLimit()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("concurrencyLimit()", opts);
+  const ipv6Subnet = resolveIpv6Subnet("concurrencyLimit()", opts.ipv6Subnet);
   let resolve: (ctx: BaseContext<any, any>) => string | undefined;
   if (opts.keyGenerator) {
     resolve = opts.keyGenerator;
   } else if (hops !== undefined) {
-    resolve = forwardedKey(hops, proxyMatchers);
+    resolve = forwardedKey(hops, proxyMatchers, ipv6Subnet);
   } else {
     throw new Error(
       'concurrencyLimit(): scope "client" requires keyGenerator, trustedHops, trustedProxies, or ' +
@@ -274,12 +294,16 @@ function buildScopeResolver(
  * response path (`onSend`), with a dispatcher-run per-request finalizer as a
  * backstop, so it is freed for success, error, and short-circuit responses
  * alike — including when another middleware's `onSend` or `onError` throws.
+ * Canceled or deadline-abandoned queued requests are removed without acquiring
+ * a slot. Running handlers retain their leases until dispatcher cleanup.
  *
  * @param opts - Concurrency-limit configuration; `maxConcurrent` is required.
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
  * @throws Error when `maxConcurrent` is not a positive integer, `maxQueue` /
  *   `queueTimeoutMs` / `retryAfterSeconds` are out of range, or `scope: "client"`
  *   is used without an identity source.
+ * @throws HttpError when the queue is full or its wait timeout expires.
+ * @throws The request's abort reason when it is canceled while queued.
  * @since 0.37.0
  */
 export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
@@ -333,8 +357,11 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
   const release = (key: string): void => {
     const bucket = buckets.get(key);
     if (!bucket) return;
-    const next = bucket.queue.shift();
-    if (next) {
+    for (let next = bucket.queue.shift(); next; next = bucket.queue.shift()) {
+      if (next.isAbandoned()) {
+        next.reject(next.abortReason());
+        continue;
+      }
       if (next.timer !== undefined) clearTimeout(next.timer);
       next.resolve();
       return;
@@ -367,7 +394,40 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
         bucket.active++;
       } else if (maxQueue > 0 && bucket.queue.length < maxQueue) {
         await new Promise<void>((resolve, reject) => {
-          const waiter: Waiter = { resolve, reject, timer: undefined };
+          const signal = ctx.request.signal;
+          let settled = false;
+          const cleanup = (): void => {
+            if (waiter.timer !== undefined) clearTimeout(waiter.timer);
+            signal.removeEventListener("abort", onAbort);
+          };
+          const waiter: Waiter = {
+            resolve() {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              resolve();
+            },
+            reject(err) {
+              if (settled) return;
+              settled = true;
+              const idx = bucket.queue.indexOf(waiter);
+              if (idx !== -1) bucket.queue.splice(idx, 1);
+              cleanup();
+              reject(err);
+            },
+            timer: undefined,
+            isAbandoned: () => signal.aborted || isRequestAbandoned(ctx),
+            abortReason: () => signal.aborted
+              ? signal.reason
+              : new DOMException("Queued request was abandoned", "AbortError"),
+          };
+          const onAbort = (): void => waiter.reject(waiter.abortReason());
+          registerRequestFinalizer(ctx, () => waiter.reject(waiter.abortReason()));
+          if (waiter.isAbandoned()) {
+            onAbort();
+            return;
+          }
+          signal.addEventListener("abort", onAbort, { once: true });
           if (queueTimeoutMs > 0) {
             waiter.timer = setTimeout(() => {
               const idx = bucket.queue.indexOf(waiter);
@@ -380,7 +440,7 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
                   queued: bucket.queue.length,
                 });
               } catch (err) {
-                reject(err);
+                waiter.reject(err);
               }
             }, queueTimeoutMs);
             const timer = waiter.timer as unknown as { unref?: () => void };
@@ -408,7 +468,9 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
       return undefined;
     },
     onSend(_res, ctx) {
-      if (ctx) releaseFor(ctx);
+      // A deadline response leaves the handler running: keep the slot until
+      // it settles. The deferred request finalizer releases it then.
+      if (ctx && !isRequestAbandoned(ctx)) releaseFor(ctx);
       return undefined;
     },
   }, "concurrencyLimit()", opts);

@@ -23,7 +23,7 @@ Montez un serveur DaloyJS minimal, appelez-le avec le client typé et inspectez 
             detail: "app.get(path, contract, handler)",
             tone: "accent",
           },
-          { label: "Ajouter OpenAPI et l’interface de documentation", detail: "docs: true" },
+          { label: "Ajouter OpenAPI et l’interface de documentation", detail: 'docs: "auto"' },
           {
             label: "Appeler le client typé",
             detail: "createClient(app)",
@@ -201,7 +201,7 @@ Les méthodes du client sont déduites du tuple de routes de l’application. En
 Pour les consommateurs situés hors du monorepo, générez un SDK fetch entièrement typé :
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
 
 ```ts

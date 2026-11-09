@@ -43,7 +43,7 @@ const app = new App()
 
 ## Объявление маршрутов [#defining-routes]
 
-Объявление маршрута является единым источником истины для сопоставления, валидации запроса, валидации ответа, вывода OpenAPI и типизированных клиентов. Указывайте `operationId`, когда используете `route()` для публичного маршрута, который должен попасть в типизированный клиент или сгенерированный SDK. Сокращённые HTTP-методы выводят его автоматически. DaloyJS отклоняет повторяющиеся значения `operationId` при регистрации.
+Объявление маршрута является единым источником истины для сопоставления, валидации запроса, валидации ответа, вывода OpenAPI и типизированных клиентов. Описывайте маршруты сокращёнными методами (`app.get(path, contract, handler)`, `app.post(...)`, `app.put(...)`, `app.patch(...)`, `app.delete(...)`, `app.head(...)`). Они выводят `operationId` автоматически, а явно указанный по-прежнему имеет приоритет. DaloyJS отклоняет повторяющиеся значения `operationId` при регистрации.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // params, query и headers выводятся из схем выше.
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### Объектная форма: `app.route({...})` [#route-object-form]
+
+`app.route({ method, path, ...contract, handler })` принимает тот же контракт одним объектом. Поведение во время выполнения, валидация, безопасность и вывод OpenAPI идентичны сокращённым методам. Используйте её только тогда, когда маршрут нужен как значение: переиспользуемый контракт `defineRoute()` (см. [Вывод типов в нескольких файлах](#multi-file-type-inference)), маршрут `OPTIONS` (у которого нет сокращённого метода) или объект маршрута, собранный другим кодом. С `route()` указывайте `operationId` самостоятельно для любого публичного маршрута, который должен попасть в типизированный клиент.
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ export const app = new App().registerRoutes([
 ## Параметры пути [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 Значения пути декодируются до валидации. Если схема `request.params` не указана, `ctx.params` выводится из пути как набор «сырых» строк. Конфликтующие имена параметров в одной и той же позиции дерева, например `/a/:x` и `/a/:y`, вызывают исключение при регистрации.
@@ -167,16 +186,17 @@ app.route({
 Завершающий сегмент `*name` захватывает остаток пути в одну декодированную строку и требует хотя бы одного оставшегося сегмента. Голый `*` использует имя `wildcard`. Wildcard-сегмент должен быть последним: `/assets/*path/private` вызывает исключение при регистрации, а не молча совпадает с более широким путём. Несколько методов могут разделять один wildcard-маршрут, если имя захвата совпадает. Повторяющиеся методы и конфликтующие имена wildcard вызывают исключение.
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ app.route({
 Захват, который декодирует закодированный `/` или `\` (`%2F`, `%5C`), по умолчанию тоже отклоняется с `404`, потому что одно захваченное значение тогда охватывало бы несколько сегментов пути для любого последующего потребителя: файловой системы, URL или прокси. Если маршрут действительно использует идентификаторы со слешем, включите это для отдельного маршрута:
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 Эта опция никогда не допускает обратно компоненты `..` или управляющие символы. Декодированные параметры остаются недоверенными данными и не являются очищенными путями файловой системы, поэтому доступ к файловой системе проверяйте отдельно.
@@ -203,15 +224,16 @@ app.route({
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // итоговый путь: /api/v1/health
 ```
@@ -268,17 +290,18 @@ app.group("/api/v1", { tags: ["v1"] }, (v1) => {
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## Преобразование ответов через `onSend` [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // Убираем внутреннюю деталь реализации, пока ответ не ушёл.
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // Убираем внутреннюю деталь реализации, пока ответ не ушёл.
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 `onSend` выполняется *после* валидации ответа и после слияния заголовков уровня запроса, включая `x-request-id`. Он выполняется *до* `onResponse`, который остаётся правильным местом для логирования и метрик.

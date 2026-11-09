@@ -232,6 +232,8 @@ Pass `pinDns: false` on Workers and other edge runtimes only if you had forced i
 
 The request's `AbortSignal` is honoured on the pinned path too (since 1.3.7): an abort before dispatch, while waiting for the response head, or while the body streams tears down the socket and rejects with the signal's reason, the same contract as `fetch`. Timeouts such as `AbortSignal.timeout()` keep working with DNS pinning on.
 
+A hostile upstream cannot crash the process through the pinned path (since 1.22.0). `204`, `205`, `304` and `HEAD` answers are surfaced with a null body as the Fetch spec requires, and any response head the WHATWG `Response` constructor refuses (a status outside 200–599, a header value it rejects) rejects that one `fetchGuard()` call. Before this, a `205 Reset Content` with a body threw inside `node:http`'s response callback as an uncaught exception.
+
 ## Residual risk: DNS rebinding (TOCTOU)
 
 With the default `pinDns` on Node, rebinding is closed for `http:` and `https:`. The window stays open in three cases: a non-Node runtime (no pin path), `pinDns: false`, and a custom `fetch` option, which does its own DNS lookup when it connects.

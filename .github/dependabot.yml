@@ -38,9 +38,11 @@ updates:
       dev-dependencies:
         dependency-type: development
     ignore:
-      # Pinned to a TypeScript 7-compatible next snapshot until Hey API
-      # 0.100.0 ships; stable releases are still on TS 6 and would revert
-      # the TS7 migration. Remove alongside the osv-scanner.toml exception.
+      # Pinned to a TypeScript 7-compatible next snapshot until a stable Hey
+      # API release supports TypeScript 7. The stable 0.99.x line drives the
+      # TypeScript compiler API, which TS 7 removed, so it crashes `pnpm gen`.
+      # Remove alongside the osv-scanner.toml exception and the matching
+      # ignore in packages/create-daloy/templates/_ci/node/_github/dependabot.yml.
       - dependency-name: "@hey-api/openapi-ts"
     commit-message:
       prefix: "chore(deps)"

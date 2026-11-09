@@ -1,6 +1,6 @@
 ---
 title: Migrate from Express.js
-description: "A complete, no-prior-knowledge guide to migrating an existing Express.js app to DaloyJS: routing, middleware, req/res, errors, routers, static files, sessions, file uploads, and a side-by-side full example, plus an incremental strangler-fig strategy."
+description: "Migrate an Express 4 or 5 app to DaloyJS: routing, middleware to hooks, req/res, errors, routers, proxies, sessions, secure-default gotchas, and AI agent setup."
 keywords:
   - Express to DaloyJS migration
   - migrate Express.js
@@ -10,6 +10,8 @@ keywords:
   - Express router to groups
   - TypeScript web framework migration
   - contract-first migration
+  - Express trust proxy to behindProxy
+  - Express migration AI agent skill
 sitemap:
   priority: 0.8
 ---
@@ -17,6 +19,10 @@ sitemap:
 # Migrate from Express.js to DaloyJS
 
 This is the long version. If you have an existing Express app and you want to move it to DaloyJS, read this top to bottom once, then keep it open as a reference while you work. It assumes you know Express a little, and assumes nothing about DaloyJS. Every concept is mapped from the Express idea you already have to the DaloyJS equivalent, with before/after code for each one.
+
+The guide covers **Express 4 and Express 5** apps (as of mid-2026, npm downloads were split roughly evenly between the two majors). Where the two majors behave differently, for example async error handling or wildcard route syntax, the difference is called out inline.
+
+<Callout type="tip">Migrating with an AI coding agent? Point it at the [DaloyJS docs MCP server and the Express migration skill](/docs/migrating/express#ai-agents) first. Most agents were trained on far more Express than DaloyJS, and without current docs they port `res.json()` and `next()` habits straight across.</Callout>
 
 ## The five W's (and one H), up front [#the-five-w-and-apos-s-and-one-h-up-front]
 
@@ -104,14 +110,12 @@ Hold these two pictures in your head. Everything else follows from the differenc
 ```text
 EXPRESS                              DALOYJS
 -------                              -------
-app.get(path, (req,res,next) => {    app.route({
-  // read from req                     method, path, operationId,
-  // mutate res                        request:  { params, query, body },  // schemas
-  // res.send() / res.json()           responses:{ 200: { body }, 404: {...} },
-  // or next(err)                      handler: async (ctx) => {
-})                                       // ctx.params/query/body are validated + typed
-                                         return { status: 200, body };       // you RETURN
-                                       },
+app.get(path, (req,res,next) => {    app.get(path, {
+  // read from req                     request:  { params, query, body },  // schemas
+  // mutate res                        responses:{ 200: { body }, 404: {...} },
+  // res.send() / res.json()         }, async (ctx) => {
+  // or next(err)                      // ctx.params/query/body are validated + typed
+})                                     return { status: 200, body };       // you RETURN
                                      })
 
 middleware chain (req,res,next)       hooks (onRequest, preBody, beforeHandle,
@@ -155,7 +159,7 @@ See [Installation](/docs/installation) for the full setup, including the `packag
 
 ## Step 1: Bootstrap the app
 
-The classic Express hello-world becomes an `App` instance plus a runtime adapter. Notice that DaloyJS asks you to set a body limit and request timeout up front, those are secure defaults you would have had to remember to add in Express.
+The classic Express hello-world becomes an `App` instance plus a runtime adapter. Notice that DaloyJS asks you to set a body limit and request timeout up front. Both already have safe defaults (1 MiB and a finite timeout), but naming them makes the budget a decision instead of an accident. Hardened response headers (the `helmet` equivalent) are installed automatically, so there is no line for them.
 
 ```typescript
 // Express
@@ -172,16 +176,18 @@ app.listen(3000, () => console.log("listening on 3000"));
 ```typescript
 // DaloyJS
 import { z } from "zod";
-import { App, requestId, secureHeaders } from "@daloyjs/core";
+import { App, rateLimit, requestId } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const app = new App({
-  bodyLimitBytes: 64 * 1024,   // secure default: cap request bodies
-  requestTimeoutMs: 5_000,     // secure default: don't hang forever
+  bodyLimitBytes: 64 * 1024,   // cap request bodies (default is 1 MiB)
+  requestTimeoutMs: 5_000,     // don't hang forever
+  docs: "auto",                // GET /docs + /openapi.json outside production
 })
-  // "middleware everywhere" -> hooks registered globally
+  // "middleware everywhere" -> hooks registered globally.
+  // secureHeaders() is auto-installed; no helmet line needed.
   .use(requestId())
-  .use(secureHeaders())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
   .get(
     "/",
     {
@@ -195,7 +201,9 @@ const { port } = serve(app, { port: 3000 });
 console.log(`listening on http://localhost:${port}`);
 ```
 
-That is the whole shape of a DaloyJS app. The rest of this guide fills in routes and hooks. Want the interactive docs UI too? Add `docs: true` to the `App` options and you get `GET /docs`, `GET /openapi.json`, and `GET /openapi.yaml` for free, no Express equivalent exists without extra packages.
+That is the whole shape of a DaloyJS app. The rest of this guide fills in routes and hooks. The `docs: "auto"` option mounts the interactive docs UI at `GET /docs` plus `GET /openapi.json` and `GET /openapi.yaml` everywhere except production (use `docs: true` to publish them in production too). No Express equivalent exists without extra packages.
+
+Two Express habits you can drop here: `app.disable("x-powered-by")` (DaloyJS sends no `X-Powered-By` header unless you opt in with `poweredBy`), and `app.use(helmet())` (see the [secure defaults](/docs/security/secure-defaults) page for what is auto-applied and how to tune it with `new App({ secureHeaders: { ... } })`).
 
 ## Step 2: Routing
 
@@ -264,7 +272,7 @@ app.get(
 );
 ```
 
-**Route path differences to know:** Express 5 uses path-to-regexp v8, which supports named wildcards like `/files/*filepath` and brace-wrapped optional segments like `/:file{.:ext}`. Note that Express 5 no longer supports inline regular-expression characters inside path strings (they are reserved). You can still pass a JavaScript `RegExp` object as the path. DaloyJS uses a trie/radix router with the conventional `:param` syntax and does *not* accept regex paths. If you rely on a regex route or a complex wildcard, model it as a single param plus validation in the handler, or split it into explicit routes. This is intentional: predictable, traversal-safe matching beats arbitrary regex on a hot path. Path traversal (`..`) and empty segments are rejected by the router before your handler runs.
+**Route path differences to know:** Express 4 accepts an unnamed `/*` wildcard and inline regex characters such as `/:id(\d+)`. Express 5 uses path-to-regexp v8, which requires named wildcards like `/files/*filepath` and supports brace-wrapped optional segments like `/:file{.:ext}`. Note that Express 5 no longer supports inline regular-expression characters inside path strings (they are reserved). You can still pass a JavaScript `RegExp` object as the path. DaloyJS uses a trie/radix router with the conventional `:param` syntax and does *not* accept regex paths. If you rely on a regex route or a complex wildcard, model it as a single param plus validation in the handler, or split it into explicit routes. This is intentional: predictable, traversal-safe matching beats arbitrary regex on a hot path. Path traversal (`..`) and empty segments are rejected by the router before your handler runs.
 
 ### Query strings and request bodies
 
@@ -314,6 +322,10 @@ This is the biggest conceptual change, so go slow here. An Express middleware is
             detail: "raw Request, before parsing",
           },
           {
+            label: "preBody",
+            detail: "cheap header auth, before body I/O",
+          },
+          {
             label: "validation",
             detail: "schemas checked, 422 on failure",
             tone: "muted",
@@ -345,7 +357,8 @@ This is the biggest conceptual change, so go slow here. An Express middleware is
 | Lifecycle point | When it runs | Express analogue |
 | --- | --- | --- |
 | `onRequest` | Earliest, raw `Request`, before any parsing. | Early `app.use` middleware. |
-| `beforeHandle` | After validation, before your handler. Return a `Response` to short-circuit. | Auth/guard middleware that may `res.status(401).end()`. |
+| `preBody` | After route matching, before the body is read or validated (`ctx.body` is undefined). Return or throw to reject without paying for body I/O. | API-key or header auth placed before `express.json()`. |
+| `beforeHandle` | After validation, before your handler. Throw an `HttpError` (or return a `4xx`/`5xx` `Response`) to short-circuit. | Auth/guard middleware that may `res.status(401).end()`. |
 | `afterHandle` | Transform the handler's return value. | Response-shaping middleware. |
 | `onError` | On the error path, before serialization. Can replace the error response. | Error-handling middleware `(err, req, res, next)`. |
 | `onSend` | After the response is built. Mutate headers or replace it. | Middleware that rewrites the outgoing response. |
@@ -374,7 +387,7 @@ app.use({
 
 ### An auth guard middleware
 
-In Express a guard either calls `next()` or ends the response early. In DaloyJS, `beforeHandle` returns a `Response` to short-circuit, or returns nothing to continue. Even better: throw a typed error and let the framework render it (see Step 4).
+In Express a guard either calls `next()` or ends the response early. In DaloyJS a guard returns nothing to continue, or throws a typed error to stop (the framework renders it, see Step 4). Returning a raw `4xx`/`5xx` `Response` also works. A *successful* raw `Response` from a hook bypasses response-schema validation, so the route must opt in with `acknowledgeNoResponseBodySchema`. If the check only needs headers (an API key, a bearer token), use `preBody` instead of `beforeHandle` so a rejected caller never makes the server read and parse a body.
 
 ```typescript
 // Express
@@ -415,26 +428,31 @@ Here is the part you actually came for: what to do with each Express middleware 
 | Express middleware | DaloyJS replacement |
 | --- | --- |
 | `express.json()` | Built in. Declare a `request.body` schema. JSON is parsed and validated automatically. |
+| `express.json({ limit: "100kb" })` | `bodyLimitBytes` on `new App(...)` (default 1 MiB, where Express defaults to 100 KiB), or a per-route `bodyLimitBytes` for an upload route. See [route limits](/docs/security/route-limits). |
 | `express.urlencoded()` | Built in when the route declares a `request.body` schema. DaloyJS parses `application/x-www-form-urlencoded` into an object and validates it, with the same body-size and prototype-pollution guards as JSON. Multipart forms: see [multipart](/docs/multipart). |
 | `express.static()` | No built-in static server (API-first). Serve assets from a CDN/object store, or front the app with nginx/Caddy. See [Static files](/docs/migrating/express#static). |
 | `cors` | `cors()` from `@daloyjs/core`. `app.use(cors({ origin: "https://app.example.com", credentials: true }))`. Unlike Express, registration order relative to auth doesn't matter: from 1.5.4 the policy is applied before any hook, so a `401` from auth still carries CORS headers. |
-| `helmet` | `secureHeaders()` for production-grade headers (CSP, HSTS, frame options, nosniff, ...). See [Security](/docs/security). |
+| `helmet` | Nothing to add: `secureHeaders()` (CSP, HSTS, frame options, nosniff, ...) is auto-installed. Tune it with `new App({ secureHeaders: { ... } })`. See [secure defaults](/docs/security/secure-defaults). |
+| `app.disable("x-powered-by")` | Nothing to add: no `X-Powered-By` is sent by default. See [technology detection](/docs/security/technology-detection). |
+| `app.set("trust proxy", 1)` | `new App({ behindProxy: { hops: 1 } })`, or better `{ cidrs: [...] }` when you know the proxy addresses (also `"loopback"`, `"none"`). Leaving it unset returns `500` on the first request carrying `X-Forwarded-*`, see [below](/docs/migrating/express#secure-defaults). |
 | `morgan` (logging) | An `onResponse` hook, or the built-in `timing()` hook plus your logger. See [tracing](/docs/tracing) / [metrics](/docs/metrics). |
-| `express-rate-limit` | `rateLimit({ windowMs, max })`. Redis-backed store available, see [Redis rate-limit store](/docs/security/rate-limit-redis). |
+| `express-rate-limit` | `rateLimit({ windowMs, max })`. Redis-backed store available, see [Redis rate-limit store](/docs/security/rate-limit-redis). Configure `behindProxy` first so the limiter keys on the real client IP. |
 | `cookie-parser` | `readRequestCookie()` to read, `serializeCookie()` to write. See [Cookies & sessions](/docs/migrating/express#sessions). |
-| `express-session` | DaloyJS [sessions](/docs/security/session) with secure cookie defaults. |
-| `csurf` / CSRF | `csrf()` hook (fetch-metadata or token strategies). See [CSRF protection](/docs/security/csrf). |
+| `express-session` | DaloyJS [sessions](/docs/security/session) with secure cookie defaults. Pair it with `csrf()`: an app with `session()` plus any `POST`/`PUT`/`PATCH`/`DELETE` route refuses to boot without one. |
+| `csurf` / CSRF (`csurf` is deprecated) | `csrf()` hook (fetch-metadata or token strategies). See [CSRF protection](/docs/security/csrf). |
 | `compression` | `compression()` hook. See [compression](/docs/security/compression) (note the decompression-bomb guardrails). |
 | `multer` (uploads) | Built-in [multipart](/docs/multipart) parsing with size/field guards. |
-| `passport` / auth | `bearerAuth()`, `basicAuth()`, JWT/JWK, or an OIDC provider, see [Authentication](/docs/auth). |
+| `passport` / auth | `bearerAuth()`, `basicAuth()`, JWT/JWK, or an OIDC provider, see [Authentication](/docs/auth). Passport's local strategy (password login) is identity-provider work: prefer a provider and verify its tokens. |
+| `express-brute` / login throttling | `loginThrottle()`. See [Security](/docs/security). |
 | ETag / conditional GET | `etag()` hook. |
+| `app.all(path, ...)` | One shorthand per method you actually serve. A method-agnostic route hides its contract from OpenAPI. |
 | Custom `(req,res,next)` middleware | Port the logic into the matching hook (`onRequest`/`beforeHandle`/`onSend`) and package reusable bundles as [plugins](/docs/plugins). |
 
 For combining hooks conditionally (the equivalent of mounting a middleware on some paths but not others), DaloyJS exports `every`, `some`, and `except` from `@daloyjs/core`, e.g. apply CSRF everywhere `except` your webhook routes.
 
 ## Step 4: Error handling
 
-Express centralizes errors in a special four-argument middleware `(err, req, res, next)`, and you signal errors by calling `next(err)`. DaloyJS replaces both with **thrown typed errors** plus an optional `onError` hook. Throw one of the built-in `HttpError` subclasses (or your own subclass) and the framework renders a consistent [RFC 9457 problem+json](/docs/errors) response with the right status code, and in production it redacts internal details automatically.
+Express centralizes errors in a special four-argument middleware `(err, req, res, next)`, and you signal errors by calling `next(err)`. Async handlers are where the majors differ: Express 4 does not await a handler, so a rejected promise becomes an `unhandledRejection` and the request hangs unless you wrap every handler. Express 5 forwards a rejection to `next(err)`. In DaloyJS every handler and hook is awaited, and any throw lands on the same error path. DaloyJS replaces both with **thrown typed errors** plus an optional `onError` hook. Throw one of the built-in `HttpError` subclasses (or your own subclass) and the framework renders a consistent [RFC 9457 problem+json](/docs/errors) response with the right status code, and in production it redacts internal details automatically.
 
 ```typescript
 // Express
@@ -460,7 +478,7 @@ app.use((err, req, res, next) => {
 ```
 
 ```typescript
-// DaloyJS - just throw; no try/catch boilerplate, no next(err)
+// DaloyJS - just throw; no try/catch boilerplate, no next(err), no express-async-errors
 import { NotFoundError } from "@daloyjs/core";
 
 app.get(
@@ -586,6 +604,7 @@ Express gives you fat `req` and `res` objects. DaloyJS gives you a typed `ctx` a
 | `res.sendStatus(204)` | `return { status: 204, body: undefined }` |
 | `res.set("x-foo", "bar")` | `return { status: 200, headers: { "x-foo": "bar" }, body }` or `ctx.set.headers.set(...)` |
 | `res.redirect("/login")` | `return { status: 302, headers: { location: "/login" }, body: undefined }` |
+| `res.redirect(req.query.next)` (user-supplied target) | `return safeRedirect(query.next, { allowedPaths: ["/", "/dashboard"] })`. A raw `location` from user input is an open redirect. See [safe redirects](/docs/security/safe-redirect). |
 | `res.cookie("sid", v)` | `ctx.set.headers.set("set-cookie", serializeCookie("sid", v, {...}))` |
 | `res.clearCookie("sid")` | `ctx.set.headers.set("set-cookie", serializeClearCookie("sid"))` |
 | `res.render("view", data)` | Return HTML you built yourself (DaloyJS is API-first), see [below](/docs/migrating/express#views) |
@@ -740,7 +759,7 @@ app.listen(3000, () => console.log("up on 3000"));
 ```typescript
 // DaloyJS: src/index.ts
 import { z } from "zod";
-import { App, bearerAuth, secureHeaders, requestId, NotFoundError, timingSafeEqual } from "@daloyjs/core";
+import { App, bearerAuth, rateLimit, requestId, NotFoundError, timingSafeEqual } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const Book = z.object({ id: z.string(), title: z.string().min(1) });
@@ -754,10 +773,10 @@ const app = new App({
     // declare the scheme referenced by the route's auth field below
     securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
   },
-  docs: true, // GET /docs + /openapi.json for free
+  docs: "auto", // GET /docs + /openapi.json outside production
 })
   .use(requestId())
-  .use(secureHeaders())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
   .get(
     "/books",
     {
@@ -809,7 +828,25 @@ const { port } = serve(app, { port: 3000 });
 console.log(`up on ${port}`);
 ```
 
-Look at what disappeared: the body-parser line, the manual `if (!id || !title)` validation, the hand-rolled auth status code, and the catch-all error middleware. Look at what appeared for free: an OpenAPI spec, a docs UI, response validation, and a path to a typed client. That is the trade the migration makes.
+Look at what disappeared: the body-parser line, the manual `if (!id || !title)` validation, the hand-rolled auth status code, and the catch-all error middleware. Look at what appeared for free: hardened headers, an OpenAPI spec, a docs UI, response validation, and a path to a typed client. That is the trade the migration makes.
+
+Two details in the DaloyJS version are deliberate. The route's `auth: { scheme: "bearer" }` documents the requirement in OpenAPI, and `bearerAuth()` enforces it; declaring `auth` without a matching enforcing hook is a [boot error](/docs/security/boot-guards#5-route-auth-declared-but-not-enforced), so the docs can never claim a protection the route does not have. And the token comparison uses `timingSafeEqual` instead of Express's `!==`, which leaks timing.
+
+## Secure defaults that change behavior after the cut-over [#secure-defaults]
+
+Express is permissive by default, so an Express app often "works" in ways that DaloyJS deliberately refuses. These are the defaults that most often surprise a team on the first deploy. Each one is a guard, not a bug: satisfy it, do not switch it off.
+
+| What you see | Why | The fix |
+| --- | --- | --- |
+| `500 problem+json` on the first request behind your load balancer | A request carried `X-Forwarded-*` and the app has no proxy posture, so the client IP is spoofable (Express's `trust proxy` defaults to off and silently ignores the headers instead). | Declare the topology: `new App({ behindProxy: { hops: 1 } })`, or `trustProxy: false` when the app faces the internet directly. See [boot guard 4](/docs/security/boot-guards#4-x-forwarded-with-trustproxy-unset-returns-500). |
+| `403` on a `POST` from your SPA on another origin | State-changing cross-origin requests are rejected unless a `cors()` hook allows that origin. The `cors` npm package was optional in Express; here it is how you declare allowed origins. | `app.use(cors({ origin: "https://app.example.com", credentials: true }))`. See [secure defaults](/docs/security/secure-defaults#2-cross-origin-post-put-patch-delete-require-cors). |
+| App refuses to boot after porting `express-session` | `session()` plus any `POST`/`PUT`/`PATCH`/`DELETE` route without `csrf()` is a CSRF hole. | Add `csrf()`. See [boot guard 3](/docs/security/boot-guards#3-session-state-changing-route-without-csrf). |
+| App refuses to boot: route declares `auth` that is not enforced | The OpenAPI document would advertise protection the route does not have. | Attach the enforcing hook (`bearerAuth()`, `jwk()`, ...) on the route, group, or app. See [boot guard 5](/docs/security/boot-guards#5-route-auth-declared-but-not-enforced). |
+| `cors({ origin: "*" })` refuses to boot | A wildcard origin is almost always a copy-paste from an Express tutorial. | List real origins. See [boot guard 2](/docs/security/boot-guards#2-cors-refuse-to-boot). |
+| `413` on a request Express accepted | Body over `bodyLimitBytes` (default 1 MiB). | Raise the limit on the one route that needs it, not globally. See [route limits](/docs/security/route-limits). |
+| `422` where Express returned `200` | Unknown or wrongly typed fields fail the `request` schema. | Fix the client or widen the schema deliberately; that 422 is the contract working. |
+
+For a service-to-service API with no browser in front of it, the [`internal-service` preset](/docs/security/internal-service-preset) relaxes only the browser-specific guards (headers, cross-origin guard, CSRF boot guard, proxy guard) and keeps everything else on. The full list of guards lives on the [boot guards](/docs/security/boot-guards) page.
 
 ## Incremental migration (the strangler-fig approach) [#incremental]
 
@@ -856,14 +893,17 @@ See [Testing & contract tests](/docs/testing) for the full patterns, including s
 <dd>No. JSON parsing is built in and gated by your body schema and the body-size limit.</dd>
 <dt><strong>"What about <code>app.locals</code> / <code>res.locals</code>{"?"}"</strong></dt>
 <dd>Use <code>app.decorate(...)</code> for app-wide shared resources (typed onto <code>ctx.state</code>) and set values on{" "}<code>ctx.state</code> within a request for per-request data.</dd>
+<dt><strong>"Where does <code>app.set("trust proxy", ...)</code> go?"</strong></dt>
+<dd>Into <code>new App({"{ behindProxy: { hops: 1 } }"})</code>{". "}It also drives rate-limit keying and <code>resolveClientIp</code>{", "}so set it before you port <code>express-rate-limit</code>{". "}See the <a href="/docs/migrating/express#secure-defaults">secure defaults table</a>{"."}</dd>
 <dt><strong>"Is there a code-mod to do this automatically?"</strong></dt>
-<dd>No, and that is on purpose. The translation is mechanical but the{" "}<em>contracts</em> (your schemas and documented responses) are the valuable part, and only you know them. Writing them is the migration.</dd>
+<dd>No, and that is on purpose. The translation is mechanical but the{" "}<em>contracts</em> (your schemas and documented responses) are the valuable part, and only you know them. Writing them is the migration. An AI coding agent can do much of the mechanical part if you give it the <a href="/docs/migrating/express#ai-agents">migration skill and docs MCP server</a> and review the contracts it proposes.</dd>
 </dl>
 
 ## Migration checklist
 
 - Create the DaloyJS `App` with a body limit + request timeout.
-- Add `requestId()` + `secureHeaders()` (replace `helmet`).
+- Declare the proxy posture (`behindProxy`) if the app runs behind a load balancer (replaces `trust proxy`).
+- Add `requestId()` + `rateLimit()`. Delete `helmet`: `secureHeaders()` is auto-installed.
 - Map each global Express middleware to a hook or built-in (use the table above).
 - Rewrite each `app.METHOD(path, ...)` as an `app.method(path, {...}, handler)` call with a unique `operationId`.
 - Add `request` schemas for params/query/body, delete manual validation.
@@ -871,9 +911,48 @@ See [Testing & contract tests](/docs/testing) for the full patterns, including s
 - Replace `next(err)` + error middleware with thrown `HttpError` values and an optional `onError` hook.
 - Turn routers into `app.group(...)` or [plugins](/docs/plugins).
 - Move static assets to a CDN/proxy. Re-implement gated downloads as streaming handlers.
+- Add `cors()` for browser origins and `csrf()` if you kept cookie sessions.
 - Replace `app.listen()` with the right [adapter](/docs/adapters)'s `serve()`.
 - Port tests to `app.request(...)`. Add OpenAPI snapshot tests.
-- Turn on `docs: true` and enjoy the free spec + client SDK.
+- Turn on `docs: "auto"` and enjoy the free spec + client SDK.
+
+## Migrating with an AI coding agent [#ai-agents]
+
+Coding agents know Express far better than DaloyJS, so left alone they port `res.json()`, `next()`, and `app.use(helmet())` line for line. Three things fix that.
+
+<Steps>
+<Step title="Connect the docs MCP server">
+
+Add `https://daloyjs.dev/mcp` to your editor or agent. It is read-only and needs no key. Its instructions carry a DaloyJS primer, and `get_doc` with the path `migrating/express` returns this whole guide as Markdown. Scaffolded projects already ship this as `.vscode/mcp.json`:
+
+```json title=".vscode/mcp.json"
+{
+  "servers": {
+    "daloyjs-docs": { "type": "http", "url": "https://daloyjs.dev/mcp" }
+  }
+}
+```
+
+</Step>
+<Step title="Install the migration skill">
+
+The `express-to-daloyjs` skill tells the agent how to sequence the port (inventory first, one resource at a time, contract tests before and after) and which security guards it must never strip. Install it into the Express repo you are migrating:
+
+```bash
+npx skills add daloyjs/daloy --skill express-to-daloyjs
+```
+
+Projects scaffolded with [create-daloy](/docs/scaffolder) already carry the same playbook at `.agents/skills/daloyjs-best-practices/references/migrating-from-express.md`, so porting Express code into a fresh scaffold needs no extra install.
+
+</Step>
+<Step title="Keep the AGENTS.md tripwire">
+
+Scaffolded projects ship an `AGENTS.md` listing the defaults an agent must not remove (`requestId`, `rateLimit`, body limits, timeouts, `.strict()` schemas). If you migrate in place instead of scaffolding, copy that file from a fresh `pnpm create daloy@latest` project. Agents read `AGENTS.md` on every task; they only open skills when a task matches.
+
+</Step>
+</Steps>
+
+Plain-text copies of every docs page are also available by appending `.md` to the URL ([this page as Markdown](https://daloyjs.dev/docs/migrating/express.md)), and the full index is at [`/llms.txt`](/docs/llms-txt).
 
 ## Where to go next
 

@@ -77,12 +77,13 @@ test("createWebhookSender: delivers a signed POST a receiver can verify", async 
   const sigHeader = headers.get("webhook-signature")!;
   assert.match(sigHeader, /^sha256=/);
 
-  // The receiver can verify the signature over "<timestamp>.<body>".
+  // The receiver can verify the signature over "<id>.<timestamp>.<body>".
   const body = req.init.body as Uint8Array;
   const verified = await verifyWebhookSignature({
     payload: body,
     signature: sigHeader,
     secret: SECRET,
+    id: headers.get("webhook-id")!,
     timestamp: 1700000000,
     now: () => 1_700_000_000_000,
   });

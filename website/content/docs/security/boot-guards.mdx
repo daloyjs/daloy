@@ -28,7 +28,7 @@ The guards on this page are gated on the resolved environment being `production`
 
 ## When the guards run [#when-the-guards-run]
 
-The route-table guards (sections 3 and 5 to 9) need every route registered before they can judge the app, so they run in three places:
+The route-table guards (sections 3, 5 to 9, and 13) need every route registered before they can judge the app, so they run in three places:
 
 - **At adapter startup.** `serve()` (Node, Bun, Deno), `toFetchHandler()` (Cloudflare, Vercel), `toWebHandler()`, `toLambdaHandler()` and the Fastly helpers call `app.assertSecureConfig()` before serving. In production a violation throws there, so the process or the cold start fails instead of live traffic. Cloudflare validates Worker startup on deploy, so there the deploy itself fails.
 - **On the first request**, as before. This still covers routes registered after the adapter was created.
@@ -43,9 +43,11 @@ import { app } from "../src/server.ts";
 app.assertSecureConfig({ production: true });
 ```
 
-**No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning.
+**No environment signal.** With no `env`, no `production` and no `NODE_ENV` (the default on Cloudflare Workers and Deno Deploy), DaloyJS cannot tell a deploy from local development, so it does not refuse. It logs each would-be refusal once instead, as a `secure_defaults.env_indeterminate` warning that names the guard and the route. Set `app({ env: "production" })` to enforce them, or `app({ env: "development" })` to silence the warning. Two guards are exceptions that **refuse even with no environment signal** (1.23.0): `cache-before-tenancy` and `mtls-header-without-proxy`. Their violations are silent identity or cross-tenant data breaches that a log line cannot undo, and on an edge runtime "no signal" *is* the production deploy.
 
 **Unrecognized `NODE_ENV` (1.5.4).** A `NODE_ENV` other than `development`, `test` or `production` (for example `staging` or `prod`) is treated the same way: DaloyJS logs a one-time warning naming the value, and each would-be production refusal is logged instead of enforced. If `staging` should behave like production, set `app({ env: "production" })` there.
+
+**Unrecognized `env` option (1.20.0).** `app({ env })` outranks `NODE_ENV`, so it is validated strictly: anything other than `"development"`, `"production"` or `"test"` (for example `"Production"`, `"staging"`, or `""` from an unset variable) throws at construction instead of silently resolving to non-production. 5xx `detail` is likewise revealed only for an explicit `development` or `test` env.
 
 **Your CI.** Because most guards need a production signal, a test run with `NODE_ENV=test` does not trip them. Run `daloy doctor`, or call `app.assertSecureConfig({ production: true })` in a test, to check the production configuration in CI. In 1.5.4, several `daloy doctor` checks that read option names that do not exist (and so never fired) were fixed to read the real options.
 
@@ -115,6 +117,13 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 app.use(cors({ origin: (o) => o.endsWith(".example.com") }));
 ```
 
+Since 1.20.0 a predicate that accepts every origin counts as `"*"` and is refused the same way. Daloy calls it once at `cors()` time with a test origin no real allowlist contains (`https://daloy-cors-canary.invalid`); if it returns `true`, as `() => true` or `(o) => !!o` do, the app refuses to boot in production. A predicate that only adds the opaque origin `"null"` is not treated as a wildcard, matching a literal `"null"` entry. The escape hatch is the same as for `"*"`: `app({ secureDefaults: false, acknowledgeInsecureDefaults: true })`.
+
+```ts
+// Throws at boot in production since 1.20.0.
+app.use(cors({ origin: () => true }));
+```
+
 ## 3. `session()` + state-changing route without `csrf()` [#3-session-state-changing-route-without-csrf]
 
 When any route accepts `POST`, `PUT`, `PATCH`, or `DELETE` AND a `session()` hook is installed, a `csrf()` hook must also be installed. The check runs on first request (because route registration order is unknown until then) and the boot error is cached so every subsequent request rethrows the same failure until you fix the wiring.
@@ -144,6 +153,8 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
 When `app({ behindProxy })` (or the older `trustProxy`) is not set and a request arrives carrying `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, or `X-Real-IP`, Daloy refuses to dispatch the request and returns a structured `500 problem+json`. The rate limiter, audit log, and request-id propagation would otherwise honour the attacker-supplied IP.
 
 The same refusal now covers the platform-specific client-IP headers `cf-connecting-ip` (Cloudflare), `fly-client-ip` (Fly.io), and `true-client-ip`. They are exactly as spoofable as `X-Forwarded-*` when the app is not actually running behind that platform's proxy, so an unconfigured app refuses them too rather than letting a client forge its source IP through a vendor header the operator never opted into.
+
+Since 1.23.0 the refusal also covers certificate-identity headers: `x-forwarded-client-cert` plus any structured header names registered through `clientCertAuth({ header })`. A forged certificate header does not just poison a rate-limit bucket — it authenticates the caller as an allow-listed service, so it joins the same refuse-loudly list (see guard 13).
 
 ```ts
 // Pick exactly one in production:
@@ -235,7 +246,7 @@ Only the `POST` transport route is checked and stamped; `GET` (a 405 hint) and `
 
 `idempotency()` partitions its store keys by tenant the same way, so the guard covers it too: an `idempotency()` mounted ahead of `tenancy()` would let one tenant replay another's stored response for a shared `Idempotency-Key`.
 
-In production with `secureDefaults` on, that ordering refuses to boot. The fix is registration order, not configuration:
+In production with `secureDefaults` on, that ordering refuses to boot. Since 1.23.0 it also refuses with **no environment signal** (edge runtimes carry no `NODE_ENV`): a warn-only log cannot undo a cross-tenant response already served. The fix is registration order, not configuration:
 
 ```ts
 import { App, responseCache, tenancy, tenantFromSubdomain } from "@daloyjs/core";
@@ -289,6 +300,8 @@ alsoGood.use(idempotency({ ttlSeconds: 86_400 }));
 
 Ordering the limiter first does mean cache hits and replays spend budget. That is the intended reading of a rate limit: the cap is on what a caller may ask for, not on what happened to be expensive to produce.
 
+Since 1.22.0 guards 7 and 8 look inside `every()` bundles and compare the earliest stored-response layer against the *latest* tenancy or budget layer in the route's effective chain. `every(responseCache(), tenancy(...))`, and a route-level `rateLimit()` registered after a global `responseCache()` (even with another limiter ahead of the cache), are refused too. Mount every budget the route relies on ahead of the first stored-response hook.
+
 ## 9. Unauthenticated `a2aRoutes()` endpoint [#9-unauthenticated-a2a-endpoint]
 
 An A2A agent endpoint runs your `onMessage` handler for whichever peer agent calls it, so it gets the same rule as MCP. In production with `secureDefaults` on, the App refuses to boot when the `a2aRoutes()` JSON-RPC `POST` route has no authentication hook in its effective chain. The public Agent Card route is never checked: discovery has to work before a peer has credentials. Like guard 5, the boot check sees that an auth hook is present; from 1.5.4 the request-time check also refuses the call in production when that hook did not run. In production, registration also throws if the card advertises a non-HTTPS endpoint on a non-loopback host.
@@ -322,11 +335,13 @@ const app = new App({ requireAuth: true });
 
 app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"] })); // register auth first
 
-app.route({ method: "GET", path: "/orders", /* ... */ });                  // ok: jwk() covers it
-app.route({ method: "GET", path: "/status", public: true, /* ... */ });   // ok: deliberately open
+app.get("/orders", { /* ... */ }, handler);                 // ok: jwk() covers it
+app.get("/status", { public: true, /* ... */ }, handler);   // ok: deliberately open
 ```
 
 Hooks apply to routes registered after them, so register auth before the routes it should cover. A route registered first is refused even if you add `app.use(auth)` later, which is the point: that route really would be unauthenticated. Framework routes that are public by design are already marked: docs, OpenAPI and AsyncAPI documents, health and metrics probes (which have their own `token`), the CSP report endpoint, the MCP and A2A `GET` / `OPTIONS` routes, and the A2A Agent Card. `mcpRoutes()` and `a2aRoutes()` with `{ public: true }` mark their JSON-RPC route public too.
+
+WebSocket routes are covered too. App and group hooks never run on an upgrade, so from 1.20.0 `app.ws()` under `requireAuth: true`, or inside a `group(prefix, { auth })`, throws in every environment unless its `beforeUpgrade` is wrapped with `markWebSocketAuth()` or the route passes `acknowledgeUnauthenticated: true`. See [WebSocket authentication](/docs/websocket#require-auth).
 
 ## 11. `allowedHosts`: DNS rebinding [#11-allowed-hosts]
 
@@ -353,6 +368,28 @@ app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER }));
 // OK.
 app.use(jwk({ jwks: JWKS_URL, algorithms: ["RS256"], issuer: ISSUER, audience: "api://orders" }));
 ```
+
+## 13. `clientCertAuth({ header })` without a proxy posture [#13-mtls-header-without-proxy]
+
+`clientCertAuth({ header: ... })` reads the client-certificate identity from a header such as `X-Forwarded-Client-Cert`, which is only meaningful when a TLS-terminating proxy verified the certificate and *replaced* any client-supplied value. The header path is documented for that topology, but before 1.23.0 nothing enforced it: an app that forgot the posture authenticated whatever identity headers a direct client invented, while the same app hard-refused a spoofed `X-Forwarded-For` (guard 4).
+
+Since 1.23.0, registering header-mode `clientCertAuth` without a declared proxy posture is refused in production and in the no-environment-signal case (edge runtimes), alongside the fail-closed guards listed above. A declared posture means `app({ behindProxy: { hops: ... } })`, `{ cidrs: [...] }`, `"loopback"`, or `trustProxy: true`. The explicitly proxy-less postures — `behindProxy: "none"` and `trustProxy: false` — contradict header mode and are refused as well.
+
+```ts
+// (a) WRONG - refuses to boot: header mode with no declared terminator.
+const bad = new App({ env: "production" });
+bad.use(clientCertAuth({ header: { format: "xfcc" }, allowSubjectCNs: ["svc-a"] }));
+
+// (b) RIGHT - the topology that makes XFCC trustworthy is declared.
+const good = new App({ env: "production", behindProxy: { hops: 1 } });
+good.use(clientCertAuth({ header: { format: "xfcc" }, allowSubjectCNs: ["svc-a"] }));
+
+// (c) RIGHT - native TLS termination needs no headers or posture at all.
+const alsoGood = new App({ env: "production" });
+alsoGood.use(clientCertAuth({ allowSubjectCNs: ["svc-a"] }));
+```
+
+The per-request spoofable-header refusal (guard 4) also covers `x-forwarded-client-cert` and any configured structured header names, so the misconfiguration fails loudly per request too.
 
 ## Checks that apply in every environment [#every-environment]
 
@@ -385,3 +422,4 @@ app.use(cors({ origin: () => true, credentials: true }));
 - For every route that declares `auth:`, confirm a built-in auth middleware covers it, or wrap your custom hook with `markAuthHook(...)`.
 - Add an auth middleware in front of every `mcpRoutes()` endpoint, or pass `mcpRoutes(path, handler, { public: true })` for a deliberately public MCP server.
 - 1.5.4: give every `jwk()` / `createJwtVerifier()` an `audience` (or `allowAnyAudience: true` for a single-tenant private provider), parse numeric env vars with a fallback instead of a bare `Number(...)`, and set `env: "production"` explicitly where `NODE_ENV` is something like `staging`.
+- 1.23.0: if you use `clientCertAuth({ header: ... })`, declare the terminating-proxy topology with `app({ behindProxy: ... })` (or `trustProxy: true`) — header mode without a posture now refuses, including on edge runtimes with no `NODE_ENV`. If you mount `responseCache()` / `idempotency()` ahead of `tenancy()`, reorder: that misorder now also refuses with no environment signal, not only in production.

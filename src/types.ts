@@ -39,8 +39,8 @@ export type PathString = `/${string}`;
 export type ParamsOf<P extends string> = P extends `${string}:${infer Param}/${infer Rest}`
   ? Param | ParamsOf<`/${Rest}`>
   : P extends `${string}:${infer Param}`
-    ? Param
-    : never;
+  ? Param
+  : never;
 
 /**
  * Record of raw (string) path parameters keyed by their name in the path.
@@ -102,14 +102,14 @@ export type InferOut<S> = S extends StandardSchemaV1 ? StandardSchemaV1.InferOut
  */
 export type InferRequest<R extends RequestSchemas | undefined, P extends string> = {
   params: R extends { params: StandardSchemaV1 }
-    ? StandardSchemaV1.InferOutput<R["params"]>
-    : PathParams<P>;
+  ? StandardSchemaV1.InferOutput<R["params"]>
+  : PathParams<P>;
   query: R extends { query: StandardSchemaV1 }
-    ? StandardSchemaV1.InferOutput<R["query"]>
-    : Record<string, string | string[] | undefined>;
+  ? StandardSchemaV1.InferOutput<R["query"]>
+  : Record<string, string | string[] | undefined>;
   headers: R extends { headers: StandardSchemaV1 }
-    ? StandardSchemaV1.InferOutput<R["headers"]>
-    : Record<string, string | undefined>;
+  ? StandardSchemaV1.InferOutput<R["headers"]>
+  : Record<string, string | undefined>;
   body: R extends { body: StandardSchemaV1 } ? InferOut<R["body"]> : unknown;
 };
 
@@ -173,8 +173,8 @@ export type HandlerReturn<R extends ResponsesMap> = {
   [S in StatusOf<R>]: {
     status: S;
     body: R[S] extends { body: StandardSchemaV1 }
-      ? StandardSchemaV1.InferInput<NonNullable<R[S]>["body"] & StandardSchemaV1>
-      : unknown;
+    ? StandardSchemaV1.InferInput<NonNullable<R[S]>["body"] & StandardSchemaV1>
+    : unknown;
     headers?: Record<string, string>;
   };
 }[StatusOf<R>];
@@ -236,7 +236,7 @@ export interface AuthSpec {
  *
  * @since 0.1.0
  */
-export interface AppState {}
+export interface AppState { }
 
 /**
  * Per-request fields DaloyJS itself writes to `ctx.state` before any hook
@@ -245,15 +245,14 @@ export interface AppState {}
  *
  * @example
  * ```ts
- * app.route({
- *   method: "GET",
- *   path: "/health",
- *   responses: { 200: { body: z.object({ ok: z.boolean() }) } },
- *   handler: ({ state }) => {
+ * app.get(
+ *   "/health",
+ *   { responses: { 200: { description: "OK", body: z.object({ ok: z.boolean() }) } } },
+ *   ({ state }) => {
  *     state.log.info({ requestId: state.requestId }, "health probe");
  *     return { status: 200 as const, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  *
  * @since 1.18.0
@@ -570,14 +569,15 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "GET",
-   *   path: "/v1/legacy",
-   *   deprecated: true,
-   *   sunset: "2026-12-31T00:00:00Z",
-   *   responses: { 200: { description: "OK" } },
-   *   handler: () => ({ status: 200, body: { ok: true } }),
-   * });
+   * app.get(
+   *   "/v1/legacy",
+   *   {
+   *     deprecated: true,
+   *     sunset: "2026-12-31T00:00:00Z",
+   *     responses: { 200: { description: "OK" } },
+   *   },
+   *   () => ({ status: 200, body: { ok: true } }),
+   * );
    * ```
    *
    * @since 0.37.0
@@ -603,19 +603,65 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "POST",
-   *   path: "/legacy-form",
-   *   accepts: ["application/x-www-form-urlencoded"],
-   *   request: { body: legacyFormSchema },
-   *   responses: { 200: { description: "OK" } },
-   *   handler: ({ body }) => ({ status: 200, body: { ok: true, body } }),
-   * });
+   * app.post(
+   *   "/legacy-form",
+   *   {
+   *     accepts: ["application/x-www-form-urlencoded"],
+   *     request: { body: legacyFormSchema },
+   *     responses: { 200: { description: "OK" } },
+   *   },
+   *   ({ body }) => ({ status: 200, body: { ok: true, body } }),
+   * );
    * ```
    *
    * @since 0.16.0
    */
   accepts?: string[];
+
+  /**
+   * Hard cap on this route's request body size in bytes, overriding
+   * `app({ bodyLimitBytes })` for this route only. Applies to bodies parsed
+   * against a schema and to bodies the handler reads itself from
+   * `ctx.request`; over the cap answers `413`. Works in both directions: raise
+   * it on a single upload route so the rest of the API keeps the 1 MiB default,
+   * or lower it on a login or webhook route to shrink its attack surface. The
+   * body is still buffered in memory, so keep very large uploads on presigned
+   * object-storage URLs. A global `onRequest` hook runs before the route is
+   * matched, so a body it reads itself is capped at the app limit.
+   *
+   * @example
+   * ```ts
+   * app.post(
+   *   "/upload",
+   *   {
+   *     bodyLimitBytes: 10 * 1024 * 1024,
+   *     request: { body: z.object({ file: fileField({ maxBytes: 5_000_000 }) }) },
+   *     responses: { 201: { description: "Stored" } },
+   *   },
+   *   async ({ body }) => ({ status: 201, body: undefined }),
+   * );
+   * ```
+   *
+   * @throws Error at registration when not a finite non-negative integer.
+   * @since 1.21.0
+   */
+  bodyLimitBytes?: number;
+
+  /**
+   * Per-request deadline in ms for this route, overriding
+   * `app({ requestTimeoutMs })` for this route only. Same semantics as the
+   * app option: it covers the `preBody` / `beforeHandle` / `afterHandle`
+   * hooks, the body read and the handler, answers with
+   * `requestTimeoutStatus` (default `408`) on expiry, and `0` disables it
+   * for this route. Pair a raised `bodyLimitBytes` with a longer deadline on
+   * the same route instead of raising the app-wide timeout, which would widen
+   * the slow-loris window on every route. On Node the adapter's
+   * `connectionTimeoutMs` socket timeout still applies server-wide.
+   *
+   * @throws Error at registration when not a finite non-negative integer.
+   * @since 1.21.0
+   */
+  requestTimeoutMs?: number;
 
   /**
    * Mark a route as internal. Requests reaching the route via the public
@@ -627,13 +673,11 @@ export interface RouteDefinition<
    *
    * @example
    * ```ts
-   * app.route({
-   *   method: "POST",
-   *   path: "/__admin/reindex",
-   *   internal: true,
-   *   responses: { 204: { description: "Started" } },
-   *   handler: () => ({ status: 204, body: undefined }),
-   * });
+   * app.post(
+   *   "/__admin/reindex",
+   *   { internal: true, responses: { 204: { description: "Started" } } },
+   *   () => ({ status: 204, body: undefined }),
+   * );
    *
    * await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
    * ```

@@ -86,6 +86,8 @@ import {
 import {
   secureHeaders as secureHeadersMiddleware,
   AUTH_HOOK_MARKER,
+  COMBINED_BEFORE_HANDLE_LAYERS,
+  type CombinedBeforeHandleLayers,
   CORS_HOOK_MARKER,
   CORS_ORIGIN_ALLOW_MARKER,
   CORS_RESPONSE_DECORATOR,
@@ -129,8 +131,19 @@ import {
   type JobWorkerOptions,
 } from "./jobs.js";
 import { securitySchemeRequiresPayloadAuth } from "./security-schemes.js";
-import { assertBehindProxy, FORWARDED_TRUST_MARKER, type BehindProxyConfig } from "./conn-info.js";
 import {
+  assertBehindProxy,
+  FORWARDED_TRUST_MARKER,
+  resolveClientIp,
+  type BehindProxyConfig,
+} from "./conn-info.js";
+import { ipRateLimitIdentity, parseIp } from "./ip-match.js";
+import {
+  CLIENT_CERT_HEADER_MODE,
+  type ClientCertHeaderModeMarker,
+} from "./mtls.js";
+import {
+  markRequestAbandoned,
   requestFinalizersEnabled,
   runRequestFinalizers,
 } from "./request-finalizers.js";
@@ -358,7 +371,9 @@ export interface AppOptions {
    * downstream I/O) and responds `408` (see {@link AppOptions.requestTimeoutStatus}
    * and {@link RequestTimeoutError}). It does
    * not forcibly stop CPU-bound work, and `onSend` / `onResponse` and response
-   * streaming are not bounded by it.
+   * streaming are not bounded by it. `concurrencyLimit()` slots,
+   * `idempotency()` reservations and the shutdown drain stay held until a
+   * timed-out step actually settles (at most 10 x `requestTimeoutMs`).
    *
    * @throws Error at construction when not a finite non-negative integer.
    */
@@ -453,6 +468,11 @@ export interface AppOptions {
    * surface loudly instead of silently shipping a misconfigured production
    * build. Accepted values mirror the canonical Node ecosystem strings.
    *
+   * @throws Error at construction when set to anything other than
+   *   `"development"`, `"production"` or `"test"` (for example `"Production"`,
+   *   `"staging"` or `""`), since an unrecognized value would otherwise
+   *   resolve to non-production and disable the production boot guards and
+   *   5xx detail redaction. Validated since 1.20.0.
    * @since 0.15.0
    */
   env?: "development" | "production" | "test";
@@ -501,6 +521,25 @@ export interface AppOptions {
    * @since 0.15.0
    */
   stripServerHeaders?: boolean;
+
+  /**
+   * Opt in to advertising the framework with an `X-Powered-By` response
+   * header, which is what technology profilers such as the Wappalyzer
+   * browser extension match on. Off by default: disclosing the stack helps
+   * attackers pick exploits.
+   *
+   * - `true` sends `X-Powered-By: DaloyJS` (no version, on purpose).
+   * - A string sends that exact value, e.g. `"DaloyJS/1.18.0"`. It must be
+   *   1–128 printable ASCII characters with no leading/trailing space.
+   *
+   * The header is stamped after the `stripServerHeaders` pass, so any
+   * upstream `X-Powered-By` is replaced, never duplicated.
+   *
+   * @throws {Error} At construction when the string is empty, too long, or
+   *   contains control/non-ASCII characters (header-injection guard).
+   * @since 1.19.0
+   */
+  poweredBy?: boolean | string;
 
   /**
    * Master switch for the secure-by-default surface (auto-applied
@@ -664,9 +703,9 @@ export interface AppOptions {
 
   /** Pluggable logger. Default: structured JSON logger at "info" (or noop in test). */
   logger?:
-    | Logger
-    | { level?: "trace" | "debug" | "info" | "warn" | "error" | "fatal" }
-    | false;
+  | Logger
+  | { level?: "trace" | "debug" | "info" | "warn" | "error" | "fatal" }
+  | false;
 
   /**
    * Mock mode: instead of running handlers, return the first declared response example
@@ -911,12 +950,12 @@ export interface PluginExtension {
   name: string;
   /** Lifecycle event the handler attaches to. */
   event:
-    | "onRequest"
-    | "preBody"
-    | "beforeHandle"
-    | "afterHandle"
-    | "onSend"
-    | "onError";
+  | "onRequest"
+  | "preBody"
+  | "beforeHandle"
+  | "afterHandle"
+  | "onSend"
+  | "onError";
   /** Hook handler. The shape mirrors the matching {@link Hooks} entry. */
   handler: (...args: any[]) => any;
   /** Extension names this one must run before. */
@@ -1230,6 +1269,17 @@ interface CompiledRoute {
    * reference never crosses an encapsulation boundary.
    */
   decorations: Record<string, unknown> | undefined;
+  /**
+   * Effective request-body cap for this route: `RouteDefinition.bodyLimitBytes`
+   * when set, else `AppOptions.bodyLimitBytes`. Resolved and validated once at
+   * registration so dispatch reads a number, never an option lookup.
+   */
+  bodyLimitBytes: number;
+  /**
+   * Effective request deadline for this route: `RouteDefinition.requestTimeoutMs`
+   * when set, else `AppOptions.requestTimeoutMs`. Resolved at registration.
+   */
+  requestTimeoutMs: number;
 }
 
 /**
@@ -1240,16 +1290,37 @@ interface CompiledRoute {
 export interface SecureConfigIssue {
   /** Which guard fired. */
   code:
-    | "shadow-auth"
-    | "mcp-unauthenticated"
-    | "a2a-unauthenticated"
-    | "cache-before-tenancy"
-    | "replay-before-budget"
-    | "session-without-csrf";
+  | "shadow-auth"
+  | "mcp-unauthenticated"
+  | "a2a-unauthenticated"
+  | "cache-before-tenancy"
+  | "replay-before-budget"
+  | "session-without-csrf"
+  | "mtls-header-without-proxy";
   /** The first offending route, as `"METHOD /path"`. */
   route: string;
   /** The full refusal message, including how to fix it. */
   message: string;
+}
+
+/**
+ * One route's `bodyLimitBytes` / `requestTimeoutMs` override, as reported by
+ * {@link App.getSecurityPosture} under `routeOverrides` and audited by
+ * `daloy doctor`.
+ *
+ * @since 1.21.0
+ */
+export interface RouteLimitOverride {
+  /** HTTP method of the route. */
+  method: HttpMethod;
+  /** Full (prefixed) path of the route. */
+  path: string;
+  /** Route-level body cap in bytes, or `undefined` when the app value applies. */
+  bodyLimitBytes: number | undefined;
+  /** Route-level deadline in ms, or `undefined` when the app value applies. */
+  requestTimeoutMs: number | undefined;
+  /** `true` when an authentication hook is in the route's effective hook chain. */
+  authenticated: boolean;
 }
 
 interface RouteSecurityMarkers {
@@ -1261,6 +1332,10 @@ interface RouteSecurityMarkers {
   hasAuth: boolean;
   /** Route declares an `auth:` requirement (surfaces in the OpenAPI `security` list). */
   declaresAuth: boolean;
+  /** Route-level `bodyLimitBytes` override, or `undefined` when the app value applies. */
+  bodyLimitBytes: number | undefined;
+  /** Route-level `requestTimeoutMs` override, or `undefined` when the app value applies. */
+  requestTimeoutMs: number | undefined;
   /** Route was produced by {@link mcpRoutes} without opting out of the auth boot guard. */
   isMcp: boolean;
   /** Route was produced by `a2aRoutes()` without opting out of the auth boot guard. */
@@ -1400,8 +1475,8 @@ function compileAllowedHosts(entries: readonly string[]): (host: string) => bool
     if (!ALLOWED_HOST_ENTRY_RE.test(entry)) {
       throw new Error(
         `app({ allowedHosts }) entry ${JSON.stringify(raw)} is not a plain hostname. ` +
-          `Use "example.com", ".example.com" for the domain and its subdomains, or an IP literal; ` +
-          `leave out the scheme and port.`,
+        `Use "example.com", ".example.com" for the domain and its subdomains, or an IP literal; ` +
+        `leave out the scheme and port.`,
       );
     }
     if (entry.startsWith(".")) {
@@ -1432,6 +1507,40 @@ interface BootGuardCache {
   checked: boolean;
   error?: Error;
 }
+
+/**
+ * Spoofable forwarded / client-IP / certificate-identity headers refused by
+ * {@link App.assertTrustProxyConfigured} when no proxy posture is declared.
+ * Platform-specific client-IP headers are just as spoofable as
+ * `X-Forwarded-*` when the app is not actually behind that platform's proxy,
+ * and a certificate-identity header is at least as spoofable: a forged XFCC
+ * authenticates an arbitrary allow-listed service, not just a forged
+ * rate-limit bucket. Module-level so the per-request guard never allocates.
+ */
+const SPOOFABLE_PROXY_HEADERS = [
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
+  "x-real-ip",
+  "cf-connecting-ip",
+  "fly-client-ip",
+  "true-client-ip",
+  "x-forwarded-client-cert",
+] as const;
+
+/**
+ * Boot-guard codes that refuse to boot even when the environment is
+ * indeterminate (no `env`/`production`/`NODE_ENV` signal, e.g. edge
+ * runtimes). Membership is limited to violations that produce a silent
+ * identity or data-isolation breach a log warning cannot undo; every other
+ * guard stays warn-only in the indeterminate branch so CI/staging surfaces
+ * keep iterating.
+ */
+const FAIL_CLOSED_WHEN_INDETERMINATE: ReadonlySet<SecureConfigIssue["code"]> = new Set([
+  "cache-before-tenancy",
+  "mtls-header-without-proxy",
+]);
 
 /**
  * Apply a topology-aware security preset on top of caller-supplied
@@ -1493,8 +1602,63 @@ function numericOption(name: string, value: unknown, fallback: number): number {
     const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
     throw new Error(
       `app({ ${name} }) must be a finite, non-negative integer; got ${shown}. ` +
-        `A value read from an unset environment variable (Number(undefined) is NaN) ` +
-        `would otherwise disable this limit. Omit the option to use the default.`,
+      `A value read from an unset environment variable (Number(undefined) is NaN) ` +
+      `would otherwise disable this limit. Omit the option to use the default.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Resolve a per-route numeric limit (`bodyLimitBytes` / `requestTimeoutMs`)
+ * against the app-wide value, with the same validation as {@link numericOption}
+ * so a `NaN` from an unset environment variable cannot disable the limit on
+ * one route either.
+ *
+ * @throws Error when the override is not a finite, non-negative integer.
+ */
+function routeNumericOption(
+  name: string,
+  value: unknown,
+  fallback: number,
+  method: string,
+  path: string,
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
+    throw new Error(
+      `app.route(): ${name} on ${method} ${path} must be a finite, non-negative integer; got ${shown}. ` +
+      `Omit the field to inherit app({ ${name} }).`,
+    );
+  }
+  return value;
+}
+
+/** Default `X-Powered-By` value for `poweredBy: true`; deliberately versionless. */
+const POWERED_BY_DEFAULT = "DaloyJS";
+/** Printable ASCII, no leading/trailing space, max 128 chars: no CR/LF injection. */
+const POWERED_BY_VALUE = /^[\x21-\x7e](?:[\x20-\x7e]{0,126}[\x21-\x7e])?$/;
+
+/**
+ * Resolve {@link AppOptions.poweredBy} + `stripServerHeaders` into the
+ * finalizer's fingerprint mode (`false` | `true` | header value).
+ * @throws Error for a non-boolean/non-string, an unsafe header value, or
+ *   `poweredBy` combined with `stripServerHeaders: false`.
+ */
+function fingerprintOption(poweredBy: unknown, strip: boolean): boolean | string {
+  if (poweredBy === undefined || poweredBy === false) return strip;
+  const value = poweredBy === true ? POWERED_BY_DEFAULT : poweredBy;
+  if (typeof value !== "string" || !POWERED_BY_VALUE.test(value)) {
+    throw new Error(
+      `app({ poweredBy }) must be true or 1-128 printable ASCII characters ` +
+      `without leading/trailing spaces; got ${JSON.stringify(value) ?? typeof value}.`,
+    );
+  }
+  if (!strip) {
+    throw new Error(
+      "app({ poweredBy }) cannot be combined with stripServerHeaders: false. " +
+      "With stripping off, nothing removes X-Powered-By, so set it in an onSend hook instead.",
     );
   }
   return value;
@@ -1532,6 +1696,29 @@ export const DALOY_RAW_BODY = Symbol.for("daloyjs.response.rawBody");
  * so first-party adapters can opt in; not part of the userland API surface.
  */
 export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
+
+/**
+ * Internal Symbol under which dispatch records a route's own `bodyLimitBytes`
+ * on the `Request` when it differs from the app value, so hooks that read raw
+ * bytes themselves (`idempotency()`'s fingerprint) can bound their read by the
+ * limit the framework applies to that route. Absent on routes that inherit
+ * the app limit. Not part of the userland API surface.
+ *
+ * @since 1.21.0
+ */
+export const DALOY_REQUEST_BODY_LIMIT: unique symbol = Symbol.for(
+  "daloyjs.request.bodyLimit",
+);
+
+/** Live limit shared by a request's body-cap wrap; see {@link capRequestBody}. */
+interface BodyCapState {
+  limit: number;
+  /** Lazily initialized branch, retained after clone tees the counted stream. */
+  stream?: ReadableStream<Uint8Array> | null;
+}
+
+/** Module-private key under which {@link capRequestBody} keeps its {@link BodyCapState}. */
+const DALOY_REQUEST_BODY_CAP: unique symbol = Symbol("daloyjs.request.bodyCap");
 
 /**
  * Internal Symbol an adapter sets (on its request shim) to expose the request's
@@ -1719,16 +1906,17 @@ Object.setPrototypeOf(LightResponse.prototype, Response.prototype);
  *
  * app.use(secureHeaders());
  *
- * app.route({
- *   method: "GET",
- *   path: "/books/:id",
- *   operationId: "getBook",
- *   request: { params: z.object({ id: z.uuid() }) },
- *   responses: {
- *     200: { description: "OK", body: z.object({ id: z.string(), title: z.string() }) },
+ * app.get(
+ *   "/books/:id",
+ *   {
+ *     operationId: "getBook",
+ *     request: { params: z.object({ id: z.uuid() }) },
+ *     responses: {
+ *       200: { description: "OK", body: z.object({ id: z.string(), title: z.string() }) },
+ *     },
  *   },
- *   handler: ({ params }) => ({ status: 200, body: { id: params.id, title: "Dune" } }),
- * });
+ *   ({ params }) => ({ status: 200, body: { id: params.id, title: "Dune" } }),
+ * );
  *
  * // Node:
  * import { serve } from "@daloyjs/core/node";
@@ -1770,8 +1958,8 @@ type AppendRoutes<
 type PascalWords<S extends string> = S extends `${infer Head}-${infer Tail}`
   ? `${PascalWords<Head>}${PascalWords<Tail>}`
   : S extends `${infer Head}_${infer Tail}`
-    ? `${Capitalize<Head>}${PascalWords<Tail>}`
-    : Capitalize<S>;
+  ? `${Capitalize<Head>}${PascalWords<Tail>}`
+  : Capitalize<S>;
 
 type OperationSegment<S extends string> = S extends `:${infer Param}`
   ? `By${PascalWords<Param>}`
@@ -1779,8 +1967,8 @@ type OperationSegment<S extends string> = S extends `:${infer Param}`
 
 type OperationPathTail<P extends string> =
   P extends `${infer Segment}/${infer Rest}`
-    ? `${OperationSegment<Segment>}${OperationPathTail<Rest>}`
-    : OperationSegment<P>;
+  ? `${OperationSegment<Segment>}${OperationPathTail<Rest>}`
+  : OperationSegment<P>;
 
 type AutoOperationId<
   M extends HttpMethod,
@@ -1827,7 +2015,7 @@ type ShorthandRoute<
  */
 export class App<
   Routes extends readonly RouteDefinition<any, any, any, any>[] =
-    readonly RouteDefinition<any, any, any, any>[],
+  readonly RouteDefinition<any, any, any, any>[],
 > {
   /**
    * Resolved constructor options. The security-relevant trio is always
@@ -1841,6 +2029,12 @@ export class App<
     >
   > &
     AppOptions;
+  /**
+   * Resolved fingerprint mode handed to the finalizers: `false` leaves
+   * headers alone, `true` strips `Server`/`X-Powered-By`, a string strips
+   * then stamps it as `X-Powered-By` (the `poweredBy` opt-in).
+   */
+  private readonly fingerprint: boolean | string;
   /** Structured logger for the app. Defaults to a JSON-lines console logger; override via `options.logger`. */
   readonly log: Logger;
   /**
@@ -1972,6 +2166,15 @@ export class App<
   private bootGuard: BootGuardCache = { checked: false };
 
   /**
+   * Header names that registered `clientCertAuth({ header })` middleware
+   * reads certificate identity from, reported via the
+   * {@link CLIENT_CERT_HEADER_MODE} marker at registration. Empty when no
+   * header-mode mTLS is in use. Feeds the `mtls-header-without-proxy` boot
+   * guard and the per-request spoofable-header refusal.
+   */
+  private clientCertHeaderModeNames = new Set<string>();
+
+  /**
    * Latched marker stamped after the framework has reported the first
    * unconfigured-proxy request. Logged once at `warn` level so production
    * dashboards see the misconfiguration without flooding on every retry.
@@ -2051,6 +2254,21 @@ export class App<
       jsonMaxKeys: numericOption("jsonMaxKeys", resolved.jsonMaxKeys, DEFAULTS.jsonMaxKeys),
       jsonMaxDepth: numericOption("jsonMaxDepth", resolved.jsonMaxDepth, DEFAULTS.jsonMaxDepth),
     };
+    this.fingerprint = fingerprintOption(
+      resolved.poweredBy,
+      resolved.stripServerHeaders !== false,
+    );
+    // `env` outranks NODE_ENV and `production`, so an unrecognized value
+    // (`"Production"`, `"staging"`, `""` from an unset variable) must not
+    // silently resolve to non-production and turn the boot guards and 5xx
+    // detail redaction off.
+    const env: unknown = this.options.env;
+    if (env !== undefined && env !== "development" && env !== "production" && env !== "test") {
+      throw new Error(
+        `app({ env }) must be "development", "production" or "test"; got ${JSON.stringify(env)}. ` +
+        "Omit it to fall back to NODE_ENV.",
+      );
+    }
     // Telemetry is resolved before the logger so the logger's write sink can
     // tee into the OTLP log exporter. Inert when no endpoint is configured.
     const telemetryOpt = options.telemetry;
@@ -2063,14 +2281,14 @@ export class App<
       options.logger === false
         ? noopLogger
         : options.logger &&
-            typeof (options.logger as Logger).info === "function"
+          typeof (options.logger as Logger).info === "function"
           ? (options.logger as Logger)
           : createLogger({
-              level: (options.logger as any)?.level ?? "info",
-              ...(telemetryWrite !== undefined
-                ? { write: telemetryWrite }
-                : {}),
-            });
+            level: (options.logger as any)?.level ?? "info",
+            ...(telemetryWrite !== undefined
+              ? { write: telemetryWrite }
+              : {}),
+          });
 
     this.warnOnEnvMismatch();
     this.warnUnrecognizedNodeEnv();
@@ -2142,15 +2360,15 @@ export class App<
     if (inProduction && this.options.acknowledgeInsecureDefaults !== true) {
       throw new Error(
         "app({ secureDefaults: false }) is refused in production. " +
-          "secureDefaults turns off the entire secure-by-default " +
-          "surface (auto secureHeaders, cross-origin guard, crash-on-unhandled-rejection, " +
-          "trustProxy guard, csrf/session boot guard, weak-secret refuse-to-boot, " +
-          "cors({ origin: '*' }) refuse-to-boot, anonymous-stateful-plugin refuse-to-boot). " +
-          "If you really need this in production, also pass " +
-          "acknowledgeInsecureDefaults: true to confirm. Prefer per-feature opt-outs " +
-          "(secureHeaders: false, corsCrossOriginGuard: false, crashOnUnhandledRejection: false, " +
-          'trustProxy: false, csrf: "off") instead. ' +
-          "See https://daloyjs.dev/docs/security/secure-defaults-enforcement.",
+        "secureDefaults turns off the entire secure-by-default " +
+        "surface (auto secureHeaders, cross-origin guard, crash-on-unhandled-rejection, " +
+        "trustProxy guard, csrf/session boot guard, weak-secret refuse-to-boot, " +
+        "cors({ origin: '*' }) refuse-to-boot, anonymous-stateful-plugin refuse-to-boot). " +
+        "If you really need this in production, also pass " +
+        "acknowledgeInsecureDefaults: true to confirm. Prefer per-feature opt-outs " +
+        "(secureHeaders: false, corsCrossOriginGuard: false, crashOnUnhandledRejection: false, " +
+        'trustProxy: false, csrf: "off") instead. ' +
+        "See https://daloyjs.dev/docs/security/secure-defaults-enforcement.",
       );
     }
     if (!insecureDefaultsLoggedThisProcess) {
@@ -2227,9 +2445,31 @@ export class App<
     jsonMaxKeys: number;
     jsonMaxDepth: number;
     stripServerHeaders: boolean;
+    /** `X-Powered-By` value advertised via `poweredBy`, or `false` (default). @since 1.19.0 */
+    poweredBy: string | false;
     production: boolean;
+    /**
+     * Routes that override `bodyLimitBytes` and/or `requestTimeoutMs`.
+     * `authenticated` is `true` when an authentication hook is in the route's
+     * effective chain. Empty when every route inherits the app values.
+     * @since 1.21.0
+     */
+    routeOverrides: readonly RouteLimitOverride[];
   } {
     const o = this.options;
+    const routeOverrides: RouteLimitOverride[] = [];
+    for (const m of this.routeSecurityMarkers) {
+      if (m.bodyLimitBytes === undefined && m.requestTimeoutMs === undefined) continue;
+      routeOverrides.push(
+        Object.freeze({
+          method: m.method,
+          path: m.path,
+          bodyLimitBytes: m.bodyLimitBytes,
+          requestTimeoutMs: m.requestTimeoutMs,
+          authenticated: m.hasAuth,
+        }),
+      );
+    }
     return Object.freeze({
       preset: o.preset,
       secureDefaults: o.secureDefaults !== false,
@@ -2248,7 +2488,9 @@ export class App<
       jsonMaxKeys: this.options.jsonMaxKeys ?? DEFAULTS.jsonMaxKeys,
       jsonMaxDepth: this.options.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
       stripServerHeaders: o.stripServerHeaders !== false,
+      poweredBy: typeof this.fingerprint === "string" ? this.fingerprint : false,
       production: this.isProduction(),
+      routeOverrides: Object.freeze(routeOverrides),
     });
   }
 
@@ -2268,7 +2510,7 @@ export class App<
     if (this.options.secureHeaders !== false) {
       const opts =
         this.options.secureHeaders &&
-        typeof this.options.secureHeaders === "object"
+          typeof this.options.secureHeaders === "object"
           ? this.options.secureHeaders
           : {};
       const auto = secureHeadersMiddleware(opts);
@@ -2366,7 +2608,8 @@ export class App<
   private redactsErrorDetail(): boolean {
     if (this._redactDetailCache !== undefined) return this._redactDetailCache;
     let v: boolean;
-    if (this.options.env !== undefined) v = this.options.env === "production";
+    // Fails closed: anything but an explicit development/test env redacts.
+    if (this.options.env !== undefined) v = this.options.env !== "development" && this.options.env !== "test";
     else if (this.options.production === true) v = true;
     else v = !nodeEnvRevealsErrorDetail();
     this._redactDetailCache = v;
@@ -2397,7 +2640,8 @@ export class App<
    * {@link AppOptions.corsCrossOriginGuard} is `false`. Same-origin
    * requests, GET / HEAD / OPTIONS, requests with no `Origin` header, and
    * routes whose hook chain includes a `cors()` policy allowing the origin
-   * are unaffected.
+   * are unaffected. Each policy predicate also receives the request, so a
+   * `cors()` wrapped in `except()` declines on the paths it exempts.
    */
   private assertCrossOriginAllowed(
     request: Request,
@@ -2418,7 +2662,7 @@ export class App<
     const origin = request.headers.get("origin");
     if (!origin) return;
     if (origin === "null") {
-      if (corsOriginAllows.some((allows) => allows(origin))) return;
+      if (corsOriginAllows.some((allows) => allows(origin, request))) return;
       throw new ForbiddenError(
         "Cross-origin state-changing request rejected: opaque Origin requires an allowing cors() policy.",
       );
@@ -2438,11 +2682,11 @@ export class App<
           : requestUrl.origin;
       if (fastReqOrigin !== undefined) {
         if (fastHeaderOrigin === fastReqOrigin) return;
-        if (corsOriginAllows.some((allows) => allows(origin))) return;
+        if (corsOriginAllows.some((allows) => allows(origin, request))) return;
         throw new ForbiddenError(
           `Cross-origin ${method} from "${fastHeaderOrigin}" rejected: no registered cors() policy allows that origin. ` +
-            `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
-            `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
+          `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
+          `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
         );
       }
     }
@@ -2460,11 +2704,11 @@ export class App<
         ? new URL(requestUrl).origin
         : requestUrl.origin;
     if (originUrl.origin === reqOrigin) return;
-    if (corsOriginAllows.some((allows) => allows(origin))) return;
+    if (corsOriginAllows.some((allows) => allows(origin, request))) return;
     throw new ForbiddenError(
       `Cross-origin ${method} from "${originUrl.origin}" rejected: no registered cors() policy allows that origin. ` +
-        `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
-        `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
+      `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
+      `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
     );
   }
 
@@ -2500,9 +2744,9 @@ export class App<
     if (typeof trustsForwarded === "string" && this.options.behindProxy === "none") {
       throw new Error(
         `${trustsForwarded} trusts X-Forwarded-For (trustProxyHeaders: true or trustedHops), but ` +
-          `app({ behindProxy: "none" }) says no proxy is in front, so any client could set its own ` +
-          `IP. Drop the guard's proxy-trust option (it follows the App's behindProxy), or declare ` +
-          `the real topology with app({ behindProxy: { hops } | { cidrs } }).`,
+        `app({ behindProxy: "none" }) says no proxy is in front, so any client could set its own ` +
+        `IP. Drop the guard's proxy-trust option (it follows the App's behindProxy), or declare ` +
+        `the real topology with app({ behindProxy: { hops } | { cidrs } }).`,
       );
     }
     if (
@@ -2514,7 +2758,7 @@ export class App<
       this.log.warn(
         { event: "session.memory_store_in_production" },
         "session() uses the in-memory store in production: sessions vanish on restart, and a logout " +
-          "or revocation on one instance does not reach the others. Pass a shared store (Redis, KV, a database).",
+        "or revocation on one instance does not reach the others. Pass a shared store (Redis, KV, a database).",
       );
     }
     const corsPolicy = (hooks as Record<PropertyKey, unknown>)[CORS_POLICY_MARKER];
@@ -2528,18 +2772,26 @@ export class App<
     if (typeof productionHook === "function") {
       (productionHook as (production: boolean) => void)(this.isProduction());
     }
+    // clientCertAuth({ header }) reports its identity-header names so the
+    // boot guards and the per-request spoofable-header refusal can treat
+    // them like the spoofable client-IP headers they are.
+    const clientCertHeaderMode = (hooks as Record<PropertyKey, unknown>)[CLIENT_CERT_HEADER_MODE];
+    if (clientCertHeaderMode !== undefined) {
+      const marker = clientCertHeaderMode as ClientCertHeaderModeMarker;
+      for (const name of marker.headerNames) this.clientCertHeaderModeNames.add(name);
+    }
     const behindProxyHook = (hooks as Record<PropertyKey, unknown>)[APP_BEHIND_PROXY_HOOK];
     if (typeof behindProxyHook === "function") {
       // In production, say so once when a guard cannot tell clients apart and
       // falls back to one shared bucket (edge platforms have no TCP peer).
       const onSharedBucket = this.isProduction()
         ? () =>
-            this.log.warn(
-              { event: "rate-limit.shared-bucket", behindProxy: this.options.behindProxy ?? null },
-              "rateLimit() cannot identify the client, so every caller shares one bucket and one " +
-                "client can exhaust it for everyone. On Vercel, Cloudflare Workers, Netlify, Fly.io, " +
-                "Render, Railway or Heroku set app({ behindProxy: { hops: 1 } }).",
-            )
+          this.log.warn(
+            { event: "rate-limit.shared-bucket", behindProxy: this.options.behindProxy ?? null },
+            "rateLimit() cannot identify the client, so every caller shares one bucket and one " +
+            "client can exhaust it for everyone. On Vercel, Cloudflare Workers, Netlify, Fly.io, " +
+            "Render, Railway or Heroku set app({ behindProxy: { hops: 1 } }).",
+          )
         : undefined;
       (behindProxyHook as (cfg: unknown, onSharedBucket?: () => void) => void)(
         this.options.behindProxy,
@@ -2571,18 +2823,18 @@ export class App<
         if (Array.isArray(hooks)) {
           throw new Error(
             "Hooks must be a single Hooks object, not an array. To run multiple " +
-              "hook bundles (e.g. ipRestriction + bearerAuth) on one route, compose " +
-              "them with every(...) (all must pass) or some(...) (any may pass) from " +
-              "@daloyjs/core. Passing an array silently applies NO hooks, leaving the " +
-              "route unguarded.",
+            "hook bundles (e.g. ipRestriction + bearerAuth) on one route, compose " +
+            "them with every(...) (all must pass) or some(...) (any may pass) from " +
+            "@daloyjs/core. Passing an array silently applies NO hooks, leaving the " +
+            "route unguarded.",
           );
         }
         if (Object.keys(hooks).length > 0) {
           throw new Error(
             "Hooks object carries none of the recognized hook keys (onRequest, preBody, " +
-              "beforeHandle, afterHandle, onError, onSend, onResponse), so it would " +
-              "silently apply no hooks. To compose multiple hook bundles use " +
-              "every(...) / some(...) from @daloyjs/core.",
+            "beforeHandle, afterHandle, onError, onSend, onResponse), so it would " +
+            "silently apply no hooks. To compose multiple hook bundles use " +
+            "every(...) / some(...) from @daloyjs/core.",
           );
         }
         // An empty object `{}` carries no hook and makes no false promise of one;
@@ -2609,9 +2861,9 @@ export class App<
     }
     if (record[CORS_WILDCARD_ORIGIN_MARKER] === true) {
       throw new Error(
-        'cors({ origin: "*" }) refused in production: a wildcard CORS origin exposes every state-changing route cross-origin. ' +
-          "Replace the wildcard with an explicit allowlist (string[] or predicate), or pass " +
-          "app({ secureDefaults: false }) to disable this guard.",
+        'cors({ origin: "*" }) (or an origin predicate that accepts any origin) refused in production: a wildcard CORS origin exposes every state-changing route cross-origin. ' +
+        "Replace the wildcard with an explicit allowlist (string[] or predicate), or pass " +
+        "app({ secureDefaults: false }) to disable this guard.",
       );
     }
     if (record[SESSION_HOOK_MARKER] === true) {
@@ -2668,7 +2920,7 @@ export class App<
     this.log.warn(
       { event: "secure_defaults.partially_disabled", disabled: off },
       `Production app with secure defaults switched off: ${off.join("; ")}. ` +
-        "Confirm each is intended; together they can leave cookie-authenticated routes open to cross-site requests.",
+      "Confirm each is intended; together they can leave cookie-authenticated routes open to cross-site requests.",
     );
   }
 
@@ -2694,9 +2946,9 @@ export class App<
     this.log.warn(
       { event: "env.unrecognized", nodeEnv },
       `NODE_ENV="${nodeEnv}" is not recognized. Only "production" enables the production ` +
-        `refusals (boot guards, proxy-header refusal, insecure-default checks), so they are logged ` +
-        `as warnings instead of enforced. Set app({ env: "production" }) for a production-like ` +
-        `deploy, or app({ env: "development" }) to silence this.`,
+      `refusals (boot guards, proxy-header refusal, insecure-default checks), so they are logged ` +
+      `as warnings instead of enforced. Set app({ env: "production" }) for a production-like ` +
+      `deploy, or app({ env: "development" }) to silence this.`,
     );
   }
 
@@ -2739,8 +2991,8 @@ export class App<
     this.log.warn(
       { event: "secure_defaults.env_indeterminate", risky },
       `DaloyJS: ${risky.join(" and ")} present, but the runtime environment is indeterminate ` +
-        `(no env option and no NODE_ENV). The production-only refuse-to-boot guard is therefore ` +
-        `inactive. If this is production (e.g. an edge runtime), set app({ env: "production" }).`,
+      `(no env option and no NODE_ENV). The production-only refuse-to-boot guard is therefore ` +
+      `inactive. If this is production (e.g. an edge runtime), set app({ env: "production" }).`,
     );
   }
 
@@ -2753,8 +3005,8 @@ export class App<
     if (!securitySchemeRequiresPayloadAuth(scheme)) return;
     throw new Error(
       `Route ${route.method} ${route.path} declares auth.payload: false, ` +
-        `but security scheme "${auth.scheme}" requires payload authentication. ` +
-        `Remove the route-level opt-out or use a scheme without requirePayloadAuth: true.`,
+      `but security scheme "${auth.scheme}" requires payload authentication. ` +
+      `Remove the route-level opt-out or use a scheme without requirePayloadAuth: true.`,
     );
   }
 
@@ -2804,10 +3056,24 @@ export class App<
     // staging surfaces that ship sample secrets / no CSRF token while
     // iterating do not pay the refuse-to-boot cost. With no environment signal
     // at all (edge runtimes have no NODE_ENV) the refusals cannot be told apart
-    // from a deploy, so every would-be refusal is logged instead of skipped.
+    // from a deploy, so every would-be refusal is logged instead of skipped —
+    // except the FAIL_CLOSED_WHEN_INDETERMINATE set, whose violations are
+    // silent identity / data-isolation breaches that a warning cannot undo.
     if (!this.isProduction()) {
       if (this.isEnvIndeterminate()) {
-        this.warnIndeterminateBootGuards(this.collectBootGuardIssues());
+        const issues = this.collectBootGuardIssues();
+        // Fail closed for guards whose violation is a silent identity or
+        // data-isolation breach that a log warning cannot undo: a shared
+        // cache keyed before tenant resolution leaks one tenant's body to
+        // another, and a certificate-identity header with no declared proxy
+        // posture authenticates a forged principal. Edge runtimes carry no
+        // NODE_ENV, so "indeterminate" there *is* the production deploy.
+        const fatal = issues.find((i) => FAIL_CLOSED_WHEN_INDETERMINATE.has(i.code));
+        if (fatal) {
+          this.bootGuard.error = new Error(fatal.message);
+          throw this.bootGuard.error;
+        }
+        this.warnIndeterminateBootGuards(issues);
       }
       return;
     }
@@ -2826,8 +3092,9 @@ export class App<
    *
    * The guards are the ones listed under "boot guards" in the docs: shadow
    * auth, unauthenticated MCP / A2A routes, `responseCache()` ahead of
-   * `tenancy()`, a stored-response layer ahead of `rateLimit()`, and
-   * `session()` without `csrf()`. They are skipped under
+   * `tenancy()`, a stored-response layer ahead of `rateLimit()`,
+   * `session()` without `csrf()`, and `clientCertAuth({ header })` without
+   * a declared proxy posture. They are skipped under
    * `secureDefaults: false`. The first-request check still runs, so routes
    * registered after this call are covered too.
    *
@@ -2835,8 +3102,12 @@ export class App<
    *   (pass `true` in CI to check a production config from a dev machine).
    * @returns Every violation found, in guard order; empty when the config is clean.
    * @throws Error listing every violation when the effective environment is
-   *   production. Outside production nothing is thrown; with no environment
-   *   signal at all the violations are logged once as a warning.
+   *   production. Also throws outside production when the environment signal
+   *   is indeterminate (no `env` / `production` / `NODE_ENV`) and a violation
+   *   is a silent identity or data-isolation breach
+   *   (`cache-before-tenancy`, `mtls-header-without-proxy`) — a warning cannot
+   *   undo a leaked response or a forged principal. Other violations with no
+   *   environment signal are logged once as a warning.
    * @since 1.5.3
    */
   assertSecureConfig(options: { production?: boolean } = {}): readonly SecureConfigIssue[] {
@@ -2846,10 +3117,20 @@ export class App<
     if (production && issues.length > 0) {
       throw new Error(
         `Insecure configuration refused (${issues.length} issue${issues.length === 1 ? "" : "s"}):\n` +
-          issues.map((issue, i) => `${i + 1}. ${issue.message}`).join("\n"),
+        issues.map((issue, i) => `${i + 1}. ${issue.message}`).join("\n"),
       );
     }
     if (!production && options.production === undefined && this.isEnvIndeterminate()) {
+      // Same fail-closed class as assertBootGuards: refuse the silent
+      // identity / data-isolation breaches even without an environment
+      // signal, warn on the rest.
+      const fatal = issues.filter((i) => FAIL_CLOSED_WHEN_INDETERMINATE.has(i.code));
+      if (fatal.length > 0) {
+        throw new Error(
+          `Insecure configuration refused (${fatal.length} issue${fatal.length === 1 ? "" : "s"}):\n` +
+          fatal.map((issue, i) => `${i + 1}. ${issue.message}`).join("\n"),
+        );
+      }
       this.warnIndeterminateBootGuards(issues);
     }
     return issues;
@@ -2978,9 +3259,9 @@ export class App<
       this.log.warn(
         { event: "secure_defaults.env_indeterminate", guard: issue.code, route: issue.route },
         `No recognized environment signal (env / production / NODE_ENV of development, test or ` +
-          `production), so this production refusal is not ` +
-          `enforced: ${issue.message} Set app({ env: "production" }) (or NODE_ENV=production) ` +
-          `to enforce it, or app({ env: "development" }) to silence this warning.`,
+        `production), so this production refusal is not ` +
+        `enforced: ${issue.message} Set app({ env: "production" }) (or NODE_ENV=production) ` +
+        `to enforce it, or app({ env: "development" }) to silence this warning.`,
       );
     }
   }
@@ -3007,12 +3288,12 @@ export class App<
         "shadow-auth",
         shadowAuth,
         `Route ${shadowAuth.method} ${shadowAuth.path} declares an auth requirement (auth: ...) ` +
-          `but no authentication hook is installed in its effective hook chain, so it is advertised ` +
-          `as protected while accepting unauthenticated requests. ` +
-          `Install an auth middleware (bearerAuth/basicAuth/jwk/httpSignatureAuth/clientCertAuth), ` +
-          `wrap a custom auth hook with markAuthHook(...), remove the route's auth: declaration, ` +
-          `or pass app({ secureDefaults: false }) to disable this guard. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`,
+        `but no authentication hook is installed in its effective hook chain, so it is advertised ` +
+        `as protected while accepting unauthenticated requests. ` +
+        `Install an auth middleware (bearerAuth/basicAuth/jwk/httpSignatureAuth/clientCertAuth), ` +
+        `wrap a custom auth hook with markAuthHook(...), remove the route's auth: declaration, ` +
+        `or pass app({ secureDefaults: false }) to disable this guard. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
 
@@ -3023,12 +3304,12 @@ export class App<
         "mcp-unauthenticated",
         mcpNoAuth,
         `MCP route ${mcpNoAuth.method} ${mcpNoAuth.path} (from mcpRoutes()) has no authentication ` +
-          `hook in its effective hook chain. MCP tools are model-controlled and can trigger side ` +
-          `effects, so an unauthenticated endpoint is a high-impact default. ` +
-          `Install an auth middleware covering the MCP route (e.g. app.use(bearerAuth({ ... }))), ` +
-          `wrap a custom auth hook with markAuthHook(...), pass mcpRoutes(path, handler, { public: true }) ` +
-          `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`,
+        `hook in its effective hook chain. MCP tools are model-controlled and can trigger side ` +
+        `effects, so an unauthenticated endpoint is a high-impact default. ` +
+        `Install an auth middleware covering the MCP route (e.g. app.use(bearerAuth({ ... }))), ` +
+        `wrap a custom auth hook with markAuthHook(...), pass mcpRoutes(path, handler, { public: true }) ` +
+        `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
 
@@ -3040,12 +3321,12 @@ export class App<
         "a2a-unauthenticated",
         a2aNoAuth,
         `A2A route ${a2aNoAuth.method} ${a2aNoAuth.path} (from a2aRoutes()) has no authentication ` +
-          `hook in its effective hook chain. Peer agents can trigger whatever your onMessage handler ` +
-          `does, so an unauthenticated agent endpoint is a high-impact default. ` +
-          `Install an auth middleware covering the A2A route (e.g. app.use(bearerAuth({ ... }))), ` +
-          `wrap a custom auth hook with markAuthHook(...), pass a2aRoutes(path, handler, { public: true }) ` +
-          `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`,
+        `hook in its effective hook chain. Peer agents can trigger whatever your onMessage handler ` +
+        `does, so an unauthenticated agent endpoint is a high-impact default. ` +
+        `Install an auth middleware covering the A2A route (e.g. app.use(bearerAuth({ ... }))), ` +
+        `wrap a custom auth hook with markAuthHook(...), pass a2aRoutes(path, handler, { public: true }) ` +
+        `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
 
@@ -3060,12 +3341,12 @@ export class App<
         "cache-before-tenancy",
         cacheBeforeTenancy,
         `Route ${cacheBeforeTenancy.method} ${cacheBeforeTenancy.path} runs responseCache() ` +
-          `or idempotency() before tenancy() in its effective hook chain. The stored-response key ` +
-          `is built before the tenant is resolved, so every tenant would share one entry and one tenant's response ` +
-          `would be served to the next caller (CWE-524 cross-tenant cached-response disclosure). ` +
-          `Register tenancy() first — as a global hook (new App({ hooks: tenancy(...) })) or an ` +
-          `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`,
+        `or idempotency() before tenancy() in its effective hook chain. The stored-response key ` +
+        `is built before the tenant is resolved, so every tenant would share one entry and one tenant's response ` +
+        `would be served to the next caller (CWE-524 cross-tenant cached-response disclosure). ` +
+        `Register tenancy() first — as a global hook (new App({ hooks: tenancy(...) })) or an ` +
+        `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
 
@@ -3083,13 +3364,13 @@ export class App<
         "replay-before-budget",
         replayBeforeBudget,
         `Route ${replayBeforeBudget.method} ${replayBeforeBudget.path} runs ` +
-          `${replayBeforeBudget.replayBeforeBudget} before rateLimit() / loginThrottle() in its ` +
-          `effective hook chain. Both act from beforeHandle, so a cache hit or an idempotent ` +
-          `replay returns a response and ends the chain before the limiter counts the request — ` +
-          `the declared budget is never spent on repeat traffic and is effectively unlimited. ` +
-          `Register rateLimit() first — as a global hook (new App({ hooks: rateLimit(...) })) or ` +
-          `an earlier app.use(...) — so every request is counted before a stored response can ` +
-          `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`,
+        `${replayBeforeBudget.replayBeforeBudget} before rateLimit() / loginThrottle() in its ` +
+        `effective hook chain. Both act from beforeHandle, so a cache hit or an idempotent ` +
+        `replay returns a response and ends the chain before the limiter counts the request — ` +
+        `the declared budget is never spent on repeat traffic and is effectively unlimited. ` +
+        `Register rateLimit() first — as a global hook (new App({ hooks: rateLimit(...) })) or ` +
+        `an earlier app.use(...) — so every request is counted before a stored response can ` +
+        `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
 
@@ -3103,14 +3384,54 @@ export class App<
           "session-without-csrf",
           stateChanging,
           `session() is registered in the hook chain for a state-changing route ` +
-            `(${stateChanging.method} ${stateChanging.path}) but no csrf() hook is installed. ` +
-            `Without CSRF protection a browser can be tricked into making authenticated ` +
-            `state-changing requests cross-site. ` +
-            `Register csrf() via app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: [...] })), ` +
-            `or pass app({ csrf: "off" }) to acknowledge that this app is not browser-facing. ` +
-            `See https://daloyjs.dev/docs/security/boot-guards.`,
+          `(${stateChanging.method} ${stateChanging.path}) but no csrf() hook is installed. ` +
+          `Without CSRF protection a browser can be tricked into making authenticated ` +
+          `state-changing requests cross-site. ` +
+          `Register csrf() via app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: [...] })), ` +
+          `or pass app({ csrf: "off" }) to acknowledge that this app is not browser-facing. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
         );
       }
+    }
+
+    // Guard 5: clientCertAuth({ header }) without a declared proxy posture.
+    // A certificate-identity header is at least as spoofable as
+    // X-Forwarded-For — the per-request guard below hard-refuses a spoofed
+    // client IP in production — yet the header path stamps a fully
+    // authenticated service principal. With no behindProxy / trustProxy:
+    // true declaration there is no trusted terminator that strips and
+    // replaces those headers, so a directly reachable origin would
+    // authenticate attacker-supplied identity.
+    // A declared posture that says "no proxy" (`behindProxy: "none"`,
+    // `trustProxy: false`) does not license reading identity from proxy
+    // headers — it asserts the very topology under which they are forged.
+    const mtlsProxyPostureDeclared =
+      this.options.trustProxy === true ||
+      (this.options.behindProxy !== undefined && this.options.behindProxy !== "none");
+    if (this.clientCertHeaderModeNames.size > 0 && !mtlsProxyPostureDeclared) {
+      // Name the posture that actually contradicts header mode so the fix is
+      // obvious — including when preset: "internal-service" set trustProxy:
+      // false implicitly (a mesh sidecar still needs behindProxy declared).
+      const posture =
+        this.options.behindProxy === "none"
+          ? 'app({ behindProxy: "none" }) says no proxy is in front'
+          : this.options.trustProxy === false
+            ? `app({ trustProxy: false })${
+              this.options.preset === "internal-service" ? ' (set by preset: "internal-service")' : ""
+            } says no proxy is in front`
+            : "the app declares no proxy posture";
+      add(
+        "mtls-header-without-proxy",
+        { method: "GLOBAL", path: "(app.use clientCertAuth)" },
+        `clientCertAuth({ header: ... }) is registered but ${posture}. ` +
+        `Certificate-identity headers (${[...this.clientCertHeaderModeNames].join(", ")}) are ` +
+        `client-controllable on any path that does not traverse a terminator which strips and ` +
+        `replaces them after verification, so the mTLS check would authenticate a forged ` +
+        `identity. Declare the topology with app({ behindProxy: { hops: 1 } | { cidrs: [...] } }) (or ` +
+        `app({ trustProxy: true }) when every request provably traverses a proxy you control), ` +
+        `or drop header mode and let the adapter attach the native TLS peer certificate. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
+      );
     }
     return issues;
   }
@@ -3120,10 +3441,13 @@ export class App<
    * constructed without an explicit {@link AppOptions.trustProxy} value
    * and a request arrives carrying a spoofable forwarded / client-IP header
    * (`X-Forwarded-*`, `X-Real-IP`, or a vendor header like `CF-Connecting-IP`,
-   * `Fly-Client-IP`, `True-Client-IP`), refuse to
-   * dispatch it: the rate limiter, audit log, and request-id propagation
-   * would otherwise honour the attacker-supplied IP. Returns a structured
-   * `500 problem+json` so the failure is loud at the network boundary.
+   * `Fly-Client-IP`, `True-Client-IP`) or a spoofable certificate-identity
+   * header (`X-Forwarded-Client-Cert` plus any structured header names
+   * registered via `clientCertAuth({ header })`), refuse to
+   * dispatch it: the rate limiter, audit log, request-id propagation, and
+   * mTLS identity would otherwise honour attacker-supplied values. Returns a
+   * structured `500 problem+json` so the failure is loud at the network
+   * boundary.
    * Disabled when `secureDefaults: false` or when `trustProxy` is set to
    * `true` or `false` explicitly.
    */
@@ -3140,23 +3464,22 @@ export class App<
     if (!this.isProduction()) return;
     const headers = request.headers;
     let found: string | undefined;
-    for (const name of [
-      "x-forwarded-for",
-      "x-forwarded-host",
-      "x-forwarded-proto",
-      "x-forwarded-port",
-      "x-real-ip",
-      // Platform-specific client-IP headers are just as spoofable as
-      // X-Forwarded-* when the app is not actually behind that platform's
-      // proxy. Refuse them too so a client cannot forge its source IP via a
-      // vendor header the operator never configured trust for.
-      "cf-connecting-ip",
-      "fly-client-ip",
-      "true-client-ip",
-    ]) {
+    for (const name of SPOOFABLE_PROXY_HEADERS) {
       if (headers.has(name)) {
         found = name;
         break;
+      }
+    }
+    // Operator-configured structured certificate-identity header names (and a
+    // renamed XFCC header) registered through clientCertAuth({ header }) are
+    // refused identically. Checked separately so the common path never
+    // allocates: the Set is empty unless header-mode mTLS is in use.
+    if (found === undefined && this.clientCertHeaderModeNames.size > 0) {
+      for (const name of this.clientCertHeaderModeNames) {
+        if (headers.has(name)) {
+          found = name;
+          break;
+        }
       }
     }
     if (!found) return;
@@ -3165,14 +3488,14 @@ export class App<
       this.log.warn(
         { event: "trust-proxy.unconfigured", header: found },
         `Request carried ${found} but app({ behindProxy }) is unset; refusing to honour spoofable proxy headers. ` +
-          PROXY_FIX_HINT,
+        PROXY_FIX_HINT,
       );
     }
     const refusal = new InternalError(
       `Refusing to dispatch request: ${found} header is present but app({ behindProxy }) is unconfigured. ` +
-        `Honouring a spoofable forwarded header would let a client forge its source IP for the rate ` +
-        `limiter, audit log, and request-id propagation. ` +
-        PROXY_FIX_HINT,
+      `Honouring a spoofable forwarded header would let a client forge its source IP for the rate ` +
+      `limiter, audit log, and request-id propagation. ` +
+      PROXY_FIX_HINT,
     );
     // Every refused request throws from this one line, so the stack is
     // identical each time and names framework internals rather than anything
@@ -3229,7 +3552,7 @@ export class App<
       this.log.warn(
         { event: "docs.public_in_production" },
         "API docs (/docs, /openapi.json) are mounted in production and public: anyone can read the " +
-          "full route map. Fine for a public API; otherwise drop docs in production or put auth in front.",
+        "full route map. Fine for a public API; otherwise drop docs in production or put auth in front.",
       );
     }
     const openapiPath = (opts.openapiPath ?? "/openapi.json") as PathString;
@@ -3367,30 +3690,30 @@ export class App<
         const html =
           ui === "swagger"
             ? swaggerUiHtml({
+              specUrl: openapiPath,
+              title,
+              configuration: opts.swagger,
+              assets: opts.assets,
+              auth: opts.auth,
+            })
+            : ui === "redoc"
+              ? redocHtml({
                 specUrl: openapiPath,
                 title,
-                configuration: opts.swagger,
+                configuration: opts.redoc,
                 assets: opts.assets,
                 auth: opts.auth,
               })
-            : ui === "redoc"
-              ? redocHtml({
-                  specUrl: openapiPath,
-                  title,
-                  configuration: opts.redoc,
-                  assets: opts.assets,
-                  auth: opts.auth,
-                })
               : scalarHtml({
-                  specUrl: openapiPath,
-                  title,
-                  configuration: scalarConfigurationWithPreferredAuth(
-                    opts.scalar,
-                    this.options.openapi?.securitySchemes,
-                  ),
-                  assets: opts.assets,
-                  auth: opts.auth,
-                });
+                specUrl: openapiPath,
+                title,
+                configuration: scalarConfigurationWithPreferredAuth(
+                  opts.scalar,
+                  this.options.openapi?.securitySchemes,
+                ),
+                assets: opts.assets,
+                auth: opts.auth,
+              });
         return {
           status: 200 as const,
           body: html,
@@ -3440,7 +3763,7 @@ export class App<
       this.log.warn(
         { event: "asyncapi.public_in_production" },
         "AsyncAPI docs (/asyncapi, /asyncapi.json) are mounted in production and public: anyone can read the " +
-          "full WebSocket channel map. Fine for a public API; otherwise drop asyncapi in production or put auth in front.",
+        "full WebSocket channel map. Fine for a public API; otherwise drop asyncapi in production or put auth in front.",
       );
     }
     const jsonPath = (opts.jsonPath ?? "/asyncapi.json") as PathString;
@@ -3599,6 +3922,11 @@ export class App<
    * Generic parameters are inferred from `path`, `method`, `request`, and
    * `responses`; you should rarely need to specify them explicitly.
    *
+   * For a single route, prefer the shorter method shorthand
+   * (`app.get(path, contract, handler)`, `app.post(...)`, and so on). Use
+   * `route()` for reusable `defineRoute()` contracts, `OPTIONS` routes, or
+   * route objects built elsewhere.
+   *
    * @example
    * ```ts
    * app.route({
@@ -3642,11 +3970,11 @@ export class App<
     if (!CANONICAL_HTTP_METHODS.has(def.method as HttpMethod)) {
       throw new Error(
         `app.route(): HTTP method "${String(def.method)}" is not on ` +
-          `the RFC 7231 + RFC 5789 allowlist. Allowed: ` +
-          `${[...CANONICAL_HTTP_METHODS].join(", ")}. Custom methods ` +
-          `(TRACE, CONNECT, WebDAV verbs, etc.) bypass the strict ` +
-          `Content-Type, body-on-GET, and TRACE/CONNECT refusal ` +
-          `defaults and are not supported.`,
+        `the RFC 7231 + RFC 5789 allowlist. Allowed: ` +
+        `${[...CANONICAL_HTTP_METHODS].join(", ")}. Custom methods ` +
+        `(TRACE, CONNECT, WebDAV verbs, etc.) bypass the strict ` +
+        `Content-Type, body-on-GET, and TRACE/CONNECT refusal ` +
+        `defaults and are not supported.`,
       );
     }
     if (def.hooks) this.assertSecureHookConfig(def.hooks);
@@ -3665,6 +3993,20 @@ export class App<
     if (merged.sunset !== undefined) {
       merged.sunset = normalizeSunset(merged.sunset, merged.method, fullPath);
     }
+    const routeBodyLimitBytes = routeNumericOption(
+      "bodyLimitBytes",
+      merged.bodyLimitBytes,
+      this.options.bodyLimitBytes,
+      merged.method,
+      fullPath,
+    );
+    const routeRequestTimeoutMs = routeNumericOption(
+      "requestTimeoutMs",
+      merged.requestTimeoutMs,
+      this.options.requestTimeoutMs,
+      merged.method,
+      fullPath,
+    );
     const sources: Hooks[] = [...this.groupHooks, def.hooks ?? {}];
     const hooks = mergeHooks(sources);
     const corsOriginAllows = corsOriginAllowsFromHooks(sources);
@@ -3690,10 +4032,10 @@ export class App<
     ) {
       throw new Error(
         `app({ requireAuth: true }) refused route ${merged.method} ${merged.path}: no authentication ` +
-          `hook is in its effective hook chain. Register auth before this route with ` +
-          `app.use(bearerAuth(...) / jwk(...) / basicAuth(...)) or route hooks, wrap a custom check ` +
-          `with markAuthHook(...), or mark the route public: true if it is meant to be open. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`,
+        `hook is in its effective hook chain. Register auth before this route with ` +
+        `app.use(bearerAuth(...) / jwk(...) / basicAuth(...)) or route hooks, wrap a custom check ` +
+        `with markAuthHook(...), or mark the route public: true if it is meant to be open. ` +
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
     }
     // Capture the decorations of this route's scope at registration time so the
@@ -3722,6 +4064,8 @@ export class App<
           (merged as unknown as Record<PropertyKey, unknown>)[A2A_ROUTE_MARKER] === true ||
           (this.options.requireAuth === true && merged.public !== true),
         decorations,
+        bodyLimitBytes: routeBodyLimitBytes,
+        requestTimeoutMs: routeRequestTimeoutMs,
       },
       def.operationId,
     );
@@ -3752,13 +4096,15 @@ export class App<
       path: merged.path,
       ...securityMarkers,
       declaresAuth: merged.auth !== undefined && merged.auth !== null,
+      bodyLimitBytes: merged.bodyLimitBytes,
+      requestTimeoutMs: merged.requestTimeoutMs,
       isMcp:
         (merged as unknown as Record<PropertyKey, unknown>)[
-          MCP_ROUTE_MARKER
+        MCP_ROUTE_MARKER
         ] === true,
       isA2a:
         (merged as unknown as Record<PropertyKey, unknown>)[
-          A2A_ROUTE_MARKER
+        A2A_ROUTE_MARKER
         ] === true,
     });
     this.resetBootGuardCache();
@@ -3964,6 +4310,9 @@ export class App<
    * @throws {Error} In production under secureDefaults when the route lacks a
    *   `beforeUpgrade` / `allowedOrigins` decision (or their acknowledgements),
    *   or when header-mutating middleware conflicts with the upgrade.
+   * @throws {Error} In every environment when `requireAuth: true` or the
+   *   enclosing group declares `auth`, unless `beforeUpgrade` is wrapped with
+   *   {@link markWebSocketAuth} or the route sets `acknowledgeUnauthenticated: true`.
    * @example `app.ws("/echo", { message(c, d) { c.send(d); } });`
    */
   ws<
@@ -3994,9 +4343,27 @@ export class App<
     ) {
       throw new Error(
         `app.ws(${JSON.stringify(fullPath)}): production WebSocket routes must ` +
-          "authenticate or reject clients before the RFC 6455 upgrade. Add a " +
-          "beforeUpgrade hook for authenticated routes, or pass " +
-          "{ acknowledgeUnauthenticated: true } for an intentionally public route.",
+        "authenticate or reject clients before the RFC 6455 upgrade. Add a " +
+        "beforeUpgrade hook for authenticated routes, or pass " +
+        "{ acknowledgeUnauthenticated: true } for an intentionally public route.",
+      );
+    }
+    // requireAuth / group auth: app and group hooks never run on the upgrade,
+    // so neither can authenticate a socket. Refuse, in every environment, a
+    // route in that scope unless its beforeUpgrade is auth-marked
+    // (markWebSocketAuth) or it is explicitly public.
+    if (
+      (this.options.requireAuth === true || this.groupAuth !== undefined) &&
+      handler.acknowledgeUnauthenticated !== true &&
+      !isWebSocketAuthMarked(handler.beforeUpgrade)
+    ) {
+      throw new Error(
+        `app.ws(${JSON.stringify(fullPath)}) refused: ` +
+        (this.options.requireAuth === true ? "app({ requireAuth: true })" : "the group's auth declaration") +
+        " covers this route, but app and group hooks do not run on WebSocket upgrades. Authenticate " +
+        "in beforeUpgrade and wrap it with markWebSocketAuth(...), or pass " +
+        "{ acknowledgeUnauthenticated: true } for an intentionally public socket. " +
+        "See https://daloyjs.dev/docs/websocket.",
       );
     }
     // Cross-Site WebSocket Hijacking (CSWSH) guard. Storybook's
@@ -4014,11 +4381,11 @@ export class App<
     ) {
       throw new Error(
         `app.ws(${JSON.stringify(fullPath)}): production WebSocket routes must ` +
-          "guard against Cross-Site WebSocket Hijacking (CSWSH). Set " +
-          '{ allowedOrigins: "same-origin" } or an explicit origin allowlist, ' +
-          "or pass { acknowledgeCrossOriginUpgrade: true } for an intentionally " +
-          "public route. See https://daloyjs.dev/docs/websocket " +
-          "and CVE-2026-27148 (Storybook) for the attack pattern.",
+        "guard against Cross-Site WebSocket Hijacking (CSWSH). Set " +
+        '{ allowedOrigins: "same-origin" } or an explicit origin allowlist, ' +
+        "or pass { acknowledgeCrossOriginUpgrade: true } for an intentionally " +
+        "public route. See https://daloyjs.dev/docs/websocket " +
+        "and CVE-2026-27148 (Storybook) for the attack pattern.",
       );
     }
     // WebSocket post-upgrade header immutability. Once the RFC
@@ -4036,11 +4403,11 @@ export class App<
       if (conflicts.length > 0) {
         throw new Error(
           `app.ws(${JSON.stringify(fullPath)}): ${conflicts.join(", ")} ` +
-            "middleware is mounted on a path that matches this WebSocket " +
-            "route, but no response headers can be added after the RFC 6455 " +
-            "upgrade. Either move the middleware below the WebSocket scope, " +
-            "or pass { acknowledgeHeaderMutatingMiddleware: true } after " +
-            "confirming the middleware does not run on Upgrade requests.",
+          "middleware is mounted on a path that matches this WebSocket " +
+          "route, but no response headers can be added after the RFC 6455 " +
+          "upgrade. Either move the middleware below the WebSocket scope, " +
+          "or pass { acknowledgeHeaderMutatingMiddleware: true } after " +
+          "confirming the middleware does not run on Upgrade requests.",
         );
       }
     }
@@ -4248,7 +4615,7 @@ export class App<
     if (token !== undefined && (typeof token !== "string" || token.length < 16)) {
       throw new Error(
         "Probe/metrics token must be a string of at least 16 characters; generate one with " +
-          "`openssl rand -base64 24`.",
+        "`openssl rand -base64 24`.",
       );
     }
 
@@ -4264,8 +4631,8 @@ export class App<
     ) {
       throw new Error(
         `app.metrics() refused in production: provide opts.token to require ` +
-          `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
-          `to acknowledge that this scrape endpoint is reachable without credentials.`,
+        `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
+        `to acknowledge that this scrape endpoint is reachable without credentials.`,
       );
     }
 
@@ -4311,7 +4678,7 @@ export class App<
     this._coldPathHooksCache = undefined;
 
     const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
-    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
+    const behindProxy = this.options.behindProxy;
 
     this.frameworkRoute({
       public: true,
@@ -4326,7 +4693,7 @@ export class App<
         const authMatch = token === undefined ? null : /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "");
         const tokenAccepted = token !== undefined && authMatch !== null && timingSafeEqual(authMatch[1]!, token);
         if (buckets && rateLimitConfig) {
-          const identity = healthRouteKey(request, trustProxyHeaders);
+          const identity = healthRouteKey(request, behindProxy);
           const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
           const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
           if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
@@ -4621,7 +4988,7 @@ export class App<
     if (token !== undefined && (typeof token !== "string" || token.length < 16)) {
       throw new Error(
         "Probe/metrics token must be a string of at least 16 characters; generate one with " +
-          "`openssl rand -base64 24`.",
+        "`openssl rand -base64 24`.",
       );
     }
 
@@ -4637,13 +5004,13 @@ export class App<
     ) {
       throw new Error(
         `app.${kind}() refused in production: provide opts.token to require ` +
-          `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
-          `to acknowledge that this probe is reachable without credentials.`,
+        `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
+        `to acknowledge that this probe is reachable without credentials.`,
       );
     }
 
     const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
-    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
+    const behindProxy = this.options.behindProxy;
 
     this.frameworkRoute({
       public: true,
@@ -4658,7 +5025,7 @@ export class App<
         const authMatch = token === undefined ? null : /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "");
         const tokenAccepted = token !== undefined && authMatch !== null && timingSafeEqual(authMatch[1]!, token);
         if (buckets && rateLimitConfig) {
-          const identity = healthRouteKey(request, trustProxyHeaders);
+          const identity = healthRouteKey(request, behindProxy);
           const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
           const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
           if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
@@ -4722,7 +5089,7 @@ export class App<
         ? null
         : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const buckets = rateLimitConfig ? new Map<string, ProbeBucket>() : null;
-    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
+    const behindProxy = this.options.behindProxy;
     const log = this.log;
     // Only log report bodies when explicitly enabled. In
     // production this is opt-in; in development the body is included by
@@ -4738,7 +5105,7 @@ export class App<
       summary: "CSP / Reporting API violation receiver",
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request, trustProxyHeaders);
+          const key = healthRouteKey(request, behindProxy);
           const retryAfter = probeRateLimitHit(buckets, key, Date.now(), rateLimitConfig);
           if (retryAfter > 0) throw new TooManyRequestsError(retryAfter);
         }
@@ -4766,14 +5133,11 @@ export class App<
         if (parsed === undefined) {
           throw new BadRequestError("Invalid JSON report body");
         }
-        const ip = healthRouteKey(request, trustProxyHeaders);
+        const ip = probeClientIp(request, behindProxy) ?? null;
         const userAgent = request.headers.get("user-agent");
         try {
           if (opts.onReport) {
-            await opts.onReport(parsed, {
-              ip: ip === "global" ? null : ip,
-              userAgent,
-            });
+            await opts.onReport(parsed, { ip, userAgent });
           } else {
             log.warn(
               includeReportBody
@@ -4951,12 +5315,11 @@ export class App<
    *
    * app.decorate("db", db);
    *
-   * app.route({
-   *   method: "GET",
-   *   path: "/health",
-   *   responses: { 200: { description: "OK" } },
-   *   handler: ({ state }) => ({ status: 200, body: state.db.ping() }),
-   * });
+   * app.get(
+   *   "/health",
+   *   { responses: { 200: { description: "OK" } } },
+   *   ({ state }) => ({ status: 200, body: state.db.ping() }),
+   * );
    * ```
    *
    * ### Scoping (Fastify-style encapsulation)
@@ -5001,7 +5364,7 @@ export class App<
       // both decorators on the explicit-override path.
       throw new Error(
         `decorate(): key "${key}" is already decorated. ` +
-          `Pass { override: true } to replace, or rename to avoid the collision.`,
+        `Pass { override: true } to replace, or rename to avoid the collision.`,
       );
     }
     if (
@@ -5016,9 +5379,9 @@ export class App<
     if (this.decorationsCount === 0 && this.routesCapturedNoDecorations) {
       throw new Error(
         `decorate(): "${key}" is the first decoration on this app scope, but routes were ` +
-          `already registered on it and would never see the value. Call decorate() before ` +
-          `registering routes (and never inside a per-request fetch/handler wrapper); for a ` +
-          `per-request value, set ctx.state in a preBody hook instead.`,
+        `already registered on it and would never see the value. Call decorate() before ` +
+        `registering routes (and never inside a per-request fetch/handler wrapper); for a ` +
+        `per-request value, set ctx.state in a preBody hook instead.`,
       );
     }
     const hadKey = Object.prototype.hasOwnProperty.call(this.decorations, key);
@@ -5090,13 +5453,13 @@ export class App<
   register(
     plugin:
       | {
-          name?: string;
-          seed?: string;
-          stateful?: boolean;
-          dependencies?: readonly string[];
-          extensions?: ReadonlyArray<PluginExtension>;
-          register?: (app: App) => void | Promise<void>;
-        }
+        name?: string;
+        seed?: string;
+        stateful?: boolean;
+        dependencies?: readonly string[];
+        extensions?: ReadonlyArray<PluginExtension>;
+        register?: (app: App) => void | Promise<void>;
+      }
       | ((app: App) => void | Promise<void>),
     config: {
       prefix?: PathString;
@@ -5106,7 +5469,7 @@ export class App<
     } = {},
   ): this {
     const fn =
-      typeof plugin === "function" ? plugin : (plugin.register ?? (() => {}));
+      typeof plugin === "function" ? plugin : (plugin.register ?? (() => { }));
     const descriptor = typeof plugin === "function" ? undefined : plugin;
     const name = descriptor?.name;
     const seed = descriptor?.seed;
@@ -5122,14 +5485,14 @@ export class App<
     ) {
       throw new Error(
         "register(): anonymous stateful plugin refused in production. " +
-          "Declare { name } (and optional { seed }) so the plugin can be deduplicated.",
+        "Declare { name } (and optional { seed }) so the plugin can be deduplicated.",
       );
     }
     for (const dep of dependencies) {
       if (!this.installedPlugins.has(dep)) {
         throw new Error(
           `register(): plugin ${JSON.stringify(name ?? "<anonymous>")} declares ` +
-            `dependency on "${dep}" but no plugin with that name has been registered yet.`,
+          `dependency on "${dep}" but no plugin with that name has been registered yet.`,
         );
       }
     }
@@ -5177,7 +5540,7 @@ export class App<
     this.pendingPlugins.add(tracked);
     void tracked
       .finally(() => this.pendingPlugins.delete(tracked))
-      .catch(() => {});
+      .catch(() => { });
   }
 
   private firePluginInstalled(
@@ -5314,11 +5677,12 @@ export class App<
     const baseLog = this.log;
     let log =
       baseLog === noopLogger ? noopLogger : requestLogger(baseLog, requestId, request);
-    const stripFingerprint = this.options.stripServerHeaders !== false;
+    const stripFingerprint = this.fingerprint;
     // One timer per request bounds hooks, body read and handler together. It
     // is created at the first asynchronous step, so a fully synchronous
-    // request never arms a timer, and it is cleared in `finally`.
-    const timeoutMs = this.options.requestTimeoutMs;
+    // request never arms a timer, and it is cleared in `finally`. Starts at
+    // the app value and switches to the route's own once it is matched.
+    let timeoutMs = this.options.requestTimeoutMs;
     let deadline: RequestDeadline | undefined;
     let ctx: BaseContext<any, any> | undefined;
     // Synthetic OPTIONS-preflight context, tracked only so the `finally` block
@@ -5350,7 +5714,14 @@ export class App<
       }
       this.assertTrustProxyConfigured(request);
       this.assertBootGuards();
+      // Bound every body read before any user hook can see the request
+      // (global / route onRequest, preBody, raw handlers). Installed only
+      // when something other than the capped schema parser could read the
+      // body, and a no-op for GET/HEAD or within-limit pre-buffered bodies.
+      let bodyCapped = false;
       if (globalHooks.onRequest !== undefined) {
+        capRequestBody(request, this.options.bodyLimitBytes);
+        bodyCapped = true;
         onRequestRan = true;
         const onRequestResult = globalHooks.onRequest(request);
         if (isPromiseLike(onRequestResult)) await onRequestResult;
@@ -5403,9 +5774,9 @@ export class App<
         const allowed = opts.allowInternal
           ? rawAllowed
           : rawAllowed.filter((m) => {
-              const candidate = this.router.find(m, pathname);
-              return candidate?.handler.def.internal !== true;
-            });
+            const candidate = this.router.find(m, pathname);
+            return candidate?.handler.def.internal !== true;
+          });
         // On the throw paths (405 -> MethodNotAllowedError, 404 -> NotFoundError)
         // ctx is only read by a registered onError hook. Build it lazily so
         // the common no-hook 404 doesn't allocate a context object, spread
@@ -5420,8 +5791,8 @@ export class App<
           allowed.length > 0 && method === "OPTIONS"
             ? false // OPTIONS path builds synthCtx
             : activeErrorHook !== undefined ||
-              coldPreBody !== undefined ||
-              coldGuards !== undefined;
+            coldPreBody !== undefined ||
+            coldGuards !== undefined;
         if (needsCtx) {
           ctx = coldPathContext(
             request,
@@ -5529,11 +5900,34 @@ export class App<
         hooks,
         mergedHooks: allHooks,
         hasFinalizeHook,
+        bodyLimitBytes: routeBodyLimit,
       } = match.handler;
+      timeoutMs = match.handler.requestTimeoutMs;
       activeErrorHook = allHooks.onError;
       activeResponseHook = allHooks.onResponse;
       activeSendHook = allHooks.onSend;
 
+      if (bodyCapped) {
+        // A global onRequest hook capped the body at the app limit before the
+        // route was known; a route with its own limit replaces that cap.
+        if (routeBodyLimit !== this.options.bodyLimitBytes) {
+          capRequestBody(request, routeBodyLimit);
+          (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_LIMIT] = routeBodyLimit;
+        }
+      } else {
+        // A schema route with no onRequest / preBody hook reads its body only
+        // through the capped parser (readBodyLimited), so it skips the wrap.
+        if (
+          def.request?.body === undefined ||
+          hooks.onRequest !== undefined ||
+          allHooks.preBody !== undefined
+        ) {
+          capRequestBody(request, routeBodyLimit);
+        }
+        if (routeBodyLimit !== this.options.bodyLimitBytes) {
+          (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_LIMIT] = routeBodyLimit;
+        }
+      }
       if (hooks.onRequest !== undefined) {
         const routeOnRequestResult = hooks.onRequest(request);
         if (isPromiseLike(routeOnRequestResult)) await routeOnRequestResult;
@@ -5541,14 +5935,8 @@ export class App<
 
       // Build a minimal route context before validation or body I/O so cheap
       // perimeter hooks can reject unauthenticated callers without consuming
-      // an attacker-controlled request stream.
-      // A route with a body schema already reads its body through the capped
-      // parser. Without one, the handler (or a preBody hook) reads
-      // `ctx.request` itself, so bound those reads too. Lazy: a route that
-      // never reads its body is never refused for it.
-      if (def.request?.body === undefined) {
-        capRequestBody(request, this.options.bodyLimitBytes);
-      }
+      // an attacker-controlled request stream. The body cap is already in
+      // place (see above), before any hook could read the request.
       ctx = createPreBodyContext(request, getUrl, match.params);
       // Apply the route's CORS policy before any preBody hook can end the
       // request, so an auth 401/403 or a 413/415/422 body error is readable
@@ -5577,8 +5965,8 @@ export class App<
         const preBodyResult = allHooks.preBody(ctx);
         const preBody = isPromiseLike(preBodyResult)
           ? await (timeoutMs === 0
-              ? preBodyResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(preBodyResult))
+            ? preBodyResult
+            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(preBodyResult))
           : preBodyResult;
         const overriddenId = state.requestId;
         if (
@@ -5618,11 +6006,11 @@ export class App<
           return finalizeFast(preBody, stripFingerprint);
         }
         // If a deferred preBody hook (such as `requestDecompression()`) inflated
-        // the body onto `DALOY_REQUEST_RAW_BODY`, re-check `bodyLimitBytes` on
-        // routes without a body schema so raw-body handlers cannot read an
-        // inflated payload that exceeds `bodyLimitBytes`.
+        // the body onto `DALOY_REQUEST_RAW_BODY`, re-check the route's body limit
+        // on routes without a body schema so raw-body handlers cannot read an
+        // inflated payload that exceeds it.
         if (def.request?.body === undefined) {
-          capRequestBody(request, this.options.bodyLimitBytes);
+          capRequestBody(request, routeBodyLimit);
         }
       }
 
@@ -5633,19 +6021,20 @@ export class App<
         ctx as RequestContext,
         def,
         this.options,
+        routeBodyLimit,
       );
       ctx = isPromiseLike(validatedCtx)
         ? await (timeoutMs === 0
-            ? validatedCtx
-            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(validatedCtx))
+          ? validatedCtx
+          : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(validatedCtx))
         : validatedCtx;
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);
         const before = isPromiseLike(beforeResult)
           ? await (timeoutMs === 0
-              ? beforeResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(beforeResult))
+            ? beforeResult
+            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(beforeResult))
           : beforeResult;
         // Honor any request id override applied by middleware (e.g. the
         // `requestId()` Hooks bundle replaces the framework-generated value
@@ -5703,16 +6092,16 @@ export class App<
         : def.handler(ctx);
       let result: any = isPromiseLike(runResult)
         ? await (timeoutMs === 0
-            ? runResult
-            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(runResult))
+          ? runResult
+          : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(runResult))
         : runResult;
 
       if (allHooks.afterHandle !== undefined) {
         const afterResult = allHooks.afterHandle(ctx, result);
         const afterReturn = isPromiseLike(afterResult)
           ? await (timeoutMs === 0
-              ? afterResult
-              : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(afterResult))
+            ? afterResult
+            : (deadline ??= new RequestDeadline(timeoutMs, request, this.options.requestTimeoutStatus ?? 408)).race(afterResult))
           : afterResult;
         if (afterReturn !== undefined) result = afterReturn;
       }
@@ -5728,7 +6117,7 @@ export class App<
         if (def.acknowledgeNoResponseBodySchema !== true) {
           throw new InternalError(
             "Raw Response refused: set acknowledgeNoResponseBodySchema: true on the route " +
-              "to explicitly accept that its response body bypasses schema validation.",
+            "to explicitly accept that its response body bypasses schema validation.",
           );
         }
         copyContextHeaders(ctx, result);
@@ -5760,7 +6149,7 @@ export class App<
         // that the response consumer only reads status/headers/raw-body — see
         // DALOY_LIGHT_RESPONSE_OK. Everyone else gets a real Response.
         (request as unknown as Record<symbol, unknown>)[
-          DALOY_LIGHT_RESPONSE_OK
+        DALOY_LIGHT_RESPONSE_OK
         ] === true,
       );
       let response: Response = isPromiseLike(serializeResultRes)
@@ -5883,8 +6272,8 @@ export class App<
       const httpErr: HttpError = isHttp
         ? (err as HttpError)
         : new InternalError(
-            err instanceof Error ? err.message : "Unexpected error",
-          );
+          err instanceof Error ? err.message : "Unexpected error",
+        );
       if (httpErr.status >= 500)
         log.error({ err: serializeErr(err) }, httpErr.problem.title);
       if (httpErr.status < 500)
@@ -5908,14 +6297,31 @@ export class App<
       );
     } finally {
       if (deadline !== undefined) deadline.clear();
-      this.inflight--;
-      // Guaranteed lease release (e.g. concurrencyLimit slots) that does not
-      // depend on every onSend/onError hook succeeding. One boolean read when
-      // no middleware ever registered a finalizer.
-      if (requestFinalizersEnabled) {
-        runRequestFinalizers(ctx);
-        runRequestFinalizers(preflightCtx);
-        if (hookCtx !== ctx) runRequestFinalizers(hookCtx);
+      if (deadline === undefined || !deadline.abandonedStepPending) {
+        this.inflight--;
+        // Guaranteed lease release (e.g. concurrencyLimit slots) that does not
+        // depend on every onSend/onError hook succeeding. One boolean read when
+        // no middleware ever registered a finalizer.
+        if (requestFinalizersEnabled) {
+          runRequestFinalizers(ctx);
+          runRequestFinalizers(preflightCtx);
+          if (hookCtx !== ctx) runRequestFinalizers(hookCtx);
+        }
+      } else {
+        // The deadline answered while a hook or the handler was still running.
+        // Hold the leases (concurrencyLimit slot, idempotency reservation) and
+        // the shutdown-drain count until that work settles, so maxConcurrent
+        // bounds running work and graceful shutdown waits for it. Bounded by
+        // RequestDeadline's grace window so a step that never settles cannot
+        // pin a slot forever.
+        deadline.afterAbandonedStep(() => {
+          this.inflight--;
+          if (requestFinalizersEnabled) {
+            runRequestFinalizers(ctx);
+            runRequestFinalizers(preflightCtx);
+            if (hookCtx !== ctx) runRequestFinalizers(hookCtx);
+          }
+        });
       }
     }
   };
@@ -5968,11 +6374,11 @@ export class App<
         routes: offending.slice(0, 20),
       },
       `${offending.length} route(s) declare a 2xx response with no body schema; ` +
-        "response field-level stripping (OWASP API3) is not applied there, so a handler that " +
-        "returns undeclared fields will leak them. Declare a response body schema, or set " +
-        "`acknowledgeNoResponseBodySchema: true` on routes that intentionally return an opaque " +
-        "or body-less response. Run `daloy doctor` to list them. " +
-        "See https://daloyjs.dev/docs/security/owasp-api-top-10#api3",
+      "response field-level stripping (OWASP API3) is not applied there, so a handler that " +
+      "returns undeclared fields will leak them. Declare a response body schema, or set " +
+      "`acknowledgeNoResponseBodySchema: true` on routes that intentionally return an opaque " +
+      "or body-less response. Run `daloy doctor` to list them. " +
+      "See https://daloyjs.dev/docs/security/owasp-api-top-10#api3",
     );
   }
 
@@ -6114,21 +6520,6 @@ function joinPath(a: string, b: string): string {
   return joined === "" ? "/" : joined;
 }
 
-/**
- * Rate-limit / attribution key for built-in observability routes
- * (`/healthz`, `/readyz`, `/metrics`, CSP report).
- *
- * Secure default: a single shared `"global"` bucket. Spoofable platform
- * headers (`X-Real-IP`, `Fly-Client-IP`) are only read when the app has an
- * explicit trusted-proxy posture (`trustProxy: true` or `behindProxy` set).
- * `X-Forwarded-For` is never used here — probes and scrapers often hit the
- * process directly, and a free-form XFF chain would let an attacker rotate
- * identities to bypass the cap.
- *
- * @param request - Inbound request.
- * @param trustProxyHeaders - When true, platform client-IP headers may be used.
- * @returns A stable string key for the in-memory rate-limit map.
- */
 /** Entry of a built-in probe route's fixed-window counter. */
 type ProbeBucket = { count: number; resetMs: number };
 
@@ -6136,8 +6527,8 @@ type ProbeBucket = { count: number; resetMs: number };
  * Upper bound on distinct identities a built-in probe route (`/metrics`,
  * health/readiness, the CSP report receiver) keeps counters for. Beyond it,
  * expired entries are swept and then the oldest live ones are evicted, so a
- * flood of fresh `x-real-ip` / `fly-client-ip` values behind a trusted proxy
- * cannot grow the map without bound.
+ * flood of fresh client addresses (an IPv6 sweep, or forwarded identities
+ * from a trusted proxy) cannot grow the map without bound.
  */
 const PROBE_BUCKET_MAX_ENTRIES = 10_000;
 
@@ -6176,21 +6567,44 @@ function probeRateLimitHit(
   return 0;
 }
 
-function healthRouteKey(request: Request, trustProxyHeaders: boolean): string {
-  if (!trustProxyHeaders) return "global";
-  return (
-    request.headers.get("x-real-ip") ??
-    request.headers.get("fly-client-ip") ??
-    "global"
-  );
+/**
+ * Client address for a built-in observability route (`/healthz`, `/readyz`,
+ * `/metrics`, CSP report), resolved through {@link resolveClientIp} under the
+ * app's declared `behindProxy` posture: the TCP peer for an unset or `"none"`
+ * posture, and a forwarded identity only from a verified proxy peer. Raw
+ * `X-Real-IP` / `Fly-Client-IP` headers are never read directly, so a caller
+ * cannot rotate them to mint fresh buckets or forge an attribution.
+ *
+ * @param request - Inbound request.
+ * @param behindProxy - The app's validated `behindProxy` posture.
+ * @returns A `parseIp`-valid address, or `undefined` when the adapter exposed
+ *   no peer (or the resolved value is not an IP).
+ */
+function probeClientIp(
+  request: Request,
+  behindProxy: BehindProxyConfig | undefined,
+): string | undefined {
+  const ip = resolveClientIp(request, behindProxy);
+  return ip !== undefined && parseIp(ip) !== undefined ? ip : undefined;
 }
 
-/** True when the app declared a trusted reverse-proxy posture. */
-function appTrustsProxyHeaders(options: {
-  trustProxy?: boolean;
-  behindProxy?: unknown;
-}): boolean {
-  return options.trustProxy === true || options.behindProxy !== undefined;
+/**
+ * Rate-limit key for a built-in observability route: the
+ * {@link probeClientIp} address normalized like `rateLimit()` does (IPv4
+ * canonicalized, IPv6 grouped per `/64`), so one client cannot exhaust
+ * another peer's budget. Falls back to one shared `"global"` bucket only when
+ * no client address is available (edge runtimes without peer metadata).
+ *
+ * @param request - Inbound request.
+ * @param behindProxy - The app's validated `behindProxy` posture.
+ * @returns A stable string key for the bounded in-memory rate-limit map.
+ */
+function healthRouteKey(
+  request: Request,
+  behindProxy: BehindProxyConfig | undefined,
+): string {
+  const ip = probeClientIp(request, behindProxy);
+  return ip === undefined ? "global" : `ip:${ipRateLimitIdentity(ip, 64)}`;
 }
 
 /** Signature of the decorator `cors()` exposes under {@link CORS_RESPONSE_DECORATOR}. */
@@ -6336,10 +6750,10 @@ export function topoSortExtensions(
       if (!declared) {
         throw new Error(
           `Plugin extension header conflict: ${JSON.stringify(a.name)} and ` +
-            `${JSON.stringify(b.name)} both mutate response header(s) ` +
-            `${overlap.map((h) => JSON.stringify(h)).join(", ")} but neither ` +
-            "declares a `before` or `after` relationship to the other. Add the " +
-            "missing ordering to make the merged header value deterministic.",
+          `${JSON.stringify(b.name)} both mutate response header(s) ` +
+          `${overlap.map((h) => JSON.stringify(h)).join(", ")} but neither ` +
+          "declares a `before` or `after` relationship to the other. Add the " +
+          "missing ordering to make the merged header value deterministic.",
         );
       }
     }
@@ -6360,28 +6774,40 @@ function securityMarkersFromHooks(
   let hasSession = false;
   let hasCsrf = false;
   let hasAuth = false;
-  // `layers` is in execution order, so the first index of each marker is enough
-  // to tell whether the cache reads state before tenancy has written it.
-  let cacheIndex = -1;
-  let tenancyIndex = -1;
-  // First stored-response layer of either kind, and the first request-budget
-  // layer. Only the earliest of each matters: if any replay precedes any budget
-  // hook, that budget is preemptable.
-  let replayIndex = -1;
-  let replayName = "";
-  let budgetIndex = -1;
-  for (let i = 0; i < layers.length; i++) {
-    const record = layers[i] as Record<PropertyKey, unknown>;
+  const flattened: Hooks[] = [];
+  const expand = (hooks: Hooks): void => {
+    const record = hooks as Record<PropertyKey, unknown>;
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
+    const combined = record[COMBINED_BEFORE_HANDLE_LAYERS] as
+      | CombinedBeforeHandleLayers
+      | undefined;
+    if (combined !== undefined && combined !== null && Array.isArray(combined.layers)) {
+      for (const inner of combined.layers) expand(inner);
+      return;
+    }
+    flattened.push(hooks);
+  };
+  for (const hooks of layers) expand(hooks);
+
+  // `flattened` is in execution order: compare the earliest replay layer
+  // against the latest tenancy or budget layer so any replay mounted ahead of
+  // any tenancy / rate-limit / throttle layer is caught, including inside every().
+  let cacheIndex = -1;
+  let tenancyIndex = -1;
+  let replayIndex = -1;
+  let replayName = "";
+  let budgetIndex = -1;
+  for (let i = 0; i < flattened.length; i++) {
+    const record = flattened[i] as Record<PropertyKey, unknown>;
     if (
       cacheIndex === -1 &&
       (record[RESPONSE_CACHE_HOOK_MARKER] === true ||
         record[IDEMPOTENCY_HOOK_MARKER] === true)
     )
       cacheIndex = i;
-    if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true)
+    if (record[TENANCY_HOOK_MARKER] === true)
       tenancyIndex = i;
     if (replayIndex === -1) {
       if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
@@ -6392,7 +6818,10 @@ function securityMarkersFromHooks(
         replayName = "idempotency()";
       }
     }
-    if (budgetIndex === -1 && Array.isArray(record[EARLY_REJECTION_MARKER]))
+    if (
+      Array.isArray(record[EARLY_REJECTION_MARKER]) &&
+      (record[EARLY_REJECTION_MARKER] as unknown[]).length > 0
+    )
       budgetIndex = i;
   }
   return {
@@ -6669,8 +7098,8 @@ function scalarConfigurationWithPreferredAuth(
     ...(configuration ?? {}),
     authentication: {
       ...(authentication &&
-      typeof authentication === "object" &&
-      !Array.isArray(authentication)
+        typeof authentication === "object" &&
+        !Array.isArray(authentication)
         ? authentication
         : {}),
       preferredSecurityScheme,
@@ -6682,7 +7111,7 @@ function finalizeResponse(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onSend" | "onResponse">,
-  stripFingerprint: boolean = true,
+  stripFingerprint: boolean | string = true,
 ): Response | PromiseLike<Response> {
   let final = res;
 
@@ -6704,12 +7133,9 @@ function finishFinalize(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onResponse">,
-  stripFingerprint: boolean,
+  stripFingerprint: boolean | string,
 ): Response | PromiseLike<Response> {
-  if (stripFingerprint) {
-    res.headers.delete("server");
-    res.headers.delete("x-powered-by");
-  }
+  if (stripFingerprint) applyFingerprint(res, stripFingerprint);
   if (hooks.onResponse !== undefined) {
     const onResponseResult = hooks.onResponse(res, ctx);
     if (isPromiseLike(onResponseResult)) {
@@ -6753,14 +7179,22 @@ function isPromiseLike<T = unknown>(
  * hooks). Avoids the two `await undefined` microtasks per request that
  * dominate sub-millisecond dispatch overhead in the no-middleware
  * benchmark. Behaviour parity with {@link finalizeResponse}: only the
- * server-fingerprint headers are stripped.
+ * server-fingerprint headers are touched (see {@link applyFingerprint}).
  */
-function finalizeFast(res: Response, stripFingerprint: boolean): Response {
-  if (stripFingerprint) {
-    res.headers.delete("server");
-    res.headers.delete("x-powered-by");
-  }
+function finalizeFast(res: Response, stripFingerprint: boolean | string): Response {
+  if (stripFingerprint) applyFingerprint(res, stripFingerprint);
   return res;
+}
+
+/**
+ * Strip `Server`, then strip (`true`) or overwrite (string, the
+ * `poweredBy` opt-in) `X-Powered-By`. Runs after `onSend`, so user hooks
+ * cannot leak a stack header past it.
+ */
+function applyFingerprint(res: Response, mode: true | string): void {
+  res.headers.delete("server");
+  if (mode === true) res.headers.delete("x-powered-by");
+  else res.headers.set("x-powered-by", mode);
 }
 
 function chain<F extends (...args: any[]) => any>(fns: F[]): F | undefined {
@@ -6856,7 +7290,7 @@ function assertAcknowledgedSuccessfulHookResponse(
   }
   throw new InternalError(
     `Raw ${phase} Response refused: set acknowledgeNoResponseBodySchema: true on the route ` +
-      "to explicitly accept that its successful response body bypasses schema validation.",
+    "to explicitly accept that its successful response body bypasses schema validation.",
   );
 }
 
@@ -7005,7 +7439,7 @@ function coldPathContext(
       const hi = requestUrl.indexOf("#", qi + 1);
       const qs =
         hi === -1 ? requestUrl.slice(qi + 1) : requestUrl.slice(qi + 1, hi);
-      return (_query = Object.fromEntries(new URLSearchParams(qs))) as any;
+      return (_query = queryToObject(new URLSearchParams(qs))) as any;
     },
     set query(v: any) {
       _query = v;
@@ -7046,12 +7480,12 @@ function validateContext(
   ctx: RequestContext,
   def: RouteDefinition<any, any, any, any>,
   opts: {
-    bodyLimitBytes: number;
     allowedContentTypes?: string[];
     multipart?: AppOptions["multipart"];
     jsonMaxKeys?: number;
     jsonMaxDepth?: number;
   },
+  bodyLimitBytes: number,
 ): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
   const hasHeadersSchema = !!def.request?.headers;
   const hasQuerySchema = !!def.request?.query;
@@ -7126,9 +7560,9 @@ function validateContext(
       const declaredBytes = Number(declared);
       if (
         Number.isFinite(declaredBytes) &&
-        declaredBytes > opts.bodyLimitBytes
+        declaredBytes > bodyLimitBytes
       ) {
-        throw new PayloadTooLargeError(opts.bodyLimitBytes);
+        throw new PayloadTooLargeError(bodyLimitBytes);
       }
     }
     (request as unknown as { [DALOY_REQUEST_BODY_SOLICIT]?: () => void })[
@@ -7137,7 +7571,7 @@ function validateContext(
     const raw = readBody(
       request,
       ct,
-      opts.bodyLimitBytes,
+      bodyLimitBytes,
       opts.multipart,
       opts.jsonMaxKeys,
       opts.jsonMaxDepth,
@@ -7188,6 +7622,7 @@ function validateContext(
 function headersToObject(h: Headers): Record<string, string> {
   const o: Record<string, string> = {};
   h.forEach((v, k) => {
+    if (isForbiddenObjectKey(k)) return;
     o[k] = v;
   });
   return o;
@@ -7445,8 +7880,8 @@ function normalizeSunset(
   if (Number.isNaN(date.getTime())) {
     throw new Error(
       `app.route(): invalid sunset date for ${method} ${path}: ` +
-        `${JSON.stringify(value)}. Provide an ISO-8601 string, an HTTP date, ` +
-        `or a Date instance.`,
+      `${JSON.stringify(value)}. Provide an ISO-8601 string, an HTTP date, ` +
+      `or a Date instance.`,
     );
   }
   return date.toUTCString();
@@ -7614,7 +8049,11 @@ function abortRequest(request: Request, reason: unknown): void {
  * route that ignores its body is never refused for it, and an
  * `Expect: 100-continue` header never changes the outcome (RFC 9110 §10.1.1).
  *
- * - No body (GET / HEAD, `Content-Length: 0`, or no stream): nothing to do.
+ * Installed in dispatch before any `onRequest` / `preBody` hook or raw handler
+ * can read the request (schema routes included whenever such a hook exists).
+ *
+ * - No body (GET / HEAD, or `Content-Length: 0` with no stream): nothing to do.
+ *   A `Content-Length: 0` that arrives with a body stream is still capped.
  * - Adapter pre-buffered bytes within the limit: nothing to wrap.
  * - Otherwise the read methods (`body`, `text`, `json`, `arrayBuffer`,
  *   `bytes`, `blob`, `formData`, `clone`) are shadowed on this instance. The
@@ -7622,31 +8061,55 @@ function abortRequest(request: Request, reason: unknown): void {
  *   before any byte is solicited, then reads through a counting stream that
  *   errors with a `PayloadTooLargeError` past the limit. The object keeps its
  *   identity, so connection info and the abort hook keyed on it still work.
+ * - Already wrapped (a global `onRequest` cap followed by the route's own
+ *   limit, or the post-`preBody` re-check): the existing wrap's limit is
+ *   retuned in place. Lowering also lazily re-caps the retained branch, so
+ *   bytes buffered by an earlier `clone()` obey the new limit without
+ *   reopening the locked native stream. Raising is safe because the
+ *   counting stream compares against the live limit; a cached
+ *   inflated body over the new limit still takes the fresh-wrap path so its
+ *   reads throw `413`.
  */
 function capRequestBody(request: Request, limit: number): void {
   const method = request.method;
   if (method === "GET" || method === "HEAD") return;
-  const declared = request.headers.get("content-length");
-  const declaredBytes = declared === null ? undefined : Number(declared);
-  if (declaredBytes === 0) return;
   const cached = (request as unknown as Record<symbol, unknown>)[
     DALOY_REQUEST_RAW_BODY
   ];
-  if (cached instanceof Uint8Array && cached.byteLength <= limit) return;
-  const cachedOverLimit =
-    cached instanceof Uint8Array && cached.byteLength > limit;
-  let limited: ReadableStream<Uint8Array> | null | undefined;
+  const existing = (request as unknown as Record<symbol, unknown>)[
+    DALOY_REQUEST_BODY_CAP
+  ] as BodyCapState | undefined;
+  if (existing !== undefined) {
+    if (limit < existing.limit && existing.stream != null) {
+      existing.stream = byteCappedStream(existing.stream, existing);
+    }
+    existing.limit = limit;
+    if (!(cached instanceof Uint8Array) || cached.byteLength <= limit) return;
+  } else if (cached instanceof Uint8Array && cached.byteLength <= limit) {
+    return;
+  }
+  const declared = request.headers.get("content-length");
+  const declaredBytes = declared === null ? undefined : Number(declared);
+  // A declared `Content-Length: 0` is only trusted when there really is no
+  // body: an in-process `app.fetch` / serverless caller can pair it with a
+  // stream of any size, so that stream is counted like any other.
+  if (declaredBytes === 0 && cached === undefined && readOriginalBody(request) === null) return;
+  const state: BodyCapState = { limit };
+  (request as unknown as Record<symbol, unknown>)[DALOY_REQUEST_BODY_CAP] = state;
   const stream = (): ReadableStream<Uint8Array> | null => {
-    if (cachedOverLimit) {
-      throw new PayloadTooLargeError(limit);
+    const rawCached = (request as unknown as Record<symbol, unknown>)[
+      DALOY_REQUEST_RAW_BODY
+    ];
+    if (rawCached instanceof Uint8Array && rawCached.byteLength > state.limit) {
+      throw new PayloadTooLargeError(state.limit);
     }
-    if (limited !== undefined) return limited;
-    if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > limit) {
-      throw new PayloadTooLargeError(limit);
+    if (declaredBytes !== undefined && Number.isFinite(declaredBytes) && declaredBytes > state.limit) {
+      throw new PayloadTooLargeError(state.limit);
     }
+    if (state.stream !== undefined) return state.stream;
     const original = readOriginalBody(request);
-    limited = original === null ? null : byteCappedStream(original, limit);
-    return limited;
+    state.stream = original === null ? null : byteCappedStream(original, state);
+    return state.stream;
   };
   const bytes = async (): Promise<Uint8Array> => {
     const source = stream();
@@ -7654,7 +8117,7 @@ function capRequestBody(request: Request, limit: number): void {
     const chunks: Uint8Array[] = [];
     let total = 0;
     const reader = source.getReader();
-    for (;;) {
+    for (; ;) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
@@ -7704,7 +8167,7 @@ function capRequestBody(request: Request, limit: number): void {
         let theirs: ReadableStream<Uint8Array> | null = null;
         if (source !== null) {
           const [mine, other] = source.tee();
-          limited = mine;
+          state.stream = mine;
           theirs = other;
         }
         return new Request(request.url, {
@@ -7736,15 +8199,16 @@ function readOriginalBody(request: Request): ReadableStream<Uint8Array> | null {
 }
 
 /**
- * Wrap `source` in a stream that errors with a `413` once more than `limit`
- * bytes pass. Pull-based (`highWaterMark: 0`): nothing is read from the source
- * until a consumer reads, so creating it does not mark the body used (a
- * `pipeThrough` would start pumping at once and trip `bodyUsed` checks such as
- * idempotency's).
+ * Wrap `source` in a stream that errors with a `413` once more than
+ * `state.limit` bytes pass. The limit is read live so a later
+ * {@link capRequestBody} call can retune it without re-wrapping. Pull-based
+ * (`highWaterMark: 0`): nothing is read from the source until a consumer
+ * reads, so creating it does not mark the body used (a `pipeThrough` would
+ * start pumping at once and trip `bodyUsed` checks such as idempotency's).
  */
 function byteCappedStream(
   source: ReadableStream<Uint8Array>,
-  limit: number,
+  state: BodyCapState,
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let seen = 0;
@@ -7758,9 +8222,9 @@ function byteCappedStream(
           return;
         }
         seen += value.byteLength;
-        if (seen > limit) {
-          controller.error(new PayloadTooLargeError(limit));
-          reader.cancel().catch(() => {});
+        if (seen > state.limit) {
+          controller.error(new PayloadTooLargeError(state.limit));
+          reader.cancel().catch(() => { });
           return;
         }
         controller.enqueue(value);
@@ -7788,27 +8252,42 @@ function byteCappedStream(
  * `AbortError` from the work it just cancelled) is never an unhandled
  * rejection. Steps are awaited one at a time, so a single pending slot is
  * enough and arming the deadline costs one timer and no promises.
+ *
+ * The step the deadline abandoned is kept: the timeout response does not stop
+ * it, so the dispatcher defers request finalizers (lease release) and the
+ * shutdown-drain decrement until it settles ({@link afterAbandonedStep}). A
+ * step that never settles is released after
+ * {@link ABANDONED_STEP_GRACE_FACTOR} times the deadline (capped at the
+ * maximum timer delay), trading a bounded over-admission for a slot that
+ * would otherwise leak for the life of the process.
  */
 class RequestDeadline {
   private readonly timer: ReturnType<typeof setTimeout>;
   private readonly ms: number;
   private readonly status: RequestTimeoutStatus;
+  private readonly request: Request;
   /** Set once the deadline has passed. */
   private expired = false;
   /** Rejects the step currently being awaited (steps run one at a time). */
   private rejectStep: ((reason: unknown) => void) | undefined;
+  /** The step currently being awaited, or the one the deadline abandoned. */
+  private pending: PromiseLike<unknown> | undefined;
 
   constructor(ms: number, request: Request, status: RequestTimeoutStatus) {
     this.ms = ms;
     this.status = status;
+    this.request = request;
     this.timer = setTimeout(() => {
       this.expired = true;
+      const reject = this.rejectStep;
+      this.rejectStep = undefined;
+      // Mark before the timeout response is built so lease-holding onSend
+      // hooks see that the work is still running.
+      if (reject !== undefined) markRequestAbandoned(request);
       abortRequest(
         request,
         new DOMException(`Request exceeded ${ms}ms`, "TimeoutError"),
       );
-      const reject = this.rejectStep;
-      this.rejectStep = undefined;
       reject?.(new RequestTimeoutError(ms, status));
     }, ms);
   }
@@ -7816,24 +8295,57 @@ class RequestDeadline {
   /** Settle with `step`, or reject with the timeout error if the deadline passes first. */
   race<T>(step: PromiseLike<T>): Promise<T> {
     if (this.expired) {
-      // Keep a handler on the abandoned step so its late settle is never an
-      // unhandled rejection.
-      step.then(undefined, () => {});
+      // The step already started and will run on, so it is abandoned. Keep a
+      // handler on it so its late settle is never an unhandled rejection.
+      step.then(undefined, () => { });
+      this.pending = step;
+      this.rejectStep = undefined;
+      markRequestAbandoned(this.request);
       return Promise.reject(new RequestTimeoutError(this.ms, this.status));
     }
+    this.pending = step;
     return new Promise<T>((resolve, reject) => {
       this.rejectStep = reject;
       step.then(
         (value) => {
           this.rejectStep = undefined;
+          if (!this.expired) this.pending = undefined;
           resolve(value);
         },
         (error: unknown) => {
           this.rejectStep = undefined;
+          if (!this.expired) this.pending = undefined;
           reject(error);
         },
       );
     });
+  }
+
+  /** True when the deadline passed while a raced step was still running. */
+  get abandonedStepPending(): boolean {
+    return this.expired && this.pending !== undefined;
+  }
+
+  /**
+   * Run `fn` exactly once, when the abandoned step settles or the grace window
+   * ({@link ABANDONED_STEP_GRACE_FACTOR} x the deadline) elapses, whichever
+   * comes first. Call only when {@link abandonedStepPending} is true.
+   */
+  afterAbandonedStep(fn: () => void): void {
+    let done = false;
+    const run = (): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(grace);
+      fn();
+    };
+    const grace = setTimeout(
+      run,
+      Math.min(this.ms * ABANDONED_STEP_GRACE_FACTOR, MAX_TIMER_DELAY_MS),
+    );
+    const handle = grace as unknown as { unref?: () => void };
+    if (typeof handle.unref === "function") handle.unref();
+    Promise.resolve(this.pending).then(run, run);
   }
 
   /** Disarm the timer once dispatch is done. */
@@ -7841,6 +8353,17 @@ class RequestDeadline {
     clearTimeout(this.timer);
   }
 }
+
+/**
+ * How long, as a multiple of `requestTimeoutMs`, request leases stay held for
+ * a step the deadline abandoned that never settles. With the default 30s
+ * deadline a hung handler holds its concurrency slot / idempotency reservation
+ * for at most 5 minutes after its timeout response.
+ */
+const ABANDONED_STEP_GRACE_FACTOR = 10;
+
+/** Largest delay `setTimeout` honors (2^31 - 1 ms); larger values fire at once. */
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /**
  * Marker set on an error whose stack carries no incident information because
@@ -7890,6 +8413,42 @@ function serializeErr(err: unknown): Record<string, unknown> {
     return { name: err.name, message: err.message, stack: err.stack };
   }
   return { value: String(err) };
+}
+
+/**
+ * Mark a WebSocket `beforeUpgrade` hook as performing authentication.
+ *
+ * App-level and group hooks never run on an upgrade request, so under
+ * `app({ requireAuth: true })` or inside a `group(prefix, { auth })`,
+ * `app.ws()` refuses to register a route unless its `beforeUpgrade` carries
+ * this marker or the route passes `acknowledgeUnauthenticated: true`. Mark
+ * only hooks that really reject unauthenticated callers (return a `401` /
+ * `403` `Response`) before the 101 response.
+ *
+ * @param fn - The `beforeUpgrade` hook (mutated in place and returned).
+ * @returns The same function, stamped with the auth marker.
+ * @example
+ * ```ts
+ * app.ws("/feed", {
+ *   allowedOrigins: "same-origin",
+ *   beforeUpgrade: markWebSocketAuth((req) =>
+ *     verify(req) ? undefined : new Response(null, { status: 401 })),
+ *   open(c) { c.send("hi"); },
+ * });
+ * ```
+ * @since 1.20.0
+ */
+export function markWebSocketAuth<F extends (...args: any[]) => unknown>(fn: F): F {
+  if (typeof fn !== "function") {
+    throw new TypeError("markWebSocketAuth(fn): fn must be a beforeUpgrade function.");
+  }
+  (fn as unknown as Record<symbol, unknown>)[AUTH_HOOK_MARKER] = true;
+  return fn;
+}
+
+/** True when `fn` is a `beforeUpgrade` hook stamped by {@link markWebSocketAuth}. */
+function isWebSocketAuthMarked(fn: unknown): boolean {
+  return typeof fn === "function" && (fn as unknown as Record<symbol, unknown>)[AUTH_HOOK_MARKER] === true;
 }
 
 /**

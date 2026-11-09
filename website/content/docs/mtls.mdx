@@ -112,6 +112,10 @@ app.use(
 
 When a proxy terminates TLS, it forwards the verified client identity in request headers. Because those headers are spoofable by anything that can reach the app directly, the header path is opt-in: only enable it when the app is *exclusively* reachable through the terminating proxy.
 
+<Callout type="security" title="Header mode requires a declared proxy posture (1.23.0)">
+<p>Since 1.23.0 this pairing is enforced, not just documented. Registering <code>clientCertAuth({"{"} header {"}"})</code> under <code>secureDefaults</code> refuses to boot — in production <em>and</em> with no environment signal — unless the App declares the topology: <code>app({"{"} behindProxy: {"{"} hops: 1 {"}}"}{"}"})</code> (or <code>{"{"} cidrs: [...] {"}"}</code> / <code>"loopback"</code>, or the coarser <code>trustProxy: true</code>). The explicitly proxy-less postures <code>behindProxy: "none"</code> and <code>trustProxy: false</code> contradict header mode and are refused too. Independently, the per-request spoofable-header guard now refuses requests carrying <code>x-forwarded-client-cert</code> or your configured structured header names when no posture is declared — the same treatment <code>x-forwarded-for</code> already had. See <a href="/docs/security/boot-guards#13-mtls-header-without-proxy">boot guard 13</a>.</p>
+</Callout>
+
 ### Envoy (X-Forwarded-Client-Cert)
 
 Configure the terminator to verify the client certificate and strip incoming XFCC before writing its own value. Appending to untrusted input is not sufficient: the parser returns the first element, and its verified flag is a proxy assertion, not cryptographic verification. Neither a fingerprint allowlist nor a proxy-trust boolean authenticates this header. Restrict origin access to the terminator, or use native mTLS.
@@ -119,6 +123,9 @@ Configure the terminator to verify the client certificate and strip incoming XFC
 The parser follows Envoy's quoting rules: a value containing `,`, `;` or `=` is double-quoted, and a `"` inside it is escaped as `\"`. Escaped quotes stay inside the value, so a certificate Subject such as `CN=\"x;DNS=allowed.internal;\"` cannot lift a forged `DNS=` SAN to the top level. A malformed header (unbalanced quotes, a stray unescaped quote, or a pair without `=`) fails closed and the request is rejected.
 
 ```ts
+// Declare the topology: one trusted terminator in front of the app.
+const app = new App({ behindProxy: { hops: 1 } });
+
 app.use(
   clientCertAuth({
     header: { format: "xfcc" }, // default header: x-forwarded-client-cert
@@ -132,6 +139,9 @@ app.use(
 For proxies that forward parsed fields in separate headers, name each header. The `verify` header lets the middleware require the proxy's own verification result (nginx `$ssl_client_verify === "SUCCESS"`):
 
 ```ts
+// Declare the topology here as well; header mode is refused without it.
+const app = new App({ behindProxy: { hops: 1 } });
+
 app.use(
   clientCertAuth({
     header: {
@@ -153,9 +163,9 @@ app.use(
 ## Allow-lists & checks [#allow-lists-and-checks]
 
 - `requireVerified` (default `true`): refuse any certificate the TLS terminator did not verify.
-- `allowSubjectCNs` / `allowIssuerCNs`: exact CN match.
+- `allowSubjectCNs` / `allowIssuerCNs`: exact CN match. In header mode (XFCC or structured) the CN is parsed from the forwarded DN per RFC 4514: backslash escapes (`\,` `\+` `\;` `\"` `\\` and `\XX` hex pairs) never start a new attribute, so a certificate whose subject prints as `OU=x\,CN=admin,O=acme` has **no** CN and is rejected by `allowSubjectCNs: ["admin"]`. A DN that is malformed or carries more than one CN attribute also yields no CN, so these allow-lists fail closed.
 - `allowFingerprints`: SHA-256 fingerprint match in **constant time** (colons/spaces and case are ignored, so a value copied from `openssl` works as-is).
-- `allowSANs`: at least one Subject Alternative Name must match (as `TYPE:value` like `URI:spiffe://acme/svc-a`, or as a bare value).
+- `allowSANs`: at least one Subject Alternative Name must match (as `TYPE:value` like `URI:spiffe://acme/svc-a`, or as a bare value). A typed entry matches only an identical SAN; only bare entries match against a SAN's value part.
 - `checkValidity` (default `true`): reject certificates outside their `[notBefore, notAfter]` window when known (belt-and-braces for header-forwarded certs).
 - `verify(cert, ctx)`: a custom async hook run last. Returning `false` rejects with `403`.
 

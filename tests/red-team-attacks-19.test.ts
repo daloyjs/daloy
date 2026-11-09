@@ -143,7 +143,9 @@ function strictExpectSocket(
 // ===========================================================================
 
 test("Wave 19.1 [live]: XFCC escaped-quote SAN smuggling is rejected while valid escaped DNs pass", async () => {
-  const app = new App({ logger: false });
+  // trustProxy: true declares the proxy-terminated topology this scenario
+  // simulates; without a posture the boot guard refuses header-mode mTLS.
+  const app = new App({ logger: false, trustProxy: true });
   app.use(
     clientCertAuth({
       header: { format: "xfcc" },

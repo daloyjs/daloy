@@ -41,7 +41,7 @@ app.route({
   responses: {
     200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
   },
-  handler: async () => ({ status: 200, body: { status: "ok" } }),
+  handler: async () => ({ status: 200, body: { status: "ok" as const } }),
 });
 ```
 

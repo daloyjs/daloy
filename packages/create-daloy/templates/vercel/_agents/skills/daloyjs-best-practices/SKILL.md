@@ -34,7 +34,9 @@ Do **not** use this skill for Next.js App Router work, frontend UI, or
 unrelated docs. Rare topics live under `references/`: **read**
 [references/mcp.md](references/mcp.md) only when adding an MCP endpoint,
 and **read** [references/ci-workflows.md](references/ci-workflows.md) only
-when editing `.github/` or a `--with-ci` workflow. Do not load those files
+when editing `.github/` or a `--with-ci` workflow, and **read**
+[references/migrating-from-express.md](references/migrating-from-express.md)
+only when porting Express.js code into this project. Do not load those files
 up front.
 
 ## Core principles
@@ -51,7 +53,7 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
    schemas, and response schemas live in one place — `app.get(path,
 contract, handler)` (and the matching `app.post`/`put`/`patch`/
    `delete`/`head` shorthands), or `app.route({...})` when you need a
-   reusable `defineRoute()` contract or a metadata-heavy route. Both
+   reusable `defineRoute()` contract or an `OPTIONS` route. Both
    forms produce identical runtime behavior, validation, security, and
    OpenAPI output.
 3. **Validation schemas protect every boundary.** This template uses Zod,

@@ -23,7 +23,7 @@ Build a tiny DaloyJS server, hit it with the typed client, and inspect the OpenA
             detail: "app.get(path, contract, handler)",
             tone: "accent",
           },
-          { label: "Add OpenAPI & docs UI", detail: "docs: true" },
+          { label: "Add OpenAPI & docs UI", detail: 'docs: "auto"' },
           {
             label: "Call the typed client",
             detail: "createClient(app)",
@@ -201,7 +201,7 @@ The client's methods are inferred from the app's route tuple. Chain registration
 For consumers outside the monorepo, generate a fully typed fetch SDK:
 
 ```bash
-pnpm add -D @hey-api/openapi-ts prettier
+pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
 ```
 
 ```ts

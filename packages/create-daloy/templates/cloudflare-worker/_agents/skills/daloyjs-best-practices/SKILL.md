@@ -36,7 +36,9 @@ Do **not** use this skill for frontend UI, infra-only work, or unrelated
 docs. Rare topics live under `references/`: **read**
 [references/mcp.md](references/mcp.md) only when adding an MCP endpoint,
 and **read** [references/ci-workflows.md](references/ci-workflows.md) only
-when editing `.github/` or a `--with-ci` workflow. Do not load those files
+when editing `.github/` or a `--with-ci` workflow, and **read**
+[references/migrating-from-express.md](references/migrating-from-express.md)
+only when porting Express.js code into this project. Do not load those files
 up front.
 
 ## Core principles
@@ -50,7 +52,7 @@ DaloyJS is a **contract-first** framework. On Workers, additionally:
    schemas, and response schemas live in one place. Use the shorthand
    `app.get(path, contract, handler)` (`app.post`, `app.put`, `app.patch`,
    `app.delete`, `app.head`) for ordinary routes; use `app.route({...})`
-   for reusable `defineRoute()` contracts, metadata-heavy routes, or when
+   for reusable `defineRoute()` contracts, `OPTIONS` routes, or when
    composing many routes via `registerRoutes()`.
 3. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library.
@@ -133,7 +135,7 @@ when it helps consumers understand or safely automate the route:
    `request` when accepting input). Add `meta` examples / descriptions when
    the route is user-facing or consumed by agents. Reach for the full
    `app.route({...})` form instead when the contract is a reusable
-   `defineRoute()` value, is metadata-heavy, or is being composed with many
+   `defineRoute()` value, is an `OPTIONS` route, or is being composed with many
    other routes via `registerRoutes()`.
 4. **Return `{ status, body, headers? }`** with `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.).

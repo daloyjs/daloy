@@ -21,7 +21,7 @@ sitemap:
 
 DaloyJS already verifies *inbound* webhooks with `verifyWebhookSignature()` and signs payloads with `signWebhookPayload()`. `createWebhookSender()` closes the loop on the *outbound* side: it delivers events to your subscribers with a timestamped HMAC signature, bounded retries with exponential backoff, `Retry-After` awareness, a per-attempt timeout, and dead-letter semantics, all with **zero runtime dependencies** and SSRF-safe transport by default.
 
-- Signed delivery: each request carries `webhook-id`, `webhook-timestamp`, and `webhook-signature` (`sha256=…`) computed over `"<timestamp>.<body>"`, the same convention `verifyWebhookSignature()` validates.
+- Signed delivery: each request carries `webhook-id`, `webhook-timestamp`, and `webhook-signature` (`sha256=…`) computed over `"<id>.<timestamp>.<body>"` (the Standard Webhooks layout), which `verifyWebhookSignature()` validates when you pass it `id` and `timestamp`.
 - Retry with backoff: transient statuses (`408/429/500/502/503/504`) and network errors are retried with exponential backoff + jitter, honouring `Retry-After`.
 - Dead-letter: events that exhaust their attempts (or fail permanently) are handed to a `WebhookDeadLetterSink` for later inspection or replay.
 - SSRF-safe by default: the transport defaults to `fetchGuard()`, so a subscriber URL pointing at cloud metadata or a private range is refused (and never retried).
@@ -109,11 +109,15 @@ webhook-signature: sha256=9f8a...c2
 {"id":"in_1","amount":4200}
 ```
 
-The signature is computed once and reused across retries, so the `webhook-id` and `webhook-signature` are identical on every attempt, so receivers can safely dedupe on the id.
+The signature is computed once and reused across retries, so the `webhook-id` and `webhook-signature` are identical on every attempt. Because the id is part of the signed content, receivers can dedupe on it: a replay that swaps in a fresh `webhook-id` fails verification. An `id` you supply must be 1-256 printable ASCII characters with no `.`; `send()` rejects with a `TypeError` otherwise.
+
+<Callout type="security">
+Dedupe only on an id you passed to `verifyWebhookSignature()`. The `webhook-event-type` header is **not** signed, matching Standard Webhooks, which also leaves it out of the signature so its verifiers interoperate. Anyone replaying a captured delivery inside the tolerance window can change that header, so never route on it: put the event type inside the payload (for example `{ "type": "invoice.paid", ... }`) and route on the signed body.
+</Callout>
 
 ## Verifying on the receiving end
 
-A DaloyJS receiver verifies the delivery with the inbound helper, using the same secret and the `webhook-timestamp` header:
+A DaloyJS receiver verifies the delivery with the inbound helper, using the same secret plus the `webhook-id` and `webhook-timestamp` headers:
 
 ```ts
 import { verifyWebhookSignature } from "@daloyjs/core";
@@ -133,11 +137,13 @@ app.post(
       payload: body,
       signature: request.headers.get("webhook-signature")!,
       secret: process.env.WEBHOOK_SIGNING_SECRET!,
-      timestamp: Number(request.headers.get("webhook-timestamp")),
+      id: request.headers.get("webhook-id") ?? "",
+      timestamp: request.headers.get("webhook-timestamp") ?? "",
       toleranceSeconds: 300,
     });
     if (!ok) return { status: 401 as const, body: { error: "invalid signature" } };
-    // ... handle the event
+    // The id is now authenticated: dedupe on it, then route on the
+    // event type inside the signed body, not on webhook-event-type.
     return { status: 200 as const, body: { ok: true } };
   },
 );

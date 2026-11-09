@@ -26,26 +26,27 @@
  * import { z } from "zod";
  * import { App, fileField, multipartObject } from "@daloyjs/core";
  *
- * app.route({
- *   method: "POST",
- *   path: "/avatars",
- *   operationId: "uploadAvatar",
- *   request: {
- *     body: multipartObject({
- *       title: z.string().min(1),
- *       file: fileField({
- *         maxBytes: 1_000_000,
- *         accept: ["image/png", "image/jpeg"],
+ * app.post(
+ *   "/avatars",
+ *   {
+ *     operationId: "uploadAvatar",
+ *     request: {
+ *       body: multipartObject({
+ *         title: z.string().min(1),
+ *         file: fileField({
+ *           maxBytes: 1_000_000,
+ *           accept: ["image/png", "image/jpeg"],
+ *         }),
  *       }),
- *     }),
+ *     },
+ *     responses: { 201: { description: "Created" } },
  *   },
- *   responses: { 201: { description: "Created" } },
- *   handler: async ({ body }) => {
+ *   async ({ body }) => {
  *     // body.file is a File you can pipe somewhere.
  *     await uploadToS3(body.file.stream(), body.file.type);
  *     return { status: 201, body: { ok: true } };
  *   },
- * });
+ * );
  * ```
  */
 
@@ -314,10 +315,33 @@ function normalizeMagicBytesOption(
  * Heuristics for scriptable / vector image formats that libraries such as
  * ImageMagick treat as code (SVG, MVG, MSL, PostScript / EPS). These are
  * deliberately fuzzy — they look at an ASCII prefix because the real files
- * are text and can be preceded by BOMs, whitespace, XML prologues, or
- * comments. Returning the label here means "refuse this upload".
+ * are text and can be preceded by BOMs, UTF-16 encoding, whitespace, XML
+ * prologues, or comments. The first 64 KiB are inspected, and a file whose
+ * entire probe window is XML-legal prolog material (whitespace, comments,
+ * processing instructions, DOCTYPE) while more bytes follow is refused as
+ * unverifiable — otherwise an attacker could pad the prolog past any fixed
+ * window to hide a scriptable root element. Treat this as a backstop to
+ * `magicBytes`, not a replacement. Returning the label here means "refuse
+ * this upload".
  */
-const SCRIPTABLE_IMAGE_PREFIX_BYTES = 512;
+const SCRIPTABLE_IMAGE_PREFIX_BYTES = 64 * 1024;
+
+/**
+ * Byte → folded byte table for {@link asciiPrefix}: printable ASCII and
+ * common whitespace pass through, everything else becomes a space so keyword
+ * searches still work across NULs / UTF-16 padding. Decoded in one shot
+ * instead of per-byte string concatenation because the probe window is
+ * 64 KiB per upload.
+ */
+const ASCII_FOLD_TABLE: Uint8Array = (() => {
+  const table = new Uint8Array(256).fill(0x20);
+  table[0x09] = 0x09;
+  table[0x0a] = 0x0a;
+  table[0x0d] = 0x0d;
+  for (let b = 0x20; b <= 0x7e; b++) table[b] = b;
+  return table;
+})();
+const ASCII_DECODER = new TextDecoder("utf-8");
 
 function asciiPrefix(bytes: Uint8Array): string {
   // Strip a UTF-8 / UTF-16 BOM so the trailing keyword sits at the start.
@@ -330,42 +354,148 @@ function asciiPrefix(bytes: Uint8Array): string {
   ) {
     start = 2;
   }
-  let out = "";
-  for (let i = start; i < bytes.length; i++) {
-    const byte = bytes[i]!;
-    // Keep printable ASCII + common whitespace; replace everything else with
-    // a space so keyword searches still work across NULs / UTF-16 padding.
-    out +=
-      byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e)
-        ? String.fromCharCode(byte)
-        : " ";
-  }
-  return out.toLowerCase();
+  const folded = new Uint8Array(bytes.length - start);
+  for (let i = 0; i < folded.length; i++) folded[i] = ASCII_FOLD_TABLE[bytes[start + i]!]!;
+  // Every folded byte is 7-bit ASCII, so UTF-8 decoding is exact.
+  return ASCII_DECODER.decode(folded).toLowerCase();
 }
 
-function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
-  const prefix = asciiPrefix(bytes);
+/**
+ * Decode a UTF-16 probe (BOM, or NUL-interleaved ASCII without one) to a
+ * one-byte-per-character view so keyword matching sees `<svg`, not
+ * `< s v g`. Code units outside Latin-1 become a space. Anything that is
+ * not UTF-16 is returned unchanged.
+ */
+function maybeDecodeUtf16(bytes: Uint8Array): Uint8Array {
+  let le: boolean | undefined;
+  let start = 0;
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    le = true;
+    start = 2;
+  } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    le = false;
+    start = 2;
+  } else if (bytes.length >= 4 && bytes[0] !== 0 && bytes[1] === 0 && bytes[2] !== 0 && bytes[3] === 0) {
+    le = true;
+  } else if (bytes.length >= 4 && bytes[0] === 0 && bytes[1] !== 0 && bytes[2] === 0 && bytes[3] !== 0) {
+    le = false;
+  }
+  if (le === undefined) return bytes;
+  const out = new Uint8Array((bytes.length - start) >> 1);
+  for (let i = 0; i < out.length; i++) {
+    const lo = bytes[start + 2 * i + (le ? 0 : 1)]!;
+    const hi = bytes[start + 2 * i + (le ? 1 : 0)]!;
+    out[i] = hi === 0 ? lo : 0x20;
+  }
+  return out;
+}
+
+/** An SVG element with an optional namespace prefix (`<svg`, `<s:svg`). */
+const SVG_ELEMENT_RE = /<(?:[a-z0-9_.-]+:)?svg(?:[\s>/]|$)/;
+
+/**
+ * Find the index of the `>` closing a `<!doctype ...` declaration, skipping
+ * over any internal subset in `[ ... ]` (which may itself contain `>`).
+ * Returns `-1` when the declaration is unterminated within the string.
+ */
+function findDoctypeEnd(text: string): number {
+  let subsetDepth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "[") subsetDepth++;
+    else if (c === "]") subsetDepth = Math.max(0, subsetDepth - 1);
+    else if (c === ">" && subsetDepth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * `true` when the folded probe window consists entirely of XML-legal prolog
+ * material: whitespace, comments, processing instructions, and a DOCTYPE.
+ * Unterminated constructs count as prolog (they reach the window edge), so a
+ * file that continues past the window never gets its root element verified.
+ */
+function isAllXmlProlog(prefix: string): boolean {
+  let rest = prefix.trimStart();
+  for (;;) {
+    if (rest.startsWith("<!--")) {
+      const end = rest.indexOf("-->");
+      if (end === -1) return true;
+      rest = rest.slice(end + 3).trimStart();
+      continue;
+    }
+    if (rest.startsWith("<?")) {
+      const end = rest.indexOf("?>");
+      if (end === -1) return true;
+      rest = rest.slice(end + 2).trimStart();
+      continue;
+    }
+    if (rest.startsWith("<!doctype")) {
+      const end = findDoctypeEnd(rest);
+      if (end === -1) return true;
+      rest = rest.slice(end + 1).trimStart();
+      continue;
+    }
+    return rest.length === 0;
+  }
+}
+
+/**
+ * `true` when every byte (after an optional BOM) is XML whitespace
+ * (`\t`, `\n`, `\r`, space). Distinguishes a window of genuine whitespace
+ * padding — which XML allows ahead of the root element, so a scriptable
+ * root may follow — from a window of non-printable binary bytes that
+ * {@link asciiPrefix} also folds to spaces but which no XML parser would
+ * accept ahead of a root (so the file cannot be a scriptable text format).
+ */
+function isAllXmlWhitespace(bytes: Uint8Array): boolean {
+  let start = 0;
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3;
+  else if (
+    bytes.length >= 2 &&
+    ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))
+  )
+    start = 2;
+  for (let i = start; i < bytes.length; i++) {
+    const b = bytes[i]!;
+    if (b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) return false;
+  }
+  return true;
+}
+
+function detectScriptableImagePayload(bytes: Uint8Array, truncated: boolean): string | undefined {
+  // Decode UTF-16, fold to lower-case ASCII, and collapse whitespace runs
+  // so spacing / encoding variants of the keywords below still match.
+  const decoded = maybeDecodeUtf16(bytes);
+  const prefix = asciiPrefix(decoded).replace(/\s+/g, " ");
+  const trimmed = prefix.trimStart();
   // PostScript / EPS — "%!PS" is the canonical Adobe header.
-  if (prefix.startsWith("%!ps") || prefix.includes("%!ps-adobe")) {
+  if (trimmed.startsWith("%!ps") || prefix.includes("%!ps-adobe")) {
     return "postscript";
   }
   // ImageMagick MVG / MSL — vector / scripting formats that can shell out
   // through the `url:`, `ephemeral:`, `msl:` coders (ImageTragick).
   if (
     prefix.includes("push graphic-context") ||
-    prefix.startsWith("<msl>") ||
+    trimmed.startsWith("viewbox ") ||
+    /<msl[\s>/]/.test(prefix) ||
     prefix.includes("<image ")
   ) {
     return "mvg-or-msl";
   }
   // SVG — XML-based and routinely carries `<script>` / external references.
-  // Match both raw `<svg` and an `<?xml ...?>` prologue that introduces SVG.
-  const trimmed = prefix.trimStart();
-  if (trimmed.startsWith("<svg") || /<!doctype\s+svg/.test(trimmed)) {
-    return "svg";
-  }
-  if (trimmed.startsWith("<?xml") && /<svg[\s>]/.test(trimmed)) {
-    return "svg";
+  // Match an (optionally namespaced) SVG element anywhere in the window
+  // rather than at the start, so leading comments, processing instructions
+  // and DOCTYPEs cannot push the root out of an anchored match.
+  if (prefix.includes("<!doctype svg") || SVG_ELEMENT_RE.test(prefix)) return "svg";
+  // Fail closed when the whole probe window is prolog material and the file
+  // continues past it: the root element is then unverifiable, and an
+  // over-long prolog is exactly how a scriptable root gets pushed out of a
+  // bounded prefix window. A window with no prolog construct at all only
+  // counts when it is genuine XML whitespace — folded binary bytes are not
+  // a prolog, and refusing them would reject legitimate zero-padded uploads.
+  if (truncated && isAllXmlProlog(prefix)) {
+    if (trimmed.length > 0 || isAllXmlWhitespace(decoded)) return "unverifiable-prolog";
   }
   return undefined;
 }
@@ -390,7 +520,7 @@ async function verifyMagicBytes(
         signature.mimes.some((mime) => mimeMatches(declared, mime))
       )
     ) {
-      return `Declared MIME "${declared}" does not match sniffed magic bytes: ${matched.map((signature) => signature.label).join(", ")}`;
+      return `Declared MIME "${echoSafe(declared)}" does not match sniffed magic bytes: ${matched.map((signature) => signature.label).join(", ")}`;
     }
   }
   return undefined;
@@ -498,7 +628,21 @@ export function fileField(
           const prefix = new Uint8Array(
             await file.slice(0, Math.min(probeLength, file.size)).arrayBuffer()
           );
-          const scriptable = detectScriptableImagePayload(prefix);
+          const scriptable = detectScriptableImagePayload(prefix, file.size > probeLength);
+          if (scriptable === "unverifiable-prolog") {
+            return {
+              issues: [
+                {
+                  message:
+                    `Refusing upload: the first ${probeLength} bytes are entirely XML prolog ` +
+                    `material (whitespace, comments, processing instructions, DOCTYPE) with more ` +
+                    `bytes following, so the root element cannot be verified inside the bounded ` +
+                    `probe window — a scriptable root could be hidden behind prolog padding. ` +
+                    `Pass rejectScriptableImages: false to opt out.`,
+                },
+              ],
+            };
+          }
           if (scriptable) {
             return {
               issues: [
@@ -535,7 +679,9 @@ export function isFileFieldSchema(s: unknown): s is FileFieldSchema {
 export interface MultipartObjectOptions {
   /**
    * Reject extra fields not declared in the shape. Default: false (extras
-   * are passed through to handlers, but never validated).
+   * are silently dropped: only declared fields reach the handler). Field
+   * names are matched as own keys of the shape, so inherited names such as
+   * `toString` count as unknown.
    */
   strict?: boolean;
 }
@@ -562,7 +708,7 @@ interface MultipartSchema<S extends MultipartShape> extends StandardSchemaV1<
  *
  * @param shape - Record mapping form-field names to per-field validators.
  * @param options - `strict: true` rejects undeclared extra fields. Defaults
- *   to `{ strict: false }` (extras pass through unvalidated).
+ *   to `{ strict: false }` (undeclared extras are dropped from the output).
  * @returns A marker-carrying schema the OpenAPI generator renders as
  *   `multipart/form-data`; validation issues are prefixed with the field name.
  */
@@ -597,9 +743,9 @@ export function multipartObject<S extends MultipartShape>(
         }
         if (strict) {
           for (const key of Object.keys(input)) {
-            if (!(key in shape)) {
+            if (!Object.hasOwn(shape, key)) {
               issues.push({
-                message: `Unknown field "${key}"`,
+                message: `Unknown field "${echoSafe(key)}"`,
                 path: [key],
               });
             }

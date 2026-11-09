@@ -43,7 +43,7 @@ Los atajos mantienen el mismo comportamiento de validación, OpenAPI, seguridad 
 
 ## Definir rutas [#defining-routes]
 
-La declaración de una ruta es la fuente de verdad para la coincidencia, la validación de la petición, la validación de la respuesta, la salida OpenAPI y los clientes tipados. Indica un `operationId` cuando uses `route()` en una ruta pública que quieras en el cliente tipado o en el SDK generado. Los atajos HTTP derivan uno automáticamente. DaloyJS rechaza los valores de `operationId` duplicados en el registro.
+La declaración de una ruta es la fuente de verdad para la coincidencia, la validación de la petición, la validación de la respuesta, la salida OpenAPI y los clientes tipados. Escribe las rutas con los atajos por método (`app.get(path, contract, handler)`, `app.post(...)`, `app.put(...)`, `app.patch(...)`, `app.delete(...)`, `app.head(...)`). Derivan un `operationId` automáticamente, y uno explícito sigue teniendo prioridad. DaloyJS rechaza los valores de `operationId` duplicados en el registro.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -69,24 +69,25 @@ async function loadUser(input: {
   };
 }
 
-export const app = new App().route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  summary: "Get a user by id",
-  request: {
-    params: z.object({ id: z.uuid() }),
-    query: z
-      .object({ include: z.enum(["profile", "settings"]).optional() })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string() }),
+export const app = new App().get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    summary: "Get a user by id",
+    request: {
+      params: z.object({ id: z.uuid() }),
+      query: z
+        .object({ include: z.enum(["profile", "settings"]).optional() })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string() }),
+    },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, query, headers }) => {
+  async ({ params, query, headers }) => {
     // params, query y headers se infieren de los esquemas de arriba.
     return {
       status: 200,
@@ -96,6 +97,23 @@ export const app = new App().route({
         include: query?.include,
       }),
     };
+  },
+);
+```
+
+### La forma de objeto: `app.route({...})` [#route-object-form]
+
+`app.route({ method, path, ...contract, handler })` recibe el mismo contrato como un único objeto. El comportamiento en tiempo de ejecución, la validación, la seguridad y la salida OpenAPI son idénticos a los de los atajos. Recurre a ella solo cuando necesites la ruta como valor: un contrato reutilizable de `defineRoute()` (ver [Inferencia de tipos entre archivos](#multi-file-type-inference)), una ruta `OPTIONS` (que no tiene atajo) o un objeto de ruta construido por otro código. Con `route()`, indica tú mismo un `operationId` en cualquier ruta pública que quieras en el cliente tipado.
+
+```ts
+app.route({
+  method: "OPTIONS",
+  path: "/books",
+  operationId: "booksOptions",
+  responses: { 204: { description: "Allowed methods" } },
+  handler: ({ set }) => {
+    set.headers.set("allow", "GET, POST, OPTIONS");
+    return { status: 204, body: undefined };
   },
 });
 ```
@@ -141,21 +159,22 @@ Hay métodos abreviados para `GET`, `POST`, `PUT`, `PATCH`, `DELETE` y `HEAD`. R
 ## Parámetros de ruta [#path-parameters]
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/orgs/:org/repos/:repo",
-  operationId: "getRepo",
-  request: {
-    params: z.object({ org: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Repository",
-      body: z.object({ org: z.string(), repo: z.string() }),
+app.get(
+  "/orgs/:org/repos/:repo",
+  {
+    operationId: "getRepo",
+    request: {
+      params: z.object({ org: z.string(), repo: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Repository",
+        body: z.object({ org: z.string(), repo: z.string() }),
+      },
     },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 ```
 
 Los valores de la ruta se decodifican antes de la validación. Si omites el esquema `request.params`, `ctx.params` se infiere de la ruta como cadenas en bruto. Los nombres de parámetro en conflicto en la misma posición del trie, como `/a/:x` y `/a/:y`, lanzan un error en el registro.
@@ -167,16 +186,17 @@ Los nombres de captura no pueden estar vacíos y deben ser únicos dentro de una
 Un segmento final `*name` captura el resto de la ruta en una única cadena decodificada y exige al menos un segmento restante. Un `*` a secas usa el nombre `wildcard`. Los comodines deben ir al final: `/assets/*path/private` lanza un error en el registro en lugar de coincidir en silencio con una ruta más amplia. Varios métodos pueden compartir una ruta comodín cuando el nombre de la captura coincide. Los métodos duplicados y los nombres de comodín en conflicto lanzan un error.
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/assets/*path",
-  operationId: "getAsset",
-  request: { params: z.object({ path: z.string() }) },
-  responses: {
-    200: { description: "Asset", body: z.object({ path: z.string() }) },
+app.get(
+  "/assets/*path",
+  {
+    operationId: "getAsset",
+    request: { params: z.object({ path: z.string() }) },
+    responses: {
+      200: { description: "Asset", body: z.object({ path: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});
+  async ({ params }) => ({ status: 200, body: params }),
+);
 
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
@@ -186,13 +206,14 @@ Los segmentos de recorrido de ruta en bruto (`..`), los segmentos vacíos `//` y
 Una captura que decodifica un `/` o `\` codificado (`%2F`, `%5C`) también se rechaza con `404` por defecto, porque entonces un único valor capturado abarcaría varios segmentos de ruta para cualquier consumidor posterior de sistema de archivos, URL o proxy. Si una ruta usa de verdad ids que contienen una barra, actívalo por ruta:
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
-  responses: { 200: { description: "Book" } },
-  handler: (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
-});
+app.get(
+  "/books/:id",
+  {
+    allowEncodedSlash: true, // GET /books/book%2F1 -> ctx.params.id === "book/1"
+    responses: { 200: { description: "Book" } },
+  },
+  (ctx) => ({ status: 200, body: { id: ctx.params.id } }),
+);
 ```
 
 Activarlo nunca vuelve a admitir componentes `..` ni caracteres de control. Los parámetros decodificados siguen siendo datos no confiables y no son rutas de sistema de archivos saneadas, así que valida por separado el acceso al sistema de archivos.
@@ -203,15 +224,16 @@ Los adaptadores también mantienen el router y el middleware sobre una misma vis
 
 ```ts
 app.group("/api/v1", { tags: ["v1"] }, (v1) => {
-  v1.route({
-    method: "GET",
-    path: "/health",
-    operationId: "health",
-    responses: {
-      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+  v1.get(
+    "/health",
+    {
+      operationId: "health",
+      responses: {
+        200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+      },
     },
-    handler: async () => ({ status: 200, body: { ok: true } }),
-  });
+    async () => ({ status: 200, body: { ok: true } }),
+  );
 });
 // ruta final: /api/v1/health
 ```
@@ -268,17 +290,18 @@ Los hooks añaden comportamiento en puntos fijos del ciclo de vida:
         ]} />
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
-  responses: {
-    200: { description: "ok", body: z.object({ purged: z.boolean() }) },
-    401: { description: "denied" },
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({ validate: t => timingSafeEqual(t, process.env.ADMIN_TOKEN!) }),
+    responses: {
+      200: { description: "ok", body: z.object({ purged: z.boolean() }) },
+      401: { description: "denied" },
+    },
   },
-  handler: async () => ({ status: 200, body: { purged: true } }),
-});
+  async () => ({ status: 200, body: { purged: true } }),
+);
 ```
 
 ## Transformar respuestas con `onSend` [#transforming-responses-with-onsend]
@@ -296,24 +319,25 @@ const app = new App({
   },
 });
 
-app.route({
-  method: "GET",
-  path: "/users/me",
-  operationId: "me",
-  hooks: {
-    onSend(res) {
-      // Quita detalles internos de implementación antes de que salga la respuesta.
-      res.headers.delete("x-internal-cache-key");
+app.get(
+  "/users/me",
+  {
+    operationId: "me",
+    hooks: {
+      onSend(res) {
+        // Quita detalles internos de implementación antes de que salga la respuesta.
+        res.headers.delete("x-internal-cache-key");
+      },
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }) },
     },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ set }) => {
+  async ({ set }) => {
     set.headers.set("x-internal-cache-key", "shard-a");
     return { status: 200, body: { id: "u_1" } };
   },
-});
+);
 ```
 
 `onSend` se ejecuta *después* de la validación de la respuesta y después de fusionar las cabeceras del ámbito de la petición, incluida `x-request-id`. Se ejecuta *antes* de `onResponse`, que sigue siendo el sitio adecuado para logs y métricas.

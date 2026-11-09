@@ -38,6 +38,7 @@ The `verify:*` scripts run the individual CI gates (see the guardrails section b
 - `scripts/` — codegen (`dump-openapi.ts`, `generate-sbom.ts`) and the `verify-*.ts` CI gates.
 - `bench/` — performance benchmarks; validate hot-path changes here (see the performance rule under "Editing the codebase").
 - `packages/create-daloy/` — the scaffolder CLI (`bin/`), its tests (`test/templates.test.mjs`), and the five project templates (`templates/`). Has no separate agent guide; this file governs it. See **Editing create-daloy templates** below before touching `_agents`, `_gitignore`, or other underscore-prefixed template files.
+- `skills/` — standalone agent skills for DaloyJS users, installable with `npx skills add daloyjs/daloy --skill <name>`. `skills/express-to-daloyjs/SKILL.md` is the Express migration playbook; its body (everything after the frontmatter) must stay byte-identical to `packages/create-daloy/templates/*/_agents/skills/daloyjs-best-practices/references/migrating-from-express.md` (enforced by `packages/create-daloy/test/templates.test.mjs`), and it must agree with the [Express migration guide](website/content/docs/migrating/express.mdx). Update all three together.
 - `website/` — the docs/marketing site. **Read [`website/AGENTS.md`](website/AGENTS.md) before editing anything under it.**
 - `workshop/` — the hands-on workshop; has its own [`workshop/AGENTS.md`](workshop/AGENTS.md).
 
