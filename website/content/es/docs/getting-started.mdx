@@ -92,7 +92,7 @@ const { port } = serve(app, { port: 3000 });
 console.log(`listening on http://localhost:${port}`);
 ```
 
-`new App()` ya aplica `secureHeaders()` automáticamente. Regístralo solo si quieras reemplazar los valores por defecto.
+`new App()` ya aplica `secureHeaders()` automáticamente. Regístralo solo si quieres reemplazar los valores por defecto.
 
 ¿Prefieres el panel de inicio con colores que incluyen las plantillas de `create-daloy`? Sustituye el `console.log` simple por `printStartupBanner()` de `@daloyjs/core/banner`. Muestra un banner enmarcado con el nombre de tu aplicación, la URL y cualquier enlace adicional (documentación de la API, comprobación de estado, etc.). El color se activa si la salida es una terminal (TTY), con `NO_COLOR` y `FORCE_COLOR` como ajustes manuales. Los caracteres ASCII, en cambio, los elige `detectAscii()` según el entorno y la plataforma (por ejemplo, `DALOY_ASCII`, el sistema operativo y la configuración regional), no según si la salida es una TTY:
 
@@ -144,7 +144,7 @@ const app = new App({
 
 Abre `http://localhost:3000/docs` para ver la referencia interactiva de Scalar, `http://localhost:3000/openapi.json` para ver la especificación en JSON sin procesar o `http://localhost:3000/openapi.yaml` para verla en YAML.
 
-En un servicio real, define `openapi.info` (o los campos de nivel superior `title`, `version` y `description`). Si los omites, Si no lo haces, DaloyJS usa los valores de respaldo portables `DaloyJS API` / `0.0.0`. El núcleo nunca lee el manifiesto del entorno anfitrión, así que el mismo bundle de documentación funciona en Node, Bun, Deno, Workers y Vercel.
+En un servicio real, define `openapi.info` (o los campos de nivel superior `title`, `version` y `description`). Si los omites, DaloyJS usa los valores de respaldo portables `DaloyJS API` / `0.0.0`. El núcleo nunca lee el manifiesto del entorno anfitrión, así que el mismo bundle de documentación funciona en Node, Bun, Deno, Workers y Vercel.
 
 ¿Prefieres una función de fábrica? `createApp(options)` es un alias exportado de `new App(options)` y se comporta exactamente igual:
 
@@ -160,6 +160,7 @@ const app = createApp({
 ### ¿Prefieres la interfaz clásica de Swagger UI? [#prefieres-el-swagger-ui-de-siempre]
 
 Scalar es la opción predeterminada porque es más rápida, más atractiva y funciona mejor en móviles. Pero si tu equipo está acostumbrado a Swagger UI, o si ya tienes capturas de pantalla, manuales de operación o hábitos de trabajo construidos en torno a ella, DaloyJS también la incluye sin configuración adicional. Cambia el campo `ui` cuando definas `docs` como objeto y volverás a la conocida interfaz verde:
+
 ```ts
 const app = new App({
   openapi: { info: { title: "Hello", version: "1.0.0" } },
@@ -170,9 +171,9 @@ const app = new App({
 });
 ```
 
-La misma URL (`GET /docs`), los mismos endpoints `/openapi.json` y `/openapi.yaml` con la especificación actualizada y el mismo manejo de la CSP; solo cambia el HTML que se muestra. También puedes mantener las dos: deja la ruta montada automáticamente con Scalar y expón tú mismo una segunda ruta con Swagger usando `swaggerUiHtml()` (consulta la [guía de OpenAPI](/docs/openapi) para ver cómo hacerlo manualmente).
+La misma URL (`GET /docs`), los mismos endpoints `/openapi.json` y `/openapi.yaml` con la especificación actualizada y el mismo manejo de la CSP; solo cambia el HTML que se muestra. También puedes mantener las dos: deja la ruta montada automáticamente con Scalar y expón tú mismo una segunda ruta con Swagger usando `swaggerUiHtml()` (consulta la [guía de OpenAPI](/es/docs/openapi) para ver cómo hacerlo manualmente).
 
-¿Quieres una ruta personalizada? Define `docs` como objeto: `docs: { ui: "swagger", path: "/reference" }`. Cuando `docs` es un objeto, la documentación solo se monta fuera de producción, a menos que añadas `enabled: true` (desde la versión 1.5.5). Es el mismo comportamiento que `docs: "auto"`, que no monta las rutas cuando `production: true`. ¿Necesitas control total? Define `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml()` o `scalarHtml()`; consulta la [guía de OpenAPI](/docs/openapi).
+¿Quieres una ruta personalizada? Define `docs` como objeto: `docs: { ui: "swagger", path: "/reference" }`. Cuando `docs` es un objeto, la documentación solo se monta fuera de producción, a menos que añadas `enabled: true` (desde la versión 1.5.5). Es el mismo comportamiento que `docs: "auto"`, que no monta las rutas cuando `production: true`. ¿Necesitas control total? Define `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml()` o `scalarHtml()`; consulta la [guía de OpenAPI](/es/docs/openapi).
 
 Tanto `swaggerUiHtml()` como `scalarHtml()` cargan sus recursos predeterminados desde la CDN de jsDelivr, así que una Content-Security-Policy estricta debe permitir esos recursos; de lo contrario, la interfaz de documentación puede mostrarse en blanco. La ruta montada automáticamente y `htmlResponse()` añaden una CSP compatible de forma automática. Si construyes tu propia respuesta, importa `docsContentSecurityPolicy` desde `@daloyjs/core/docs` y pasa el resultado como encabezado de la respuesta:
 
@@ -236,7 +237,7 @@ La autenticación demuestra quién hizo la llamada, pero no demuestra que tenga 
 
 ## Siguientes pasos
 
-- [Enrutamiento](/docs/routing)
-- [Validación con Standard Schema](/docs/validation)
-- [Salvaguardas de seguridad y middleware](/docs/security)
-- [Tutorial: API de una librería](/docs/tutorials/bookstore)
+- [Enrutamiento](/es/docs/routing)
+- [Validación con Standard Schema](/es/docs/validation)
+- [Salvaguardas de seguridad y middleware](/es/docs/security)
+- [Tutorial: API de una librería](/es/docs/tutorials/bookstore)

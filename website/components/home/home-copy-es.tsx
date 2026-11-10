@@ -114,7 +114,7 @@ const BENCHMARK_CHARTS_ES: BenchmarkChartsCopy = {
   ],
 };
 
-/** Neutro Spanish (es-ES) landing-page copy. Mirrors `HOME_COPY_EN`. */
+/** Neutral Spanish landing-page copy (served under the `es` locale). Mirrors `HOME_COPY_EN`. */
 export const HOME_COPY_ES: HomeCopy = {
   locale: "es",
   links: {
@@ -185,8 +185,8 @@ export const HOME_COPY_ES: HomeCopy = {
       },
     },
     supplyChain: {
-      title: "Plantillas de proyecto con la cadena de suministro reforzada.",
-      body: "Si eliges pnpm en create-daloy, el archivo pnpm-workspace.yaml ya viene reforzado: ignoreScripts bloquea el código malicioso en los scripts de instalación (no el código que se ejecuta al importar), minimumReleaseAge de 24 horas retrasa la instalación de versiones recién publicadas para que las versiones maliciosas que se detectan a tiempo no lleguen a tu proyecto, y verifyStoreIntegrity verifica la integridad de lo que se instala. El conjunto de seguridad opcional añade flujos de GitHub Actions reforzados, Dependabot, CODEOWNERS, SECURITY.md, verificación del origen de los paquetes en el lockfile, plantillas de contenedor que se ejecutan sin privilegios de root y con tini, y daloy doctor, un validador de la configuración para producción",
+      title: "Plantillas de proyecto con la cadena de suministro reforzada",
+      body: "Si eliges pnpm en create-daloy, el archivo pnpm-workspace.yaml ya viene reforzado: ignoreScripts bloquea el código malicioso en los scripts de instalación (no el código que se ejecuta al importar), minimumReleaseAge de 24 horas retrasa la instalación de versiones recién publicadas para que las versiones maliciosas que se detectan a tiempo no lleguen a tu proyecto, y verifyStoreIntegrity verifica la integridad de lo que se instala. El conjunto de seguridad opcional añade flujos de GitHub Actions reforzados, Dependabot, CODEOWNERS, SECURITY.md, verificación del origen de los paquetes en el lockfile, plantillas de contenedor que se ejecutan sin privilegios de root y con tini, y daloy doctor, un validador de la configuración para producción.",
       badges: [
         "ignoreScripts",
         "minimumReleaseAge de 24 h",
@@ -204,7 +204,7 @@ export const HOME_COPY_ES: HomeCopy = {
       title: "Streaming y observabilidad",
       body: "Utilidades para SSE y NDJSON que gestionan la contrapresión (backpressure) de forma segura, y un hook de trazas de OpenTelemetry que genera spans de servidor HTTP con atributos según las convenciones semánticas.",
       badges: [
-      "SSE con gestión de contrapresión",
+        "SSE con gestión de contrapresión",
         "Streaming con NDJSON",
         "Spans de servidor HTTP con OTel",
       ],
