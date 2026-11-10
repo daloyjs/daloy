@@ -274,7 +274,7 @@ export const HOME_COPY_ES: HomeCopy = {
     serverTitle: "Convierte tu API en un servidor MCP",
     serverBody: (
       <>
-        DaloyJS crea servidores MCP solo con <code>@daloyjs/core</code>, sin necesidad de ningún SDK: transporte Streamable HTTP, validación de los esquemas de entrada y una comprobación al iniciar que, en producción, se niega a arrancar si un endpoint MCP no tiene un hook de autenticación en su cadena. La comprobación verifica que el hook esté presente y, en producción, que se haya ejecutado en cada solicitud, pero no que rechace a nadie, así que prueba también tu autenticación.
+        DaloyJS crea servidores MCP solo con <code>@daloyjs/core</code>, sin necesidad de ningún SDK: transporte Streamable HTTP, validación de los esquemas de entrada y una comprobación al iniciar que, en producción, se niega a arrancar si un endpoint MCP no público no tiene un hook de autenticación en su cadena (la autenticación es obligatoria por defecto; solo las rutas configuradas con <code>{"{ public: true }"}</code> quedan exentas). La comprobación verifica que el hook esté presente y, en producción, que se haya ejecutado en cada solicitud, pero no que rechace a nadie, así que prueba también tu autenticación.
       </>
     ),
     serverCta: "Crea un servidor MCP →",
