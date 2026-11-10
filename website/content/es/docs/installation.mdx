@@ -40,6 +40,8 @@ DaloyJS es compatible con **Node.js 24 LTS o con Node.js 26 y versiones posterio
           },
         ]} caption="Crea un proyecto reforzado con un solo comando o añade el paquete sin dependencias a uno existente; después, agrega el .npmrc reforzado y comprueba que la importación se resuelva correctamente." />
 
+<a id="lo-más-rápido-crea-un-proyecto"></a>
+
 ## La forma más rápida: crea un proyecto
 
 Usa el generador oficial: con un solo comando configura un `.npmrc` reforzado, TypeScript en modo estricto y una ruta que ya funciona.
@@ -55,6 +57,8 @@ bun  create daloy           my-api
 ```
 
 Consulta [Scaffold a project](/docs/scaffolder) (en inglés) para ver las plantillas y las opciones disponibles.
+
+<a id="o-instálalo-en-un-proyecto-que-ya-tengas"></a>
 
 ## O instálalo en un proyecto existente
 
@@ -110,6 +114,8 @@ El periodo de espera e `ignoreScripts` reducen el riesgo en la cadena de suminis
 
 Consulta los motivos en [Seguridad](/docs/security) y en la [explicación de por qué usar pnpm](https://pnpm.io/motivation) (en inglés).
 
+<a id="comprueba-la-instalación"></a>
+
 ## Verifica la instalación
 
 Después de instalar, ejecuta esto desde la raíz del proyecto. Funciona igual con pnpm, npm, yarn o bun, porque llama directamente a `node`:
@@ -117,6 +123,8 @@ Después de instalar, ejecuta esto desde la raíz del proyecto. Funciona igual c
 ```bash
 node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"
 ```
+
+<a id="siguiente-paso"></a>
 
 ## Siguientes pasos
 
