@@ -15,14 +15,14 @@ sitemap:
 
 # Validación
 
-DaloyJS valida las entradas mediante [Standard Schema](https://github.com/standard-schema/standard-schema), una interfaz mínima que exponen validadores como **Zod**, **Valibot**, **ArkType** y TypeBox (este último mediante un adaptador de Standard Schema). Elige el validador que encaje en tu proyecto. El contrato de DaloyJS es el mismo.
+DaloyJS valida las entradas con [Standard Schema](https://github.com/standard-schema/standard-schema), una interfaz mínima que exponen validadores como **Zod**, **Valibot**, **ArkType** y TypeBox (este último mediante un adaptador de Standard Schema). Elige el validador que mejor se adapte a tu proyecto. El contrato de DaloyJS es el mismo.
 
 <BranchDiagram title="Una interfaz, cuatro validadores" source={{
           eyebrow: "contrato del framework",
           label: "Standard Schema",
           detail: "la propiedad ~standard",
         }} branches={[
-          { eyebrow: "por defecto", label: "Zod", detail: "z.object({ ... })" },
+          { eyebrow: "predeterminado", label: "Zod", detail: "z.object({ ... })" },
           {
             eyebrow: "tree-shakeable",
             label: "Valibot",
@@ -30,7 +30,7 @@ DaloyJS valida las entradas mediante [Standard Schema](https://github.com/standa
           },
           { label: "ArkType", detail: "type({ ... })" },
           { label: "TypeBox", detail: "mediante adaptador" },
-        ]} caption="Cada validador expone la misma propiedad ~standard, así que DaloyJS infiere los tipos del handler, genera OpenAPI y devuelve errores problem+json por un único camino del framework." />
+        ]} caption="Cada validador expone la misma propiedad ~standard, así que DaloyJS infiere los tipos del handler, genera OpenAPI y devuelve errores problem+json mediante una única ruta del framework." />
 
 ## Qué se valida [#what-gets-validated]
 
@@ -42,11 +42,11 @@ En cada ruta puedes declarar esquemas para:
 - `request.body`: cuerpos de petición ya parseados. El cuerpo solo se lee cuando una ruta declara un esquema de cuerpo.
 - `responses[status].body`: cuerpos de respuesta tipados y validados.
 
-Las query strings, los campos de formulario y los campos multipart descartan antes de la validación las claves de contaminación de prototipos como `__proto__`, `constructor` y `prototype`.
+Las query strings, los campos de formulario y los campos multiparte descartan antes de la validación las claves de contaminación de prototipos, como `__proto__`, `constructor` y `prototype`.
 
 ## Acota los campos numéricos (dinero, cantidades, IDs) [#bound-numeric-fields]
 
-Un `z.number()` a secas acepta `1e308`, `-Infinity` tras errores de conversión y otros valores que son válidos como flotantes IEEE pero desastrosos para dinero, inventario o paginación. Pon siempre límites de dominio en los campos numéricos de la petición:
+Un `z.number()` sin restricciones acepta `1e308`, `-Infinity` después de errores de conversión y otros valores válidos para los números de coma flotante IEEE, pero desastrosos para importes, inventario o paginación. Define siempre límites de dominio en los campos numéricos de las peticiones:
 
 ```ts
 import { z } from "zod";
@@ -128,10 +128,10 @@ export const app = new App().post(
 
 ## Elige tu validador [#pick-your-validator]
 
-- [Zod](/docs/validation/zod) (en inglés): la opción por defecto para la mayoría de los equipos. API encadenable, un ecosistema enorme y fácil de aprender.
-- [Valibot](/docs/validation/valibot) (en inglés): modular y tree-shakeable. Ideal para runtimes edge y para contratos que se envían al navegador.
+- [Zod](/docs/validation/zod) (en inglés): la opción predeterminada para la mayoría de los equipos. API encadenable, ecosistema amplio y fácil de aprender.
+- [Valibot](/docs/validation/valibot) (en inglés): modular y con eliminación de código no usado. Ideal para runtimes de borde y para contratos incluidos en el navegador.
 
-Los esquemas compatibles con ArkType y TypeBox también funcionan cuando exponen la misma propiedad `~standard`, pero DaloyJS solo ofrece documentación y plantillas propias para Zod y Valibot.
+Los esquemas de ArkType y compatibles con TypeBox también funcionan siempre que expongan la misma propiedad `~standard`, pero DaloyJS solo incluye documentación y plantillas propias para Zod y Valibot.
 
 ## Comparación lado a lado [#side-by-side]
 
@@ -164,16 +164,16 @@ En cuanto un esquema expone `~standard`, DaloyJS infiere los tipos del handler, 
 
 ## Errores [#errors]
 
-<FlowDiagram title="Parsear y bifurcar según el resultado" steps={[
+<FlowDiagram title="Analizar y ramificar según el resultado" steps={[
           {
             eyebrow: "no confiable",
-            label: "Petición en bruto",
+            label: "Petición sin procesar",
             detail: "params · query · headers · body",
             tone: "muted",
           },
           {
             eyebrow: "standard schema",
-            label: "Parseo del esquema",
+            label: "Análisis con el esquema",
             detail: "validate(schema, input)",
             tone: "accent",
           },
@@ -189,26 +189,26 @@ En cuanto un esquema expone `~standard`, DaloyJS infiere los tipos del handler, 
             detail: "ctx.body / params / query / headers",
             tone: "success",
           },
-        ]} caption="Todos los esquemas declarados se ejecutan antes de tu handler. La entrada no válida nunca llega al código del handler: se cortocircuita con una respuesta 422 de la RFC 9457. La entrada válida llega totalmente tipada." />
+        ]} caption="Cada esquema declarado se ejecuta antes de tu handler. La entrada no válida nunca llega al código del handler: se corta el flujo con una respuesta 422 según RFC 9457. La entrada válida llega totalmente tipada." />
 
-Ante una entrada no válida, DaloyJS devuelve **422 Unprocessable Entity** como problem+json de la RFC 9457, con un array `errors` de registros `path` y `message` por cada problema. No tienes que escribir un manejador de errores para esto: viene integrado. Consulta [Errores y problem+json](/es/docs/errors).
+Ante una entrada no válida, DaloyJS devuelve **422 Unprocessable Entity** como problem+json según RFC 9457, con un array `errors` de registros `path` y `message` por cada incidencia. No necesitas escribir un manejador de errores para esto, porque ya viene integrado. Consulta [Errores y problem+json](/es/docs/errors).
 
 ## Validación de respuestas [#response-validation]
 
-Cuando se declara un esquema de respuesta, DaloyJS valida lo que devuelve el handler antes de serializarlo. El valor validado es lo que se envía, así que los esquemas de objeto que eliminan las claves desconocidas también impiden que los campos no declarados lleguen a los clientes. Si la validación falla, en producción el cliente recibe una respuesta problem 500 con los detalles ocultos.
+Cuando se declara un esquema de respuesta, DaloyJS valida el valor devuelto por el handler antes de serializarlo. El valor validado es el que se envía por la red, así que los esquemas de objeto que eliminan las claves desconocidas también evitan que los campos no declarados lleguen a los clientes. Si la validación falla, el cliente recibe en producción una respuesta problem 500 con los datos redactados.
 
 ## Límites de cuerpo y tipos de contenido [#body-limits-and-content-types]
 
-La opción `bodyLimitBytes` de App (1 MiB por defecto) limita el Content-Length declarado y el tamaño transmitido de cada cuerpo de petición -\> **413**. Desde la 1.5.4 se aplica en todas las rutas, incluidos los cuerpos que un handler lee por su cuenta desde `ctx.request`; el límite se comprueba de forma diferida, cuando se lee el cuerpo.
+La opción `bodyLimitBytes` de App (1 MiB por defecto) limita el Content-Length declarado y el tamaño recibido en streaming de cada cuerpo de petición → **413**. Desde la versión 1.5.4 se aplica en todas las rutas, incluidos los cuerpos que un handler lee por sí mismo desde `ctx.request`; el límite se comprueba de forma diferida, cuando se lee el cuerpo. Desde la versión 1.21.0, una ruta puede definir su propio `bodyLimitBytes` (y `requestTimeoutMs`) para subir o bajar el límite solo para esa ruta; consulta [límites de cuerpo y tiempos de espera por ruta](/docs/security/route-limits) (en inglés).
 
-Cuando una ruta declara `request.body`, DaloyJS también aplica:
+Cuando una ruta declara `request.body`, DaloyJS también aplica lo siguiente:
 
-- El Content-Type frente a la lista `accepts` de la ruta, o frente a `allowedContentTypes` global si está configurado -\> **415**.
+- El Content-Type se compara con la lista `accepts` de la ruta o, si está definida, con `allowedContentTypes` global → **415**.
 - Tipos de cuerpo aceptados por defecto: `application/json`, `application/x-www-form-urlencoded` y `multipart/form-data`.
-- Parseo a salvo de la contaminación de prototipos para JSON, query strings, formularios urlencoded y formularios multipart.
-- Decodificación UTF-8 estricta para cuerpos JSON, urlencoded y de texto (desde 1.16.0): una secuencia UTF-8 inválida o sobrelarga responde **400** `Request body is not valid UTF-8` en lugar de validarse con `U+FFFD` sustituido (RFC 8259 §8.1). El texto no ASCII bien formado y un BOM inicial se siguen parseando; `ctx.request.text()` mantiene la decodificación permisiva de la plataforma.
+- Análisis (parsing) seguro frente a la contaminación de prototipos para JSON, query strings, formularios urlencoded y formularios multiparte.
+- Decodificación UTF-8 estricta para cuerpos JSON, urlencoded y de texto (desde la versión 1.16.0): una secuencia UTF-8 no válida o demasiado larga responde **400** `Request body is not valid UTF-8` en lugar de validarse con `U+FFFD` sustituido (RFC 8259 §8.1). Los caracteres no ASCII bien formados y un BOM al inicio siguen analizándose correctamente. `ctx.request.text()` mantiene la decodificación permisiva de la plataforma.
 
-Los cuerpos JSON se parsean a objetos, los urlencoded pasan por `URLSearchParams` y los multipart por la API `Request.formData()` de la plataforma. Si activas en una ruta un tipo de medio de texto personalizado, DaloyJS pasa el texto decodificado a tu esquema de cuerpo.
+Los cuerpos JSON se analizan como objetos, los cuerpos urlencoded se analizan mediante `URLSearchParams` y los cuerpos multiparte mediante la API `Request.formData()` de la plataforma. Si una ruta acepta explícitamente un tipo de medio de texto personalizado, DaloyJS pasa el texto decodificado a tu esquema de cuerpo.
 
 ```ts
 app.post(
@@ -232,4 +232,4 @@ app.post(
 
 ## Combinar validadores [#mixing-validators]
 
-Puedes combinarlos ruta a ruta. Un esquema de Zod en un archivo y uno de Valibot en otro son ambos válidos, algo útil cuando migras un código existente o consumes esquemas de un paquete compartido.
+Puedes combinar validadores por ruta. Un esquema de Zod en un archivo y un esquema de Valibot en otro son ambos válidos, y resulta útil al migrar una base de código existente o al consumir esquemas de un paquete compartido.
