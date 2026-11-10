@@ -53,11 +53,11 @@ This project uses Next.js' App Router at the repository root (no `src/` director
 
 ## Add a page
 
-1. Create `app/docs/<slug>/page.tsx` — export a default React component.
+1. Create `content/docs/<slug>.mdx` (or `content/docs/<section>/<slug>.mdx`). The route files under `app/docs/` are loaders; do not add a `page.tsx` per page.
 2. Add `{ title: "...", href: "/docs/<slug>" }` to the appropriate section of `docsNav` in `components/docs-nav.ts`.
-3. Add the route to `app/sitemap.ts` so it ships in the sitemap.
+3. Run `pnpm verify:docs-links` from the repo root. The sitemap is derived from the content files, so there is nothing to register there.
 
-For a blog post, create `app/blog/<slug>/page.tsx`, register it in `app/blog/page.tsx`, and add the matching entry to `app/sitemap.ts`. See [`AGENTS.md`](./AGENTS.md) for the full voice/stack rules.
+For a blog post, create `content/blog/<slug>.mdx` with the required frontmatter. That one file is the whole registration: the blog index, RSS and sitemap read the frontmatter. See [`AGENTS.md`](./AGENTS.md) for the full voice/stack rules and the post checklist.
 
 ## Add a shadcn component
 

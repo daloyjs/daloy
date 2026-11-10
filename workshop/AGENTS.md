@@ -18,16 +18,16 @@ Do not collapse these layers into a single file when adding new exercises. Senio
 
 ## Tech Stack
 
-| Category    | Technology                           | Version   |
-| ----------- | ------------------------------------ | --------- |
-| Scaffolder  | create-daloy                         | 1.0.0     |
-| Framework   | @daloyjs/core                        | ^1.0.0    |
-| Runtime     | Node.js                              | >= 24.0.0 |
-| Language    | TypeScript                           | ^6.0.3    |
-| Validator   | Zod                                  | ^4        |
-| Codegen     | @hey-api/openapi-ts                  | ^0.99.0   |
-| Dev runner  | node --watch (native type stripping) | n/a       |
-| Test runner | node:test (built-in)                 | n/a       |
+| Category    | Technology                           | Version                 |
+| ----------- | ------------------------------------ | ----------------------- |
+| Scaffolder  | create-daloy                         | current release         |
+| Framework   | @daloyjs/core                        | workspace:^ (this repo) |
+| Runtime     | Node.js                              | >= 24.0.0               |
+| Language    | TypeScript                           | ^7.0.2                  |
+| Validator   | Zod                                  | ^4                      |
+| Codegen     | @hey-api/openapi-ts                  | pinned in package.json  |
+| Dev runner  | node --watch (native type stripping) | n/a                     |
+| Test runner | node:test (built-in)                 | n/a                     |
 
 ## Setup Commands
 

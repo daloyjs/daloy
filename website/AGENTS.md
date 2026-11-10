@@ -22,7 +22,7 @@ Use these package scripts from `package.json`:
 - `pnpm format` — `prettier --write "**/*.{ts,tsx}"`
 - `pnpm typecheck` — `tsc --noEmit`
 
-Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant.
+Run `pnpm typecheck` and `pnpm test` before finishing code changes when relevant. There is no lint script.
 
 ## Repo notes
 
@@ -89,7 +89,7 @@ Blog posts are MDX: `content/blog/<slug>.mdx` renders at `/blog/<slug>` through 
 3. That one file is the whole registration: the blog index, RSS, llms.txt, the sitemap and the OG image all read the frontmatter. Restart `pnpm dev` to see a new file.
 4. The OG image is generated from the title automatically. For a custom card, add `app/blog/<slug>/opengraph-image.tsx` (only that file; never a `page.tsx` there).
 5. Run `pnpm verify:docs-links` from the repo root: it also checks the post's `/docs` links.
-6. Run `pnpm lint` and `pnpm typecheck` before finishing.
+6. Run `pnpm typecheck` before finishing.
 
 ## Skills
 

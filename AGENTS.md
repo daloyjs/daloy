@@ -133,7 +133,7 @@ The marketing/docs site lives in [`website/`](website) and has its own agent gui
 
 - Voice and tone rules for new blog posts (author persona, humor, English-only prose, no Tagalog/Norwegian).
 - Required stack assumptions for examples (latest Next.js App Router + React 19 + Tailwind v4 + shadcn/ui).
-- The mandatory checklist for adding a blog post: create `app/blog/<slug>/page.tsx`, use the **current real date**, add the post to [`website/app/blog/page.tsx`](website/app/blog/page.tsx), and add a matching entry to [`website/app/sitemap.ts`](website/app/sitemap.ts).
+- The mandatory checklist for adding a blog post: create `website/content/blog/<slug>.mdx` with the required frontmatter and the **current real date**. That one file is the whole registration — the blog index, RSS, and sitemap read the frontmatter, so do not add a `page.tsx` or hand-edit the index or sitemap.
 - Docs navigation/search files that must be updated when adding or moving doc routes.
 
 If a task involves writing or editing a blog post, treat `website/AGENTS.md` as required reading, not optional context.
@@ -146,7 +146,7 @@ If a task involves writing or editing a blog post, treat `website/AGENTS.md` as 
   - Bump `packages/create-daloy/package.json` version (typically a minor or patch alongside the core bump)
   - Bump `version` in `jsr.json` (the JSR package `@daloyjs/daloy` is published from the same source — it MUST match the npm version)
   - Update `@daloyjs/core` peer/dependency in every `packages/create-daloy/templates/*/package.json` and `packages/create-daloy/templates/deno-basic/deno.json` to the new core version (use `^X.Y.Z`)
-  - Update the matching assertions in `packages/create-daloy/test/templates.test.mjs`
+  - Run `pnpm --filter create-daloy test` — `packages/create-daloy/test/templates.test.mjs` derives the expected core version from the root `package.json`, so it fails on any template that missed the bump (no assertions to edit by hand)
   - Update the `CORE_PACKAGE_VERSION` fallback in `website/lib/seo.ts` (the value after `?? ` — overridable at build time via the `NEXT_PUBLIC_CORE_PACKAGE_VERSION` env var). There is no `website/next.config.mjs`; this fallback is the only place the website hardcodes the core version.
 - Run `pnpm coverage` (not just `pnpm test`) before tagging — the 90% line/function gate in CI blocks publish silently if missed. If a security-heavy slice can't reach 90% without contortions, lower the threshold in `package.json` rather than write throwaway tests.
 - Publish flow: **pushing the tag `vX.Y.Z` is the only step.** That single push runs `release.yml` once, and that one run publishes everything — `@daloyjs/core` (npm), `create-daloy` (npm), `@daloyjs/daloy` (JSR), and the GitHub Release. The `publish-core`, `publish-create-daloy`, and `publish-jsr` jobs all gate on `github.event_name == 'push'`, so they all fire from the tag. **Do NOT** also run `gh workflow run release.yml -f package=create-daloy` after a tag push — that spawns a second, redundant run (it re-publishes only the companion and otherwise just duplicates the protected-environment approval prompt). The `-f package=<name>` dispatch is **backfill-only**: use it to re-publish a single package when its tag-push job failed or was skipped, never as part of the normal tag flow.
