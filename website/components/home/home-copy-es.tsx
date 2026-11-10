@@ -250,7 +250,7 @@ export const HOME_COPY_ES: HomeCopy = {
   benchmarks: {
     eyebrow: "Benchmarks y rendimiento",
     title: "Las cifras, con todas sus salvedades",
-    body: "Cuando los agentes de IA ejecutan herramientas en bucle y envían solicitudes con alta concurrencia, el throughput y la latencia de arranque en frío se vuelven críticos. DaloyJS incluye comprobaciones de seguridad activadas por defecto, y estos benchmarks miden el rendimiento con todas las protecciones activas.",
+    body: "Cuando los agentes de IA ejecutan herramientas en bucle y envían solicitudes con alta concurrencia, el throughput y la latencia de arranque en frío se vuelven críticos. DaloyJS incluye comprobaciones de seguridad activadas por defecto, y estos benchmarks miden el rendimiento de la pila de middleware configurada de DaloyJS, no con todas las protecciones activas en su configuración de producción.",
     charts: BENCHMARK_CHARTS_ES,
   },
   mcp: {
