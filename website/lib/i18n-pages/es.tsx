@@ -37,7 +37,7 @@ export const PAGES_COPY_ES: TranslatedPagesCopy = {
       "DaloyJS es un framework web de TypeScript basado en contratos y portable entre entornos de ejecución. Una sola definición de ruta es la fuente de verdad para la validación, OpenAPI 3.1, los clientes tipados y el handler HTTP. El runtime no tiene ninguna dependencia de npm, trae valores seguros por defecto (límites de tamaño del cuerpo, tiempos de espera por petición, saneamiento de cabeceras, listas de algoritmos JWT permitidos, comparaciones en tiempo constante, parsers a salvo de la contaminación de prototipos y un envoltorio de fetch opcional protegido contra SSRF) y ejecuta la misma aplicación en Node.js, Bun, Deno, Cloudflare Workers y Vercel.",
       "El proyecto es de código abierto con licencia MIT. El framework se publica como @daloyjs/core en npm y como @daloyjs/daloy en JSR a partir del mismo código TypeScript. Crea una aplicación nueva con pnpm create daloy@latest. El código fuente, el gestor de incidencias, el registro de cambios y la política de seguridad están en el repositorio de GitHub, en github.com/daloyjs/daloy.",
       "Daloy significa flujo en tagalo y se pronuncia da-loy. El nombre recuerda que las peticiones, las respuestas, los contratos, los tipos y los clientes generados deberían avanzar en un único flujo en lugar de separarse entre capas. Hay una nota más larga sobre el nombre en /es/about-the-name.",
-      "DaloyJS lo mantiene Devlin Duldulao, un desarrollador fullstack filipino que vive en Noruega, junto con colaboradores voluntarios. Es un proyecto de software, no una empresa registrada con una oficina abierta al público. Las preguntas técnicas, el patrocinio y los informes de seguridad se gestionan a través de la página de contacto. Los primeros pasos, la instalación y el tutorial de la documentación están traducidos al español; el resto de la documentación técnica y el blog están en inglés.",
+      "DaloyJS lo mantiene Devlin Duldulao, un desarrollador fullstack filipino que vive en Noruega, junto con colaboradores voluntarios. Es un proyecto de software, no una empresa registrada con una oficina abierta al público. Las preguntas técnicas, el patrocinio y los informes de seguridad se gestionan a través de la página de contacto. De la documentación están traducidos al español los primeros pasos, la instalación, el tutorial y las guías de enrutamiento, validación, manejo de errores, OpenAPI, cliente tipado y seguridad; el resto de las guías y el blog están en inglés.",
     ],
     more: {
       label: "Más:",
@@ -120,7 +120,7 @@ export const PAGES_COPY_ES: TranslatedPagesCopy = {
   docsIndex: {
     title: "Documentación en español",
     description:
-      "Primeros pasos con DaloyJS en español: instalación, tu primera ruta basada en contratos y un tutorial completo. El resto de la documentación está en inglés.",
+      "En español: primeros pasos, instalación, tutorial y guías de enrutamiento, validación, errores, OpenAPI, cliente tipado y seguridad. El resto, en inglés.",
     keywords: ["documentación DaloyJS", "DaloyJS en español", "tutorial TypeScript API", "primeros pasos DaloyJS"],
     heading: "Documentación en español",
     intro:
