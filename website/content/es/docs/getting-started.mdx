@@ -157,7 +157,7 @@ const app = createApp({
 });
 ```
 
-### ¿Prefieres la interfaz clásica de Swagger UI?
+### ¿Prefieres la interfaz clásica de Swagger UI? [#prefieres-el-swagger-ui-de-siempre]
 
 Scalar es la opción predeterminada porque es más rápida, más atractiva y funciona mejor en móviles. Pero si tu equipo está acostumbrado a Swagger UI, o si ya tienes capturas de pantalla, manuales de operación o hábitos de trabajo construidos en torno a ella, DaloyJS también la incluye sin configuración adicional. Cambia el campo `ui` cuando definas `docs` como objeto y volverás a la conocida interfaz verde:
 ```ts
@@ -182,7 +182,7 @@ import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
 headers: { "content-security-policy": docsContentSecurityPolicy() }
 ```
 
-## 4. Usa el cliente tipado en el mismo proceso
+## 4. Usa el cliente tipado en el mismo proceso [#4-usa-el-cliente-tipado-en-proceso]
 
 ```ts
 import { createInProcessClient } from "@daloyjs/core/client";
