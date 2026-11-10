@@ -1,12 +1,12 @@
 ---
 title: Primeros pasos
-description: "Crea tu primera aplicación con DaloyJS: declara una ruta basada en contratos, valida con Zod, genera OpenAPI y sirve respuestas en cualquier runtime compatible."
+description: "Crea tu primera aplicación con DaloyJS: declara una ruta desde un contrato, valida con Zod, genera la especificación OpenAPI y sirve respuestas."
 keywords:
   - DaloyJS primeros pasos
-  - primera aplicación DaloyJS
-  - tutorial API TypeScript
+  - primera aplicación con DaloyJS
+  - tutorial de API con TypeScript
   - Swagger UI
-  - referencia de API Scalar
+  - referencia de API con Scalar
   - interfaz de documentación OpenAPI
 sitemap:
   priority: 0.8
@@ -14,7 +14,7 @@ sitemap:
 
 # Primeros pasos
 
-Monta un servidor DaloyJS mínimo, llámalo con el cliente tipado e inspecciona la especificación OpenAPI, todo en cinco minutos.
+Crea un pequeño servidor con DaloyJS, haz solicitudes con el cliente tipado y revisa la especificación OpenAPI en cinco minutos.
 
 <FlowDiagram numbered title="Cinco minutos, cinco pasos" steps={[
           { label: "Crear el proyecto", detail: "pnpm add @daloyjs/core zod" },
@@ -25,7 +25,7 @@ Monta un servidor DaloyJS mínimo, llámalo con el cliente tipado e inspecciona 
           },
           { label: "Añadir OpenAPI y la interfaz de documentación", detail: 'docs: "auto"' },
           {
-            label: "Llamar al cliente tipado",
+            label: "Usa el cliente tipado",
             detail: "createClient(app)",
           },
           {
@@ -33,7 +33,7 @@ Monta un servidor DaloyJS mínimo, llámalo con el cliente tipado e inspecciona 
             detail: "pnpm exec openapi-ts",
             tone: "success",
           },
-        ]} caption="Esta guía va de una carpeta vacía a un SDK tipado en cinco pasos, y cada uno se apoya en la ruta que declaras en el paso dos." />
+        ]} caption="Esta guía te lleva de una carpeta vacía a un SDK tipado en cinco pasos, y cada uno se basa en la ruta que declaras en el segundo." />
 
 ## 1. Crea el proyecto
 
@@ -55,9 +55,9 @@ pnpm add -D typescript @types/node
 }
 ```
 
-Node.js ejecuta directamente los puntos de entrada en TypeScript gracias a la eliminación de tipos integrada (estable en Node 24+, disponible desde la 22.18), así que el desarrollo en local no necesita transpilador ni un paso de build aparte.
+Node.js ejecuta directamente los puntos de entrada escritos en TypeScript gracias a la eliminación de tipos integrada (type stripping), estable desde Node 24 y disponible desde la versión 22.18. Por eso, en desarrollo local no necesitas un transpilador ni un paso de compilación aparte.
 
-Aquí usamos `src/index.ts` y `--watch` para que la estructura coincida con la que genera [create-daloy](/docs/scaffolder): puedes copiar y pegar entre esta guía y un proyecto creado con la plantilla sin renombrar archivos.
+Aquí usamos `src/index.ts` y `--watch` para que la estructura coincida con la que genera create-daloy. Así puedes copiar y pegar código entre esta guía y un proyecto generado sin cambiar el nombre de ningún archivo.
 
 ## 2. Escribe tu primera ruta
 
@@ -92,9 +92,9 @@ const { port } = serve(app, { port: 3000 });
 console.log(`listening on http://localhost:${port}`);
 ```
 
-`new App()` ya aplica `secureHeaders()` automáticamente. Regístralo solo cuando quieras sustituir los valores por defecto.
+`new App()` ya aplica `secureHeaders()` automáticamente. Regístralo solo si quieras reemplazar los valores por defecto.
 
-¿Prefieres el panel de arranque a color que traen las plantillas de `create-daloy`? Cambia el `console.log` simple por `printStartupBanner()` de `@daloyjs/core/banner`: dibuja un recuadro que detecta si hay TTY (con alternativa en ASCII) con el nombre de tu aplicación, la URL y los enlaces extra que quieras (documentación de la API, comprobación de salud, etc.):
+¿Prefieres el panel de inicio con colores que incluyen las plantillas de `create-daloy`? Sustituye el `console.log` simple por `printStartupBanner()` de `@daloyjs/core/banner`. Muestra un banner enmarcado con el nombre de tu aplicación, la URL y cualquier enlace adicional (documentación de la API, comprobación de estado, etc.). El color se activa si la salida es una terminal (TTY), con `NO_COLOR` y `FORCE_COLOR` como ajustes manuales. Los caracteres ASCII, en cambio, los elige `detectAscii()` según el entorno y la plataforma (por ejemplo, `DALOY_ASCII`, el sistema operativo y la configuración regional), no según si la salida es una TTY:
 
 ```ts
 import { printStartupBanner } from "@daloyjs/core/banner";
@@ -121,7 +121,7 @@ curl http://localhost:3000/greet/world
 # -> {"msg":"Hello, world!"}
 ```
 
-¿No quieres levantar un servidor de verdad? Toda `App` expone `app.request(input, init?)`, un cliente de pruebas en proceso que recibe una URL o una `Request` y devuelve una `Response`: sin pila de red, sin puerto y sin una segunda terminal. Es el mismo punto de entrada que usan el cliente tipado y la [guía de pruebas](/docs/testing):
+¿No quieres iniciar un servidor real? Cada `App` expone `app.request(input, init?)`, un cliente de pruebas que se ejecuta en el mismo proceso: recibe una URL o un objeto `Request` y devuelve un objeto `Response`, sin pila de red, sin puerto y sin abrir otra terminal. Es el mismo punto de entrada que usan el cliente tipado y la guía de pruebas:
 
 ```ts
 const res = await app.request("/greet/world");
@@ -131,7 +131,7 @@ console.log(res.status, await res.json());
 
 ## 3. Añade OpenAPI y la interfaz de documentación [#3-add-openapi-and-docs-ui]
 
-Con una línea en el constructor de `App`, DaloyJS monta automáticamente `GET /openapi.json` + `GET /openapi.yaml` (la especificación en vivo en ambos formatos) y `GET /docs` (una referencia de API con Scalar):
+Con una sola línea en el constructor de `App`, DaloyJS monta automáticamente `GET /openapi.json` + `GET /openapi.yaml` (la especificación actualizada en ambos formatos) y `GET /docs` (una referencia de la API con Scalar):
 
 ```ts
 const app = new App({
@@ -142,11 +142,11 @@ const app = new App({
 });
 ```
 
-Abre `http://localhost:3000/docs` para ver la referencia interactiva de Scalar, `http://localhost:3000/openapi.json` para la especificación en JSON o `http://localhost:3000/openapi.yaml` para la especificación en YAML.
+Abre `http://localhost:3000/docs` para ver la referencia interactiva de Scalar, `http://localhost:3000/openapi.json` para ver la especificación en JSON sin procesar o `http://localhost:3000/openapi.yaml` para verla en YAML.
 
-En un servicio real, configura `openapi.info` (o los campos de primer nivel `title`, `version` y `description`). Si los omites, DaloyJS usa los valores portables `DaloyJS API` / `0.0.0`. El núcleo nunca lee un manifiesto del entorno, así que el mismo paquete de documentación funciona en Node, Bun, Deno, Workers y Vercel.
+En un servicio real, define `openapi.info` (o los campos de nivel superior `title`, `version` y `description`). Si los omites, Si no lo haces, DaloyJS usa los valores de respaldo portables `DaloyJS API` / `0.0.0`. El núcleo nunca lee el manifiesto del entorno anfitrión, así que el mismo bundle de documentación funciona en Node, Bun, Deno, Workers y Vercel.
 
-¿Prefieres una función de fábrica? `createApp(options)` es un alias exportado de `new App(options)` con un comportamiento idéntico:
+¿Prefieres una función de fábrica? `createApp(options)` es un alias exportado de `new App(options)` y se comporta exactamente igual:
 
 ```ts
 import { createApp } from "@daloyjs/core";
@@ -157,10 +157,9 @@ const app = createApp({
 });
 ```
 
-### ¿Prefieres el Swagger UI de siempre?
+### ¿Prefieres la interfaz clásica de Swagger UI? [#prefieres-el-swagger-ui-de-siempre]
 
-Scalar viene por defecto porque es más rápido, más bonito y más cómodo en el móvil, pero si tu equipo está acostumbrado a Swagger UI, o tienes capturas, runbooks o memoria muscular construidos a su alrededor, DaloyJS lo trae de serie. Cambia el campo `ui` de la forma de objeto de `docs` y vuelves a la interfaz verde de toda la vida:
-
+Scalar es la opción predeterminada porque es más rápida, más atractiva y funciona mejor en móviles. Pero si tu equipo está acostumbrado a Swagger UI, o si ya tienes capturas de pantalla, manuales de operación o hábitos de trabajo construidos en torno a ella, DaloyJS también la incluye sin configuración adicional. Cambia el campo `ui` cuando definas `docs` como objeto y volverás a la conocida interfaz verde:
 ```ts
 const app = new App({
   openapi: { info: { title: "Hello", version: "1.0.0" } },
@@ -171,11 +170,11 @@ const app = new App({
 });
 ```
 
-La misma URL (`GET /docs`), los mismos endpoints en vivo `/openapi.json` y `/openapi.yaml` y el mismo tratamiento de la CSP; solo cambia el HTML que se renderiza. También puedes tener los dos: deja la ruta montada automáticamente con Scalar y expón una segunda ruta con Swagger tú mismo mediante `swaggerUiHtml()` (consulta la receta manual en la [guía de OpenAPI](/es/docs/openapi)).
+La misma URL (`GET /docs`), los mismos endpoints `/openapi.json` y `/openapi.yaml` con la especificación actualizada y el mismo manejo de la CSP; solo cambia el HTML que se muestra. También puedes mantener las dos: deja la ruta montada automáticamente con Scalar y expón tú mismo una segunda ruta con Swagger usando `swaggerUiHtml()` (consulta la [guía de OpenAPI](/docs/openapi) para ver cómo hacerlo manualmente).
 
-¿Quieres otra ruta? Usa la forma de objeto: `docs: { ui: "swagger", path: "/reference" }`. La forma de objeto solo se monta fuera de producción salvo que añadas `enabled: true` (desde la 1.5.5), igual que `docs: "auto"`, que omite el montaje cuando `production: true`. ¿Necesitas control total? Configura `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml() / scalarHtml()`: consulta la [guía de OpenAPI](/es/docs/openapi).
+¿Quieres una ruta personalizada? Define `docs` como objeto: `docs: { ui: "swagger", path: "/reference" }`. Cuando `docs` es un objeto, la documentación solo se monta fuera de producción, a menos que añadas `enabled: true` (desde la versión 1.5.5). Es el mismo comportamiento que `docs: "auto"`, que no monta las rutas cuando `production: true`. ¿Necesitas control total? Define `docs: false` y monta tus propias rutas con `generateOpenAPI()` y `swaggerUiHtml()` o `scalarHtml()`; consulta la [guía de OpenAPI](/docs/openapi).
 
-Tanto `swaggerUiHtml()` como `scalarHtml()` cargan sus recursos por defecto desde la CDN de jsDelivr, así que una Content-Security-Policy estricta tiene que permitirlos o la interfaz de documentación puede quedarse en blanco. La ruta montada automáticamente y `htmlResponse()` añaden una CSP compatible por sí solas. Si construyes tu propia respuesta, importa `docsContentSecurityPolicy` de `@daloyjs/core/docs` y pasa el resultado como cabecera de la respuesta:
+Tanto `swaggerUiHtml()` como `scalarHtml()` cargan sus recursos predeterminados desde la CDN de jsDelivr, así que una Content-Security-Policy estricta debe permitir esos recursos; de lo contrario, la interfaz de documentación puede mostrarse en blanco. La ruta montada automáticamente y `htmlResponse()` añaden una CSP compatible de forma automática. Si construyes tu propia respuesta, importa `docsContentSecurityPolicy` desde `@daloyjs/core/docs` y pasa el resultado como encabezado de la respuesta:
 
 ```ts
 import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
@@ -183,7 +182,7 @@ import { docsContentSecurityPolicy } from "@daloyjs/core/docs";
 headers: { "content-security-policy": docsContentSecurityPolicy() }
 ```
 
-## 4. Usa el cliente tipado en proceso
+## 4. Usa el cliente tipado en el mismo proceso [#4-usa-el-cliente-tipado-en-proceso]
 
 ```ts
 import { createInProcessClient } from "@daloyjs/core/client";
@@ -194,11 +193,11 @@ const r = await client.greet({ params: { name: "DaloyJS" } });
 console.log(r.status, r.body);
 ```
 
-Los métodos del cliente se infieren de la tupla de rutas de la aplicación. Encadena los registros o compón contratos `defineRoute()` exportados con `registerRoutes([...])`. Evita ensanchar el resultado con una anotación `App` a secas, porque borra esa tupla a propósito.
+Los métodos del cliente se infieren a partir de la tupla de rutas de la aplicación. Encadena los registros de rutas o combina los contratos exportados con `defineRoute()` mediante `registerRoutes([...])`. Evita anotar el resultado solo como `App`, porque esa anotación amplía el tipo y, de forma deliberada, elimina la tupla.
 
 ## 5. Genera un SDK con Hey API
 
-Para los consumidores que están fuera del monorepo, genera un SDK fetch totalmente tipado:
+Para las aplicaciones que consumen la API fuera del monorepo, genera un SDK basado en fetch completamente tipado:
 
 ```bash
 pnpm add -D @hey-api/openapi-ts@0.0.0-next-20260930190945 prettier
@@ -214,7 +213,7 @@ export default defineConfig({
 });
 ```
 
-Deja corriendo el servidor de desarrollo del paso dos y guarda en disco el documento OpenAPI en vivo antes de ejecutar el generador del SDK:
+Deja en ejecución el servidor de desarrollo del paso dos y, antes de ejecutar el generador del SDK, guarda en disco el documento OpenAPI actualizado:
 
 ```bash
 mkdir -p generated
@@ -224,20 +223,20 @@ pnpm exec openapi-ts
 
 ## Antes de desplegar
 
-`new App()` ya activa los límites de tamaño del cuerpo, los tiempos de espera por petición, el JSON a salvo de la contaminación de prototipos, la ocultación de los errores 5xx en producción y `secureHeaders()`. Las claves y los cupos de la limitación de peticiones son una decisión de despliegue, así que `rateLimit()` sigue siendo explícito:
+`new App()` ya activa los límites de tamaño del cuerpo, los tiempos de espera para las solicitudes, el análisis de JSON protegido contra la contaminación de prototipos, la ocultación de detalles en los errores 5xx en producción y `secureHeaders()`. Las claves y los cupos del límite de solicitudes dependen de cada despliegue, así que `rateLimit()` tienes que añadirlo de forma explícita:
 
 ```ts
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
-// Por defecto en memoria: por proceso. Dos réplicas significan N * max.
+// Almacenamiento en memoria por defecto: un límite por proceso. Con N réplicas, el límite real es N × max.
 ```
 
-Cuando ejecutes más de una instancia, conecta el [almacén de Redis para la limitación de peticiones](/docs/security/rate-limit-redis); si no, cada réplica lleva su propio contador.
+Si ejecutas más de una instancia, conecta el [almacenamiento de límites de solicitudes en Redis](/docs/security/rate-limit-redis); de lo contrario, cada réplica lleva su propio contador.
 
-La autenticación demuestra quién llama. No demuestra que pueda leer esta fila. DaloyJS no puede traer por defecto la autorización a nivel de objeto porque no conoce tu modelo de propiedad. Pon la comprobación en el handler o en la consulta, y sigue la guía de [autorización de recursos](/docs/security/resource-authorization), incluidas las pruebas de Alice contra Bob.
+La autenticación demuestra quién hizo la llamada, pero no demuestra que tenga permiso para leer ese registro. DaloyJS no puede aplicar por defecto la autorización a nivel de objeto, porque no conoce tu modelo de propiedad de los datos. Pon la comprobación en el handler o en la consulta, y sigue la guía de [autorización de recursos](/docs/security/resource-authorization), incluidas las pruebas de Alice contra Bob.
 
 ## Siguientes pasos
 
-- [Enrutado](/es/docs/routing)
-- [Validación con Standard Schema](/es/docs/validation)
-- [Barreras de seguridad y middleware](/es/docs/security)
-- [Tutorial: la API de una librería](/es/docs/tutorials/bookstore)
+- [Enrutamiento](/docs/routing)
+- [Validación con Standard Schema](/docs/validation)
+- [Salvaguardas de seguridad y middleware](/docs/security)
+- [Tutorial: API de una librería](/docs/tutorials/bookstore)
