@@ -94,7 +94,7 @@ console.log(`listening on http://localhost:${port}`);
 
 `new App()` ya aplica `secureHeaders()` automáticamente. Regístralo solo si quieras reemplazar los valores por defecto.
 
-¿Prefieres el panel de inicio colores que incluyen las plantillas de `create-daloy`? Sustituye el `console.log` simple por `printStartupBanner()` de `@daloyjs/core/banner`. Muestra un banner enmarcado con el nombre de tu aplicación, la URL y cualquier enlace adicional (documentación de la API, comprobación de estado, etc.); detecta si la salida es una terminal (TTY) y, si no lo es, usa caracteres ASCII como alternativa:
+¿Prefieres el panel de inicio con colores que incluyen las plantillas de `create-daloy`? Sustituye el `console.log` simple por `printStartupBanner()` de `@daloyjs/core/banner`. Muestra un banner enmarcado con el nombre de tu aplicación, la URL y cualquier enlace adicional (documentación de la API, comprobación de estado, etc.). El color se activa si la salida es una terminal (TTY), con `NO_COLOR` y `FORCE_COLOR` como ajustes manuales. Los caracteres ASCII, en cambio, los elige `detectAscii()` según el entorno y la plataforma (por ejemplo, `DALOY_ASCII`, el sistema operativo y la configuración regional), no según si la salida es una TTY:
 
 ```ts
 import { printStartupBanner } from "@daloyjs/core/banner";
