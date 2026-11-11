@@ -1,17 +1,17 @@
 ---
 title: Errores y problem+json
-description: Lanza errores tipados en DaloyJS y obtén por defecto respuestas problem+json de la RFC 9457. Personaliza, amplía y documenta los errores en OpenAPI.
+description: Lanza errores tipados en DaloyJS y obtén respuestas problem+json predeterminadas según RFC 9457. Personalízalos, amplíalos y documéntalos en OpenAPI.
 keywords:
   - problem+json
   - RFC 9457
-  - errores DaloyJS
+  - errores de DaloyJS
   - respuestas de error HTTP
-  - errores tipados TypeScript
+  - errores tipados en TypeScript
 ---
 
 # Errores y problem+json
 
-En DaloyJS los errores son ciudadanos de primera clase. Cada `HttpError` lanzado se serializa como [problem+json de la RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) con una URI `type` estable, un id de petición y el Content-Type adecuado.
+Los errores de DaloyJS son de primera clase. Cada `HttpError` que se lanza se serializa como [problem+json según RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) con una URI `type` estable, un identificador de petición (request-id) y el Content-Type correspondiente.
 
 <FlowDiagram title="Del error lanzado a problem+json" numbered steps={[
           {
@@ -61,7 +61,7 @@ import {
 } from "@daloyjs/core";
 ```
 
-`TooManyRequestsError` y `ServiceUnavailableError` validan `retryAfterSeconds` de la misma forma: cualquier valor que no sea un entero seguro no negativo lanza un `RangeError` al construirlo, así que un `NaN` procedente de una variable de entorno ausente nunca se convierte en una cabecera `Retry-After` no válida. `RequestTimeoutError` (el plazo de `requestTimeoutMs`, consulta [`requestTimeoutStatus`](/docs/api-reference/app), en inglés) es `no-store` en todas sus variantes de estado desde la 1.16.0, así que una caché compartida nunca sigue sirviendo un `503`/`504` después de que el backend se recupere. Un `new HttpError(status, …)` a secas recibe un `type` de problem `https://httpstatuses.io/<status>`; las clases integradas llevan URIs estables `https://daloyjs.dev/errors/<slug>`.
+`TooManyRequestsError` y `ServiceUnavailableError` validan `retryAfterSeconds` de la misma forma: cualquier valor que no sea un entero seguro no negativo lanza un `RangeError` durante la construcción, así que un `NaN` procedente de una variable de entorno que falta nunca llega a convertirse en una cabecera `Retry-After` no válida. `RequestTimeoutError` (el plazo de `requestTimeoutMs`, consulta [`requestTimeoutStatus`](/docs/api-reference/app), en inglés) lleva `no-store` en todas las variantes de estado desde la versión 1.16.0, así que una caché compartida nunca sigue sirviendo un `503`/`504` después de que el backend se recupere. Un `new HttpError(status, …)` sin más recibe un `type` de problema `https://httpstatuses.io/<status>`; las clases integradas llevan URIs estables `https://daloyjs.dev/errors/<slug>`.
 
 ## Lanzar errores en un handler [#throwing-in-a-handler]
 
@@ -84,7 +84,7 @@ app.get(
 
 ## Formato en la red [#wire-format]
 
-El id de petición se devuelve al cliente en dos sitios: la cabecera de respuesta `x-request-id` y (según la [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail)) el campo `instance` del documento problem, como una URN `urn:request:<uuid>`. No hay una propiedad `requestId` de primer nivel: los clientes deben leer la cabecera o extraer la URN de `instance`.
+El id de petición se devuelve al cliente en dos sitios: la cabecera de respuesta `x-request-id` y, según [RFC 9457 §3.1](https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail), el campo `instance` del documento de problema como una URN `urn:request:<uuid>`. No existe una propiedad `requestId` de primer nivel. Los clientes deben leer la cabecera o extraer la URN de `instance`.
 
 ```json
 HTTP/1.1 404 Not Found

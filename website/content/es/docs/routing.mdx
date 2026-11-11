@@ -1,6 +1,6 @@
 ---
 title: Enrutado
-description: "Define rutas HTTP con tipos seguros en DaloyJS mediante una API basada en contratos: parámetros, query, cuerpo y respuestas inferidos desde una declaración."
+description: "Define rutas HTTP con tipos seguros en DaloyJS: parámetros, query, body y esquemas de respuesta inferidos de extremo a extremo desde un único contrato."
 keywords:
   - enrutado DaloyJS
   - rutas con tipos seguros
@@ -12,13 +12,13 @@ sitemap:
 
 # Enrutado
 
-DaloyJS usa un trie de segmentos con una vía rápida para las rutas estáticas. Tras las comprobaciones de seguridad de la ruta, las rutas estáticas exactas se resuelven con un único `Map.get`. Las búsquedas dinámicas dan preferencia a los segmentos literales, después a los parámetros y por último a los comodines. Una búsqueda sin retroceso es lineal respecto a la longitud de la ruta; las rutas que se solapan pueden obligar a recorrer ramas adicionales del trie.
+DaloyJS usa un trie de segmentos (árbol de prefijos por segmento) con una ruta rápida para las rutas estáticas. Tras las comprobaciones de seguridad de la ruta, las rutas estáticas exactas se resuelven con una única llamada a `Map.get`. Las búsquedas dinámicas prefieren los segmentos literales, después los parámetros y, por último, los comodines. Una búsqueda sin retroceso (backtracking) es lineal respecto a la longitud de la ruta, pero las rutas que se solapan pueden obligar a visitar ramas adicionales del trie.
 
-Solo las rutas completas cuentan como coincidencias. Por ejemplo, registrar` /users/me/details/:field` no impide que` /users/:id` coincida con `/users/me`. Dentro del trie dinámico, una ruta completa de mayor prioridad gana aunque no tenga handler para el método solicitado. Una ruta estática exacta gana para sus métodos registrados; los demás métodos aún pueden coincidir en el trie dinámico.
+Solo cuentan como coincidencias las rutas completas. Por ejemplo, registrar `/users/me/details/:field` no impide que `/users/me` coincida con `/users/:id`. Dentro del trie dinámico, una ruta completa de mayor prioridad gana aunque no tenga un handler para el método solicitado. Una ruta estática exacta gana para los métodos con los que se registró; otros métodos pueden seguir coincidiendo con el trie dinámico.
 
 ## Atajos progresivos [#progressive-shorthands]
 
-Los atajos por método reducen la ceremonia sin eliminar el contrato. DaloyJS deriva un id de operación estable a partir del método y la ruta, como `getRoot` o `postBookItemsByItemId`. Un `operationId` explícito sigue teniendo prioridad.
+Los atajos por método reducen el código repetitivo sin quitar el contrato. DaloyJS deriva un identificador de operación estable a partir del método y la ruta, como `getRoot` o `postBookItemsByItemId`. Un `operationId` explícito siempre tiene prioridad.
 
 ```ts
 const app = new App()
@@ -39,11 +39,11 @@ const app = new App()
   );
 ```
 
-Los atajos mantienen el mismo comportamiento de validación, OpenAPI, seguridad y cliente tipado que `route()`. No existe una forma de dos argumentos que se salte en silencio el contrato de respuesta. Para un cuerpo opaco a propósito, pasa `acknowledgeNoResponseBodySchema: true` de forma explícita. Las respuestas en bruto con éxito devueltas por `preBody` o `beforeHandle` requieren el mismo reconocimiento. Las denegaciones normales `4xx`/`5xx` de los hooks no. Las descripciones de las respuestas siguen siendo opcionales. Los valores omitidos se convierten en una descripción estable `HTTP <status> response` en OpenAPI.
+Los atajos mantienen el mismo comportamiento de validación, OpenAPI, seguridad y cliente tipado que `route()`. No existe ninguna forma de dos argumentos que omita en silencio un contrato de respuesta. Para un cuerpo que deliberadamente no tiene esquema, pasa `acknowledgeNoResponseBodySchema: true` de forma explícita. Las respuestas sin procesar exitosas devueltas por `preBody` o `beforeHandle` requieren la misma confirmación. Las denegaciones ordinarias de los hooks con `4xx`/`5xx` no la requieren. Las descripciones de respuesta siguen siendo opcionales. Si se omiten, OpenAPI usa una descripción estable del tipo `HTTP <status> response`.
 
 ## Definir rutas [#defining-routes]
 
-La declaración de una ruta es la fuente de verdad para la coincidencia, la validación de la petición, la validación de la respuesta, la salida OpenAPI y los clientes tipados. Escribe las rutas con los atajos por método (`app.get(path, contract, handler)`, `app.post(...)`, `app.put(...)`, `app.patch(...)`, `app.delete(...)`, `app.head(...)`). Derivan un `operationId` automáticamente, y uno explícito sigue teniendo prioridad. DaloyJS rechaza los valores de `operationId` duplicados en el registro.
+Una declaración de ruta es la fuente de verdad para el emparejamiento, la validación de peticiones, la validación de respuestas, la salida de OpenAPI y los clientes tipados. Escribe las rutas con los atajos por método (`app.get(path, contract, handler)`, `app.post(...)`, `app.put(...)`, `app.patch(...)`, `app.delete(...)`, `app.head(...)`). Estos atajos derivan un `operationId` automáticamente, y un `operationId` explícito siempre tiene prioridad. DaloyJS rechaza los valores `operationId` duplicados en el momento del registro.
 
 ```ts
 import { App } from "@daloyjs/core";
@@ -103,7 +103,7 @@ export const app = new App().get(
 
 ### La forma de objeto: `app.route({...})` [#route-object-form]
 
-`app.route({ method, path, ...contract, handler })` recibe el mismo contrato como un único objeto. El comportamiento en tiempo de ejecución, la validación, la seguridad y la salida OpenAPI son idénticos a los de los atajos. Recurre a ella solo cuando necesites la ruta como valor: un contrato reutilizable de `defineRoute()` (ver [Inferencia de tipos entre archivos](#multi-file-type-inference)), una ruta `OPTIONS` (que no tiene atajo) o un objeto de ruta construido por otro código. Con `route()`, indica tú mismo un `operationId` en cualquier ruta pública que quieras en el cliente tipado.
+`app.route({ method, path, ...contract, handler })` recibe el mismo contrato en un único objeto. El comportamiento en tiempo de ejecución, la validación, la seguridad y la salida de OpenAPI son idénticos a los de los atajos. Úsala solo cuando necesites la ruta como un valor: un contrato reutilizable con `defineRoute()` (consulta [Inferencia de tipos entre varios archivos](#multi-file-type-inference)), una ruta `OPTIONS` (que no tiene atajo) o un objeto de ruta construido por otro código. Con `route()`, indica tú mismo un `operationId` para cualquier ruta pública que quieras en el cliente tipado.
 
 ```ts
 app.route({
@@ -120,7 +120,7 @@ app.route({
 
 ## Inferencia de tipos entre archivos [#multi-file-type-inference]
 
-Exporta cada ruta con `defineRoute()` y después compón los contratos importados con `registerRoutes()`. La tupla literal sobrevive a los límites de archivo y de módulo, así que el cliente sin generación de código conserva todos los ids de operación y los esquemas.
+Exporta cada ruta con `defineRoute()` y, después, combina los contratos importados mediante `registerRoutes()`. La tupla literal se conserva al cruzar los límites de archivos y módulos, así que el cliente sin generación de código mantiene todos los identificadores de operación y todos los esquemas.
 
 ```ts
 // routes/list-books.ts
@@ -144,17 +144,17 @@ export const app = new App().registerRoutes([
 ] as const);
 ```
 
-Las llamadas encadenadas a `route()` también se acumulan correctamente. Evita una anotación `const app: App` a secas en la aplicación final compuesta, porque ensancha explícitamente el tipo y borra la tupla de rutas.
+Encadenar llamadas a `route()` también acumula los tipos correctamente. Evita una anotación `const app: App` en la aplicación final compuesta, porque amplía explícitamente la tupla de rutas y la pierde.
 
-`group()` con callback y `register()` de los plugins siguen ofreciendo ámbito en tiempo de ejecución, pero TypeScript no puede ensanchar la variable padre desde dentro de sus callbacks. Para un cliente sin generación de código totalmente tipado en módulos grandes, exporta tuplas literales de rutas y haz de `registerRoutes()` el límite final de composición.
+Los `group()` con callback y el `register()` de los plugins siguen aportando un ámbito en tiempo de ejecución, pero TypeScript no puede ampliar la variable padre desde dentro de sus callbacks. Para tener un cliente totalmente tipado y sin generación de código en módulos grandes, exporta tuplas de rutas literales y usa `registerRoutes()` como el límite final de composición.
 
 ## Métodos HTTP [#http-methods]
 
-Los métodos soportados incluyen `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` y `OPTIONS`. Los métodos personalizados como `TRACE`, `CONNECT` y los verbos de WebDAV se rechazan en el registro.
+Los métodos admitidos son `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` y `OPTIONS`. Los métodos personalizados, como `TRACE`, `CONNECT` y los verbos de WebDAV, se rechazan durante el registro.
 
-`HEAD` recurre a la ruta `GET` correspondiente cuando no existe una ruta `HEAD` explícita, y devuelve las mismas cabeceras con el cuerpo vacío. `OPTIONS` devuelve una respuesta de preflight 204 con una cabecera `Allow` cuando la ruta existe pero no hay registrada una ruta `OPTIONS` explícita.
+`HEAD` recurre a la ruta `GET` correspondiente cuando no existe una ruta `HEAD` explícita, y devuelve las mismas cabeceras con un cuerpo vacío. `OPTIONS` devuelve, como alternativa, una respuesta 204 de preflight con una cabecera `Allow` cuando la ruta existe, no hay ninguna ruta `OPTIONS` explícita registrada y ningún hook `beforeHandle` (por ejemplo, CORS) devuelve antes una respuesta.
 
-Hay métodos abreviados para `GET`, `POST`, `PUT`, `PATCH`, `DELETE` y `HEAD`. Registra una ruta `OPTIONS` explícita con `route()`. Si no, DaloyJS se encarga automáticamente del preflight.
+Los atajos por método están disponibles para `GET`, `POST`, `PUT`, `PATCH`, `DELETE` y `HEAD`. Para registrar una ruta `OPTIONS` explícita, usa `route()`. Si no lo haces, DaloyJS gestiona el preflight automáticamente.
 
 ## Parámetros de ruta [#path-parameters]
 
@@ -177,13 +177,13 @@ app.get(
 );
 ```
 
-Los valores de la ruta se decodifican antes de la validación. Si omites el esquema `request.params`, `ctx.params` se infiere de la ruta como cadenas en bruto. Los nombres de parámetro en conflicto en la misma posición del trie, como `/a/:x` y `/a/:y`, lanzan un error en el registro.
+Los valores de la ruta se decodifican antes de la validación. Si omites el esquema `request.params`, `ctx.params` se infiere a partir de la ruta como cadenas sin procesar. Los nombres de parámetro en conflicto en la misma posición del trie, como `/a/:x` y `/a/:y`, lanzan un error durante el registro.
 
-Los nombres de captura no pueden estar vacíos y deben ser únicos dentro de una ruta. Los nombres` __proto__`, `constructor` y` prototype` se rechazan para que los objetos de parámetros sean seguros en el código posterior. Un registro rechazado no reserva su` operationId`.
+Los nombres de captura deben ser cadenas no vacías y únicos dentro de cada ruta. Los nombres `__proto__`, `constructor` y `prototype` se rechazan para que los objetos de parámetros sean seguros para su uso posterior. Un registro rechazado no reserva su `operationId`.
 
-### Capturas comodín [#wildcard-captures]
+### Capturas con comodín [#wildcard-captures]
 
-Un segmento final `*name` captura el resto de la ruta en una única cadena decodificada y exige al menos un segmento restante. Un `*` a secas usa el nombre `wildcard`. Los comodines deben ir al final: `/assets/*path/private` lanza un error en el registro en lugar de coincidir en silencio con una ruta más amplia. Varios métodos pueden compartir una ruta comodín cuando el nombre de la captura coincide. Los métodos duplicados y los nombres de comodín en conflicto lanzan un error.
+Un segmento final `*name` captura el resto de la ruta en una única cadena decodificada y exige que quede al menos un segmento. Un `*` sin nombre usa el nombre `wildcard`. Los comodines deben estar al final: `/assets/*path/private` lanza un error durante el registro en lugar de coincidir en silencio con una ruta más amplia. Varios métodos pueden compartir una ruta con comodín siempre que el nombre de la captura coincida. Los métodos duplicados y los nombres de comodín en conflicto lanzan un error.
 
 ```ts
 app.get(
@@ -201,9 +201,9 @@ app.get(
 // GET /assets/css/app.css -> params.path === "css/app.css"
 ```
 
-Los segmentos de recorrido de ruta en bruto (`..`), los segmentos vacíos `//` y los escapes de porcentaje mal formados en las capturas no coinciden, sin más. El descubrimiento de métodos aplica las mismas comprobaciones, así que las rutas rechazadas no anuncian una cabecera `Allow`. Desde la 1.3.7, un segmento de parámetro o comodín nunca enlaza `.` ni `..`, incluidas las formas codificadas `%2e` y `%2e%2e`. Un parser de URL los resolvería como pasos de directorio, así que permitir que se enlazaran daría al handler una ruta distinta de la que vio el middleware. Una captura también rechaza un valor decodificado con un componente `.` o `..` detrás de un separador codificado (`..%2F..%2Fsecret`, `..%5C`), o cualquier carácter de control (`%00`, `%0A`, `%09`, `%7F`). Esas peticiones reciben `404`.
+Los segmentos de recorrido de ruta sin procesar (`..`), los segmentos vacíos `//` y los escapes porcentuales mal formados en las capturas no coinciden y devuelven un fallo limpio. La detección de métodos aplica las mismas comprobaciones, así que las rutas rechazadas no anuncian una cabecera `Allow`. Desde la versión 1.3.7, un segmento de parámetro o de comodín nunca se vincula a `.` ni a `..`, incluidas las formas codificadas `%2e` y `%2e%2e`. Un analizador de URL resolvería esos valores como pasos de directorio, así que permitir su vinculación daría al handler una ruta distinta de la que vio el middleware. Una captura también rechaza un valor decodificado que tenga un componente `.` o `..` detrás de un separador codificado (`..%2F..%2Fsecret`, `..%5C`), o cualquier carácter de control (`%00`, `%0A`, `%09`, `%7F`). Esas peticiones reciben un `404`.
 
-Una captura que decodifica un `/` o `\` codificado (`%2F`, `%5C`) también se rechaza con `404` por defecto, porque entonces un único valor capturado abarcaría varios segmentos de ruta para cualquier consumidor posterior de sistema de archivos, URL o proxy. Si una ruta usa de verdad ids que contienen una barra, actívalo por ruta:
+Por defecto, una captura que decodifica un `/` o un `\` codificados (`%2F`, `%5C`) también se rechaza con un `404`, porque un único valor capturado abarcaría entonces varios segmentos de ruta para cualquier consumidor posterior, sea un sistema de archivos, una URL o un proxy. Si una ruta necesita de verdad identificadores con barras, actívalo de forma explícita para esa ruta:
 
 ```ts
 app.get(
@@ -216,9 +216,9 @@ app.get(
 );
 ```
 
-Activarlo nunca vuelve a admitir componentes `..` ni caracteres de control. Los parámetros decodificados siguen siendo datos no confiables y no son rutas de sistema de archivos saneadas, así que valida por separado el acceso al sistema de archivos.
+Activar esta opción nunca vuelve a admitir componentes `..` ni caracteres de control. Los parámetros decodificados siguen siendo datos no confiables y no son rutas de sistema de archivos saneadas, así que la validación del acceso al sistema de archivos debe hacerse por separado.
 
-Los adaptadores también mantienen el router y el middleware sobre una misma vista de la ruta (desde la 1.3.7). El adaptador de Node canonicaliza los request-targets que contienen `\`, segmentos de punto o sus formas `%2e` igual que lo haría `new URL()` antes del enrutado. Los adaptadores de Node y AWS Lambda rechazan con `400` una cabecera `Host` que no sea un simple `host[:port]` (por ejemplo, una que contenga `\ / ? # @ %` o espacios). Por eso, las protecciones basadas en la ruta como `except()` coinciden exactamente con la ruta que se ejecuta. Consulta el [adaptador de Node](/docs/adapters/node) (en inglés) para más detalles.
+Los adaptadores también mantienen una única vista de la ruta para el enrutador y el middleware (desde la versión 1.3.7). El adaptador de Node canonicaliza los request-targets que contienen `\`, segmentos de punto o sus formas `%2e` como lo haría `new URL()`, antes de enrutar. Los adaptadores de Node y de AWS Lambda rechazan con `400` cualquier cabecera `Host` que no sea un simple `host[:port]` (por ejemplo, una que contenga `\ / ? # @ %` o espacios en blanco). Así, las guardas basadas en la ruta, como `except()`, coinciden exactamente con la ruta que se ejecuta. Consulta el [adaptador de Node](/docs/adapters/node) (en inglés) para más detalles.
 
 ## Grupos [#groups]
 
@@ -238,36 +238,36 @@ app.group("/api/v1", { tags: ["v1"] }, (v1) => {
 // ruta final: /api/v1/health
 ```
 
-Los grupos fusionan prefijos, etiquetas, hooks y valores de autenticación por defecto en las rutas registradas dentro del callback. La aplicación hija está encapsulada: el middleware añadido dentro de un grupo no se filtra a las rutas de fuera. Las rutas agrupadas son visibles para el enrutado en tiempo de ejecución y para OpenAPI. Para contratos paralelos `/api/v1` y `/api/v2`, políticas de migración y SDK generados por separado, lee la [guía de versionado de APIs](/docs/api-versioning) (en inglés).
+Los grupos combinan prefijos, etiquetas, hooks y valores predeterminados de autenticación en las rutas registradas dentro del callback. La aplicación hija está encapsulada: el middleware añadido dentro de un grupo no se filtra a las rutas que están fuera de él. Las rutas agrupadas son visibles para el enrutamiento en tiempo de ejecución y para OpenAPI. Para contratos paralelos `/api/v1` y `/api/v2`, la política de migración y los SDK generados por separado, consulta la [guía de versionado de la API](/docs/api-versioning) (en inglés).
 
 ## Opciones de ruta [#route-options]
 
 - `request`: esquemas para `params`, `query`, `headers` y `body`.
-- `responses`: códigos de estado declarados y esquemas opcionales de cuerpo y cabeceras de la respuesta.
-- `accepts`: lista permitida de `Content-Type` por ruta para las rutas con esquema de cuerpo de petición.
-- `auth`: requisito de seguridad OpenAPI de la ruta. Combínalo con un hook de autenticación como `bearerAuth()`.
-- `internal`: oculta una ruta a los adaptadores públicos y sigue permitiendo llamadas en proceso con `app.inject()`.
+- `responses`: códigos de estado declarados y esquemas opcionales del cuerpo y de las cabeceras de la respuesta.
+- `accepts`: lista de tipos `Content-Type` permitidos por ruta, para las rutas con esquemas de cuerpo de petición.
+- `auth`: requisito de seguridad de OpenAPI para la ruta. Combínalo con un hook de autenticación, como `bearerAuth()`.
+- `internal`: oculta una ruta de los adaptadores públicos, pero sigue permitiendo las llamadas `app.inject()` dentro del proceso.
 - `deprecated` y `sunset`: marcan un endpoint como obsoleto y emiten las cabeceras de respuesta correspondientes.
-- `callbacks` y `meta`: añaden callbacks de OpenAPI, ejemplos y metadatos de la ruta pensados para la IA.
+- `callbacks` y `meta`: añaden callbacks de OpenAPI, ejemplos y metadatos de ruta pensados para la IA.
 
 ## Hooks [#hooks]
 
 Los hooks añaden comportamiento en puntos fijos del ciclo de vida:
 
-- `onRequest`: el primero, antes del parseo.
-- `preBody`: tras la coincidencia de la ruta, antes de la validación de esquemas o de la E/S del cuerpo. Aquí se ejecuta la autenticación integrada por cabecera, JWT, basic y mTLS.
-- `beforeHandle`: tras la validación, antes de tu handler. Devuelve una `Response` para cortocircuitar.
+- `onRequest`: el primero, antes del análisis (parsing).
+- `preBody`: después de la coincidencia de la ruta y antes de la validación del esquema o de la E/S del cuerpo. La autenticación integrada por cabecera, JWT, básica y mTLS se ejecuta aquí.
+- `beforeHandle`: después de la validación y antes de tu handler. Devuelve una `Response` para cortocircuitar el flujo.
 - `afterHandle`: envuelve o transforma el resultado del handler antes de serializar la respuesta.
-- `onError`: observa o sustituye la respuesta de error.
-- `onSend`: modifica in situ las cabeceras salientes o devuelve una nueva `Response`. Se ejecuta en los caminos de éxito, de error y de preflight `OPTIONS`.
-- `onResponse`: observador final. Úsalo para logs y métricas. No modifiques aquí la respuesta.
+- `onError`: observa o reemplaza la respuesta de error.
+- `onSend`: modifica las cabeceras de salida en su lugar o devuelve una nueva `Response`. Se ejecuta en las rutas de éxito, de error y de preflight `OPTIONS`.
+- `onResponse`: observador final. Úsalo para registros (logging) y métricas. No modifiques la respuesta en este punto.
 
-<FlowDiagram title="Ciclo de vida de la petición" numbered caption="Los hooks se disparan en puntos fijos alrededor de tu handler. La autenticación barata puede rechazar en preBody antes de la E/S del cuerpo. El middleware que necesita el cuerpo mantiene beforeHandle después de la validación. Si algo lanza un error, el control salta a onError, y onSend y onResponse se siguen ejecutando." steps={[
-          { label: "onRequest", eyebrow: "el primero", detail: "antes del parseo" },
+<FlowDiagram title="Ciclo de vida de la petición" numbered caption="Los hooks se ejecutan en puntos fijos alrededor de tu handler. La autenticación ligera puede rechazar en preBody antes de la E/S del cuerpo. El middleware que depende del cuerpo mantiene beforeHandle después de la validación. Si algo lanza un error, el control pasa a onError; después, onSend y onResponse siguen ejecutándose." steps={[
+          { label: "onRequest", eyebrow: "el primero", detail: "antes del análisis" },
           {
             label: "preBody",
-            eyebrow: "el rechazo más barato",
-            detail: "ruta encontrada · cuerpo sin tocar",
+            eyebrow: "rechazo más barato",
+            detail: "ruta coincide · cuerpo sin tocar",
           },
           {
             label: "validate",
@@ -279,8 +279,8 @@ Los hooks añaden comportamiento en puntos fijos del ciclo de vida:
             detail: "devuelve una Response para cortocircuitar",
           },
           { label: "handler", detail: "la lógica de tu ruta", tone: "accent" },
-          { label: "afterHandle", detail: "envolver / transformar el resultado" },
-          { label: "onSend", detail: "modificar o sustituir la Response" },
+          { label: "afterHandle", detail: "envuelve o transforma el resultado" },
+          { label: "onSend", detail: "modifica o reemplaza la Response" },
           {
             label: "onResponse",
             eyebrow: "siempre",
@@ -306,7 +306,7 @@ app.post(
 
 ## Transformar respuestas con `onSend` [#transforming-responses-with-onsend]
 
-Usa `onSend` cuando necesites reescribir la respuesta saliente, por ejemplo para añadir una cabecera, quitar una cabecera interna o sustituir la respuesta por completo. Devolver `void` mantiene la respuesta actual. Varios hooks `onSend` se componen en cadena (global -\> grupo -\> ruta).
+Usa `onSend` cuando necesites reescribir la respuesta de salida, por ejemplo, para añadir una cabecera, eliminar una cabecera interna o reemplazar la respuesta por completo. Si devuelve `void`, se mantiene la respuesta actual. Varios hooks `onSend` se componen como una cadena (global → grupo → ruta).
 
 ```ts
 const app = new App({
@@ -340,13 +340,13 @@ app.get(
 );
 ```
 
-`onSend` se ejecuta *después* de la validación de la respuesta y después de fusionar las cabeceras del ámbito de la petición, incluida `x-request-id`. Se ejecuta *antes* de `onResponse`, que sigue siendo el sitio adecuado para logs y métricas.
+`onSend` se ejecuta *después* de la validación de la respuesta y después de combinar las cabeceras con alcance de petición, incluida `x-request-id`. Se ejecuta *antes* de `onResponse`, que sigue siendo el lugar adecuado para los registros (logging) y las métricas.
 
 ## 405 Method Not Allowed [#405-method-not-allowed]
 
-Si una ruta está registrada para un método pero se llama con otro, el router devuelve **405** con una cabecera `Allow` correcta, nunca un 404 engañoso. Las rutas marcadas con `internal: true` se excluyen de las respuestas 405 públicas y de `Allow`, para que los endpoints ocultos de administración o de cron no se filtren mediante el sondeo de métodos.
+Si una ruta está registrada para un método, pero se llama con otro, el enrutador devuelve **405** con una cabecera `Allow` correcta, nunca un 404 engañoso. Las rutas marcadas con `internal: true` se excluyen de las respuestas 405 públicas y de las cabeceras `Allow`, para que los endpoints de administración o de tareas programadas ocultos no se revelen al sondear métodos.
 
-El descubrimiento de métodos incluye tanto una ruta estática exacta como la ruta dinámica seleccionada. Con `GET /users/me` y` POST /users/:id`, la ruta `/users/me` anuncia ambos métodos registrados. La cabecera enumera los registros explícitos; el manejo sintetizado de HEAD y OPTIONS no añade entradas.
+La detección de métodos incluye tanto una ruta estática exacta como la ruta dinámica seleccionada. Con `GET /users/me` y `POST /users/:id`, la ruta `/users/me` anuncia los dos métodos registrados. La cabecera enumera los registros explícitos; el manejo sintetizado de HEAD y OPTIONS no añade entradas.
 
 ## Rendimiento [#performance]
 
