@@ -1,6 +1,6 @@
 ---
 title: Especificación OpenAPI de DaloyJS
-description: "Generación de la especificación OpenAPI de DaloyJS: emite OpenAPI 3.1 desde tus rutas y, con Hey API, la mantiene sincronizada con tu cliente tipado."
+description: "Especificación OpenAPI de DaloyJS: emite OpenAPI 3.1 desde tus rutas y alimenta el cliente tipado de Hey API, que se regenera al cambiar las rutas."
 keywords:
   - especificación OpenAPI de DaloyJS
   - OpenAPI 3.1
@@ -45,7 +45,7 @@ DaloyJS genera un documento **OpenAPI 3.1** limpio directamente desde tus defini
             label: "SDK de cliente tipado",
             detail: "generación de código con Hey API",
           },
-        ]} caption="Escribes la ruta una sola vez. La validación, la especificación OpenAPI, la documentación interactiva y el cliente tipado se derivan de ella, así que nunca pueden desincronizarse." />
+        ]} caption="Escribes la ruta una sola vez. La validación, la especificación OpenAPI y la documentación interactiva se derivan de ella en tiempo de ejecución. El cliente tipado se genera a partir de la especificación, así que debes regenerarlo cuando cambien las rutas." />
 
 ## Una línea: monta automáticamente /docs, /openapi.json y /openapi.yaml [#one-line-auto-mount-docs-openapi-json-openapi-yaml]
 
@@ -89,7 +89,7 @@ new App({
 
 ## Elige una interfaz: Scalar, Swagger UI o Redoc [#pick-a-ui-scalar-swagger-ui-or-redoc]
 
-Define `ui` como `"scalar"` (valor por defecto), `"swagger"` o `"redoc"`. Las tres interfaces muestran la misma especificación en vivo, se montan en las mismas rutas y usan la misma CSP estricta y los mismos recursos alojados en CDN, así que cambiar de una a otra es un cambio de una sola palabra. Scalar y Swagger UI incluyen una consola de peticiones para desarrolladores en las rutas protegidas. Redoc es una interfaz de referencia de solo lectura: muestra los requisitos de seguridad, pero no incluye una consola integrada *Try it*.
+Define `ui` como `"scalar"` (valor por defecto), `"swagger"` o `"redoc"`. Las tres interfaces muestran la misma especificación en vivo, se montan en las mismas rutas y cargan los mismos recursos alojados en CDN. Scalar y Swagger UI usan la misma CSP estricta, mientras que Redoc la amplía con `worker-src 'self' blob:` para su índice de búsqueda. Aun así, cambiar de una a otra es un cambio de una sola palabra. Scalar y Swagger UI incluyen una consola de peticiones para desarrolladores en las rutas protegidas. Redoc es una interfaz de referencia de solo lectura: muestra los requisitos de seguridad, pero no incluye una consola integrada *Try it*.
 
 ```ts
 new App({

@@ -152,7 +152,7 @@ Los `group()` con callback y el `register()` de los plugins siguen aportando un 
 
 Los métodos admitidos son `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` y `OPTIONS`. Los métodos personalizados, como `TRACE`, `CONNECT` y los verbos de WebDAV, se rechazan durante el registro.
 
-`HEAD` recurre a la ruta `GET` correspondiente cuando no existe una ruta `HEAD` explícita, y devuelve las mismas cabeceras con un cuerpo vacío. `OPTIONS` devuelve una respuesta 204 de preflight con una cabecera `Allow` cuando la ruta existe, pero no hay ninguna ruta `OPTIONS` explícita registrada.
+`HEAD` recurre a la ruta `GET` correspondiente cuando no existe una ruta `HEAD` explícita, y devuelve las mismas cabeceras con un cuerpo vacío. `OPTIONS` devuelve, como alternativa, una respuesta 204 de preflight con una cabecera `Allow` cuando la ruta existe, no hay ninguna ruta `OPTIONS` explícita registrada y ningún hook `beforeHandle` (por ejemplo, CORS) devuelve antes una respuesta.
 
 Los atajos por método están disponibles para `GET`, `POST`, `PUT`, `PATCH`, `DELETE` y `HEAD`. Para registrar una ruta `OPTIONS` explícita, usa `route()`. Si no lo haces, DaloyJS gestiona el preflight automáticamente.
 

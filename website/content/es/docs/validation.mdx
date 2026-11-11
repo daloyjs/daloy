@@ -46,7 +46,7 @@ Las query strings, los campos de formulario y los campos multiparte descartan an
 
 ## Acota los campos numéricos (dinero, cantidades, IDs) [#bound-numeric-fields]
 
-Un `z.number()` sin restricciones acepta `1e308`, `-Infinity` después de errores de conversión y otros valores válidos para los números de coma flotante IEEE, pero desastrosos para importes, inventario o paginación. Define siempre límites de dominio en los campos numéricos de las peticiones:
+Un `z.number()` sin restricciones acepta `1e308`, `-1e308` después de errores de conversión y otros valores válidos para los números de coma flotante IEEE, pero desastrosos para importes, inventario o paginación. Define siempre límites de dominio en los campos numéricos de las peticiones:
 
 ```ts
 import { z } from "zod";
