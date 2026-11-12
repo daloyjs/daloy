@@ -792,14 +792,13 @@ that stopped scanning after a comment-like string. Seeded property tests
 (`tests/gate-composition-properties.test.ts`) now check random
 `every()` / `some()` compositions against a reference model.
 
-A second round closed most of the gate gaps: `verify:secret-comparisons` now
-audits all of `src/`, and the TLS-option, encoded-payload and
-dependency-specifier rules catch the ordinary spellings. Still not caught,
-because each needs a deliberate author rather than an accident: a banned
-call split across lines or built from concatenated strings, `setTimeout`
-with a string, a blob split into two shorter halves, some provider-specific
-token formats, a few lockfile shapes, and helper-command keys in agent
-configuration files.
+Two further rounds closed most of the gate gaps: `verify:secret-comparisons`
+audits all of `src/`; the TLS-option, encoded-payload, dependency-specifier,
+lockfile, agent-config, credential and lifecycle gates catch the ordinary
+spellings; and allow markers need a reason. Still not caught, because each
+needs a deliberate author rather than an accident: a banned call built from
+concatenated strings or a variable module specifier, and an encoded blob
+split into two shorter halves.
 
 ### Repeatable local audits with the Cloudflare skill
 

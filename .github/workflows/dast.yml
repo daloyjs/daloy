@@ -42,7 +42,7 @@
 #     for the SARIF upload step.
 #   * Third-party actions are SHA-pinned (same posture as the rest of
 #     the repo). ZAP itself runs via the official docker image
-#     `ghcr.io/zaproxy/zaproxy:stable` rather than a new third-party
+#     `ghcr.io/zaproxy/zaproxy`, pinned by digest, rather than a new third-party
 #     action so the SHA-pin gate stays satisfied without adding a new
 #     pinned dependency.
 #   * `step-security/harden-runner` is in audit mode — the job needs
@@ -145,10 +145,12 @@ jobs:
         # (e.g. permissive CORS in the example app). The follow-up
         # "Fail on HIGH findings" step is what gates the build.
         run: |
-          docker pull ghcr.io/zaproxy/zaproxy:stable
+          # Pinned by digest (the `stable` tag as of 2026-11-12): a tag can be
+          # repointed, a digest cannot. Refresh it deliberately when updating ZAP.
+          docker pull ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
           docker run --rm --network host \
             -v "$PWD/dast-results:/zap/wrk/:rw" \
-            -t ghcr.io/zaproxy/zaproxy:stable \
+            -t ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
             zap-baseline.py \
               -t http://localhost:3000 \
               -J zap-report.json \
@@ -177,7 +179,7 @@ jobs:
         run: |
           docker run --rm --network host \
             -v "$PWD/dast-results:/zap/wrk/:rw" \
-            -t ghcr.io/zaproxy/zaproxy:stable \
+            -t ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
             zap-api-scan.py \
               -t http://localhost:3000/openapi.json \
               -f openapi \

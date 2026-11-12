@@ -49,6 +49,13 @@ const FORBIDDEN_HOOKS = [
   "prepublish",
   // pnpm runs this before every install in the project that declares it.
   "pnpm:devPreinstall",
+  // Run on the consumer's machine when the package is removed.
+  "preuninstall",
+  "uninstall",
+  "postuninstall",
+  // Run when the package is installed from a git URL (npm packs it first).
+  "prepack",
+  "postpack",
 ] as const;
 
 const CHECKED_MANIFESTS: readonly string[] = [

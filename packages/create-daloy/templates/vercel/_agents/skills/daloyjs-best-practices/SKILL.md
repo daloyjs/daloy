@@ -352,7 +352,7 @@ reference. Skip that file for ordinary route work.
   also run on the Edge runtime unchanged.
 - Do not weaken response literal types (`as const`).
 - Do not return errors as `{ status: 4xx, body }`. Throw a typed error.
-- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).
+- Do not add runtime dependencies without checking the install guardrails in `pnpm-workspace.yaml` (installs wait 24h after publish by default).
 - If a route intentionally returns a body the contract cannot describe (a
   raw `Response`, HTML, a proxied payload), set
   `acknowledgeNoResponseBodySchema: true` on that route — never silence the

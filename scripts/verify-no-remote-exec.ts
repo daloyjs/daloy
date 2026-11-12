@@ -140,6 +140,14 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "use a typed parser instead",
   },
   {
+    // The first argument is checked on the unblanked line by the caller
+    // (see STRING_TIMER_RE): a string there is compiled like `eval`.
+    re: /\bnew\s+Worker\s*\([^)]*\beval\s*:\s*true/,
+    reason:
+      "`new Worker(code, { eval: true })` runs a string as a worker script; " +
+      "load a file instead",
+  },
+  {
     re: /\bBun\s*\.\s*(?:spawn|spawnSync)\b|\bBun\s*\.\s*\$|\bDeno\s*\.\s*(?:Command|run)\b|\bgetBuiltinModule\s*\(/,
     reason:
       "runtime-native process spawn (`Bun.spawn`, `Deno.Command`) or `process.getBuiltinModule()` " +
@@ -212,6 +220,9 @@ function stripCommentsAndStrings(line: string): string {
   return out;
 }
 
+/** `setTimeout("code")` / `setInterval("code")`: a string first argument is compiled like `eval`. */
+const STRING_TIMER_RE = /\bset(?:Timeout|Interval|Immediate)\s*\(\s*["'`]/;
+
 const IMPORT_OR_REQUIRE_PATTERNS = FORBIDDEN_PATTERNS.slice(0, 7);
 const CODE_GEN_PATTERNS = FORBIDDEN_PATTERNS.slice(7);
 
@@ -247,6 +258,16 @@ export function findForbiddenRemoteExecCalls(
     // Phase 2: code-generation patterns — strip string literals so a
     // word like "eval" inside a doc string / error message doesn't trip.
     const codeOnly = views.code[i]!;
+    if (STRING_TIMER_RE.test(noComments)) {
+      out.push({
+        file,
+        line: i + 1,
+        text: raw.trim(),
+        reason:
+          "`setTimeout` / `setInterval` with a string argument compiles that string as JS; pass a function",
+      });
+      continue;
+    }
     for (const pattern of CODE_GEN_PATTERNS) {
       if (pattern.re.test(codeOnly)) {
         out.push({ file, line: i + 1, text: raw.trim(), reason: pattern.reason });

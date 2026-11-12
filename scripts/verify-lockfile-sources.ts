@@ -17,6 +17,8 @@ export interface ForbiddenLockfileSource {
 
 const GIT_SOURCE_PATTERN =
   /(?:specifier:\s*)?(?:github:|gitlab:|bitbucket:|gist:|git\+|git:\/\/|ssh:\/\/git@|git@github\.com:|git@gitlab\.com:|git@bitbucket\.org:)/i;
+const GIT_RESOLUTION_PATTERN = /\btype:\s*git\b|\brepo:\s*(?:https?|ssh|git):\/\//i;
+const FILE_SPECIFIER_PATTERN = /^(?:specifier|version):\s*['"]?file:/i;
 const TARBALL_PATTERN = /tarball:\s*(?<url>https?:\/\/[^}\s]+)/i;
 const REGISTRY_TARBALL_PREFIX = "https://registry.npmjs.org/";
 
@@ -395,6 +397,21 @@ export function findForbiddenLockfileSources(lockfile: string): ForbiddenLockfil
       continue;
     }
 
+    // pnpm records a git dependency fetched over plain https as
+    // `resolution: {commit: ..., repo: https://..., type: git}`, with none of
+    // the prefixes above.
+    if (GIT_RESOLUTION_PATTERN.test(text)) {
+      findings.push({ line: index + 1, reason: "git dependency source", text });
+      continue;
+    }
+
+    // A `file:` specifier installs a local tarball or directory copy that
+    // never went through the registry. `link:` (a workspace symlink) is fine.
+    if (FILE_SPECIFIER_PATTERN.test(text)) {
+      findings.push({ line: index + 1, reason: "non-registry tarball source", text });
+      continue;
+    }
+
     if (NPM_ALIAS_SPECIFIER_PATTERN.test(text)) {
       findings.push({
         line: index + 1,
@@ -432,16 +449,34 @@ export function findForbiddenLockfileSources(lockfile: string): ForbiddenLockfil
   return findings;
 }
 
+/**
+ * True when the text has the shape of a pnpm lockfile. An empty or truncated
+ * file would otherwise scan clean and pass.
+ *
+ * @param lockfile - Raw lockfile text.
+ */
+export function looksLikePnpmLockfile(lockfile: string): boolean {
+  return /^lockfileVersion:/m.test(lockfile) && /^(?:importers|packages):/m.test(lockfile);
+}
+
 async function main(): Promise<void> {
-  const lockfiles = ["../pnpm-lock.yaml", "../website/pnpm-lock.yaml"] as const;
+  const lockfiles = [
+    "../pnpm-lock.yaml",
+    "../website/pnpm-lock.yaml",
+    "../bench/cross-framework/pnpm-lock.yaml",
+  ] as const;
   let total = 0;
   for (const rel of lockfiles) {
     const lockfile = await readFile(new URL(rel, import.meta.url), "utf8");
+    const name = rel.replace(/^\.\.\//, "");
+    if (!looksLikePnpmLockfile(lockfile)) {
+      console.error(`${name} is empty or not a pnpm lockfile; refusing to treat it as clean`);
+      total++;
+      continue;
+    }
     const findings = findForbiddenLockfileSources(lockfile);
     for (const finding of findings) {
-      console.error(
-        `${rel.replace(/^\.\.\//, "")} ${finding.reason} on line ${finding.line}: ${finding.text}`
-      );
+      console.error(`${name} ${finding.reason} on line ${finding.line}: ${finding.text}`);
     }
     total += findings.length;
   }

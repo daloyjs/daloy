@@ -63,6 +63,6 @@ AI agents tend to remove the checks that block them ([why](https://www.aikido.de
 - Bug fixes include a regression test.
 - Pin `compatibility_date` in `wrangler.toml`; only bump it deliberately.
 - For deploys, ensure the user has run `wrangler login`; do not authenticate on their behalf.
-- Never bypass safety checks without a clear reason.
+- Never bypass safety checks; record any exception in the PR.
 
 For the full workflow — routes, background jobs, bindings, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

@@ -73,6 +73,6 @@ AI agents tend to remove the checks that block them ([why](https://www.aikido.de
 - Run the contract gate (`pnpm contract`) whenever route shapes, examples, operation IDs, or OpenAPI metadata change.
 - Bug fixes include a regression test.
 - For deploys, ensure the user has run `vercel login`; do not authenticate on their behalf.
-- Never bypass safety checks without a clear reason.
+- Never bypass safety checks; record any exception in the PR.
 
 For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

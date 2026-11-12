@@ -35,6 +35,36 @@ For the forward-looking plan and the full thematic release log, see
   `robots.txt`), so Vercel serves static files from there and not from the
   project root, and its `.vercelignore` covers `*.p12`.
 
+- **CI gates, third round.**
+  - `verify:lockfile` catches `type: git` resolutions and `file:`
+    specifiers, refuses an empty or truncated lockfile, and scans the
+    benchmark lockfile.
+  - `verify:no-agent-config-autorun` flags helper commands in agent settings
+    (`apiKeyHelper`, `statusLine`), dev container lifecycle commands, MCP
+    servers that launch a local command, and scripts run from a config
+    directory under any interpreter.
+  - `verify:no-leaked-credentials` recognises more provider token formats and
+    refuses template `_env` files.
+  - `verify:no-lifecycle-scripts` covers uninstall and pack hooks.
+  - `verify:known-dep-names` scans the workshop, benchmark, compat and fuzz
+    manifests (benchmark-only names live in their own allowlist) and the
+    `overrides:` block of every `pnpm-workspace.yaml`.
+  - Allow markers need a reason and must be in a comment; a call split across
+    lines, `setTimeout` with a string and `Buffer(n)` without `new` are
+    caught.
+- **Upload file names** containing a bidirectional-override or zero-width
+  character, named after a Windows device, or ending with a dot or space are
+  refused unless `allowUnsafeFilenames` is set.
+- **`geoBlock()`** passes an IPv4-mapped client address to `lookupCountry` as
+  plain IPv4, so a lookup keyed on IPv4 no longer returns "unknown" for it.
+- **Generated CI:** the ZAP image is pinned by digest (also in this
+  repository's `dast.yml`), Bun is pinned to a version, Dependabot waits a
+  day for GitHub Actions and Docker updates too, and the scaffolded lockfile
+  check catches GitLab / Bitbucket shorthand, aliases and `type: git`.
+- **Template agent files** attribute the install cooldown to the file each
+  package manager reads and ask for any safety-check exception to be
+  recorded in the PR.
+
 ### Fixed
 
 - The secret-scan workflow failed on the RFC 6455 sample handshake key in two

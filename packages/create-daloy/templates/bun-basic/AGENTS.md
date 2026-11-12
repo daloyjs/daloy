@@ -74,6 +74,6 @@ AI agents tend to remove the checks that block them ([why](https://www.aikido.de
 - Quality gates must pass before declaring work done: `bun run typecheck` and `bun test`.
 - Regenerate the OpenAPI spec and typed client whenever route shapes change, then run `bun run contract`.
 - Bug fixes include a regression test.
-- Never bypass safety checks without a clear reason.
+- Never bypass safety checks; record any exception in the PR.
 
 For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

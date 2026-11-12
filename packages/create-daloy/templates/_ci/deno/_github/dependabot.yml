@@ -3,6 +3,9 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: "/"
+    # Wait a day before proposing a new release, like the npm cooldown.
+    cooldown:
+      default-days: 1
     schedule:
       interval: weekly
       day: monday
@@ -18,6 +21,9 @@ updates:
   # with the `container-scan.yml` workflow, this catches base-image CVEs early.
   - package-ecosystem: docker
     directory: "/"
+    # Wait a day before proposing a new release, like the npm cooldown.
+    cooldown:
+      default-days: 1
     schedule:
       interval: weekly
       day: monday

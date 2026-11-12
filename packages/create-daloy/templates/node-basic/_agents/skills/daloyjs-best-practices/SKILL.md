@@ -425,9 +425,9 @@ reference. Skip that file for ordinary route work.
   depends on them.
 - Do not return errors as `{ status: 4xx, body: {...} }`. Throw a typed
   error so the framework can format the problem response consistently.
-- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).
+- Do not add runtime dependencies without checking the install guardrails in `pnpm-workspace.yaml` (installs wait 24h after publish by default).
 - Do not bypass safety checks like `--no-verify` on commit or
-  `--ignore-scripts=false` on install without a clear reason.
+  `--ignore-scripts=false` on install without recording the reason in the PR.
 - Avoid global mutable state in `buildApp()`. If you need shared state,
   pass it in as a parameter (`buildApp({ store })`).
 - If a route intentionally returns a body the contract cannot describe (a

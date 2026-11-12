@@ -48,6 +48,12 @@ interface ForbiddenPattern {
 
 const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
   {
+    // `Buffer(size)` without `new` is the same deprecated constructor.
+    re: /(?<![.\w$])Buffer\s*\(/,
+    reason:
+      "deprecated `Buffer(...)` call; use `Buffer.alloc(size)` or `Buffer.from(input)`",
+  },
+  {
     re: /\bnew\s+Buffer\s*\(/,
     reason:
       "deprecated `new Buffer(...)` constructor; use `Buffer.alloc(size)` or `Buffer.from(input)`",

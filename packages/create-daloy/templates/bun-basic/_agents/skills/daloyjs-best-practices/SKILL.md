@@ -358,7 +358,7 @@ reference. Skip that file for ordinary route work.
   depends on them.
 - Do not return errors as `{ status: 4xx, body: {...} }`. Throw a typed
   error.
-- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).
+- Do not add runtime dependencies without checking the install guardrails in `pnpm-workspace.yaml` (installs wait 24h after publish by default).
 - Avoid Node-only APIs in code that may also run on the Cloudflare/Vercel
   templates; the Bun runtime is web-standard friendly but check before
   reaching for `node:fs` etc.

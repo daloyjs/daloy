@@ -63,7 +63,8 @@ export interface ReDosFinding {
   readonly reason: string;
 }
 
-const ALLOW_MARKER_RE = /\/\/\s*daloy-allow-redos\b/;
+// A reason is required: `// daloy-allow-redos: <why>`.
+const ALLOW_MARKER_RE = /\/\/\s*daloy-allow-redos:\s*\S+/;
 
 /**
  * Banned shapes, applied to the *body* of each regex literal (between

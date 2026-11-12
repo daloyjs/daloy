@@ -154,7 +154,129 @@ export const SCANNED_PACKAGE_JSONS: readonly string[] = [
   "packages/create-daloy/templates/cloudflare-worker/package.json",
   "packages/create-daloy/templates/node-basic/package.json",
   "packages/create-daloy/templates/vercel/package.json",
+  "workshop/package.json",
+  "bench/cross-framework/package.json",
+  "compat/typescript-6/package.json",
+  ".clusterfuzzlite/package.json",
 ];
+
+/**
+ * Extra names allowed only in `bench/cross-framework/package.json`: the other
+ * frameworks the benchmark compares against. Kept apart from
+ * {@link ALLOWED_DEP_NAMES} so none of them becomes acceptable in the
+ * framework, the scaffolder, a template or the website.
+ */
+export const BENCH_ONLY_DEP_NAMES: ReadonlySet<string> = new Set([
+  "@elysiajs/cors",
+  "@elysiajs/jwt",
+  "@elysiajs/node",
+  "@fastify/cors",
+  "@fastify/helmet",
+  "@fastify/jwt",
+  "@fastify/rate-limit",
+  "@feathersjs/feathers",
+  "@feathersjs/koa",
+  "@hono/node-server",
+  "@koa/cors",
+  "@koa/router",
+  "@nestjs/common",
+  "@nestjs/core",
+  "@nestjs/jwt",
+  "@nestjs/platform-fastify",
+  "@nestjs/throttler",
+  "autocannon",
+  "cors",
+  "elysia",
+  "esbuild",
+  "express",
+  "express-rate-limit",
+  "fastify",
+  "helmet",
+  "hono",
+  "jsonwebtoken",
+  "koa",
+  "koa-bodyparser",
+  "koa-helmet",
+  "koa-jwt",
+  "koa-ratelimit",
+  "pino",
+  "reflect-metadata",
+  "rxjs",
+]);
+
+/**
+ * `pnpm-workspace.yaml` files whose `overrides:` block is checked. An
+ * override silently swaps what a dependency name resolves to, so its names
+ * get the same scrutiny as a direct dependency.
+ */
+export const SCANNED_WORKSPACE_FILES: readonly string[] = [
+  "pnpm-workspace.yaml",
+  "website/pnpm-workspace.yaml",
+  "bench/cross-framework/pnpm-workspace.yaml",
+  "packages/create-daloy/templates/bun-basic/pnpm-workspace.yaml",
+  "packages/create-daloy/templates/cloudflare-worker/pnpm-workspace.yaml",
+  "packages/create-daloy/templates/node-basic/pnpm-workspace.yaml",
+  "packages/create-daloy/templates/vercel/pnpm-workspace.yaml",
+];
+
+/** Transitive packages this repository pins through `overrides:`. */
+export const ALLOWED_OVERRIDE_NAMES: ReadonlySet<string> = new Set([
+  "brace-expansion",
+  "browserslist",
+  "esbuild",
+  "ip-address",
+  "js-yaml",
+  "source-map-js",
+]);
+
+/** An `overrides:` entry that is unknown or resolves outside the registry. */
+export interface SuspiciousOverride {
+  readonly source: string;
+  readonly name: string;
+  readonly specifier: string;
+  readonly reason: "unknown name" | "non-registry specifier";
+}
+
+/**
+ * Check the `overrides:` block of a `pnpm-workspace.yaml`.
+ *
+ * @param source - File label used in the findings.
+ * @param yaml - Raw file text.
+ * @param allowed - Names permitted as override keys.
+ * @returns One finding per override whose package name is not allowed or
+ *   whose target is an alias, a git source, a URL or a path.
+ */
+export function findSuspiciousOverrides(
+  source: string,
+  yaml: string,
+  allowed: ReadonlySet<string> = ALLOWED_OVERRIDE_NAMES
+): readonly SuspiciousOverride[] {
+  const out: SuspiciousOverride[] = [];
+  let inBlock = false;
+  for (const line of yaml.split(/\r?\n/)) {
+    if (/^overrides:\s*$/.test(line)) {
+      inBlock = true;
+      continue;
+    }
+    if (!inBlock) continue;
+    if (/^\S/.test(line)) break;
+    const match = /^\s+["']?([^"':]+(?::[^"':]+)?)["']?\s*:\s*["']?([^"'#]*?)["']?\s*(?:#.*)?$/.exec(line);
+    if (!match || line.trimStart().startsWith("#")) continue;
+    const key = match[1]!.trim();
+    const specifier = match[2]!.trim();
+    // `name@range` or `parent>name`: the overridden package is the last name.
+    // The range may itself contain `>` (`name@>=5.0.0 <5.0.12`), so read
+    // the name from the front of the last `parent>child` segment instead of
+    // splitting on `>`.
+    const named = /(?:^|[a-z0-9._-]>)(@?[a-z0-9._-]+(?:\/[a-z0-9._-]+)?)(?:@.*)?$/i.exec(key);
+    const name = named?.[1] ?? key;
+    if (!allowed.has(name)) out.push({ source, name, specifier, reason: "unknown name" });
+    else if (!/^[\^~<>=*\d]/.test(specifier) && specifier !== "-") {
+      out.push({ source, name, specifier, reason: "non-registry specifier" });
+    }
+  }
+  return out;
+}
 
 interface PackageJsonLike {
   readonly name?: unknown;
@@ -384,9 +506,36 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    offending.push(...findUnknownDependencyNames(rel, pkg));
+    const allowlist = rel.startsWith("bench/")
+      ? new Set([...ALLOWED_DEP_NAMES, ...BENCH_ONLY_DEP_NAMES])
+      : ALLOWED_DEP_NAMES;
+    offending.push(...findUnknownDependencyNames(rel, pkg, allowlist));
     aliased.push(...findAliasedDependencySpecifiers(rel, pkg));
     nonRegistry.push(...findGitOrUrlDependencySpecifiers(rel, pkg));
+  }
+  const overrides: SuspiciousOverride[] = [];
+  for (const rel of SCANNED_WORKSPACE_FILES) {
+    let yaml: string;
+    try {
+      yaml = await readFile(new URL(rel, repoRoot), "utf8");
+    } catch (err) {
+      console.error(`verify-known-dep-names: could not read ${rel} (${(err as Error).message})`);
+      process.exitCode = 1;
+      return;
+    }
+    overrides.push(...findSuspiciousOverrides(rel, yaml));
+  }
+  if (overrides.length > 0) {
+    console.error(`verify-known-dep-names: ${overrides.length} suspicious pnpm override(s):`);
+    for (const o of overrides) {
+      console.error(`  - ${o.source} → overrides["${o.name}"] = "${o.specifier}" (${o.reason})`);
+    }
+    console.error(
+      "An override changes what a dependency name resolves to for the whole tree. " +
+        "Check the name and add it to ALLOWED_OVERRIDE_NAMES in the same PR; the " +
+        "target must be a registry version range."
+    );
+    process.exitCode = 1;
   }
   if (offending.length === 0 && aliased.length === 0 && nonRegistry.length === 0) return;
   if (offending.length > 0) {

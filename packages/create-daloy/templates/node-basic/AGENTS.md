@@ -69,7 +69,7 @@ AI agents tend to remove the checks that block them ([why](https://www.aikido.de
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use `timingSafeEqual`, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - `.env`, secrets, and private keys never get committed — the template `_gitignore` is the source of truth.
-- Do not bypass safety checks (`--no-verify`, `--ignore-scripts=false`, lowering the 24h `minimum-release-age` in `.npmrc`) without recording the reason in the PR.
+- Do not bypass safety checks (`--no-verify`, `--ignore-scripts=false`, lowering the 24h install cooldown) without recording the reason in the PR.
 - Workflows count as security surface: SHA-pinned actions, `permissions: {}` per job, never delete a failing gate.
 
 ## Process expectations

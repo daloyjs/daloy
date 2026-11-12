@@ -379,7 +379,7 @@ reference. Skip that file for ordinary route work.
   `process.env`) unless `nodejs_compat` is enabled and required.
 - Do not weaken response literal types (`as const`).
 - Do not return errors as `{ status: 4xx, body }`. Throw a typed error.
-- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).
+- Do not add runtime dependencies without checking the install guardrails in `pnpm-workspace.yaml` (installs wait 24h after publish by default).
 - Long-running work belongs in `ctx.waitUntil(...)`, not blocking the
   response.
 - If a route intentionally returns a body the contract cannot describe (a

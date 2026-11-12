@@ -234,6 +234,23 @@ export function scanAgentHooks(raw: string): readonly Omit<AutorunFinding, "file
       why: 'A Claude Code / Gemini CLI `"type": "command"` hook auto-runs a shell command when an agent session opens in the project ("a SessionStart hook is a postinstall for your editor"). This is the Miasma worm\'s Claude/Gemini launcher (SafeDep 2026-06-05). Repo-committed agent settings must not wire command hooks.',
     });
   }
+  // Settings keys whose value is a shell command the agent runs on its own:
+  // credential helpers at session start, the status line on every render.
+  const helpers = [
+    ...text.matchAll(
+      /"(apiKeyHelper|awsAuthRefresh|awsCredentialExport|otelHeadersHelper)"\s*:\s*"((?:\\.|[^"\\])+)"/g,
+    ),
+  ];
+  const statusLine = /"statusLine"\s*:\s*\{[^}]*"command"\s*:\s*"((?:\\.|[^"\\])+)"/.exec(text);
+  if (helpers.length > 0 || statusLine) {
+    const parts = helpers.map((m) => `${m[1]}: ${(m[2] ?? "").slice(0, 120)}`);
+    if (statusLine) parts.push(`statusLine: ${(statusLine[1] ?? "").slice(0, 120)}`);
+    out.push({
+      id: "agent-helper-command",
+      detail: parts.join(" | "),
+      why: "Agent settings keys such as `apiKeyHelper` and `statusLine.command` run a shell command without the user asking: at session start or on every prompt render. A committed value executes on every contributor's machine that opens the project. Repo-committed agent settings must not set them.",
+    });
+  }
   return out;
 }
 
@@ -248,7 +265,8 @@ export function scanAgentHooks(raw: string): readonly Omit<AutorunFinding, "file
  */
 export function scanCursorRule(raw: string): readonly Omit<AutorunFinding, "file">[] {
   const out: Omit<AutorunFinding, "file">[] = [];
-  const alwaysApply = /^\s*alwaysApply\s*:\s*true\s*$/im.test(raw);
+  // A trailing YAML comment (`alwaysApply: true # yes`) is still `true`.
+  const alwaysApply = /^\s*alwaysApply\s*:\s*true\s*(?:#.*)?$/im.test(raw);
   if (!alwaysApply) return out;
   // Imperative "run/execute/invoke … <runtime|script>" instruction.
   const runInstruction =
@@ -278,8 +296,12 @@ export function scanCursorRule(raw: string): readonly Omit<AutorunFinding, "file
  */
 export function scanPackageJsonScripts(raw: string): readonly Omit<AutorunFinding, "file">[] {
   const out: Omit<AutorunFinding, "file">[] = [];
+  // An interpreter run against anything inside an editor / agent config
+  // directory (any extension or none, e.g. `sh .github/setup.sh`,
+  // `node .github/setup`), a JS/TS file there under any launcher, or a
+  // `cd <config-dir> &&` that then runs something.
   const entrypointRe =
-    /[._](?:github|vscode|idea|claude|gemini|cursor)\/[^\s"';|&]*\.(?:c|m)?[jt]sx?\b/i;
+    /[._](?:github|vscode|idea|claude|gemini|cursor)\/[^\s"';|&]*\.(?:c|m)?[jt]sx?\b|\b(?:node|bun|deno|tsx|sh|bash|zsh|python3?|ruby|perl)\s+(?:run\s+)?(?:\.\/)?[._](?:github|vscode|idea|claude|gemini|cursor)\/[^\s"';|&]+|\bcd\s+(?:\.\/)?[._](?:github|vscode|idea|claude|gemini|cursor)\b[^;|]*&&/i;
   let scripts: Record<string, unknown> | undefined;
   try {
     const parsed = JSON.parse(stripJsonComments(raw)) as {
@@ -312,10 +334,57 @@ export function scanPackageJsonScripts(raw: string): readonly Omit<AutorunFindin
   return out;
 }
 
+/**
+ * Flag lifecycle commands in a dev container definition: they run on the
+ * contributor's machine or container as soon as the folder is opened.
+ *
+ * @param raw - Raw `devcontainer.json` content (JSONC tolerated).
+ * @returns Findings (without the `file` field).
+ */
+export function scanDevcontainer(raw: string): readonly Omit<AutorunFinding, "file">[] {
+  const text = stripJsonComments(raw);
+  const keys = [
+    ...text.matchAll(
+      /"(initializeCommand|onCreateCommand|updateContentCommand|postCreateCommand|postStartCommand|postAttachCommand)"\s*:/g,
+    ),
+  ].map((m) => m[1]);
+  if (keys.length === 0) return [];
+  return [
+    {
+      id: "devcontainer-lifecycle-command",
+      detail: `lifecycle command(s): ${[...new Set(keys)].join(", ")}`,
+      why: "Dev container lifecycle commands run automatically when a contributor opens the repository in a container (`initializeCommand` runs on the host). A committed command executes without review on every machine that opens the project.",
+    },
+  ];
+}
+
+/**
+ * Flag an MCP server definition that launches a local command. A stdio
+ * server is started by the agent as soon as the project opens; a remote
+ * (`url`) server is not a local process and is allowed.
+ *
+ * @param raw - Raw MCP config content (JSONC tolerated).
+ * @returns Findings (without the `file` field).
+ */
+export function scanMcpConfig(raw: string): readonly Omit<AutorunFinding, "file">[] {
+  const text = stripJsonComments(raw);
+  const cmds = [...text.matchAll(/"command"\s*:\s*"((?:\\.|[^"\\])+)"/g)].map((m) => m[1] ?? "");
+  if (cmds.length === 0) return [];
+  return [
+    {
+      id: "mcp-stdio-command",
+      detail: `command server(s): ${cmds.map((c) => c.slice(0, 120)).join(" | ")}`,
+      why: "A committed MCP server with a `command` is a local process the coding agent starts when the project opens. Commit remote (`url`) servers only; a stdio server belongs in the contributor's own settings.",
+    },
+  ];
+}
+
 const VSCODE_TASKS_RE = /(?:^|\/)[._]vscode\/tasks\.json$/i;
 const CODE_WORKSPACE_RE = /\.code-workspace$/i;
 const AGENT_SETTINGS_RE = /(?:^|\/)[._](?:claude|gemini)\/settings(?:\.local)?\.json$/i;
-const CURSOR_RULE_RE = /(?:^|\/)[._]cursor\/rules\/[^/]+\.mdc$/i;
+const CURSOR_RULE_RE = /(?:^|\/)[._]cursor\/rules\/(?:[^/]+\/)*[^/]+\.mdc$/i;
+const DEVCONTAINER_RE = /(?:^|\/)(?:[._]devcontainer\/(?:[^/]+\/)?devcontainer\.json|[._]devcontainer\.json)$/i;
+const MCP_CONFIG_RE = /(?:^|\/)(?:[._]mcp\.json|[._](?:cursor|vscode|claude)\/mcp\.json)$/i;
 const PACKAGE_JSON_RE = /(?:^|\/)package\.json$/i;
 const GITHUB_ROOT_SCRIPT_RE = /(?:^|\/)[._]github\/[^/]+\.(?:c|m)?[jt]sx?$/i;
 
@@ -333,6 +402,8 @@ export function isConfigSurface(relPosix: string): boolean {
     AGENT_SETTINGS_RE.test(relPosix) ||
     CURSOR_RULE_RE.test(relPosix) ||
     PACKAGE_JSON_RE.test(relPosix) ||
+    DEVCONTAINER_RE.test(relPosix) ||
+    MCP_CONFIG_RE.test(relPosix) ||
     GITHUB_ROOT_SCRIPT_RE.test(relPosix)
   );
 }
@@ -360,6 +431,12 @@ export function scanConfigFile(relPosix: string, raw: string): readonly AutorunF
   }
   if (PACKAGE_JSON_RE.test(relPosix)) {
     hits.push(...scanPackageJsonScripts(raw));
+  }
+  if (DEVCONTAINER_RE.test(relPosix)) {
+    hits.push(...scanDevcontainer(raw));
+  }
+  if (MCP_CONFIG_RE.test(relPosix)) {
+    hits.push(...scanMcpConfig(raw));
   }
   if (GITHUB_ROOT_SCRIPT_RE.test(relPosix)) {
     hits.push({

@@ -73,6 +73,11 @@ const MAX_FILENAME_LENGTH = 255;
 // eslint-disable-next-line no-control-regex
 const UNSAFE_FILENAME_RE = /[\u0000-\u001f\u007f/\\]/;
 
+/** Bidi controls and zero-width / invisible format characters. */
+const INVISIBLE_FILENAME_RE = /[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff]/;
+/** Windows device names, with or without an extension. */
+const WINDOWS_DEVICE_NAME_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+
 /**
  * Why an upload's file name is unsafe to use as a path component, or
  * `undefined` when it is acceptable. An empty name (a bare `Blob`) is fine.
@@ -84,6 +89,16 @@ function unsafeFilenameReason(name: string): string | undefined {
   if (name === "." || name === "..") return "File name is a relative directory reference";
   if (UNSAFE_FILENAME_RE.test(name)) {
     return "File name contains a path separator or control character";
+  }
+  // Bidi overrides and zero-width characters make a name display as
+  // something else (`evil\u202Egnp.exe` shows as `evilexe.png`).
+  if (INVISIBLE_FILENAME_RE.test(name)) {
+    return "File name contains a bidirectional-override or invisible character";
+  }
+  // Windows resolves these to a device, or strips the trailing dot / space,
+  // so `a.php.` is stored as `a.php` and `CON.txt` is not a file at all.
+  if (WINDOWS_DEVICE_NAME_RE.test(name) || /[. ]$/.test(name)) {
+    return "File name is reserved on Windows or ends with a dot or space";
   }
   return undefined;
 }

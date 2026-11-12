@@ -560,6 +560,8 @@ const MIN_BUN_ENGINE = ">=1.3.0";
 // whose platform needs it, by package.json#packageManager. One constant so the
 // two can never drift.
 const PINNED_PNPM_VERSION = "11.1.3";
+/** Bun used by generated CI. Pinned like pnpm: `latest` would skip the 24h cooldown for the tool itself. */
+const PINNED_BUN_VERSION = "1.4.2";
 
 /**
  * Parse the leading major-version integer out of a version string such as
@@ -884,7 +886,7 @@ function rewritePackageManagerText(raw, packageManager) {
       `- Hey API codegen wired to \`${packageManager} run gen\`.`
     )
     .replace(
-      "- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).",
+      "- Do not add runtime dependencies without checking the install guardrails in `pnpm-workspace.yaml` (installs wait 24h after publish by default).",
       `- Add runtime dependencies with \`${packageManager} install <package>\` and rerun the quality gates after dependency changes.`
     );
 }
@@ -1200,7 +1202,7 @@ function setupBunStep() {
   return `      - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: latest`;
+          bun-version: ${PINNED_BUN_VERSION}`;
 }
 
 function setupNodeStep() {

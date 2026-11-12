@@ -58,6 +58,11 @@ export const PUBLISHABLE_PACKAGES: readonly PublishablePackage[] = [
 const FORBIDDEN_FILENAME_PATTERNS: readonly RegExp[] = [
   /^\.env$/i,
   /^\.env\..+$/i,
+  // Templates author dotfiles with a `_` prefix that the scaffolder renames
+  // (`_env` becomes `.env`), so the same names must be refused in that form.
+  /^_env$/i,
+  /^_env\..+$/i,
+  /^_netrc$/i,
   /^id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i,
   /^\.npmrc$/i,
   /^\.netrc$/i,
@@ -79,6 +84,9 @@ const ALLOWED_FILENAME_PATTERNS: readonly RegExp[] = [
   /^\.env\.example$/i,
   /^\.env\.sample$/i,
   /^\.env\.template$/i,
+  /^_env\.example$/i,
+  /^_env\.sample$/i,
+  /^_env\.template$/i,
 ];
 
 /** Credential-shaped string patterns scanned in every included file. */
@@ -103,6 +111,11 @@ export const CREDENTIAL_CONTENT_PATTERNS: readonly { name: string; re: RegExp }[
   { name: "npm access token (npm_)", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
   { name: "Slack token", re: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/ },
   { name: "Stripe live secret key", re: /\bsk_live_[A-Za-z0-9]{24,}\b/ },
+  { name: "Stripe restricted live key", re: /\brk_live_[A-Za-z0-9]{24,}\b/ },
+  { name: "AWS temporary access key id", re: /\bASIA[0-9A-Z]{16}\b/ },
+  { name: "Anthropic API key", re: /\bsk-ant-[A-Za-z0-9_-]{24,}/ },
+  { name: "OpenAI project key", re: /\bsk-proj-[A-Za-z0-9_-]{24,}/ },
+  { name: "GitLab personal access token", re: /\bglpat-[A-Za-z0-9_-]{20,}/ },
   { name: "Google API key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
   {
     name: "PEM private-key block",

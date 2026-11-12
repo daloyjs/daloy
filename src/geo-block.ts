@@ -38,7 +38,7 @@ import {
   stampForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
+import { normalizeFamily, parseIp, type IpMatcher } from "./ip-match.js";
 
 /**
  * Why a request was (or would have been) blocked by {@link geoBlock}.
@@ -249,6 +249,20 @@ function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) 
 }
 
 /**
+ * Rewrite an IPv4-mapped IPv6 address (`::ffff:1.2.3.4`, the form a
+ * dual-stack listener reports for an IPv4 peer) as dotted IPv4, so a country
+ * lookup keyed on IPv4 does not return "unknown" for it. Any other value is
+ * returned unchanged.
+ */
+function foldMappedIpv4(ip: string): string {
+  if (ip.indexOf(":") === -1) return ip;
+  const parsed = parseIp(ip);
+  if (parsed === undefined || parsed.family !== 6) return ip;
+  const v4 = normalizeFamily(parsed, 4);
+  return v4 === undefined ? ip : `${v4[0]}.${v4[1]}.${v4[2]}.${v4[3]}`;
+}
+
+/**
  * Block or allow requests by client country. Daloy ships no GeoIP database;
  * supply either an IP → country `lookupCountry` (e.g. a MaxMind reader) or a
  * `resolveCountry` that reads an edge-injected country header.
@@ -346,7 +360,7 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
           ip = readRemoteAddress(ctx);
           viaPeer = ip !== undefined;
         }
-        rawCountry = ip ? await lookupCountry!(ip) : undefined;
+        rawCountry = ip ? await lookupCountry!(foldMappedIpv4(ip)) : undefined;
       }
 
       const country = rawCountry && rawCountry.trim() ? rawCountry.trim().toUpperCase() : undefined;

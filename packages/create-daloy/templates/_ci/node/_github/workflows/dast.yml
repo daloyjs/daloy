@@ -135,10 +135,12 @@ __DAST_EXTRA_ENV__
 
       - name: Run OWASP ZAP baseline scan
         run: |
-          docker pull ghcr.io/zaproxy/zaproxy:stable
+          # Pinned by digest (the `stable` tag as of 2026-11-12): a tag can be
+          # repointed, a digest cannot. Refresh it deliberately when updating ZAP.
+          docker pull ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
           docker run --rm --network host \
             -v "$PWD/dast-results:/zap/wrk/:rw" \
-            -t ghcr.io/zaproxy/zaproxy:stable \
+            -t ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
             zap-baseline.py \
               -t http://localhost:3000 \
               -J zap-report.json \

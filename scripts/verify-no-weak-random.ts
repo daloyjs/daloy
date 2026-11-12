@@ -63,7 +63,8 @@ export interface ForbiddenWeakRandomCall {
 const FORBIDDEN_RE =
   /\bMath\s*(?:\?\.|\.)\s*random\b|\bMath\s*\[\s*["'`]random["'`]\s*\]|\{[^}]*\brandom\b[^}]*\}\s*=\s*Math\b/;
 const COMPUTED_RE = /\bMath\s*\[\s*["'`]random["'`]\s*\]/;
-const ALLOW_MARKER_RE = /\/\/\s*daloy-allow-weak-random\b/;
+// A reason is required: `// daloy-allow-weak-random: <why>`.
+const ALLOW_MARKER_RE = /\/\/\s*daloy-allow-weak-random:\s*\S+/;
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
 
@@ -98,8 +99,13 @@ export function findForbiddenWeakRandomCalls(
     const stripped = views.code[i]!;
     if (stripped.trim().length === 0) continue;
     // Computed access keeps its name in a string, which `stripped` blanks.
-    if (!FORBIDDEN_RE.test(stripped) && !COMPUTED_RE.test(working)) continue;
-    if (ALLOW_MARKER_RE.test(raw)) continue;
+    // `Math` at the end of one line and `.random` at the start of the next.
+    const splitAcrossLines =
+      /\bMath\s*$/.test(stripped) && /^\s*(?:\?\.|\.)\s*random\b/.test(views.code[i + 1] ?? "");
+    if (!FORBIDDEN_RE.test(stripped) && !COMPUTED_RE.test(working) && !splitAcrossLines) continue;
+    // The marker must sit in a comment: one inside a string literal survives
+    // comment stripping and does not count.
+    if (ALLOW_MARKER_RE.test(raw) && !ALLOW_MARKER_RE.test(working)) continue;
     out.push({
       file,
       line: i + 1,

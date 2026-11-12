@@ -8,6 +8,7 @@ import {
   findAliasedDependencySpecifiers,
   findGitOrUrlDependencySpecifiers,
   findUnknownDependencyNames,
+  BENCH_ONLY_DEP_NAMES,
 } from "../scripts/verify-known-dep-names.ts";
 
 // Resolve from the current working directory (the repo root in both
@@ -22,7 +23,11 @@ test("every scanned package.json has zero unknown top-level dep names", async ()
   for (const rel of SCANNED_PACKAGE_JSONS) {
     const text = await readFile(new URL(rel, REPO_ROOT), "utf8");
     const pkg = JSON.parse(text);
-    const offending = findUnknownDependencyNames(rel, pkg);
+    // The benchmark manifest may also name the frameworks it compares against.
+    const allowlist = rel.startsWith("bench/")
+      ? new Set([...ALLOWED_DEP_NAMES, ...BENCH_ONLY_DEP_NAMES])
+      : ALLOWED_DEP_NAMES;
+    const offending = findUnknownDependencyNames(rel, pkg, allowlist);
     assert.deepEqual(
       offending,
       [],

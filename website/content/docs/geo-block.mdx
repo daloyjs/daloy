@@ -63,7 +63,7 @@ DaloyJS ships `geoBlock()`, a country allow/deny middleware that maps the client
 
 ## Strategy 1: bring your own IP -\> country lookup [#strategy-1-bring-your-own-ip-country-lookup]
 
-Use any GeoIP reader as an operator dependency. Daloy resolves the client IP and hands it to `lookupCountry`. Return an ISO 3166-1 alpha-2 code (or nothing when the IP can't be mapped).
+Use any GeoIP reader as an operator dependency. Daloy resolves the client IP and hands it to `lookupCountry`. Return an ISO 3166-1 alpha-2 code (or nothing when the IP can't be mapped). An IPv4-mapped IPv6 address (`::ffff:1.2.3.4`, what a dual-stack listener reports for an IPv4 client) is passed to your lookup as plain `1.2.3.4`.
 
 ```ts
 import { createApp } from "@daloyjs/core";
