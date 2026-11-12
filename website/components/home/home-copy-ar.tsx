@@ -350,7 +350,7 @@ export const HOME_COPY_AR: HomeCopy = {
   },
   cta: {
     title: "هل أنت جاهز للإطلاق بإعدادات آمنة افتراضيًا؟",
-    body: "أنشئ مشروعًا في ثوانٍ مع تثبيت معزَّز لمدير الحزم لديك، وتكامل مستمر مولَّد يحظر سكربتات التثبيت، وGitHub Actions مثبّتة، وDependabot، وCODEOWNERS، والتحقق من مصدر lockfile. ثم حافظ على العقد مع نمو التطبيق: التطبيق نفسه يعمل على Node وBun وDeno وCloudflare Workers.",
+    body: "أنشئ مشروعًا في ثوانٍ مع تثبيت معزَّز لمدير الحزم لديك (مهلة الـ24 ساعة تتطلب pnpm 11+ أو npm 12+ أو Bun 1.3+ أو Yarn 4.10+)، وتكامل مستمر مولَّد يحظر سكربتات التثبيت، وGitHub Actions مثبّتة، وDependabot، وCODEOWNERS، والتحقق من مصدر lockfile. ثم حافظ على العقد مع نمو التطبيق: التطبيق نفسه يعمل على Node وBun وDeno وCloudflare Workers.",
     install: "ثبّت DaloyJS",
     tutorial: "ابنِ واجهة برمجة لمكتبة كتب",
     source: "اعرض الشيفرة المصدرية",

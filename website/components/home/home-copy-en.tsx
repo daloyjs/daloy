@@ -286,7 +286,7 @@ export const HOME_COPY_EN: HomeCopy = {
   },
   cta: {
     title: "Ready to ship with secure defaults?",
-    body: "Scaffold a project in seconds with install hardening for your package manager, generated CI that blocks install scripts, pinned GitHub Actions, Dependabot, CODEOWNERS, and lockfile source verification. Then keep the contract as the app grows, the same app runs on Node, Bun, Deno, and Cloudflare Workers.",
+    body: "Scaffold a project in seconds with install hardening for your package manager (the 24-hour cooldown needs pnpm 11+, npm 12+, Bun 1.3+ or Yarn 4.10+), generated CI that blocks install scripts, pinned GitHub Actions, Dependabot, CODEOWNERS, and lockfile source verification. Then keep the contract as the app grows, the same app runs on Node, Bun, Deno, and Cloudflare Workers.",
     install: "Install DaloyJS",
     tutorial: "Build a bookstore API",
     source: "View source",

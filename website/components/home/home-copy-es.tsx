@@ -370,7 +370,7 @@ export const HOME_COPY_ES: HomeCopy = {
   },
   cta: {
     title: "¿Todo listo para llevar tu API a producción con seguridad por defecto?",
-    body: "Crea un proyecto en segundos con una instalación reforzada para tu gestor de paquetes, un CI generado que bloquea los scripts de instalación, GitHub Actions fijadas, Dependabot, CODEOWNERS y verificación del origen de los paquetes en el lockfile. Después, conserva el contrato a medida que la aplicación crece: la misma aplicación funciona en Node, Bun, Deno y Cloudflare Workers.",
+    body: "Crea un proyecto en segundos con una instalación reforzada para tu gestor de paquetes (la espera de 24 horas requiere pnpm 11+, npm 12+, Bun 1.3+ o Yarn 4.10+), un CI generado que bloquea los scripts de instalación, GitHub Actions fijadas, Dependabot, CODEOWNERS y verificación del origen de los paquetes en el lockfile. Después, conserva el contrato a medida que la aplicación crece: la misma aplicación funciona en Node, Bun, Deno y Cloudflare Workers.",
     install: "Instalar DaloyJS",
     tutorial: "Crea la API de una librería",
     source: "Ver el código fuente",

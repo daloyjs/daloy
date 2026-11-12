@@ -341,7 +341,7 @@ export const HOME_COPY_JA: HomeCopy = {
   },
   cta: {
     title: "セキュアバイデフォルトで出荷する準備はできましたか？",
-    body: "数秒でプロジェクトを作成できます。パッケージマネージャーのインストール設定を強化し、インストールスクリプトを遮断する CI、バージョンを固定した GitHub Actions、Dependabot、CODEOWNERS、lockfile の取得元検証を生成します。アプリが成長してもコントラクトは一貫したまま、同じアプリが Node、Bun、Deno、Cloudflare Workers で動きます。",
+    body: "数秒でプロジェクトを作成できます。パッケージマネージャーのインストール設定を強化し（24 時間の待機期間には pnpm 11 以上、npm 12 以上、Bun 1.3 以上、Yarn 4.10 以上のいずれかが必要です）、インストールスクリプトを遮断する CI、バージョンを固定した GitHub Actions、Dependabot、CODEOWNERS、lockfile の取得元検証を生成します。アプリが成長してもコントラクトは一貫したまま、同じアプリが Node、Bun、Deno、Cloudflare Workers で動きます。",
     install: "DaloyJS をインストール",
     tutorial: "書店 API を構築する",
     source: "ソースコードを見る",

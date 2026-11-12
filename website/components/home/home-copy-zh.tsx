@@ -342,7 +342,7 @@ export const HOME_COPY_ZH: HomeCopy = {
   },
   cta: {
     title: "准备好以默认安全的方式交付了吗？",
-    body: "几秒钟就能创建项目：为你的包管理器加固安装配置，生成会拦截安装脚本的 CI，固定版本的 GitHub Actions、Dependabot、CODEOWNERS 以及 lockfile 来源校验。随着应用增长，契约始终保持一致，同一个应用可以运行在 Node、Bun、Deno 和 Cloudflare Workers 上。",
+    body: "几秒钟就能创建项目：为你的包管理器加固安装配置（24 小时等待期需要 pnpm 11+、npm 12+、Bun 1.3+ 或 Yarn 4.10+），生成会拦截安装脚本的 CI，固定版本的 GitHub Actions、Dependabot、CODEOWNERS 以及 lockfile 来源校验。随着应用增长，契约始终保持一致，同一个应用可以运行在 Node、Bun、Deno 和 Cloudflare Workers 上。",
     install: "安装 DaloyJS",
     tutorial: "构建图书商店 API",
     source: "查看源码",

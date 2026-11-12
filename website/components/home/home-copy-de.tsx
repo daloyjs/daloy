@@ -352,7 +352,7 @@ export const HOME_COPY_DE: HomeCopy = {
   },
   cta: {
     title: "Bereit, mit sicheren Standardeinstellungen auszuliefern?",
-    body: "Legen Sie in Sekunden ein Projekt an, mit gehärteter Installation für Ihren Paketmanager, generierter CI, die Installationsskripte blockiert, gepinnten GitHub Actions, Dependabot, CODEOWNERS und Prüfung der Lockfile-Herkunft. Behalten Sie dann den Vertrag bei, während die Anwendung wächst: Dieselbe Anwendung läuft auf Node, Bun, Deno und Cloudflare Workers.",
+    body: "Legen Sie in Sekunden ein Projekt an, mit gehärteter Installation für Ihren Paketmanager (die 24-Stunden-Wartezeit setzt pnpm 11+, npm 12+, Bun 1.3+ oder Yarn 4.10+ voraus), generierter CI, die Installationsskripte blockiert, gepinnten GitHub Actions, Dependabot, CODEOWNERS und Prüfung der Lockfile-Herkunft. Behalten Sie dann den Vertrag bei, während die Anwendung wächst: Dieselbe Anwendung läuft auf Node, Bun, Deno und Cloudflare Workers.",
     install: "DaloyJS installieren",
     tutorial: "Eine Buchladen-API bauen",
     source: "Quellcode ansehen",
