@@ -5,6 +5,6 @@
   "description": "Holds the TypeScript 6 compiler that `pnpm verify:ts-consumer-compat` uses to prove @daloyjs/core works in apps on TypeScript 6. Never published.",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }
