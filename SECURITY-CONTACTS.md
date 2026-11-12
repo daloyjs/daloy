@@ -77,12 +77,17 @@ at least once per quarter with a simulated report. The exercise verifies that:
 
 > `_<date>_ — quarterly disclosure exercise completed. Findings: <short summary>.`
 
+> _2026-11-12_ — quarterly disclosure exercise completed. Findings: one
+> contact had a backup email on an employer-owned domain on their GitHub
+> account, now removed; the `npm-publish` environment carried a `v*` branch
+> deployment rule that no release flow uses.
+
 The audit script reads the `<!-- last-exercise: YYYY-MM-DD -->` marker below,
 warns when the date is older than 90 days, and refuses with a non-zero exit
 when older than 180 days so a missed quarter fails CI loud instead of silently
 aging out.
 
-<!-- last-exercise: 2026-05-20 -->
+<!-- last-exercise: 2026-11-12 -->
 
 ---
 
