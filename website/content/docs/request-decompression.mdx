@@ -64,7 +64,9 @@ app.use(requestDecompression({
 }));
 ```
 
-The middleware runs as a **deferred `preBody` hook**. Wherever you register it, it waits until the request has matched a route and every other `preBody` hook in the chain has passed: `bearerAuth()`, `apiKeyAuth()`, `jwk()`, `session()`, `rateLimit()`, `ipAccessControl()`, `csrf()`, and the rest. An unauthenticated, rate-limited, or unrouted (`404` / `405`) request is rejected before a single compressed byte is read or inflated, and the work stays inside the `requestTimeoutMs` budget.
+The middleware runs as a **deferred `preBody` hook**. Wherever you register it, it waits until the request has matched a route and every other `preBody` hook in the chain has passed: `bearerAuth()`, `basicAuth()`, `jwk()`, `httpSignatureAuth()`, `clientCertAuth()`, `ipRestriction()`, `geoBlock()`, `botGuard()`, and the rest. An unauthenticated, IP-blocked, or unrouted (`404` / `405`) request is rejected before a single compressed byte is read or inflated, and the work stays inside the `requestTimeoutMs` budget.
+
+`session()`, `csrf()` and `rateLimit()` run in `beforeHandle`, after the body has been read, so they do not shield the inflation. For those requests the bound is the decompression caps themselves (`maxDecompressedBytes` and `maxRatio`) and the route's `bodyLimitBytes`.
 
 Once it runs, it installs the inflated bytes as the request body, so schema-validated bodies and handlers that read the raw body (`request.text()`, `request.json()`, `request.arrayBuffer()`, `request.bytes()`, `request.blob()`, `request.formData()`, `request.body`, `request.clone()`) all see the decompressed payload.
 

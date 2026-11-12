@@ -45,7 +45,7 @@ readBodyLimited(req: Request, limit: number): Promise<Uint8Array>;
 safeJsonParse(text: string | Uint8Array): unknown;          // refuses __proto__, constructor, prototype keys
 isForbiddenObjectKey(key: string): boolean;
 hasMongoOperatorKeys(value: unknown): boolean;
-assertNoMongoOperators(value: unknown, where?: string): void; // refuses $-prefixed keys on user input
+assertNoMongoOperators(value: unknown): void;               // throws BadRequestError on $-prefixed keys
 
 // Headers
 sanitizeHeaderName(name: string): string;
@@ -80,7 +80,7 @@ verifyWebhookSignature(opts: {
 sanitizeFilename(name: string): string;                     // also strips bidi, format, and C1 control chars
 contentDisposition(filename: string,
                    type?: "attachment" | "inline"): string;  // default "attachment"; RFC 6266 + RFC 8187 (since 1.3.7)
-assertSafeRelativePath(p: string, where?: string): void;    // refuses .. escape, absolute, NUL
+assertSafeRelativePath(p: string): string;  // returns p; throws BadRequestError on .. escape, absolute, NUL
 ```
 
 `contentDisposition()` (since 1.3.7) builds a download header from an untrusted filename. It runs the name through `sanitizeFilename()`, emits an ASCII-only quoted `filename` fallback, and adds an RFC 8187 `filename*` parameter when the name is not plain ASCII. The result is always a valid Latin-1 header value, and it throws `BadRequestError` when the name sanitizes to nothing.

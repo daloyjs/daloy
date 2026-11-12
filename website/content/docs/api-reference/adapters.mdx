@@ -169,7 +169,11 @@ Since 1.16.0. `context.ip` is attached as the request's connection peer (when it
 ## `@daloyjs/core/fastly` [#daloyjs-core-fastly]
 
 ```ts
-toFastlyHandler(app: App): (req: Request, waitUntil?: (p: Promise<unknown>) => void) => Promise<Response>;
+toFastlyHandler(app: App): (
+  req: Request,
+  waitUntil?: (p: Promise<unknown>) => void,
+  clientAddress?: string, // event.client.address; becomes the trusted peer when it is an IP
+) => Promise<Response>;
 installFastlyListener(app: App): void;   // wires addEventListener("fetch", ...) and event.waitUntil
 ```
 

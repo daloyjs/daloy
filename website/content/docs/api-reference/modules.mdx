@@ -73,7 +73,7 @@ interface WebhookDefinition {
 ### Discriminated unions (OpenAPI)
 
 ```ts
-discriminator(opts: DiscriminatorObject): unknown;            // { propertyName, mapping? }
+discriminator(propertyName: string, mapping?: Record<string, string>): DiscriminatorObject;
 discriminatedUnion(prop: string, branches: StandardSchemaV1[],
                    opts?: DiscriminatedUnionOptions): StandardSchemaV1;
 ```
@@ -421,9 +421,9 @@ interface NDJSONResponseOptions extends StreamOptions { status?: number; headers
 
 ```ts
 fileField(opts?: FileFieldOptions): FileFieldSchema<UploadedFile>;
-multipartObject<S>(shape: S, opts?: MultipartObjectOptions): StandardSchemaV1;
-isFileFieldSchema(value: unknown): boolean;
-isMultipartObjectSchema(value: unknown): boolean;
+multipartObject<S>(shape: S, opts?: MultipartObjectOptions): MultipartSchema<S>;  // a StandardSchemaV1
+isFileFieldSchema(value: unknown): value is FileFieldSchema;
+isMultipartObjectSchema(value: unknown): value is MultipartSchema<MultipartShape>;
 
 type UploadedFile = Blob & { readonly name?: string };
 
@@ -488,14 +488,14 @@ DEFAULT_WS_IDLE_TIMEOUT_SECONDS;    // 120
 
 // Frame primitives (for custom adapters)
 parseSubprotocols(header: string | null | undefined): string[];
-validateSelectedSubprotocol(selected, allowed): boolean;
-checkWebSocketOrigin(origin, allowed): boolean;
+validateSelectedSubprotocol(selected: string, offered: readonly string[]): string;  // returns it, or throws WebSocketProtocolError
+checkWebSocketOrigin(request: Request, allowedOrigins): { ok: true } | { ok: false; reason: string };
 parseFrame(buf: Uint8Array, opts?): ParsedFrame | typeof FRAME_INCOMPLETE;
 encodeFrame(opts): Uint8Array;
 encodeClosePayload(code: number, reason?: string): Uint8Array;
 decodeClosePayload(payload: Uint8Array): { code: number; reason: string };
-encodeSendPayload(data: string | ArrayBufferLike | ArrayBufferView): Uint8Array;
-computeAcceptKey(secWebSocketKey: string): string;
+encodeSendPayload(data: string | ArrayBufferLike | ArrayBufferView): { opcode: number; payload: Uint8Array };
+computeAcceptKey(secWebSocketKey: string): Promise<string>;
 
 class WebSocketRegistry {}
 class WebSocketProtocolError extends Error {}

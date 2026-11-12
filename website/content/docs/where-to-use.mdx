@@ -246,13 +246,14 @@ See [WebSocket primitives](/docs/websocket).
 
 The Model Context Protocol is JSON-RPC 2.0, transported over either stdio or Streamable HTTP. Streamable HTTP uses POST and GET requests, and can use Server-Sent Events when the server needs to stream multiple messages. DaloyJS handles the HTTP/SSE building blocks natively:
 
+- A first-party MCP handler (`createMcpHandler()` + `mcpRoutes()`) over Streamable HTTP
 - Routes for `POST /` (JSON-RPC requests) and SSE streaming back
 - Schema validation on every request
 - Bearer auth + scopes for tool authorization
 - `fetchGuard` for any tool that makes outbound HTTP
 - Streaming helpers at `@daloyjs/core/streaming`
 
-You bring the MCP framing (initialize, tools/list, tools/call) on top. DaloyJS won't generate it for you, there's no `defineTool()` primitive yet, but the HTTP, validation, bearer-auth, scopes, and SSE pieces are in-box. For public remote MCP servers, implement the MCP authorization metadata and OAuth flow on top.
+The MCP framing (initialize, tools/list, tools/call) is in the box too: `createMcpHandler()` takes your tools with their input schemas, and `mcpRoutes()` mounts the endpoint, with a production boot guard that refuses to start when it has no auth hook. See [MCP](/docs/mcp). For public remote MCP servers, you still implement the MCP authorization metadata and OAuth flow on top.
 
 ### 11. gRPC server: no
 

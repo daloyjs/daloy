@@ -328,7 +328,9 @@ class ServiceUnavailableError    extends HttpError {} // 503 - sets Retry-After 
 // would set a header outside the safe allowlist.
 const SAFE_CUSTOM_ERROR_RESPONSE_HEADERS: ReadonlySet<string>;
 class MessageLeakError extends Error {}
-function checkCustomErrorResponseHeaders(headers: Headers | Record<string, string>): void;
+function checkCustomErrorResponseHeaders(
+  headers: Headers | Record<string, string>,
+): Array<{ name: string; reason: string }>; // the disallowed headers; empty when all are fine
 
 function httpError(opts: HttpErrorOptions): HttpError;  // typed factory
 ```
