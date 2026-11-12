@@ -3458,3 +3458,51 @@ test("agent skills only reference APIs that exist", async () => {
   assert.doesNotMatch(cf, /buildApp\(env\)/, "never build the App per request (resets the rateLimit store)");
   assert.doesNotMatch(cf, /export default \{\s*fetch:/, "export toFetchHandler(app) directly");
 });
+
+test("[unhappy] bun scaffolds declare an empty trustedDependencies so no install script runs", async () => {
+  for (const template of ["node-basic", "bun-basic", "cloudflare-worker", "vercel"]) {
+    const { tmpDir, dir } = await scaffold(template, ["--package-manager", "bun"]);
+    try {
+      const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
+      assert.deepEqual(pkg.trustedDependencies, [], `${template}: Bun must not run default-trusted lifecycle scripts`);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("[happy] non-bun scaffolds do not gain a trustedDependencies field", async () => {
+  const { tmpDir, dir } = await scaffold("node-basic");
+  try {
+    const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
+    assert.equal(pkg.trustedDependencies, undefined);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("deno-basic ships a 24h dependency cooldown", async () => {
+  const deno = JSON.parse(await readFile(path.join(TEMPLATE_DIR("deno-basic"), "deno.json"), "utf8"));
+  assert.equal(deno.minimumDependencyAge, "P1D");
+});
+
+test("[unhappy] --force does not write through a symlink in the target directory", async () => {
+  const { symlink, lstat } = await import("node:fs/promises");
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-symlink-"));
+  try {
+    const victim = path.join(tmpDir, "victim.txt");
+    await writeFile(victim, "ORIGINAL");
+    const dir = path.join(tmpDir, "proj");
+    await mkdir(dir);
+    await symlink(victim, path.join(dir, "AGENTS.md"));
+    const result = await runCreateDaloy(
+      ["proj", "--force", "--no-install", "--no-git", "--no-ci", "--yes"],
+      { cwd: tmpDir },
+    );
+    assert.equal(result.exitCode, 0, result.output);
+    assert.equal(await readFile(victim, "utf8"), "ORIGINAL", "file outside the project must be untouched");
+    assert.equal((await lstat(path.join(dir, "AGENTS.md"))).isSymbolicLink(), false);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});

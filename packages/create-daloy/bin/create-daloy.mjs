@@ -12,6 +12,7 @@ import {
   copyFile,
   rm,
   stat,
+  lstat,
   chmod,
   access,
 } from "node:fs/promises";
@@ -715,6 +716,11 @@ async function copyTemplate(src, dest) {
     if (entry.isDirectory()) {
       await copyTemplate(from, to);
     } else if (entry.isFile()) {
+      // With --force the target may already hold a symlink at this path.
+      // copyFile/chmod follow it and would overwrite a file outside the
+      // project, so drop the link and write a regular file in its place.
+      const existing = await lstat(to).catch(() => null);
+      if (existing?.isSymbolicLink()) await rm(to);
       await copyFile(from, to);
       // Preserve the source file's mode so executable templates (e.g.
       // `.githooks/pre-push`, the localhost contract gate) stay executable in
@@ -757,6 +763,13 @@ async function patchPackageJson(dir, projectName, packageManager, template) {
       const field = packageManager === "yarn" ? "resolutions" : "overrides";
       json[field] = { ...overrides, ...json[field] };
     }
+  }
+  // Bun does not read `.npmrc` ignore-scripts, and it runs lifecycle scripts
+  // for its built-in default-trusted list (esbuild, sharp, workerd, ...)
+  // unless the project declares `trustedDependencies`. An explicit empty list
+  // keeps the "blocked install scripts" promise on the Bun path too.
+  if (packageManager === "bun") {
+    json.trustedDependencies = json.trustedDependencies ?? [];
   }
   if (packageManager === "pnpm") {
     json.engines = { ...json.engines, pnpm: `>=${MIN_PNPM_MAJOR}.0.0` };

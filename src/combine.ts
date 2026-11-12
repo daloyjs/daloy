@@ -170,6 +170,12 @@ export function some(...layers: Hooks[]): Hooks {
     // detectable, and put it back afterwards (see `finally`).
     const priorOptionalPass = state[AUTH_OPTIONAL_PASS] === true;
     if (priorOptionalPass) delete state[AUTH_OPTIONAL_PASS];
+    // Likewise AUTH_RAN: it is request-wide, so an earlier auth hook's record
+    // would make a no-credential optional branch look like it authenticated
+    // and win outright. Clear it for the branches (a branch that really
+    // authenticates sets it itself) and restore it afterwards.
+    const priorAuthRan = state[AUTH_RAN] === true;
+    if (priorAuthRan) delete state[AUTH_RAN];
     let sawOptionalPassthrough = false;
     const snapshot = snapshotState(state);
     const finalizerMark = requestFinalizerMark(ctx);
@@ -207,12 +213,17 @@ export function some(...layers: Hooks[]): Hooks {
       return undefined;
     } finally {
       if (priorOptionalPass) state[AUTH_OPTIONAL_PASS] = true;
+      if (priorAuthRan) state[AUTH_RAN] = true;
     }
   };
   if (usePreBody) {
     return { ...base, preBody: runCandidates };
   }
-  if (hadConditionalScopes) {
+  // A pre-body gate (requireRoles(), bearerAuth(), ...) promises to run before
+  // a stored response can be replayed. When a mixed stack demotes the whole
+  // some() to beforeHandle, keep that promise by ordering it ahead of
+  // responseCache()/idempotency(), exactly as for conditional scope gates.
+  if (hadConditionalScopes || preBodyCandidates.length > 0) {
     (runCandidates as unknown as Record<PropertyKey, unknown>)[
       CONDITIONAL_SCOPES_BEFORE_REPLAY_MARKER
     ] = true;

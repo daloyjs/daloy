@@ -8,6 +8,7 @@
  */
 import type { App } from "../app.js";
 import { setConnInfo } from "../conn-info.js";
+import { badRequestTargetResponse, canonicalWebRequest } from "../internal-request-target.js";
 
 /** Options forwarded to `Deno.serve` by {@link serve}. */
 export interface DenoServeOptions {
@@ -88,7 +89,13 @@ export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
   if (opts.onError) init.onError = opts.onError;
 
   const servesTls = Boolean(opts.cert && opts.key);
-  const server = denoServe(init, (req, info) => {
+  const server = denoServe(init, (raw, info) => {
+    // `Deno.serve` builds `request.url` from the raw Host header and
+    // request-target without WHATWG parsing. Refuse an unsafe authority and
+    // canonicalize a path that parsing would rewrite, so the router and
+    // `new URL()` consumers (`except()`, tenancy, allowedHosts) cannot disagree.
+    const req = canonicalWebRequest(raw);
+    if (req === undefined) return badRequestTargetResponse();
     // Fulfil the conn-info contract with the immediate TCP peer from
     // `Deno.serve`'s handler info, so `getConnInfo` / `resolveClientIp` /
     // `behindProxy` work on Deno. Never derived from spoofable headers.

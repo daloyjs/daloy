@@ -40,6 +40,72 @@ For the forward-looking plan and the full thematic release log, see
   AGENTS.md). The docs MCP server's primer now points Express migrations at
   `get_doc("migrating/express")` and the skill.
 
+### Security
+
+Findings from the 2026-11-12 audit pass, which covered the surfaces earlier
+passes left out (runtime adapters other than Node, the scaffolder, CI gates,
+the docs site) and the code added by the previous fixes. Each was reproduced
+before the fix. Regression tests: `tests/audit-2026-11-12-third-pass.test.ts`,
+`packages/create-daloy/test/templates.test.mjs`, and the website suite.
+
+- **Header-mode `clientCertAuth` inside a group or plugin skipped the proxy
+  guard (high).** The `mtls-header-without-proxy` boot guard and the
+  per-request spoofable-header refusal only saw registrations made on the
+  root App, so `child.use(clientCertAuth({ header }))` in an `app.group()`
+  callback or `app.register()` plugin accepted a forged certificate header.
+  Child apps now share that bookkeeping with the root.
+- **`some()` admitted a request behind an earlier auth hook (high).** With an
+  app-level auth hook in front, an optional-mode branch that saw no
+  credential won `some(optional, strict)` outright, so the strict branch never
+  ran. The request-wide "auth ran" record is now cleared while branches run.
+- **`some()` could serve a stored response past `requireRoles()` (medium).**
+  When a mixed stack moved `some()` to `beforeHandle`, a pre-body gate inside
+  it ran after `responseCache()` / `idempotency()`. It is now ordered ahead
+  of replay.
+- **Deno adapter: path and `Host` differentials (high).** `Deno.serve` hands
+  over an unparsed URL, so `/api/users/..\health` reached a protected route
+  while `except()` saw an exempt path, and `Host: good.example:80@evil.example`
+  passed `allowedHosts`. The adapter now refuses an unsafe authority with
+  `400` and canonicalizes the path; `allowedHosts` fails closed on userinfo on
+  every adapter.
+- **Node WebSocket: one frame could stop the process (high).** A CLOSE frame
+  with an invalid UTF-8 reason threw out of the socket `data` listener. It is
+  now a `1002` protocol error, and the listener no longer lets any error
+  escape.
+- **Node WebSocket: closed connections kept working (medium).** After a
+  server-initiated close, messages still reached `message()` and the
+  validator, and a peer that never finished the handshake kept its socket.
+  Messages are dropped once a close starts and the socket is destroyed after
+  5 seconds.
+- **Lambda adapter** refuses event paths containing control characters or a
+  trailing space, which the URL parser silently strips (medium).
+- **Forwarded `ip:port` entries** (Azure App Service) now resolve to the
+  client address instead of no identity (medium).
+- **Fastly adapter** attaches `event.client.address` as the trusted peer;
+  `toFastlyHandler()` accepts it as an optional third argument (medium).
+- **Bun adapter** answers a missing or malformed `Host` with `400` instead of
+  a logged `500` (low).
+- **`rejectScriptableImages`** now catches an SVG root split across the probe
+  window, a quoted `]>` inside a DOCTYPE subset, and a non-ASCII namespace
+  prefix (low).
+- **create-daloy:** Bun scaffolds declare `trustedDependencies: []` so Bun's
+  default-trusted packages cannot run install scripts; the Deno template sets
+  `minimumDependencyAge: "P1D"`; `--force` no longer writes through a symlink
+  in the target directory.
+- **CI gates:** `verify:actions-pinned` reports `uses` written in YAML forms
+  it previously skipped (quoted key, flow mapping, value on the next line,
+  explicit key) and requires `docker://` references to be digest-pinned;
+  `verify:no-runtime-deps` also checks `optionalDependencies`, non-optional
+  `peerDependencies` and bundled dependencies.
+- **Docs site:** `@modelcontextprotocol/server` 2.0.0 → 2.4.0 and
+  `mcp-handler` 2.1.0 → 2.3.1 (three high-severity advisories on the live
+  `/mcp` endpoint), `sharp` → 0.35.5, `shadcn` → 4.23.0 and moved to
+  `devDependencies`, plus overrides for `source-map-js`, `brace-expansion`
+  and `ip-address`. `pnpm audit --prod` goes from 48 advisories to none.
+  `/mcp` refuses JSON-RPC batches over 10 messages and charges one
+  rate-limit token per message; the rate limiter's key map is bounded and
+  IPv6 clients are keyed by /64.
+
 ## [1.23.0] - 2026-11-08
 
 ### Added

@@ -10,8 +10,10 @@ import {
   verifyDocsReadAccessToken,
 } from "../../lib/site-oauth";
 import {
+  clientBucket,
   createMemoryRateLimiter,
   rateLimitHeaders,
+  rateLimitKey,
 } from "../../lib/site-rate-limit";
 
 const { GET: getUnversionedApi } = await import(
@@ -282,6 +284,57 @@ test("memory rate limiter returns 429 after the quota is exhausted", () => {
   assert.equal(headers["RateLimit-Remaining"], "0");
   assert.match(headers.RateLimit, /r=0/);
   assert.match(headers["RateLimit-Policy"], /q=2/);
+});
+
+test("[happy] memory rate limiter sweeps expired buckets once it is full", () => {
+  const limiter = createMemoryRateLimiter(2, 1_000, 3);
+  limiter.take("a", 0);
+  limiter.take("b", 0);
+  limiter.take("c", 0);
+  assert.equal(limiter.size(), 3);
+  // All three windows have expired by t=2000, so the new key replaces them.
+  limiter.take("d", 2_000);
+  assert.equal(limiter.size(), 1);
+});
+
+test("[unhappy] memory rate limiter stays bounded under a flood of live keys", () => {
+  const limiter = createMemoryRateLimiter(2, 60_000, 100);
+  for (let i = 0; i < 5_000; i++) {
+    limiter.take(`key-${i}`, i);
+  }
+  assert.ok(limiter.size() <= 100);
+  // A caller still inside the map keeps its count: the limit still applies.
+  limiter.take("key-4999", 5_000);
+  assert.equal(limiter.take("key-4999", 5_001).limited, true);
+});
+
+test("[happy] rate-limit keys leave IPv4 addresses alone", () => {
+  assert.equal(clientBucket("203.0.113.7"), "203.0.113.7");
+  assert.equal(clientBucket("::ffff:203.0.113.7"), "203.0.113.7");
+});
+
+test("[unhappy] rotating through one IPv6 /64 lands in a single bucket", () => {
+  const keys = new Set(
+    [
+      "2001:db8:1:2::1",
+      "2001:db8:1:2:aaaa:bbbb:cccc:dddd",
+      "2001:0DB8:0001:0002:ffff:ffff:ffff:ffff",
+      "[2001:db8:1:2::9]",
+      "2001:db8:1:2::9%eth0",
+    ].map(clientBucket),
+  );
+  assert.deepEqual([...keys], ["2001:db8:1:2::/64"]);
+  assert.notEqual(clientBucket("2001:db8:1:3::1"), "2001:db8:1:2::/64");
+  assert.equal(clientBucket("::1"), "0:0:0:0::/64");
+
+  const request = new Request("http://localhost/api/v1", {
+    headers: { "x-forwarded-for": "2001:db8:1:2::42, 10.0.0.1" },
+  });
+  assert.equal(rateLimitKey(request), "2001:db8:1:2::/64");
+});
+
+test("[unhappy] an oversized client address cannot become an unbounded key", () => {
+  assert.ok(clientBucket("x".repeat(10_000)).length <= 64);
 });
 
 test("homepage SSR markup has an H1 and nested H2/H3 headings", async () => {

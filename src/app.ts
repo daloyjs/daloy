@@ -1432,6 +1432,12 @@ function hostnameOfUrl(url: string): string {
     }
   }
   let host = url.slice(start + 3, end);
+  // Userinfo, a backslash or an escape in the authority means WHATWG parsing
+  // would name a different host than this slice. Fail closed.
+  for (let i = 0; i < host.length; i++) {
+    const c = host.charCodeAt(i);
+    if (c === 64 /* @ */ || c === 92 /* \\ */ || c === 37 /* % */) return "";
+  }
   if (host.charCodeAt(0) === 91 /* [ */) {
     const close = host.indexOf("]");
     host = close === -1 ? host : host.slice(0, close + 1);
@@ -5206,6 +5212,11 @@ export class App<
     (child as any).webSocketRoutes = this.webSocketRoutes;
     (child as any).routeSecurityMarkers = this.routeSecurityMarkers;
     (child as any).bootGuard = this.bootGuard;
+    // Security bookkeeping written by assertSecureHookConfig() is read only on
+    // the root (boot guards, per-request spoofable-header refusal). Share it so
+    // a hook registered inside a group or plugin is seen there too.
+    (child as any).clientCertHeaderModeNames = this.clientCertHeaderModeNames;
+    (child as any).corsPolicies = this.corsPolicies;
     (child as any).log = this.log;
     (child as any).prefix = joinPath(this.prefix, prefix);
     (child as any).groupHooks = [

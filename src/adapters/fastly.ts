@@ -18,6 +18,8 @@
  * multipart helpers that rely on `node:stream`).
  */
 import type { App } from "../app.js";
+import { setConnInfo } from "../conn-info.js";
+import { parseIp } from "../ip-match.js";
 
 /**
  * Wrap an {@link App} in a `(req) => Promise<Response>` function suitable for Fastly Compute.
@@ -28,7 +30,10 @@ import type { App } from "../app.js";
  * {@link installFastlyListener}, which does that for you.
  *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
- * @returns A web-standard handler delegating to {@link App.fetch}.
+ * @returns A web-standard handler delegating to {@link App.fetch}. Its optional
+ *   third argument is the platform-reported client address
+ *   (`event.client.address`); when it is an IP literal it becomes the request's
+ *   trusted peer address for `behindProxy: "none"`.
  * @throws Error in production when `app.assertSecureConfig()` finds a boot-guard
  *   violation, so an insecure route table fails at startup, not on the first request.
  */
@@ -37,11 +42,18 @@ export function toFastlyHandler(
 ): (
   req: Request,
   waitUntil?: (promise: Promise<unknown>) => void,
+  clientAddress?: string,
 ) => Promise<Response> {
   // Refuse an insecure configuration at cold start (and so at deploy time
   // where the platform validates startup) instead of on the first request.
   app.assertSecureConfig();
-  return async (req, waitUntil) => {
+  return async (req, waitUntil, clientAddress) => {
+    // Fastly reports the connecting client on the event, not in a header.
+    // Attach it as the trusted peer so IP-keyed guards do not have to read a
+    // client-settable `X-Forwarded-For`. Anything that is not an IP is ignored.
+    if (clientAddress !== undefined && parseIp(clientAddress) !== undefined) {
+      setConnInfo(req, { remoteAddress: clientAddress, tls: true });
+    }
     const res = await app.fetch(req);
     const telemetry = app.telemetry;
     if (telemetry !== undefined) {
@@ -57,6 +69,8 @@ interface FastlyFetchEvent {
   request: Request;
   respondWith: (response: Response | Promise<Response>) => void;
   waitUntil?: (promise: Promise<unknown>) => void;
+  /** Connecting client, as reported by Fastly Compute. */
+  client?: { address?: string };
 }
 
 /**
@@ -81,6 +95,8 @@ export function installFastlyListener(app: App): void {
     throw new Error("Fastly Compute runtime not detected: globalThis.addEventListener is missing");
   }
   g.addEventListener("fetch", (event) =>
-    event.respondWith(handler(event.request, event.waitUntil?.bind(event))),
+    event.respondWith(
+      handler(event.request, event.waitUntil?.bind(event), event.client?.address),
+    ),
   );
 }

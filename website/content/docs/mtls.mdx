@@ -116,6 +116,9 @@ When a proxy terminates TLS, it forwards the verified client identity in request
 <p>Since 1.23.0 this pairing is enforced, not just documented. Registering <code>clientCertAuth({"{"} header {"}"})</code> under <code>secureDefaults</code> refuses to boot — in production <em>and</em> with no environment signal — unless the App declares the topology: <code>app({"{"} behindProxy: {"{"} hops: 1 {"}}"}{"}"})</code> (or <code>{"{"} cidrs: [...] {"}"}</code> / <code>"loopback"</code>, or the coarser <code>trustProxy: true</code>). The explicitly proxy-less postures <code>behindProxy: "none"</code> and <code>trustProxy: false</code> contradict header mode and are refused too. Independently, the per-request spoofable-header guard now refuses requests carrying <code>x-forwarded-client-cert</code> or your configured structured header names when no posture is declared — the same treatment <code>x-forwarded-for</code> already had. See <a href="/docs/security/boot-guards#13-mtls-header-without-proxy">boot guard 13</a>.</p>
 </Callout>
 
+The guard applies wherever header mode is registered: on the app, on a route, or inside an `app.group()` callback or an `app.register()` plugin.
+
+
 ### Envoy (X-Forwarded-Client-Cert)
 
 Configure the terminator to verify the client certificate and strip incoming XFCC before writing its own value. Appending to untrusted input is not sufficient: the parser returns the first element, and its verified flag is a proxy assertion, not cryptographic verification. Neither a fingerprint allowlist nor a proxy-trust boolean authenticates this header. Restrict origin access to the terminator, or use native mTLS.

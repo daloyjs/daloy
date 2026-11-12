@@ -45,19 +45,55 @@ export function consumeSiteApiQuota(
     return { limited: false, snapshot };
   }
 
+  return {
+    limited: true,
+    snapshot,
+    response: rateLimitedResponse(request, snapshot),
+  };
+}
+
+/**
+ * Build the 429 problem+json for a caller whose quota is exhausted, with
+ * Retry-After and RateLimit headers.
+ *
+ * @param request - Incoming request (its path becomes the problem `instance`).
+ * @param snapshot - The exhausted quota snapshot.
+ * @returns The 429 response.
+ */
+export function rateLimitedResponse(
+  request: Request,
+  snapshot: RateLimitSnapshot,
+): Response {
   const headers = siteApiHeaders(snapshot, {
     "Retry-After": String(snapshot.resetSec),
     // A 429 is per-caller and momentary. Never let a shared cache replay it.
     "cache-control": "no-store",
   });
-  return {
-    limited: true,
-    snapshot,
-    response: problemResponse(
-      tooManyRequestsProblem(new URL(request.url).pathname, snapshot.resetSec),
-      headers,
-    ),
-  };
+  return problemResponse(
+    tooManyRequestsProblem(new URL(request.url).pathname, snapshot.resetSec),
+    headers,
+  );
+}
+
+/**
+ * Charge extra quota for work one request fans out into (for example the
+ * additional messages of a JSON-RPC batch), so a single HTTP request cannot
+ * buy many operations for one token.
+ *
+ * @param request - Incoming request (identifies the caller's bucket).
+ * @param extra - Additional takes to charge; zero or less is a no-op.
+ * @returns The snapshot after the last take, or `null` when nothing was charged.
+ */
+export function chargeSiteApiQuota(
+  request: Request,
+  extra: number,
+): RateLimitSnapshot | null {
+  let snapshot: RateLimitSnapshot | null = null;
+  const key = rateLimitKey(request);
+  for (let i = 0; i < extra; i++) {
+    snapshot = siteApiRateLimiter.take(key);
+  }
+  return snapshot;
 }
 
 /**

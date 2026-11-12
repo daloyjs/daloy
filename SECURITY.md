@@ -746,6 +746,30 @@ Also fixed without a demonstrated security impact: a per-route
 `bodyLimitBytes` raised above the App default refused an adapter-pre-buffered
 body that fit the route limit (`413`).
 
+### Third-pass audit (2026-11-12)
+
+This pass covered what the earlier ones left out of scope: the runtime
+adapters other than Node, the `create-daloy` scaffolder, the CI gates, and the
+docs site, plus the code the previous fixes introduced. Confirmed and fixed:
+header-mode `clientCertAuth` registered in a group or plugin bypassing the
+proxy guard; `some()` admitting a request behind an earlier auth hook; a
+pre-body gate inside a demoted `some()` running after a stored-response
+replay; path and `Host` differentials on the Deno adapter; a Node WebSocket
+CLOSE frame that stopped the process; and smaller adapter, upload-probe,
+scaffolder and CI-gate gaps. The full list is in `CHANGELOG.md`.
+
+Known and still open:
+
+- With `rateLimit()` ahead of pre-body authentication, a request that fails
+  schema validation is answered before the limiter's `beforeHandle` runs. An
+  attacker can therefore tell a correct credential (validation error) from a
+  wrong one (`401`/`429`) after the budget is spent. Use `loginThrottle()` or
+  `autoBan()` on credential endpoints until this is closed.
+- The release workflow reads its maintainer rotation from the ref being
+  published and does not check that the tagged commit is on `main`; the
+  `main` ruleset has no required status checks. These are repository settings
+  and workflow changes for the maintainers to make.
+
 ### Repeatable local audits with the Cloudflare skill
 
 The audit above used the upstream

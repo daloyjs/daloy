@@ -101,6 +101,27 @@ pnpm fastly compute serve     # local dev
 pnpm fastly compute publish    # deploy
 ```
 
+## Client IP
+
+`installFastlyListener(app)` passes Fastly's `event.client.address` to the App as the trusted peer address, so IP-keyed guards (`rateLimit()`, `autoBan()`, `ipRestriction()`) identify the real client. Declare that nothing sits in front of Compute:
+
+```ts title="src/app.ts"
+import { App } from "@daloyjs/core";
+
+export const app = new App({ behindProxy: "none" });
+```
+
+Do not use `behindProxy: { hops: 1 }` here: Compute hands your code the client's own `X-Forwarded-For`, so that header is client-controlled. If you call `toFastlyHandler(app)` yourself, pass the address as the third argument:
+
+```ts
+const handler = toFastlyHandler(app);
+addEventListener("fetch", (event) =>
+  event.respondWith(handler(event.request, event.waitUntil.bind(event), event.client.address)),
+);
+```
+
+A value that is not an IP address is ignored.
+
 ## Gotchas
 
 - No `node:*` modules. Avoid the Node session store, the Redis rate-limit store, and multipart helpers that depend on `node:stream`: use the fetch-based alternatives.

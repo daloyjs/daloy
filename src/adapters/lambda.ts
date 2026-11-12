@@ -300,11 +300,19 @@ function eventToRequest(event: LambdaEvent, trustProto: boolean): Request {
 
 /**
  * `true` when an API Gateway event path is safe to splice into a URL without
- * the WHATWG parser moving it: no `\`, `?` or `#`, and no `.` / `..` segment in
- * any spelling (`%2e`, `.%2E`, ...). Encoded slashes stay opaque and are fine.
+ * the WHATWG parser moving it: no `\`, `?` or `#`, no control character or
+ * trailing space, and no `.` / `..` segment in any spelling (`%2e`, `.%2E`, ...). Encoded slashes stay opaque and are fine.
  */
 function isPlainEventPath(path: string): boolean {
   if (path.includes("\\") || path.includes("?") || path.includes("#")) return false;
+  // The URL parser silently strips tab/CR/LF anywhere and trims trailing
+  // spaces, so `/ad\tmin` or `/admin ` would route to `/admin` although the
+  // gateway matched (and authorized) a different path.
+  for (let i = 0; i < path.length; i++) {
+    const c = path.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return false;
+  }
+  if (path.charCodeAt(path.length - 1) === 0x20) return false;
   for (const segment of path.split("/")) {
     if (segment.length === 0 || segment.length > 6) continue;
     const s = segment.toLowerCase().replaceAll("%2e", ".");

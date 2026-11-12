@@ -561,6 +561,52 @@ test("[unhappy] POST enforces the shared site API rate limit with 429 problem+js
   assert.equal(last?.headers.get("ratelimit-remaining"), "0");
 });
 
+/** A legacy-era batch of `count` identical `tools/list` calls. */
+function listBatch(count: number): object[] {
+  return Array.from({ length: count }, (_, i) => ({
+    jsonrpc: "2.0",
+    id: i + 1,
+    method: "tools/list",
+    params: {},
+  }));
+}
+
+test("[happy] a small JSON-RPC batch runs and is charged one token per message", async () => {
+  const res = await post(listBatch(3), {
+    "mcp-protocol-version": "2025-06-18",
+    "x-forwarded-for": "203.0.113.201",
+  });
+  assert.equal(res.status, 200);
+  // 120 - 3: batching does not buy three calls for one token.
+  assert.equal(res.headers.get("ratelimit-remaining"), "117");
+});
+
+test("[unhappy] an oversized JSON-RPC batch is refused before any tool runs", async () => {
+  const res = await post(listBatch(11), {
+    "mcp-protocol-version": "2025-06-18",
+    "x-forwarded-for": "203.0.113.202",
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.headers.get("access-control-allow-origin"), "*");
+  const body = (await res.json()) as { error: { code: number; message: string } };
+  assert.equal(body.error.code, -32600);
+  assert.match(body.error.message, /at most 10 messages/);
+});
+
+test("[unhappy] batches cannot be used to outrun the rate limit", async () => {
+  const headers = {
+    "mcp-protocol-version": "2025-06-18",
+    "x-forwarded-for": "203.0.113.203",
+  };
+  let last: Response | undefined;
+  // 13 batches of 10 = 130 messages against a 120-message quota.
+  for (let i = 0; i < 13; i++) {
+    last = await post(listBatch(10), headers);
+  }
+  assert.equal(last?.status, 429);
+  assert.ok(last?.headers.get("retry-after"));
+});
+
 test("search_docs maps a Chinese query to English and also lists the Chinese page", async () => {
   const { json } = await legacyRpc(70, "tools/call", {
     name: "search_docs",

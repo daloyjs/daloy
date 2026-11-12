@@ -4,6 +4,12 @@ strictDepBuilds: true
 
 overrides:
   "browserslist@<4.28.7": "4.28.9"
+  # Transitive advisories with no fixed parent release yet (2026-11 audit).
+  # source-map-js reaches the production tree through postcss; the other two
+  # come from the build-time shadcn CLI. Drop each once its parent catches up.
+  "source-map-js@<1.2.2": "^1.2.2"
+  "brace-expansion@>=5.0.0 <5.0.12": "^5.0.12"
+  "ip-address@>=10.0.0 <10.7.4": "^10.7.4"
 
 allowBuilds:
   esbuild: true

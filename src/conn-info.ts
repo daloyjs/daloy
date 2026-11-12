@@ -230,13 +230,31 @@ export function pickForwardedForByHops(header: string | null, hops: number): str
  * Select the client slot from an ordered hop list: index 0 is the leftmost
  * (most attacker-influenceable) entry, the last entry is the one the proxy
  * nearest Daloy appended. Returns `undefined` when the chain is shorter than
- * `hops` or the selected slot is not an IP literal. Shared by every header
+ * `hops` or the selected slot is not an IP literal (an optional `:port`
+ * suffix is stripped first). Shared by every header
  * source so the trust rule cannot drift between them.
  */
 function pickByHops(parts: readonly string[], hops: number): string | undefined {
   if (parts.length < hops) return undefined;
-  const selected = parts[parts.length - hops]?.trim();
-  return selected && parseIp(selected) ? selected : undefined;
+  let selected = parts[parts.length - hops]?.trim();
+  if (!selected) return undefined;
+  // Some platforms (Azure App Service) append `ip:port`. Strip the port from
+  // the trusted slot: `[v6]:port` / `[v6]`, or `v4:port` (exactly one colon,
+  // so a bare IPv6 literal is left alone). The result must still be an IP.
+  if (selected.charCodeAt(0) === 91 /* [ */) {
+    const close = selected.indexOf("]");
+    if (close <= 0) return undefined;
+    const rest = selected.slice(close + 1);
+    if (rest !== "" && !/^:\d{1,5}$/.test(rest)) return undefined;
+    selected = selected.slice(1, close);
+  } else {
+    const colon = selected.indexOf(":");
+    if (colon > 0 && selected.indexOf(":", colon + 1) < 0) {
+      if (!/^\d{1,5}$/.test(selected.slice(colon + 1))) return undefined;
+      selected = selected.slice(0, colon);
+    }
+  }
+  return parseIp(selected) ? selected : undefined;
 }
 
 /**

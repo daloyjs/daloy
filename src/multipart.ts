@@ -390,8 +390,13 @@ function maybeDecodeUtf16(bytes: Uint8Array): Uint8Array {
   return out;
 }
 
-/** An SVG element with an optional namespace prefix (`<svg`, `<s:svg`). */
-const SVG_ELEMENT_RE = /<(?:[a-z0-9_.-]+:)?svg(?:[\s>/]|$)/;
+/**
+ * An SVG element with an optional namespace prefix (`<svg`, `<s:svg`). XML
+ * prefixes may be non-ASCII, which the ASCII fold turns into spaces, so the
+ * prefix class accepts anything that cannot be a tag end, a quote or an
+ * attribute assignment.
+ */
+const SVG_ELEMENT_RE = /<(?:[^<>"'=/:]{1,128}:)?svg(?:[\s>/]|$)/;
 
 /**
  * Find the index of the `>` closing a `<!doctype ...` declaration, skipping
@@ -400,9 +405,16 @@ const SVG_ELEMENT_RE = /<(?:[a-z0-9_.-]+:)?svg(?:[\s>/]|$)/;
  */
 function findDoctypeEnd(text: string): number {
   let subsetDepth = 0;
+  let quote = "";
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
-    if (c === "[") subsetDepth++;
+    // Quoted literals (entity values, system ids) may contain `]` and `>`.
+    if (quote !== "") {
+      if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === "[") subsetDepth++;
     else if (c === "]") subsetDepth = Math.max(0, subsetDepth - 1);
     else if (c === ">" && subsetDepth === 0) return i;
   }
@@ -412,8 +424,9 @@ function findDoctypeEnd(text: string): number {
 /**
  * `true` when the folded probe window consists entirely of XML-legal prolog
  * material: whitespace, comments, processing instructions, and a DOCTYPE.
- * Unterminated constructs count as prolog (they reach the window edge), so a
- * file that continues past the window never gets its root element verified.
+ * Unterminated constructs count as prolog (they reach the window edge), as
+ * does a start tag split by the window edge, so a file that continues past
+ * the window never gets its root element verified.
  */
 function isAllXmlProlog(prefix: string): boolean {
   let rest = prefix.trimStart();
@@ -436,7 +449,9 @@ function isAllXmlProlog(prefix: string): boolean {
       rest = rest.slice(end + 1).trimStart();
       continue;
     }
-    return rest.length === 0;
+    // Nothing left, or a tag cut off by the window edge (`<sv` | `g ...>`):
+    // either way the root element was never seen whole.
+    return rest.length === 0 || (rest.startsWith("<") && !rest.includes(">"));
   }
 }
 

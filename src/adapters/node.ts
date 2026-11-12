@@ -3,6 +3,7 @@
  * Request/Response. Includes graceful shutdown wired to SIGTERM/SIGINT.
  */
 
+import { isPlainAuthority, pathNeedsCanonicalization } from "../internal-request-target.js";
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { Readable } from "node:stream";
 import type { Duplex } from "node:stream";
@@ -1082,64 +1083,6 @@ function requestOrigin(req: IncomingMessage, trustProxy: boolean): string | unde
   return `${proto}://${host}`;
 }
 
-/** `true` when `host` is a non-empty `reg-name|IPv4|[IPv6][:port]` with no path, query, userinfo or escape characters. */
-function isPlainAuthority(host: string): boolean {
-  const len = host.length;
-  if (len === 0 || len > 1024) return false;
-  for (let i = 0; i < len; i++) {
-    const c = host.charCodeAt(i);
-    if (
-      (c >= 97 && c <= 122) || // a-z
-      (c >= 65 && c <= 90) || // A-Z
-      (c >= 48 && c <= 58) || // 0-9 and ':'
-      c === 46 || // .
-      c === 45 || // -
-      c === 95 // _
-    ) {
-      continue;
-    }
-    // Brackets only as a leading IPv6 literal: `[` at 0 and one `]` after it.
-    if (c === 91 /* [ */ && i === 0) continue;
-    if (c === 93 /* ] */ && host.charCodeAt(0) === 91 && host.indexOf("]", i + 1) === -1) continue;
-    return false;
-  }
-  return true;
-}
-
-/**
- * `true` when WHATWG URL parsing would rewrite the path portion of an
- * origin-form request-target: `\` (folded to `/`), `.`/`..` segments and
- * their `%2e` spellings (resolved), or bytes in the path percent-encode set.
- * One charCode pass that stops at `?`/`#`; ordinary targets never allocate.
- */
-function pathNeedsCanonicalization(target: string): boolean {
-  const len = target.length;
-  for (let i = 0; i < len; i++) {
-    const c = target.charCodeAt(i);
-    if (c === 63 /* ? */ || c === 35 /* # */) return false;
-    if (
-      c <= 32 ||
-      c >= 127 ||
-      c === 92 /* \ */ ||
-      c === 34 /* " */ ||
-      c === 60 /* < */ ||
-      c === 62 /* > */ ||
-      c === 96 /* ` */ ||
-      c === 123 /* { */ ||
-      c === 125 /* } */
-    ) {
-      return true;
-    }
-    if (c === 37 /* % */) {
-      if (target.charCodeAt(i + 1) === 50 && (target.charCodeAt(i + 2) | 0x20) === 101) return true;
-    } else if (c === 46 /* . */ && target.charCodeAt(i - 1) === 47 /* / */) {
-      const n = target.charCodeAt(i + 1);
-      if (n !== n /* end */ || n === 47 || n === 46 || n === 63 || n === 35) return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Normalize a raw Node request-target to origin-form `path[?query]`.
  *
@@ -1275,6 +1218,9 @@ function pumpBody(body: ReadableStream<Uint8Array>, out: ServerResponse): Promis
     readable.pipe(out);
   });
 }
+
+/** How long a peer gets to complete the close handshake before the socket is destroyed. */
+const WS_CLOSE_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 /**
  * `pipe()` unpipes but never destroys its source when the destination closes
@@ -1495,6 +1441,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
         this.readyState = WS_READY_STATE.CLOSED;
         this._fireClose(code, reason);
         this.socket.end();
+        this._reapAfterClose();
       },
       onProtocolError: (err) => {
         this._invokeError(err);
@@ -1524,6 +1471,21 @@ class NodeWebSocketConnection implements WebSocketConnection {
     this._writeFrame(WS_OPCODE.CLOSE, encodeClosePayload(code, reason));
     this._fireClose(code, reason);
     this.socket.end();
+    this._reapAfterClose();
+  }
+
+  /**
+   * Destroy the socket if the peer has not finished the close handshake
+   * shortly after our CLOSE. `socket.end()` only half-closes; without this a
+   * peer that never sends FIN keeps the descriptor for as long as it likes.
+   */
+  private _reapAfterClose(): void {
+    const timer = setTimeout(() => {
+      this.readyState = WS_READY_STATE.CLOSED;
+      this.socket.destroy();
+    }, WS_CLOSE_HANDSHAKE_TIMEOUT_MS);
+    timer.unref?.();
+    this.socket.once("close", () => clearTimeout(timer));
   }
 
   ping(data?: string | ArrayBufferLike | ArrayBufferView): void {
@@ -1543,7 +1505,15 @@ class NodeWebSocketConnection implements WebSocketConnection {
 
   _ingest(chunk: Buffer): void {
     if (this.readyState === WS_READY_STATE.CLOSED) return;
-    this.sink.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+    try {
+      this.sink.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+    } catch (err) {
+      // This runs inside the socket `data` listener: anything that escapes is
+      // an uncaught exception that takes the whole process down. Report it
+      // and drop this one connection instead.
+      this._invokeError(err);
+      this.terminate();
+    }
   }
 
   _handleSocketClose(): void {
@@ -1604,6 +1574,9 @@ class NodeWebSocketConnection implements WebSocketConnection {
   }
 
   private _dispatchMessage(data: string | Uint8Array | ArrayBuffer, isBinary: boolean): void {
+    // Once a close has started (ours or the peer's) no further message may
+    // reach the handler or its validator; only the peer's CLOSE is processed.
+    if (this.readyState !== WS_READY_STATE.OPEN) return;
     const schema = this.handler.request?.body;
     if (schema === undefined) {
       void this._invokeMessage(data, isBinary, undefined);

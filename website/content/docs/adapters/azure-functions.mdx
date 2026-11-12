@@ -121,7 +121,7 @@ export const app = new App({
 });
 ```
 
-<Callout type="warning">Check what your plan actually sends before you pick `hops`. Log `x-forwarded-for` from one real request: DaloyJS accepts only plain IP addresses there, so an entry with a port (`203.0.113.7:51234`) resolves to no client IP rather than a guessed one.</Callout>
+<Callout type="warning">Check what your plan actually sends before you pick `hops`. Log `x-forwarded-for` from one real request. App Service appends the client as `ip:port` (`203.0.113.7:51234`, or `[2001:db8::1]:51234`); DaloyJS strips that port from the trusted entry. Anything else that is not an IP address resolves to no client IP rather than a guessed one.</Callout>
 
 ## What the adapter does for you
 

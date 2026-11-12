@@ -1,5 +1,6 @@
 {
   "name": "my-daloy-deno-app",
+  "minimumDependencyAge": "P1D",
   "tasks": {
     "dev": "DENO_ENV=development deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL --watch src/main.ts",
     "start": "deno run --allow-net --allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL src/main.ts",

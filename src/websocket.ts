@@ -1364,7 +1364,14 @@ export function decodeClosePayload(payload: Uint8Array): {
   if (!isValidWireCloseCode(code)) {
     throw new WebSocketProtocolError(`Invalid close status code ${code}`);
   }
-  const reason = new TextDecoder("utf-8", { fatal: true }).decode(payload.subarray(2));
+  let reason: string;
+  try {
+    reason = new TextDecoder("utf-8", { fatal: true }).decode(payload.subarray(2));
+  } catch {
+    // RFC 6455 §5.5.1: the reason must be valid UTF-8. A raw TypeError here
+    // would escape the socket `data` listener as an uncaught exception.
+    throw new WebSocketProtocolError("Invalid UTF-8 in close reason");
+  }
   return { code, reason };
 }
 

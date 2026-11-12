@@ -168,6 +168,10 @@ Whichever you pick, run your contract tests against the new entry before you swi
 - Platform-managed hosts (Deno Deploy, Netlify Edge Functions, Supabase Edge Functions) never send your code `SIGTERM`. The built-in signal handling only matters when you run the Deno process yourself.
 - Use `--allow-net` (and others) explicitly, Deno's default-deny permissions are the point.
 
+## Request target and `Host`
+
+`Deno.serve` builds `request.url` from the raw `Host` header and request line. The adapter checks it before your app runs: a `Host` that is not a plain `host[:port]` (userinfo, a backslash, an escape) is answered with `400`, and a path that URL parsing would rewrite (`\`, `..`, `%2e`) is canonicalized first. The router and path-based guards such as `except()` therefore always see the same path. The scaffolded `deno.json` also sets `"minimumDependencyAge": "P1D"`, the 24-hour cooldown the other templates get from their package manager.
+
 ## See also
 
 - [Adapters overview](/docs/adapters)

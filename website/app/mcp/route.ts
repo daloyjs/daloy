@@ -26,7 +26,11 @@ import {
 } from "@/lib/site-api";
 import { readBodyLimited } from "@/lib/read-body-limited";
 import { renderPathMarkdown } from "@/lib/render-page-markdown";
-import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import {
+  chargeSiteApiQuota,
+  consumeSiteApiQuota,
+  rateLimitedResponse,
+} from "@/lib/site-api-response";
 import {
   rateLimitHeaders,
   type RateLimitSnapshot,
@@ -53,6 +57,13 @@ import {
 
 /** Hard cap on the accepted request body (256 KiB). */
 const MAX_BODY_BYTES = 1 << 18;
+/**
+ * Most JSON-RPC messages accepted in one batched POST. Each message can run a
+ * tool, so an uncapped batch turns one HTTP request (one rate-limit token)
+ * into many searches or page renders. Batches within the cap are still
+ * charged one token per message; see {@link POST}.
+ */
+const MAX_BATCH_MESSAGES = 10;
 /**
  * Cap on the body text returned by `get_doc`. Sized to serve the longest docs
  * pages in full, including the deliberately exhaustive Express migration guide
@@ -424,6 +435,38 @@ export async function POST(request: Request): Promise<Response> {
     return tooLarge();
   }
 
+  // A JSON-RPC batch fans one request out into many tool calls. Refuse large
+  // batches, and charge the rest one token per message so batching cannot be
+  // used to step around the per-caller quota. Unparseable bodies fall through
+  // to the library, which answers with the JSON-RPC parse error.
+  let snapshot = quota.snapshot;
+  const batchSize = batchLength(body.bytes);
+  if (batchSize > MAX_BATCH_MESSAGES) {
+    return withCors(
+      new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: null,
+          error: {
+            code: -32600,
+            message: `Invalid Request: a batch may carry at most ${MAX_BATCH_MESSAGES} messages.`,
+          },
+        }),
+        {
+          status: 400,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }
+      ),
+      snapshot
+    );
+  }
+  if (batchSize > 1) {
+    snapshot = chargeSiteApiQuota(request, batchSize - 1) ?? snapshot;
+    if (snapshot.limited) {
+      return withCors(rateLimitedResponse(request, snapshot), snapshot);
+    }
+  }
+
   return withCors(
     await handler(
       new Request(request.url, {
@@ -432,8 +475,28 @@ export async function POST(request: Request): Promise<Response> {
         body: body.bytes,
       })
     ),
-    quota.snapshot
+    snapshot
   );
+}
+
+/**
+ * Number of messages in a JSON-RPC batch body.
+ *
+ * @param bytes - The (already size-capped) request body.
+ * @returns The array length for a batch, or `1` for a single message or a
+ *   body that does not parse (the library reports the parse error).
+ */
+function batchLength(bytes: Uint8Array): number {
+  // Cheap pre-check: only a body that starts with "[" can be a batch.
+  let i = 0;
+  while (i < bytes.length && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0a || bytes[i] === 0x0d)) i++;
+  if (bytes[i] !== 0x5b) return 1;
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return Array.isArray(parsed) ? parsed.length : 1;
+  } catch {
+    return 1;
+  }
 }
 
 /**

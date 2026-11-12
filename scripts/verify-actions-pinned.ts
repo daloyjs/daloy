@@ -83,6 +83,15 @@ const DENIED_ACTIONS: ReadonlyMap<string, string> = new Map([
  */
 const USES_LINE = /^(\s*)(?:-\s+)?uses:\s+(.+?)\s*(?:#.*)?$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
+/** A `docker://` reference pinned by content digest. */
+const DOCKER_DIGEST_RE = /@sha256:[0-9a-f]{64}$/;
+/**
+ * Any `uses` mapping key, in whatever YAML spelling: quoted, inside a flow
+ * mapping, with its value on the next line, or as an explicit `? uses` key.
+ * Only structural positions match, so prose such as `run: echo uses: x` does not.
+ */
+const LOOSE_USES =
+  /^\s*(?:-\s+)?(?:\?\s*)?["']?uses["']?\s*(?::|$)|[{,]\s*["']?uses["']?\s*:/;
 const EXPRESSION_RE = /\$\{\{/;
 
 export interface UsesViolation {
@@ -103,15 +112,40 @@ export function findUnpinnedActions(file: string, text: string): readonly UsesVi
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     const match = USES_LINE.exec(line);
-    if (!match) continue;
-    const value = match[2] ?? "";
     const raw = line.trim();
+    if (!match) {
+      // Fail closed: a `uses` key written in a YAML form the strict regex
+      // does not consume (quoted key, flow mapping, value on the next line,
+      // explicit `? uses` key) would otherwise skip the audit entirely.
+      if (LOOSE_USES.test(line)) {
+        violations.push({
+          file,
+          line: i + 1,
+          raw,
+          reason:
+            "`uses` is written in a form this gate cannot audit; write it as `uses: owner/repo@<40-hex-sha>` on one line",
+        });
+      }
+      continue;
+    }
+    const value = match[2] ?? "";
 
-    // Local actions (./path) and Docker image references are out of
-    // scope for the SHA-pinning rule. Local actions are reviewed as
-    // part of the repo; Docker images are not used by Daloy today and
-    // would be caught by a future explicit gate if introduced.
-    if (value.startsWith("./") || value.startsWith("docker://")) continue;
+    // Local actions (./path) are reviewed as part of the repo. Docker
+    // image references must be pinned by digest, the image equivalent of
+    // a commit SHA.
+    if (value.startsWith("./")) continue;
+    if (value.startsWith("docker://")) {
+      if (!DOCKER_DIGEST_RE.test(value)) {
+        violations.push({
+          file,
+          line: i + 1,
+          raw,
+          reason:
+            "`docker://` image is not pinned by `@sha256:<digest>`; a tag can be repointed to a different image",
+        });
+      }
+      continue;
+    }
 
     if (EXPRESSION_RE.test(value)) {
       violations.push({

@@ -126,6 +126,8 @@ Semantics worth knowing:
 - Since 1.22.0 `requireScopes()` inside a bundle applies to that bundle only. `some()` no longer advertises an all-of union of every bundle's scopes, so `some(every(bearerAuth(a), requireScopes(["a"])), every(bearerAuth(b), requireScopes(["b"])))` accepts a caller holding either scope. The conditional scope gate is still ordered ahead of `responseCache()` / `idempotency()` replays, so a stored response is never served past it. When a bundle pairs a `preBody` auth hook with a default-phase `requireScopes()`, the whole `some()` selects in `preBody`, ahead of body parsing and `requestDecompression()`.
 - Only the `preBody`/`beforeHandle` selection strategy changes. `afterHandle`, `onSend`, `onResponse`, and `onError` from every bundle still compose normally.
 
+Two more guarantees hold however `some()` is mounted. An optional-mode branch never counts as authentication just because an earlier hook (an app-level API key, mTLS) already authenticated the request: the strict branches still run. And when a mixed stack moves the whole `some()` to `beforeHandle`, any pre-body gate inside it (`requireRoles()`, `bearerAuth()`) is still ordered ahead of `responseCache()` and `idempotency()`, so a stored response is never replayed to a caller the gate would refuse.
+
 ## `except()`: apply everywhere but a few paths
 
 `except(when, hooks)` runs a bundle on every request except those matching `when`. The canonical use is applying auth everywhere except health checks, OpenAPI JSON, and docs assets.

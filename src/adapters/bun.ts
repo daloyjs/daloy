@@ -7,6 +7,7 @@
  */
 import type { App } from "../app.js";
 import { setConnInfo } from "../conn-info.js";
+import { badRequestTargetResponse } from "../internal-request-target.js";
 import {
   WS_READY_STATE,
   WS_CLOSE_CODE,
@@ -138,6 +139,7 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
             upgrade: (req: Request, opts?: { data?: unknown; headers?: HeadersInit }) => boolean;
           }
         ) => {
+          if (req.url.charCodeAt(0) === 47 /* / */) return badRequestTargetResponse();
           tagConnInfo(req, server);
           if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
             return tryBunUpgrade(app, req, server);
@@ -145,6 +147,10 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
           return app.fetch(req);
         }
       : (req: Request, server: BunRequestIPServer) => {
+          // Bun leaves `req.url` relative when the Host header is missing or
+          // malformed. Answer 400 like the Node adapter instead of letting
+          // URL parsing throw into a logged 500.
+          if (req.url.charCodeAt(0) === 47 /* / */) return badRequestTargetResponse();
           tagConnInfo(req, server);
           return app.fetch(req);
         },
