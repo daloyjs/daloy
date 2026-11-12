@@ -161,8 +161,22 @@ jobs:
       - name: Verify top-level dependency names against slopsquatting allowlist (Aikido AI package hallucination gate)
         run: pnpm verify:known-dep-names
 
+      # A tag push does not run ci.yml, so every gate CI enforces is repeated
+      # here; these four used to run on pull requests only.
+      - name: Verify no ReDoS-prone regex patterns in core
+        run: pnpm verify:no-redos-patterns
+
+      - name: Verify dev-dependency license posture
+        run: pnpm verify:dep-licenses
+
+      - name: Verify no toxic agent skills in shipped SKILL.md / AGENTS.md
+        run: pnpm verify:no-toxic-agent-skills
+
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Verify apps on TypeScript 6 can consume the TypeScript 7 build
+        run: pnpm verify:ts-consumer-compat
 
       - name: Build
         run: pnpm build
@@ -396,14 +410,34 @@ jobs:
         env:
           npm_config_ignore_scripts: "true"
 
-      - name: Verify actor is on SECURITY-CONTACTS rotation
+      - name: Verify the commit is on the default branch
+        # A tag or dispatch ref can point at a commit that never went through
+        # review on the default branch. Refuse to publish from one.
         env:
-          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
-          node -e '
+          ref="refs/remotes/origin/${DEFAULT_BRANCH}"
+          git fetch --no-tags --unshallow origin "+refs/heads/${DEFAULT_BRANCH}:${ref}" \
+            || git fetch --no-tags origin "+refs/heads/${DEFAULT_BRANCH}:${ref}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$ref"; then
+            echo "::error::$GITHUB_SHA is not on ${DEFAULT_BRANCH}; refusing to publish."
+            exit 1
+          fi
+
+      - name: Verify actor is on SECURITY-CONTACTS rotation
+        # The rotation is read from the default branch (fetched above), never
+        # from the ref being published: otherwise a tag that adds its own
+        # author to the list would approve itself.
+        env:
+          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          git show "refs/remotes/origin/${DEFAULT_BRANCH}:SECURITY-CONTACTS.md" > "$RUNNER_TEMP/security-contacts.md"
+          CONTACTS="$RUNNER_TEMP/security-contacts.md" node -e '
             const fs = require("node:fs");
-            const text = fs.readFileSync("SECURITY-CONTACTS.md", "utf8");
+            const text = fs.readFileSync(process.env.CONTACTS, "utf8");
             const m = text.match(/<!--\s*BEGIN ACTIVE\s*-->([\s\S]*?)<!--\s*END ACTIVE\s*-->/);
             if (!m) { console.error("::error::SECURITY-CONTACTS.md is missing the ACTIVE block."); process.exit(1); }
             const handles = [...m[1].matchAll(/^\s*-\s*handle:\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$/gm)].map(x => x[1]);
@@ -504,14 +538,34 @@ jobs:
         env:
           npm_config_ignore_scripts: "true"
 
-      - name: Verify actor is on SECURITY-CONTACTS rotation
+      - name: Verify the commit is on the default branch
+        # A tag or dispatch ref can point at a commit that never went through
+        # review on the default branch. Refuse to publish from one.
         env:
-          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
-          node -e '
+          ref="refs/remotes/origin/${DEFAULT_BRANCH}"
+          git fetch --no-tags --unshallow origin "+refs/heads/${DEFAULT_BRANCH}:${ref}" \
+            || git fetch --no-tags origin "+refs/heads/${DEFAULT_BRANCH}:${ref}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$ref"; then
+            echo "::error::$GITHUB_SHA is not on ${DEFAULT_BRANCH}; refusing to publish."
+            exit 1
+          fi
+
+      - name: Verify actor is on SECURITY-CONTACTS rotation
+        # The rotation is read from the default branch (fetched above), never
+        # from the ref being published: otherwise a tag that adds its own
+        # author to the list would approve itself.
+        env:
+          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          git show "refs/remotes/origin/${DEFAULT_BRANCH}:SECURITY-CONTACTS.md" > "$RUNNER_TEMP/security-contacts.md"
+          CONTACTS="$RUNNER_TEMP/security-contacts.md" node -e '
             const fs = require("node:fs");
-            const text = fs.readFileSync("SECURITY-CONTACTS.md", "utf8");
+            const text = fs.readFileSync(process.env.CONTACTS, "utf8");
             const m = text.match(/<!--\s*BEGIN ACTIVE\s*-->([\s\S]*?)<!--\s*END ACTIVE\s*-->/);
             if (!m) { console.error("::error::SECURITY-CONTACTS.md is missing the ACTIVE block."); process.exit(1); }
             const handles = [...m[1].matchAll(/^\s*-\s*handle:\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$/gm)].map(x => x[1]);
@@ -652,14 +706,34 @@ jobs:
         env:
           npm_config_ignore_scripts: "true"
 
-      - name: Verify actor is on SECURITY-CONTACTS rotation
+      - name: Verify the commit is on the default branch
+        # A tag or dispatch ref can point at a commit that never went through
+        # review on the default branch. Refuse to publish from one.
         env:
-          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
-          node -e '
+          ref="refs/remotes/origin/${DEFAULT_BRANCH}"
+          git fetch --no-tags --unshallow origin "+refs/heads/${DEFAULT_BRANCH}:${ref}" \
+            || git fetch --no-tags origin "+refs/heads/${DEFAULT_BRANCH}:${ref}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$ref"; then
+            echo "::error::$GITHUB_SHA is not on ${DEFAULT_BRANCH}; refusing to publish."
+            exit 1
+          fi
+
+      - name: Verify actor is on SECURITY-CONTACTS rotation
+        # The rotation is read from the default branch (fetched above), never
+        # from the ref being published: otherwise a tag that adds its own
+        # author to the list would approve itself.
+        env:
+          ACTOR: ${{ github.actor }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          git show "refs/remotes/origin/${DEFAULT_BRANCH}:SECURITY-CONTACTS.md" > "$RUNNER_TEMP/security-contacts.md"
+          CONTACTS="$RUNNER_TEMP/security-contacts.md" node -e '
             const fs = require("node:fs");
-            const text = fs.readFileSync("SECURITY-CONTACTS.md", "utf8");
+            const text = fs.readFileSync(process.env.CONTACTS, "utf8");
             const m = text.match(/<!--\s*BEGIN ACTIVE\s*-->([\s\S]*?)<!--\s*END ACTIVE\s*-->/);
             if (!m) { console.error("::error::SECURITY-CONTACTS.md is missing the ACTIVE block."); process.exit(1); }
             const handles = [...m[1].matchAll(/^\s*-\s*handle:\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$/gm)].map(x => x[1]);

@@ -758,17 +758,30 @@ replay; path and `Host` differentials on the Deno adapter; a Node WebSocket
 CLOSE frame that stopped the process; and smaller adapter, upload-probe,
 scaffolder and CI-gate gaps. The full list is in `CHANGELOG.md`.
 
-Known and still open:
+Two follow-ups landed the same week:
 
-- With `rateLimit()` ahead of pre-body authentication, a request that fails
-  schema validation is answered before the limiter's `beforeHandle` runs. An
-  attacker can therefore tell a correct credential (validation error) from a
-  wrong one (`401`/`429`) after the budget is spent. Use `loginThrottle()` or
-  `autoBan()` on credential endpoints until this is closed.
-- The release workflow reads its maintainer rotation from the ref being
-  published and does not check that the tagged commit is on `main`; the
-  `main` ruleset has no required status checks. These are repository settings
-  and workflow changes for the maintainers to make.
+- **Request budgets are charged when validation fails.** Validation runs
+  between `preBody` (authentication) and `beforeHandle` (where `rateLimit()`
+  and `loginThrottle()` enforce). A request that authenticated and then
+  failed validation was answered before any limiter ran, so it was never
+  counted, and after the budget was spent a correct credential still got the
+  validation error while a wrong one got `429`. The route's budgets are now
+  charged on a validation failure, and an exhausted budget's `429` replaces
+  the validation error.
+- **The release workflow no longer trusts the ref it publishes.** Every
+  publish job checks that the commit is on the default branch and reads the
+  `SECURITY-CONTACTS.md` rotation from the default branch, and the release
+  verify job runs the four
+  gates that previously ran on pull requests only. The docs site lockfile is
+  scanned daily (`vuln-scan.yml`).
+
+Still open, and only changeable in the repository settings: the `main`
+ruleset has no required status checks or required reviews, and the
+`npm-publish` environment's deployment policy also allows `v*` branches,
+which no documented flow uses. The publish jobs also take their environment
+name from the `NPM_PUBLISH_ENVIRONMENT` repository variable when it is set,
+so whoever can edit repository variables can point them at an unprotected
+environment; leave it unset.
 
 ### Repeatable local audits with the Cloudflare skill
 

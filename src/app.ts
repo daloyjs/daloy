@@ -6028,12 +6028,19 @@ export class App<
       // Validation remains sync-first; only an async schema or an actual body
       // stream read suspends. `beforeHandle` still receives the fully validated
       // context for compatibility with body-aware middleware.
-      const validatedCtx = validateContext(
-        ctx as RequestContext,
-        def,
-        this.options,
-        routeBodyLimit,
-      );
+      const failureBudgets = (allHooks as Record<PropertyKey, unknown>)[
+        VALIDATION_FAILURE_BUDGETS
+      ] as readonly ValidationBudgetHook[] | undefined;
+      const validatedCtx =
+        failureBudgets === undefined
+          ? validateContext(ctx as RequestContext, def, this.options, routeBodyLimit)
+          : validateChargingBudgets(
+              ctx as RequestContext,
+              def,
+              this.options,
+              routeBodyLimit,
+              failureBudgets,
+            );
       ctx = isPromiseLike(validatedCtx)
         ? await (timeoutMs === 0
           ? validatedCtx
@@ -6986,6 +6993,65 @@ function getOriginFast(url: string): string | undefined {
   return url.slice(0, end);
 }
 
+/** A request-budget hook (`rateLimit()`, `loginThrottle()`) charged for a rejected request. */
+type ValidationBudgetHook = (ctx: BaseContext<any, any>) => unknown;
+
+/**
+ * Key on a merged route {@link Hooks} bundle holding the request-budget hooks
+ * to charge when request validation fails. Absent when the route has none, so
+ * routes without a limiter pay one property read and nothing else.
+ */
+const VALIDATION_FAILURE_BUDGETS = Symbol("daloyjs.app.validationFailureBudgets");
+
+/** Same registry key `_mergePreBodyWithEarlyRejections` uses to charge a budget once per request. */
+const EARLY_REJECTIONS_CHARGED = Symbol.for("daloyjs.middleware.earlyRejectionsCharged");
+
+/**
+ * Run request validation and, when it fails, charge the route's request
+ * budgets before the failure is reported.
+ *
+ * Validation sits between `preBody` (authentication) and `beforeHandle`
+ * (where a limiter enforces). Without this, a request that authenticates and
+ * then fails validation is answered before any limiter runs: it is never
+ * counted, and after the budget is spent a correct credential still gets the
+ * validation error while a wrong one gets `429`, which tells them apart.
+ * Charging here closes both gaps; an exhausted budget's error replaces the
+ * validation error.
+ *
+ * @returns The validated context, or a promise for it.
+ * @throws The budget's rejection (for example `429`) when one is exhausted,
+ *   otherwise the original validation error.
+ */
+function validateChargingBudgets(
+  ctx: RequestContext,
+  def: RouteDefinition<any, any, any, any>,
+  opts: Parameters<typeof validateContext>[2],
+  bodyLimitBytes: number,
+  budgets: readonly ValidationBudgetHook[],
+): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
+  const charge = async (err: unknown): Promise<never> => {
+    const state = ctx.state as Record<PropertyKey, unknown>;
+    let charged = state[EARLY_REJECTIONS_CHARGED] as Set<unknown> | undefined;
+    if (!(charged instanceof Set)) {
+      charged = new Set();
+      state[EARLY_REJECTIONS_CHARGED] = charged;
+    }
+    for (const hook of budgets) {
+      if (charged.has(hook)) continue;
+      charged.add(hook);
+      await hook(ctx as unknown as BaseContext<any, any>);
+    }
+    throw err;
+  };
+  let result: BaseContext<any, any> | PromiseLike<BaseContext<any, any>>;
+  try {
+    result = validateContext(ctx, def, opts, bodyLimitBytes);
+  } catch (err) {
+    return charge(err);
+  }
+  return isPromiseLike(result) ? Promise.resolve(result).catch(charge) : result;
+}
+
 function mergeHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
     layers
@@ -7006,6 +7072,19 @@ function mergeHooks(layers: Hooks[]): Hooks {
     onResponse: chain(pick("onResponse")),
   };
   stampRequiredScopes(hooks, requiredScopes);
+  const budgets: ValidationBudgetHook[] = [];
+  for (const layer of layers) {
+    const list = (layer as Record<PropertyKey, unknown>)[EARLY_REJECTION_MARKER];
+    if (!Array.isArray(list)) continue;
+    for (const candidate of list) {
+      if (typeof candidate === "function" && !budgets.includes(candidate as ValidationBudgetHook)) {
+        budgets.push(candidate as ValidationBudgetHook);
+      }
+    }
+  }
+  if (budgets.length > 0) {
+    (hooks as Record<PropertyKey, unknown>)[VALIDATION_FAILURE_BUDGETS] = budgets;
+  }
   return hooks;
 }
 

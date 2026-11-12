@@ -631,3 +631,44 @@ test("release workflow builds tarballs without publish credentials and stages ve
     assert.match(body, /does not match the pack job's/);
   }
 });
+
+test("release publish jobs trust the default branch, not the ref being published", async () => {
+  const workflow = await readWorkspaceFile(".github/workflows/release.yml");
+  for (const job of ["publish-core", "publish-create-daloy", "publish-jsr"]) {
+    const body =
+      workflow.match(new RegExp(`\\n  ${job}:\\n[\\s\\S]*?(?=\\n  [a-z-]+:\\n|\\n  # -{10}|$)`))?.[0] ?? "";
+    assert.notEqual(body, "", `${job} exists`);
+    assert.match(body, /git merge-base --is-ancestor "\$GITHUB_SHA"/, `${job} checks the commit is on the default branch`);
+    assert.match(
+      body,
+      /git show "refs\/remotes\/origin\/\$\{DEFAULT_BRANCH\}:SECURITY-CONTACTS\.md"/,
+      `${job} reads the rotation from the default branch`,
+    );
+    assert.doesNotMatch(
+      body,
+      /readFileSync\("SECURITY-CONTACTS\.md"/,
+      `${job} must not read the rotation from the checked-out ref`,
+    );
+    assert.ok(
+      body.indexOf("is-ancestor") < body.indexOf("Verify actor is on SECURITY-CONTACTS rotation"),
+      `${job} fetches the default branch before reading from it`,
+    );
+  }
+});
+
+test("release verify job runs every gate ci.yml runs", async () => {
+  const ci = await readWorkspaceFile(".github/workflows/ci.yml");
+  const release = await readWorkspaceFile(".github/workflows/release.yml");
+  const verifyJob = release.match(/  verify:[\s\S]*?\n  pack:/)?.[0] ?? "";
+  const ciGates = new Set(ci.match(/pnpm verify:[a-z0-9-]+/g) ?? []);
+  assert.ok(ciGates.size > 20);
+  const missing = [...ciGates].filter((gate) => !verifyJob.includes(`${gate}\n`));
+  assert.deepEqual(missing, [], "a tag push does not run ci.yml, so the release job must repeat its gates");
+});
+
+test("the docs site lockfile is scanned for vulnerabilities", async () => {
+  const workflow = await readWorkspaceFile(".github/workflows/vuln-scan.yml");
+  const job = workflow.match(/\n  website-audit:[\s\S]*$/)?.[0] ?? "";
+  assert.match(job, /working-directory: website\n\s+run: pnpm audit --prod\n/);
+  assert.doesNotMatch(job.split("Audit full website")[0] ?? "", /continue-on-error/);
+});

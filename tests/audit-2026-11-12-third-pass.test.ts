@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
+import { z } from "zod";
 import {
   App,
   bearerAuth,
@@ -14,6 +15,7 @@ import {
   fileField,
   httpSignatureAuth,
   markAuthHook,
+  rateLimit,
   requireRoles,
   responseCache,
   some,
@@ -572,3 +574,60 @@ test("[happy] verify-no-runtime-deps allows dev dependencies and optional peers"
     [],
   );
 });
+
+// ---------------------------------------------------------------------------
+// Request budgets are charged when validation fails
+// ---------------------------------------------------------------------------
+
+function limitedApp(compose: "use" | "every"): App {
+  const app = new App({ logger: false, env: "production", behindProxy: "none" } as never);
+  const limiter = rateLimit({ windowMs: 60_000, max: 3 });
+  const auth = bearerAuth({ validate: (t: string) => (t === "s3cret" ? { sub: "admin" } : false) });
+  if (compose === "every") app.use(every(limiter, auth));
+  else {
+    app.use(limiter);
+    app.use(auth);
+  }
+  app.route({
+    method: "GET",
+    path: "/items",
+    auth: { scheme: "bearer" },
+    request: { query: z.object({ page: z.coerce.number().int().min(1) }).strict() },
+    responses: ok,
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  } as never);
+  return app;
+}
+
+const good = { authorization: "Bearer s3cret" };
+
+for (const compose of ["use", "every"] as const) {
+  test(`[unhappy] a spent budget hides whether the credential was right (${compose})`, async () => {
+    const app = limitedApp(compose);
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await get(app, "/items?page=1", { authorization: "Bearer nope" })).status, 403);
+    }
+    const wrong = await get(app, "/items?page=x", { authorization: "Bearer nope" });
+    const right = await get(app, "/items?page=x", good);
+    assert.equal(wrong.status, 429);
+    assert.equal(right.status, 429, "a correct credential must not surface the validation error");
+  });
+
+  test(`[unhappy] validation failures count toward the budget (${compose})`, async () => {
+    const app = limitedApp(compose);
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await get(app, "/items?page=x", good)).status, 422);
+    }
+    assert.equal((await get(app, "/items?page=x", good)).status, 429);
+    assert.equal((await get(app, "/items?page=1", good)).status, 429);
+  });
+
+  test(`[happy] valid requests are charged exactly once and invalid ones still get 422 (${compose})`, async () => {
+    const app = limitedApp(compose);
+    assert.equal((await get(app, "/items?page=x", good)).status, 422);
+    assert.equal((await get(app, "/items?page=1", good)).status, 200);
+    assert.equal((await get(app, "/items?page=1", good)).status, 200);
+    assert.equal((await get(app, "/items?page=1", good)).status, 429);
+  });
+}

@@ -123,7 +123,7 @@ app.use(rateLimit({             // per TCP peer by default; configure trustedPro
 app.use(timing());              // Server-Timing header for observability
 ```
 
-Put `rateLimit()` or `loginThrottle()` before bearer/basic/JWK/mTLS auth when it must count failed credentials. The limiter will still spend the attempt and return `429` after the cap even though auth rejects in `preBody`. DaloyJS does not read a declared request body to do it. A custom key generator on that path should use raw request data or state populated by an earlier `preBody` hook.
+Put `rateLimit()` or `loginThrottle()` before bearer/basic/JWK/mTLS auth when it must count failed credentials. The limiter will still spend the attempt and return `429` after the cap even though auth rejects in `preBody`. DaloyJS does not read a declared request body to do it. A custom key generator on that path should use raw request data or state populated by an earlier `preBody` hook. A request that passes auth but fails schema validation is charged too, and gets `429` once the cap is reached, so a spent budget never reveals whether the credential was right.
 
 The official starters wire these in for you: Node, Bun, and Deno enable `secureHeaders()`, `requestId()`, and `rateLimit()`. Cloudflare Worker and Vercel enable `secureHeaders()` and `requestId()` plus tighter edge-friendly body and timeout limits.
 

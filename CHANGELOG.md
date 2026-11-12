@@ -106,6 +106,20 @@ before the fix. Regression tests: `tests/audit-2026-11-12-third-pass.test.ts`,
   rate-limit token per message; the rate limiter's key map is bounded and
   IPv6 clients are keyed by /64.
 
+- **Request budgets are charged when validation fails (medium).** With
+  `rateLimit()` or `loginThrottle()` ahead of authentication, a request that
+  authenticated and then failed schema validation was answered before the
+  limiter ran. It was never counted, and once the budget was spent a correct
+  credential still got `422` while a wrong one got `429`, which told them
+  apart. Validation failures now charge the route's budgets, and an exhausted
+  budget answers `429`. Routes without a limiter are unaffected.
+- **Release workflow:** every publish job now refuses a commit that is not on
+  the default branch and reads the maintainer rotation from the default
+  branch instead of the ref being published; the release verify job also runs `verify:no-redos-patterns`,
+  `verify:dep-licenses`, `verify:no-toxic-agent-skills` and
+  `verify:ts-consumer-compat`.
+- **CI:** `vuln-scan.yml` audits the docs site lockfile daily.
+
 ## [1.23.0] - 2026-11-08
 
 ### Added
