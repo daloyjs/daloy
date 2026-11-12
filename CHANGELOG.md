@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-11-12
+
 ### Added
 
 - New standalone agent skill `express-to-daloyjs` at
