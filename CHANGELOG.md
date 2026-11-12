@@ -17,8 +17,59 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.24.1] - 2026-11-12
+
 ### Security
 
+Follow-up to the 2026-11-12 audit pass: the leads earlier reviews had not
+reached, and three rounds of tightening on the CI gates. Regression tests:
+`tests/audit-2026-11-12-followups.test.ts`,
+`tests/audit-2026-11-13-gates-and-hardening.test.ts` and
+`tests/gate-composition-properties.test.ts`.
+
+- **WebSocket upgrades honour the spoofed-proxy-header refusal.** With no
+  proxy posture declared, production HTTP requests carrying
+  `X-Forwarded-For` (or another forwarded / certificate-identity header) are
+  refused, but an upgrade on the Node or Bun adapter skipped that check, so a
+  `beforeUpgrade` hook or IP-keyed guard could act on a client-supplied
+  address. Upgrades now get the same refusal.
+- **create-daloy:** on Yarn older than 4 the CLI now says that the 24h
+  cooldown is not enforced (Yarn 1 has no release-age setting) and skips the
+  automatic install; the generated README says which Yarn the cooldown needs.
+  Every Bun scaffold, not only `bun-basic`, declares `engines.bun >= 1.3.0`,
+  the first Bun that reads the `bunfig.toml` cooldown.
+
+- **Boot guards judge the order hooks actually run in (medium).** Two wrapped
+  bundles such as `except(paths, every(rateLimit(), responseCache()))`
+  followed by `except(paths, every(bearerAuth(), idempotency()))` passed the
+  `replay-before-budget` / `cache-before-tenancy` guards, but at runtime the
+  second bundle was moved ahead of the first. Replays were then served
+  before the rate limit was counted or the tenant resolved. The guards now
+  check execution order as well and refuse that composition.
+- **Upgrades with duplicate `Host`, `Content-Length` or `Transfer-Encoding`
+  headers are refused** on the Node and Bun adapters, as HTTP requests
+  already were.
+- **A GET or HEAD that declares a body** is answered and the connection
+  closed. Node previously drained the unread body without limit.
+- **IP rules written in IPv4-mapped form** (`::ffff:1.2.3.4`, as Node prints
+  a dual-stack peer) now match a client that arrives in dotted form.
+- `requireRoles()` and `tenantFromClaim` read `claims` / `credentials` as own
+  properties only, like scopes.
+- **CI gates:** five source-scanning gates stopped scanning after a `"/*"`
+  or `"*/*"` inside a string, leaving 685 lines of `src/` unchecked; they now
+  share a whole-file scanner that also looks inside `${...}`. No violation
+  was hiding in those lines. The gates also catch aliases, computed access
+  and bare-statement forms (`const r = Math.random`, `Buffer["allocUnsafe"]`,
+  `eval(x);`, `Bun.spawn`), the standard `.npmrc` auth-token line,
+  variation-selector and filler characters, `(A) AND (B)` license
+  expressions, and install hooks in template manifests.
+- **create-daloy templates:** the Cloudflare and Vercel skills point agents
+  at `createJwtVerifier()` / `jwk()`, not hand-rolled Web Crypto checks; all
+  skills state `422` for validation failures; every template `AGENTS.md`
+  lists `fetchGuard()`, `isForbiddenObjectKey` and `except()`; the Deno
+  template pins its `npx` generator command; the generated end-of-life check
+  no longer skips Node versions written with a minor number, and generated
+  deploy workflows read `$GITHUB_ACTOR`, not an inline expression.
 - **CI gates, second round.** `verify:secret-comparisons` audits every file
   under `src/` (it audited four) and recognises credentials under ordinary
   names (`provided`, `signature`, `password`, `secret`) and wrapped across
@@ -64,6 +115,14 @@ For the forward-looking plan and the full thematic release log, see
 - **Template agent files** attribute the install cooldown to the file each
   package manager reads and ask for any safety-check exception to be
   recorded in the PR.
+
+### Added
+
+- `tests/gate-composition-properties.test.ts`: seeded property tests that
+  build random trees of `every()` / `some()` over pre-body, `beforeHandle`
+  and optional-mode gates and check admission, handler-visible state and
+  stored-response replay against a reference model. A failure prints the
+  seed and the tree.
 
 ### Fixed
 
