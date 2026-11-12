@@ -1999,8 +1999,13 @@ async function denoTemplateAllowedVersions() {
   ).version;
   const changelog = await readFile(path.join(pkgRoot, "../../CHANGELOG.md"), "utf8");
   const released = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - /gm)].map((m) => m[1]);
-  const previous = released.find((v) => v !== coreVersion);
-  return previous ? [coreVersion, previous] : [coreVersion];
+  // The current release plus the two before it. deno.lock can only lock a
+  // version that is 24 hours old (the template's own minimumDependencyAge), so
+  // when two releases ship within a day the template trails by two until the
+  // newer one ages. Owner decision, 2026-11-12: release anyway, never bypass
+  // the cooldown. Bump the template as soon as the version is old enough.
+  const previous = released.filter((v) => v !== coreVersion).slice(0, 2);
+  return [coreVersion, ...previous];
 }
 
 test("npm templates pin @daloyjs/core to the current release version", async () => {
