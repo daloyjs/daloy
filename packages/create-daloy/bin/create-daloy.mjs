@@ -552,6 +552,10 @@ const TOOL_INSTALL_GUIDES = {
 const MIN_NODE_MAJOR = 24;
 const MIN_NPM_MAJOR = 12;
 const MIN_PNPM_MAJOR = 11;
+/** Yarn's `npmMinimalAgeGate` cooldown exists from Yarn 4.10; Yarn 1 has no equivalent. */
+const MIN_YARN_MAJOR = 4;
+/** Bun honours `minimumReleaseAge` in bunfig.toml from 1.3. */
+const MIN_BUN_ENGINE = ">=1.3.0";
 // Exact pnpm used by the generated CI (pnpm/action-setup) and, for templates
 // whose platform needs it, by package.json#packageManager. One constant so the
 // two can never drift.
@@ -770,6 +774,9 @@ async function patchPackageJson(dir, projectName, packageManager, template) {
   // keeps the "blocked install scripts" promise on the Bun path too.
   if (packageManager === "bun") {
     json.trustedDependencies = json.trustedDependencies ?? [];
+    // Older Bun silently ignores the bunfig.toml cooldown; declare the floor
+    // on every Bun scaffold, not only the bun-basic template.
+    json.engines = { ...json.engines, bun: json.engines?.bun ?? MIN_BUN_ENGINE };
   }
   if (packageManager === "pnpm") {
     json.engines = { ...json.engines, pnpm: `>=${MIN_PNPM_MAJOR}.0.0` };
@@ -838,7 +845,7 @@ function rewritePackageManagerText(raw, packageManager) {
   const cooldownByManager = {
     bun: ["minimumReleaseAge", "bunfig.toml"],
     npm: ["min-release-age", ".npmrc"],
-    yarn: ["npmMinimalAgeGate", ".yarnrc.yml"],
+    yarn: ["npmMinimalAgeGate", ".yarnrc.yml; needs Yarn 4.10 or newer, Yarn 1 has no cooldown"],
   };
   const target = cooldownByManager[packageManager];
   const withCooldownNote = target
@@ -1254,7 +1261,7 @@ function containerPublishSteps() {
           GH_TOKEN: \${{ github.token }}
         run: |
           set -eu
-          echo "$GH_TOKEN" | docker login ghcr.io -u "\${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Derive image name
         run: |
@@ -2598,6 +2605,32 @@ async function main() {
       }
     }
 
+    // Yarn scaffolds get their 24h cooldown from `npmMinimalAgeGate` in
+    // .yarnrc.yml, which only Yarn >= 4.10 reads. Yarn 1 (still the usual
+    // global install, and what Corepack picks without a packageManager field)
+    // has no release-age setting at all, so installing with it would resolve
+    // brand-new versions with no cooldown. Say so and do not install.
+    if (packageManager === "yarn" && !missingTools.some((tool) => tool.tool === "yarn")) {
+      const yarnMajor = await detectToolMajor("yarn", targetDir);
+      if (Number.isFinite(yarnMajor) && yarnMajor < MIN_YARN_MAJOR) {
+        logWarn(
+          `You're on Yarn ${yarnMajor}.x, which has no release-age cooldown: the 24h supply-chain safeguard is NOT enforced.`
+        );
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Switch this project to Yarn 4: ${color(COLORS.cyan, "corepack enable && yarn set version stable")} ${color(COLORS.dim, `(${TOOL_INSTALL_GUIDES.yarn.url})`)}`
+        );
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Install scripts stay blocked on Yarn 1 (.yarnrc), but freshly published versions are not held back.")}`
+        );
+        if (installDeps) {
+          console.log(
+            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until Yarn is up to date.")}`
+          );
+          installDeps = false;
+        }
+      }
+    }
+
     if (installDeps) {
       const spinner = createSpinner(
         `Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`
@@ -2661,4 +2694,5 @@ export {
   MIN_NODE_MAJOR,
   MIN_NPM_MAJOR,
   MIN_PNPM_MAJOR,
+  MIN_YARN_MAJOR,
 };

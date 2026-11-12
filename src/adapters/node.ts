@@ -224,6 +224,18 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     // hot path doesn't pay for any of the buffering bookkeeping below.
     const method = req.method;
     if (method === "GET" || method === "HEAD" || method === undefined) {
+      // A GET/HEAD that declares a body is never read by the app, and on a
+      // keep-alive socket Node would drain it after the response with no
+      // bound. Answer it, then close the connection instead of draining.
+      const headers = req.headers;
+      const declaredLength = headers["content-length"];
+      if (
+        headers["transfer-encoding"] !== undefined ||
+        (declaredLength !== undefined && declaredLength !== "0")
+      ) {
+        res.setHeader("connection", "close");
+        res.once("finish", () => req.socket.destroy());
+      }
       dispatchToApp(app, req, res, trustProxy, undefined, onBodyPull);
       return;
     }
@@ -1219,6 +1231,20 @@ function pumpBody(body: ReadableStream<Uint8Array>, out: ServerResponse): Promis
   });
 }
 
+/** True when `rawHeaders` (flat `[name, value, ...]`) repeats a header that must appear once. */
+function hasDuplicateSingletonHeader(rawHeaders: readonly string[]): boolean {
+  let host = 0;
+  let contentLength = 0;
+  let transferEncoding = 0;
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    const name = rawHeaders[i]!.toLowerCase();
+    if (name === "host") host++;
+    else if (name === "content-length") contentLength++;
+    else if (name === "transfer-encoding") transferEncoding++;
+  }
+  return host > 1 || contentLength > 1 || transferEncoding > 1;
+}
+
 /** How long a peer gets to complete the close handshake before the socket is destroyed. */
 const WS_CLOSE_HANDSHAKE_TIMEOUT_MS = 5_000;
 
@@ -1265,6 +1291,22 @@ async function handleUpgrade(
   // reach a route (or pass a same-origin check) for a host the app rejects.
   if (!app.isUpgradeHostAllowed(url.href)) {
     writeUpgradeError(socket, 400, "Invalid Host header");
+    return;
+  }
+  // The HTTP dispatcher refuses duplicated Host / Content-Length /
+  // Transfer-Encoding. `req.headers` keeps only the first Host, so count the
+  // occurrences in `rawHeaders`: a proxy that routes on the last Host and an
+  // app that reads the first would otherwise disagree about the upgrade.
+  if (hasDuplicateSingletonHeader(req.rawHeaders)) {
+    writeUpgradeError(socket, 400, "Bad Request");
+    return;
+  }
+  // Same spoofed-proxy-header refusal the HTTP dispatcher applies: with no
+  // proxy posture declared, a client-supplied X-Forwarded-For must not reach
+  // beforeUpgrade or an IP-keyed guard.
+  const upgradeHeaders = req.headers;
+  if (app.isUpgradeProxyHeaderRefused({ has: (name) => upgradeHeaders[name] !== undefined })) {
+    writeUpgradeError(socket, 500, "Internal Server Error");
     return;
   }
   const match = app.webSocketRoutes.find(url.pathname);

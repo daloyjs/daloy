@@ -48,6 +48,7 @@
  * @since 0.46.0
  */
 
+import { stripSource } from "./lib/strip-source.js";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,22 +171,12 @@ function alternationIsAmbiguous(group: string): boolean {
 export function findReDosPatterns(file: string, source: string): readonly ReDosFinding[] {
   const out: ReDosFinding[] = [];
   const lines = source.split(/\r?\n/);
-  let inBlockComment = false;
+  // Comments are removed by a whole-file scan (see strip-source.ts): a
+  // per-line guess mistook `"/*"` in a string for a comment opener.
+  const views = stripSource(source);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    let working = raw;
-    if (inBlockComment) {
-      const end = working.indexOf("*/");
-      if (end < 0) continue;
-      working = working.slice(end + 2);
-      inBlockComment = false;
-    }
-    const blockOpen = working.lastIndexOf("/*");
-    const blockClose = working.lastIndexOf("*/");
-    if (blockOpen >= 0 && blockClose < blockOpen) {
-      working = working.slice(0, blockOpen);
-      inBlockComment = true;
-    }
+    const working = views.noComments[i]!;
     const stripped = stripCommentsAndStrings(working);
     if (stripped.trim().length === 0 && !/\bnew\s+RegExp\b/.test(raw)) continue;
     if (ALLOW_MARKER_RE.test(raw)) continue;

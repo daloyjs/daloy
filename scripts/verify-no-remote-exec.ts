@@ -38,6 +38,7 @@
  * @since 0.34.0
  */
 
+import { stripSource } from "./lib/strip-source.js";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,6 +119,33 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "use a typed parser instead",
   },
   {
+    // A statement that is just `eval(x);` has nothing before it, which the
+    // operator-prefixed rule above skips to spare method declarations. A
+    // declaration is followed by `{` or `:`; a call statement is not.
+    re: /^\s*eval\s*\([^)]*\)\s*(?:;|$|\.|\))/,
+    reason:
+      "bare `eval(...)` statement in core can execute downloaded source as JS (BlokTrooper class); " +
+      "use a typed parser instead",
+  },
+  {
+    re: /\(\s*0\s*,\s*eval\s*\)|\b(?:globalThis|window|self|global)\s*(?:\.\s*eval\b|\[\s*["'`]eval["'`]\s*\])/,
+    reason:
+      "indirect `eval` (`(0, eval)(x)`, `globalThis.eval(x)`) still executes a string as JS; " +
+      "use a typed parser instead",
+  },
+  {
+    re: /(?:^|[=(,?:!&|;{}\[]|\breturn\s)\s*Function\s*\(\s*["'`]/,
+    reason:
+      "`Function(\"...\")` without `new` compiles a string into JS exactly like `new Function`; " +
+      "use a typed parser instead",
+  },
+  {
+    re: /\bBun\s*\.\s*(?:spawn|spawnSync)\b|\bBun\s*\.\s*\$|\bDeno\s*\.\s*(?:Command|run)\b|\bgetBuiltinModule\s*\(/,
+    reason:
+      "runtime-native process spawn (`Bun.spawn`, `Deno.Command`) or `process.getBuiltinModule()` " +
+      "in core reaches the same primitives as `child_process`",
+  },
+  {
     re: /\bnew\s+Function\s*\(/,
     reason:
       "`new Function(...)` in core compiles a string into JS at runtime (BlokTrooper class); " +
@@ -194,27 +222,14 @@ export function findForbiddenRemoteExecCalls(
   const out: ForbiddenRemoteExecCall[] = [];
   const lines = source.split(/\r?\n/);
   const importLines: string[] = new Array(lines.length).fill("");
-  let inBlockComment = false;
+  // Comments are removed by a whole-file scan (see strip-source.ts): a
+  // per-line guess mistook `"/*"` in a string for a comment opener.
+  const views = stripSource(source);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    let working = raw;
-    if (inBlockComment) {
-      const end = working.indexOf("*/");
-      if (end < 0) continue;
-      working = working.slice(end + 2);
-      inBlockComment = false;
-    }
-    const blockOpen = working.lastIndexOf("/*");
-    const blockClose = working.lastIndexOf("*/");
-    if (blockOpen >= 0 && blockClose < blockOpen) {
-      working = working.slice(0, blockOpen);
-      inBlockComment = true;
-    }
-    // Drop line comments only (keep string literals so import/require patterns match).
-    // Use a string-aware scanner so that `//` inside a URL (e.g.
-    // `"https://..."`) is NOT treated as a line-comment start.
-    const lineCommentIndex = findLineCommentStart(working);
-    const noComments = lineCommentIndex >= 0 ? working.slice(0, lineCommentIndex) : working;
+    // Comment-free line with string literals intact, so import/require
+    // patterns still see the module name.
+    const noComments = views.noComments[i]!;
     if (noComments.trim().length === 0) continue;
     importLines[i] = noComments;
 
@@ -231,7 +246,7 @@ export function findForbiddenRemoteExecCalls(
 
     // Phase 2: code-generation patterns — strip string literals so a
     // word like "eval" inside a doc string / error message doesn't trip.
-    const codeOnly = stripCommentsAndStrings(noComments).replace(STRING_LITERAL_RE, '""');
+    const codeOnly = views.code[i]!;
     for (const pattern of CODE_GEN_PATTERNS) {
       if (pattern.re.test(codeOnly)) {
         out.push({ file, line: i + 1, text: raw.trim(), reason: pattern.reason });

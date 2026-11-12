@@ -27,6 +27,7 @@
  * @since 0.34.0
  */
 
+import { stripSource } from "./lib/strip-source.js";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,7 +53,10 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "deprecated `new Buffer(...)` constructor; use `Buffer.alloc(size)` or `Buffer.from(input)`",
   },
   {
-    re: /\bBuffer\.allocUnsafe(?:Slow)?\s*\(/,
+    // Any reference, not only a direct call: `const alloc = Buffer.allocUnsafe`,
+    // `Buffer["allocUnsafe"](n)` and `const { allocUnsafe } = Buffer` are the
+    // same primitive under another name.
+    re: /\ballocUnsafe(?:Slow)?\b|\bnew\s+SlowBuffer\b/,
     reason:
       "`Buffer.allocUnsafe*` returns uninitialized memory; use `Buffer.alloc(size)` or `Uint8Array`",
   },
@@ -83,28 +87,19 @@ export function findForbiddenBufferCalls(
 ): readonly ForbiddenBufferCall[] {
   const out: ForbiddenBufferCall[] = [];
   const lines = source.split(/\r?\n/);
-  let inBlockComment = false;
+  // Comments are removed by a whole-file scan (see strip-source.ts): a
+  // per-line guess mistook `"/*"` in a string for a comment opener.
+  const views = stripSource(source);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    let working = raw;
-    if (inBlockComment) {
-      const end = working.indexOf("*/");
-      if (end < 0) continue;
-      working = working.slice(end + 2);
-      inBlockComment = false;
-    }
-    // Track unterminated block comments that span multiple lines.
-    const blockOpen = working.lastIndexOf("/*");
-    const blockClose = working.lastIndexOf("*/");
-    if (blockOpen >= 0 && blockClose < blockOpen) {
-      working = working.slice(0, blockOpen);
-      inBlockComment = true;
-    }
-    const stripped = stripCommentsAndStrings(working);
+    const stripped = views.code[i]!;
     const trimmed = stripped.trim();
     if (trimmed.length === 0) continue;
+    // Computed access (`Buffer["allocUnsafe"]`) keeps its name in a string,
+    // which `stripped` blanks, so test that one form on the unblanked line.
+    const computed = /\bBuffer\s*\[\s*["'`]allocUnsafe(?:Slow)?["'`]\s*\]/.test(views.noComments[i]!);
     for (const pattern of FORBIDDEN_PATTERNS) {
-      if (pattern.re.test(stripped)) {
+      if (pattern.re.test(stripped) || (computed && pattern.re.source.includes("allocUnsafe"))) {
         out.push({ file, line: i + 1, text: raw.trim(), reason: pattern.reason });
         break;
       }

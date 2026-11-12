@@ -55,11 +55,12 @@ You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it 
 
 ## Secure-by-default (do not let an AI strip these)
 
-Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): _"If you tell an AI to make something work, it might remove the very security checks that protect you."_ When a guard rejects a request, **satisfy it, do not delete it.**
+AI agents tend to remove the checks that block them ([why](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development)). When a guard rejects a request, **satisfy it, do not delete it.**
 
 - Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs` (see core rule 5 on backing rate limits with a shared store).
 - Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
 - Every protected route attaches auth `beforeHandle` and tests unauthenticated `401` plus wrong-scope `403`.
+- Keep `fetchGuard()` on outbound fetches, `isForbiddenObjectKey` checks, and exact `except()` paths.
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use constant-time comparison, never `===`. Throw typed errors so problem+json redacts in prod.
 - Keep core rule 7 intact: removing the rewrite or splitting into per-path files 404s the root domain.

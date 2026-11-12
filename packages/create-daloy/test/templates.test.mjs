@@ -3506,3 +3506,57 @@ test("[unhappy] --force does not write through a symlink in the target directory
     await rm(tmpDir, { recursive: true, force: true });
   }
 });
+
+/** Run the CLI with a stub `yarn` on PATH that reports the given version. */
+async function scaffoldWithYarn(version) {
+  const { chmod } = await import("node:fs/promises");
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-yarn-"));
+  const bin = path.join(tmpDir, "bin");
+  await mkdir(bin);
+  const marker = path.join(tmpDir, "yarn-install-ran");
+  const stub = path.join(bin, "yarn");
+  await writeFile(
+    stub,
+    `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "${version}"; exit 0; fi\nif [ "$1" = "install" ]; then echo ran > "${marker}"; fi\nexit 0\n`,
+  );
+  await chmod(stub, 0o755);
+  const output = await new Promise((resolve) => {
+    let out = "";
+    const proc = spawn(
+      process.execPath,
+      [path.join(pkgRoot, "bin/create-daloy.mjs"), "app", "--pm", "yarn", "--install", "--no-git", "--yes"],
+      { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } },
+    );
+    proc.stdout.on("data", (chunk) => (out += chunk.toString()));
+    proc.stderr.on("data", (chunk) => (out += chunk.toString()));
+    proc.on("exit", () => resolve(out));
+  });
+  const installed = await access(marker).then(() => true, () => false);
+  await rm(tmpDir, { recursive: true, force: true });
+  return { output, installed };
+}
+
+test("[unhappy] Yarn 1 gets a no-cooldown warning and no automatic install", { skip: process.platform === "win32" }, async () => {
+  const { output, installed } = await scaffoldWithYarn("1.22.22");
+  assert.match(output, /Yarn 1\.x, which has no release-age cooldown/);
+  assert.match(output, /Skipping the automatic install/);
+  assert.equal(installed, false, "yarn install must not run on a Yarn without a cooldown");
+});
+
+test("[happy] Yarn 4 installs without the warning", { skip: process.platform === "win32" }, async () => {
+  const { output, installed } = await scaffoldWithYarn("4.18.1");
+  assert.doesNotMatch(output, /no release-age cooldown/);
+  assert.equal(installed, true);
+});
+
+test("every bun scaffold declares the Bun floor its cooldown needs", async () => {
+  for (const template of ["node-basic", "bun-basic", "cloudflare-worker", "vercel"]) {
+    const { tmpDir, dir } = await scaffold(template, ["--package-manager", "bun"]);
+    try {
+      const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
+      assert.equal(pkg.engines.bun, ">=1.3.0", `${template}: bunfig minimumReleaseAge needs Bun >= 1.3`);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+});

@@ -282,7 +282,7 @@ test("GET /healthz returns ok", async () => {
 ```
 
 Cover both **happy paths and unhappy paths** for every route: valid input,
-validation failures (400), auth failures (401/403), not-found (404),
+validation failures (422), auth failures (401/403), not-found (404),
 conflicts (409), rate limiting (429). For external services, inject an
 in-memory fake via `buildApp({ store })` rather than mocking `fetch`.
 For user-owned or tenant-owned resources, use at least two principals and

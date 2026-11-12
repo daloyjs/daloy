@@ -273,17 +273,22 @@ export function tenantFromClaim(claim: string, opts: ClaimTenantOptions = {}): T
   };
 }
 
-/** Read `claim` from a principal node via `credentials`, `claims`, then the node itself. */
+/** Read `claim` from a principal node via its own `credentials`, `claims`, then the node itself. */
 function readClaim(node: unknown, claim: string): string | undefined {
   if (!node || typeof node !== "object") return undefined;
   const record = node as Record<string, unknown>;
-  for (const nested of [record.credentials, record.claims]) {
+  // Own properties only at every step, so a tenant id can never come from a
+  // prototype (a polluted Object.prototype, a principal built with
+  // Object.create), matching how scopes and roles are read.
+  const own = (source: object, key: string): unknown =>
+    Object.hasOwn(source, key) ? (source as Record<string, unknown>)[key] : undefined;
+  for (const nested of [own(record, "credentials"), own(record, "claims")]) {
     if (nested && typeof nested === "object") {
-      const value = claimString((nested as Record<string, unknown>)[claim]);
+      const value = claimString(own(nested, claim));
       if (value !== undefined) return value;
     }
   }
-  return claimString(record[claim]);
+  return claimString(own(record, claim));
 }
 
 function claimString(value: unknown): string | undefined {

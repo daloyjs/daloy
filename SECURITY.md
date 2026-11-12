@@ -783,6 +783,22 @@ name from the `NPM_PUBLISH_ENVIRONMENT` repository variable when it is set,
 so whoever can edit repository variables can point them at an unprotected
 environment; leave it unset.
 
+Later the same week the remaining leads were worked through. Fixed: boot
+guards that judged the written hook order while the runtime reordered opaque
+replay bundles ahead of a rate limit or tenancy resolver; WebSocket upgrades
+that skipped the forwarded-header and duplicate-`Host` refusals; unbounded
+draining of a GET/HEAD body; IP rules in IPv4-mapped form; and five CI gates
+that stopped scanning after a comment-like string. Seeded property tests
+(`tests/gate-composition-properties.test.ts`) now check random
+`every()` / `some()` compositions against a reference model.
+
+Known gaps in the CI gates, not yet closed: `verify:secret-comparisons`
+audits a fixed list of four files and a short list of variable names;
+`verify:no-encoded-payloads`, the TLS-option rule in
+`verify:no-registry-exfiltration`, `verify:known-dep-names` (git shorthand
+and `file:` specifiers), `verify:lockfile` and `verify:no-agent-config-autorun`
+each miss some spellings a determined author could use.
+
 ### Repeatable local audits with the Cloudflare skill
 
 The audit above used the upstream

@@ -126,7 +126,13 @@ function cycleNumber(cycle) {
 function findCycle(feed, version) {
   const exact = feed.find((item) => String(item.cycle) === version);
   if (exact) return exact;
-  if (!/^\d+$/.test(version)) return null;
+  if (!/^\d+$/.test(version)) {
+    // "18.17" or "24.0" on a feed keyed by major (Node): judge the major.
+    // Without this a range such as "^18.17.0" matched no cycle and was
+    // silently treated as supported.
+    const majorOnly = version.split(".")[0];
+    return feed.find((item) => String(item.cycle) === majorOnly) ?? null;
+  }
   const major = Number(version);
   const candidates = feed
     .filter((item) => Math.floor(cycleNumber(item.cycle)) === major)
@@ -172,7 +178,14 @@ async function main() {
   for (const pin of pinned) {
     if (!feeds.has(pin.runtime)) feeds.set(pin.runtime, await fetchFeed(pin.runtime));
     const cycle = findCycle(feeds.get(pin.runtime), pin.version);
-    if (!cycle || cycle.eol === false) continue;
+    if (!cycle) {
+      // Never pass silently on a version this check could not judge.
+      console.warn(
+        `verify-runtime-eol: could not match ${pin.runtime} ${pin.version} to a release cycle; it was NOT checked.`,
+      );
+      continue;
+    }
+    if (cycle.eol === false) continue;
     const eol = new Date(cycle.eol);
     if (Number.isNaN(eol.getTime())) continue;
     const remaining = daysUntil(eol, now);

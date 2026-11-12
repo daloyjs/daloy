@@ -115,6 +115,40 @@ export function extractLicenseString(pkg: PackageJsonLike): string {
   return "NOASSERTION";
 }
 
+/** True when `expr` is wrapped by one pair of parentheses that match each other. */
+function wrapsWhole(expr: string): boolean {
+  if (!expr.startsWith("(") || !expr.endsWith(")")) return false;
+  let depth = 0;
+  for (let i = 0; i < expr.length; i++) {
+    if (expr[i] === "(") depth++;
+    else if (expr[i] === ")" && --depth === 0) return i === expr.length - 1;
+  }
+  return false;
+}
+
+/** Split an SPDX expression on `operator` where it appears outside parentheses. */
+function splitTopLevel(expr: string, operator: "OR" | "AND"): string[] {
+  const parts: string[] = [];
+  const re = new RegExp(`^\\s+${operator}\\s+`, "i");
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (depth === 0 && /\s/.test(c ?? "")) {
+      const match = re.exec(expr.slice(i));
+      if (match) {
+        parts.push(expr.slice(start, i).trim());
+        start = i + match[0].length;
+        i = start - 1;
+      }
+    }
+  }
+  parts.push(expr.slice(start).trim());
+  return parts;
+}
+
 /**
  * Returns `true` iff every required branch of the SPDX expression is on
  * the allow-list. Supports the `(A OR B)` / `(A AND B)` / bare-id subset.
@@ -127,15 +161,15 @@ export function isLicenseAllowed(
   if (expr === "" || expr === "NOASSERTION" || expr === "UNLICENSED") return false;
   if (/^SEE\s+LICENSE/i.test(expr)) return false;
   // Strip a single outer pair of parentheses.
-  const inner = expr.startsWith("(") && expr.endsWith(")") ? expr.slice(1, -1).trim() : expr;
-  // Handle OR: pass if any branch is allowed.
-  if (/\s+OR\s+/i.test(inner)) {
-    return inner.split(/\s+OR\s+/i).some((b) => isLicenseAllowed(b, allowed));
-  }
-  // Handle AND: pass only if every branch is allowed.
-  if (/\s+AND\s+/i.test(inner)) {
-    return inner.split(/\s+AND\s+/i).every((b) => isLicenseAllowed(b, allowed));
-  }
+  // Strip the outer parentheses only when they are one matching pair:
+  // `(A) AND (B)` starts with "(" and ends with ")" but they do not match.
+  const inner = wrapsWhole(expr) ? expr.slice(1, -1).trim() : expr;
+  // OR binds loosest: pass if any top-level branch is allowed.
+  const orParts = splitTopLevel(inner, "OR");
+  if (orParts.length > 1) return orParts.some((b) => isLicenseAllowed(b, allowed));
+  // AND: pass only if every top-level branch is allowed.
+  const andParts = splitTopLevel(inner, "AND");
+  if (andParts.length > 1) return andParts.every((b) => isLicenseAllowed(b, allowed));
   // Bare id; strip a trailing "+" (e.g. "Apache-2.0+").
   const id = inner.replace(/\+$/, "").trim();
   return allowed.has(id);

@@ -90,6 +90,19 @@ export function compileCidrMatcher(input: string): IpMatcher {
       throw new Error(`ipRestriction(): invalid CIDR prefix in ${JSON.stringify(input)}.`);
     }
   }
+  // A rule written in IPv4-mapped form (`::ffff:a.b.c.d`, as Node prints the
+  // peer on a dual-stack listener) names an IPv4 address. Compile it as IPv4
+  // so it also matches a client that arrives in dotted form; mapped clients
+  // already fold to IPv4 in normalizeFamily(). A prefix shorter than /96
+  // covers more than the mapped range and stays an IPv6 rule.
+  if (parsed.family === 6 && prefix >= 96) {
+    const b = parsed.bytes;
+    let mapped = b[10] === 0xff && b[11] === 0xff;
+    for (let i = 0; mapped && i < 10; i++) mapped = b[i] === 0;
+    if (mapped) {
+      return { family: 4, prefix: prefix - 96, bytes: applyPrefixMask(b.slice(12), prefix - 96) };
+    }
+  }
   return { family: parsed.family, prefix, bytes: applyPrefixMask(parsed.bytes, prefix) };
 }
 

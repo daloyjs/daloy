@@ -112,7 +112,14 @@ export const CREDENTIAL_CONTENT_PATTERNS: readonly { name: string; re: RegExp }[
     name: "JWT-shaped string",
     re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
   },
-  { name: "npm-registry _authToken", re: /(^|[\s,;])_authToken\s*=\s*\S+/im },
+  // In a real .npmrc the key follows the registry path and a colon, so a
+  // colon must be an accepted prefix. An env-var reference is not a secret,
+  // and a value shorter than 8 characters is prose, not a token.
+  {
+    name: "npm-registry credential (_authToken / _auth / _password)",
+    re: /(^|[\s,;:])_(?:authToken|auth|password)\s*=\s*(?!\$\{)[^\s`'"]{8,}/im,
+  },
+  { name: "PGP private-key block", re: /-----BEGIN PGP PRIVATE KEY(?: BLOCK)-----/ },
 ]);
 
 /**

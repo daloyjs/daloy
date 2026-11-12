@@ -95,6 +95,24 @@ export const FORBIDDEN_CLASSES: readonly ForbiddenClass[] = Object.freeze([
     name: "Bidi override control (Trojan Source, U+202A–U+202E/U+2066–U+2069)",
     test: (cp) => (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069),
   },
+  {
+    name: "Variation Selector Supplement (payload carrier, U+E0100–U+E01EF)",
+    test: (cp) => cp >= 0xe0100 && cp <= 0xe01ef,
+  },
+  {
+    // U+FE0F (emoji presentation) stays allowed: Markdown emoji use it.
+    name: "Variation selector outside emoji use (U+FE00–U+FE0E)",
+    test: (cp) => cp >= 0xfe00 && cp <= 0xfe0e,
+  },
+  {
+    name: "Invisible filler, valid in identifiers (U+115F/U+1160/U+3164/U+FFA0)",
+    test: (cp) => cp === 0x115f || cp === 0x1160 || cp === 0x3164 || cp === 0xffa0,
+  },
+  {
+    name: "Directional mark or invisible operator (U+200E/U+200F/U+061C/U+180E/U+2061–U+2064)",
+    test: (cp) =>
+      cp === 0x200e || cp === 0x200f || cp === 0x061c || cp === 0x180e || (cp >= 0x2061 && cp <= 0x2064),
+  },
 ]);
 
 /**

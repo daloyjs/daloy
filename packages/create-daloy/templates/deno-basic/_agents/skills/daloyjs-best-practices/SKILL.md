@@ -93,7 +93,7 @@ The typed Hey API SDK is generated outside Deno today (Hey API has no
 Deno entrypoint yet). To produce the client, run:
 
 ```bash
-npx @hey-api/openapi-ts -i generated/openapi.json -o generated/client
+npx --ignore-scripts @hey-api/openapi-ts@0.0.0-next-20260930190945 -i generated/openapi.json -o generated/client
 ```
 
 Always run `deno task typecheck` and `deno task test` before declaring a
@@ -278,7 +278,7 @@ Deno.test("GET /healthz returns ok", async () => {
 ```
 
 Cover **happy paths and unhappy paths**: valid input, validation failures
-(400), auth failures (401/403), not-found (404), conflict (409), rate
+(422), auth failures (401/403), not-found (404), conflict (409), rate
 limiting (429). For external services, inject an in-memory fake via
 `buildApp({ store })`.
 For user-owned or tenant-owned resources, use at least two principals and

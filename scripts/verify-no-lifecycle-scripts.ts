@@ -37,7 +37,7 @@
  * @since 0.33.0
  */
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
 const FORBIDDEN_HOOKS = [
   "preinstall",
@@ -47,6 +47,8 @@ const FORBIDDEN_HOOKS = [
   "preprepare",
   "postprepare",
   "prepublish",
+  // pnpm runs this before every install in the project that declares it.
+  "pnpm:devPreinstall",
 ] as const;
 
 const CHECKED_MANIFESTS: readonly string[] = [
@@ -65,9 +67,36 @@ export function findForbiddenLifecycleScripts(packageJson: PackageJsonLike): rea
   return FORBIDDEN_HOOKS.filter((hook) => Object.prototype.hasOwnProperty.call(scripts, hook));
 }
 
+/**
+ * Template manifests ship inside `create-daloy` and become the user's own
+ * `package.json`, where an install hook would run on their machine.
+ *
+ * @returns Paths (relative to this script) of every template `package.json`.
+ * @throws Error when no template manifest is found, so a moved templates
+ *   directory cannot turn this check into a silent pass.
+ */
+async function templateManifests(): Promise<string[]> {
+  const base = "../packages/create-daloy/templates/";
+  const entries = await readdir(new URL(base, import.meta.url), { withFileTypes: true });
+  const found: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const rel = `${base}${entry.name}/package.json`;
+    const exists = await readFile(new URL(rel, import.meta.url), "utf8").then(
+      () => true,
+      () => false,
+    );
+    if (exists) found.push(rel);
+  }
+  if (found.length === 0) {
+    throw new Error("verify-no-lifecycle-scripts: no template package.json found to check.");
+  }
+  return found;
+}
+
 async function main(): Promise<void> {
   let failed = 0;
-  for (const relPath of CHECKED_MANIFESTS) {
+  for (const relPath of [...CHECKED_MANIFESTS, ...(await templateManifests())]) {
     const url = new URL(relPath, import.meta.url);
     const text = await readFile(url, "utf8");
     const pkg = JSON.parse(text) as PackageJsonLike;

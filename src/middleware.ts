@@ -982,7 +982,24 @@ export const COMBINED_BEFORE_HANDLE_LAYERS: unique symbol = Symbol.for("daloyjs.
 export function _orderBeforeHandleForReplay(
   layers: Hooks[]
 ): NonNullable<Hooks["beforeHandle"]>[] {
-  const fns: NonNullable<Hooks["beforeHandle"]>[] = [];
+  return _replayOrderedBundles(layers).map((hooks) => hooks.beforeHandle!);
+}
+
+/**
+ * The bundles whose `beforeHandle` runs, in execution order (see
+ * {@link _orderBeforeHandleForReplay} for the ordering rule). Transparent
+ * `every()` bundles are expanded into their layers; an opaque bundle is one
+ * entry. The boot guards use this, not registration order, to decide whether
+ * a stored-response replay runs ahead of a tenancy or request-budget layer:
+ * the reordering can move an opaque auth-and-replay bundle in front of an
+ * earlier bundle, and a guard that judged the written order would miss it.
+ *
+ * @param layers - Hook layers in registration order.
+ * @returns Each bundle that contributes a `beforeHandle`, in execution order.
+ * @internal
+ */
+export function _replayOrderedBundles(layers: Hooks[]): Hooks[] {
+  const units: Hooks[] = [];
   const replay: boolean[] = [];
   const auth: boolean[] = [];
   const collect = (hooks: Hooks): void => {
@@ -1002,7 +1019,7 @@ export function _orderBeforeHandleForReplay(
       for (const layer of combined.layers) collect(layer);
       return;
     }
-    fns.push(hooks.beforeHandle);
+    units.push(hooks);
     replay.push(
       record[REPLAY_RESPONSE_CACHE_MARKER] === true || record[REPLAY_IDEMPOTENCY_MARKER] === true
     );
@@ -1015,18 +1032,18 @@ export function _orderBeforeHandleForReplay(
   };
   for (const hooks of layers) collect(hooks);
   const firstReplay = replay.indexOf(true);
-  if (firstReplay === -1) return fns;
+  if (firstReplay === -1) return units;
   const lastAuth = auth.lastIndexOf(true);
-  if (lastAuth <= firstReplay) return fns;
-  const span = fns.slice(firstReplay, lastAuth + 1);
+  if (lastAuth <= firstReplay) return units;
+  const span = units.slice(firstReplay, lastAuth + 1);
   const spanReplay = replay.slice(firstReplay, lastAuth + 1);
   const spanAuth = auth.slice(firstReplay, lastAuth + 1);
   return [
-    ...fns.slice(0, firstReplay),
+    ...units.slice(0, firstReplay),
     ...span.filter((_, i) => !spanReplay[i]),
     ...span.filter((_, i) => spanReplay[i] && spanAuth[i]),
     ...span.filter((_, i) => spanReplay[i] && !spanAuth[i]),
-    ...fns.slice(lastAuth + 1),
+    ...units.slice(lastAuth + 1),
   ];
 }
 
@@ -2753,7 +2770,10 @@ function validateRoleList(roles: unknown): readonly string[] {
 }
 
 function claimsOf(user: object): Readonly<Record<string, unknown>> {
-  const claims = (user as { claims?: unknown }).claims;
+  // Own property only, like the role claim itself: an inherited `claims`
+  // object (a polluted prototype, a principal built with Object.create) must
+  // not supply roles.
+  const claims = Object.hasOwn(user, "claims") ? (user as { claims?: unknown }).claims : undefined;
   return (claims !== null && typeof claims === "object" ? claims : user) as Readonly<
     Record<string, unknown>
   >;

@@ -7,6 +7,7 @@
  */
 import type { App } from "../app.js";
 import { setConnInfo } from "../conn-info.js";
+import { assertNoDuplicateSingletonHeaders } from "../security.js";
 import { badRequestTargetResponse } from "../internal-request-target.js";
 import {
   WS_READY_STATE,
@@ -264,6 +265,17 @@ async function tryBunUpgrade(
   // reach a route (or pass a same-origin check) for a host the app rejects.
   if (!app.isUpgradeHostAllowed(req.url)) {
     return new Response("Invalid Host header", { status: 400 });
+  }
+  // Same duplicate Host / Content-Length / Transfer-Encoding refusal the
+  // HTTP dispatcher applies (Bun joins repeats with ", ").
+  try {
+    assertNoDuplicateSingletonHeaders(req.headers);
+  } catch {
+    return new Response("Bad Request", { status: 400 });
+  }
+  // Same spoofed-proxy-header refusal the HTTP dispatcher applies.
+  if (app.isUpgradeProxyHeaderRefused(req.headers)) {
+    return new Response("Internal Server Error", { status: 500 });
   }
   const match = app.webSocketRoutes.find(url.pathname);
   if (!match) return new Response("Not Found", { status: 404 });

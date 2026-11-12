@@ -266,7 +266,7 @@ test("GET /healthz returns ok", async () => {
 ```
 
 Cover **happy paths and unhappy paths** for every route: valid input,
-validation failures (400), auth failures (401/403), not-found (404),
+validation failures (422), auth failures (401/403), not-found (404),
 conflict (409), rate limiting (429). For external services, inject an
 in-memory fake during tests.
 For user-owned or tenant-owned resources, use at least two principals and
@@ -289,9 +289,10 @@ Aim for complete happy- and unhappy-path test coverage of the routes you add.
 - Never log secrets — filter `authorization`, `cookie`, etc.
 - Read secrets from `process.env` (available on Node.js Functions).
   Validate via Zod at module load.
-- For auth, verify JWT signatures with the Web Crypto API
-  (`crypto.subtle`, available on both Node.js and Edge). Never trust the
-  `alg` header from the token.
+- For auth, use `createJwtVerifier({ algorithms: [...] })` or `jwk()` from
+  `@daloyjs/core` (both run on Web Crypto). Do not hand-roll signature checks
+  with `crypto.subtle`. Keep the explicit `algorithms` allowlist, never trust
+  the token's `alg` header, and always check `exp` / `nbf`.
 - Authentication and scopes are not resource authorization. For every route
   that accepts a resource id, classify the resource as public, user-owned,
   tenant-owned, shared, or administrator-only.

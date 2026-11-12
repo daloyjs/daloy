@@ -43,6 +43,7 @@
  * @since 0.46.0
  */
 
+import { stripSource } from "./lib/strip-source.js";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,7 +57,12 @@ export interface ForbiddenWeakRandomCall {
   readonly reason: string;
 }
 
-const FORBIDDEN_RE = /\bMath\s*\.\s*random\s*\(/;
+// Any reference to the function, not only a direct call: an alias
+// (`const rnd = Math.random`), computed access (`Math["random"]()`) and
+// destructuring (`const { random } = Math`) are the same PRNG.
+const FORBIDDEN_RE =
+  /\bMath\s*(?:\?\.|\.)\s*random\b|\bMath\s*\[\s*["'`]random["'`]\s*\]|\{[^}]*\brandom\b[^}]*\}\s*=\s*Math\b/;
+const COMPUTED_RE = /\bMath\s*\[\s*["'`]random["'`]\s*\]/;
 const ALLOW_MARKER_RE = /\/\/\s*daloy-allow-weak-random\b/;
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
@@ -83,25 +89,16 @@ export function findForbiddenWeakRandomCalls(
 ): readonly ForbiddenWeakRandomCall[] {
   const out: ForbiddenWeakRandomCall[] = [];
   const lines = source.split(/\r?\n/);
-  let inBlockComment = false;
+  // Comments are removed by a whole-file scan (see strip-source.ts): a
+  // per-line guess mistook `"/*"` in a string for a comment opener.
+  const views = stripSource(source);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    let working = raw;
-    if (inBlockComment) {
-      const end = working.indexOf("*/");
-      if (end < 0) continue;
-      working = working.slice(end + 2);
-      inBlockComment = false;
-    }
-    const blockOpen = working.lastIndexOf("/*");
-    const blockClose = working.lastIndexOf("*/");
-    if (blockOpen >= 0 && blockClose < blockOpen) {
-      working = working.slice(0, blockOpen);
-      inBlockComment = true;
-    }
-    const stripped = stripCommentsAndStrings(working);
+    const working = views.noComments[i]!;
+    const stripped = views.code[i]!;
     if (stripped.trim().length === 0) continue;
-    if (!FORBIDDEN_RE.test(stripped)) continue;
+    // Computed access keeps its name in a string, which `stripped` blanks.
+    if (!FORBIDDEN_RE.test(stripped) && !COMPUTED_RE.test(working)) continue;
     if (ALLOW_MARKER_RE.test(raw)) continue;
     out.push({
       file,

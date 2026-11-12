@@ -326,7 +326,7 @@ test("GET /healthz returns ok", async () => {
 Cover both **happy paths** and **unhappy paths** for every route:
 
 - Happy path: valid input → expected `status` and `body`.
-- Validation failure: missing/invalid fields → `400` with problem details.
+- Validation failure: missing/invalid fields → `422` with problem details.
 - Auth failure (when applicable): unauthenticated → `401`; wrong scope →
   `403`.
 - Resource authorization (when a route accepts an id): Alice can access

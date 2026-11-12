@@ -94,6 +94,7 @@ import {
   CORS_WILDCARD_ORIGIN_MARKER,
   CSRF_HOOK_MARKER,
   _mergePreBodyWithEarlyRejections,
+  _replayOrderedBundles,
   _orderBeforeHandleForReplay,
   REQUIRE_SCOPES_AGGREGATE_KEY,
   REQUIRE_SCOPES_HOOK_MARKER,
@@ -3443,32 +3444,25 @@ export class App<
   }
 
   /**
-   * Per-request guard for spoofed proxy headers. When the App was
-   * constructed without an explicit {@link AppOptions.trustProxy} value
-   * and a request arrives carrying a spoofable forwarded / client-IP header
-   * (`X-Forwarded-*`, `X-Real-IP`, or a vendor header like `CF-Connecting-IP`,
-   * `Fly-Client-IP`, `True-Client-IP`) or a spoofable certificate-identity
-   * header (`X-Forwarded-Client-Cert` plus any structured header names
-   * registered via `clientCertAuth({ header })`), refuse to
-   * dispatch it: the rate limiter, audit log, request-id propagation, and
-   * mTLS identity would otherwise honour attacker-supplied values. Returns a
-   * structured `500 problem+json` so the failure is loud at the network
-   * boundary.
-   * Disabled when `secureDefaults: false` or when `trustProxy` is set to
-   * `true` or `false` explicitly.
+   * Name of the first spoofable forwarded / certificate-identity header the
+   * request carries while no proxy posture is declared, or `undefined` when
+   * the request may proceed. Shared by the HTTP dispatcher and the adapters'
+   * WebSocket upgrade paths so the two cannot drift.
+   *
+   * @param headers - Anything with a `has(lowercaseName)` test; a `Headers`
+   *   object is passed as-is so the HTTP path allocates nothing.
    */
-  private assertTrustProxyConfigured(request: Request): void {
-    if (this.options.secureDefaults === false) return;
-    if (this.options.trustProxy !== undefined) return;
+  private untrustedProxyHeader(headers: { has(name: string): boolean }): string | undefined {
+    if (this.options.secureDefaults === false) return undefined;
+    if (this.options.trustProxy !== undefined) return undefined;
     // `behindProxy` is the declarative successor — when supplied,
     // the framework already knows how to interpret forwarded headers and
     // the legacy unconfigured-proxy guard is satisfied.
-    if (this.options.behindProxy !== undefined) return;
+    if (this.options.behindProxy !== undefined) return undefined;
     // Same risk-register clause as the session/CSRF guard: only enforce
     // in production. Dev/CI surfaces routinely test forwarded headers
     // without configuring a reverse-proxy posture.
-    if (!this.isProduction()) return;
-    const headers = request.headers;
+    if (!this.isProduction()) return undefined;
     let found: string | undefined;
     for (const name of SPOOFABLE_PROXY_HEADERS) {
       if (headers.has(name)) {
@@ -3488,6 +3482,51 @@ export class App<
         }
       }
     }
+    return found;
+  }
+
+  /**
+   * Apply the spoofed-proxy-header refusal to a WebSocket upgrade, which
+   * bypasses the HTTP dispatcher. Without it, a `beforeUpgrade` hook (or an
+   * IP-keyed guard on the upgrade) could act on a client-supplied
+   * `X-Forwarded-For` that the same app refuses on every HTTP route.
+   *
+   * @param headers - The upgrade request's headers, or anything with a
+   *   `has(lowercaseName)` test.
+   * @returns `true` when the upgrade must be refused.
+   * @internal
+   */
+  isUpgradeProxyHeaderRefused(headers: { has(name: string): boolean }): boolean {
+    const found = this.untrustedProxyHeader(headers);
+    if (found === undefined) return false;
+    if (!this.trustProxyWarned) {
+      this.trustProxyWarned = true;
+      this.log.warn(
+        { event: "trust-proxy.unconfigured", header: found },
+        `WebSocket upgrade carried ${found} but app({ behindProxy }) is unset; refusing to honour spoofable proxy headers. ` +
+        PROXY_FIX_HINT,
+      );
+    }
+    return true;
+  }
+
+  /**
+   * Per-request guard for spoofed proxy headers. When the App was
+   * constructed without an explicit {@link AppOptions.trustProxy} value
+   * and a request arrives carrying a spoofable forwarded / client-IP header
+   * (`X-Forwarded-*`, `X-Real-IP`, or a vendor header like `CF-Connecting-IP`,
+   * `Fly-Client-IP`, `True-Client-IP`) or a spoofable certificate-identity
+   * header (`X-Forwarded-Client-Cert` plus any structured header names
+   * registered via `clientCertAuth({ header })`), refuse to
+   * dispatch it: the rate limiter, audit log, request-id propagation, and
+   * mTLS identity would otherwise honour attacker-supplied values. Returns a
+   * structured `500 problem+json` so the failure is loud at the network
+   * boundary.
+   * Disabled when `secureDefaults: false` or when `trustProxy` is set to
+   * `true` or `false` explicitly.
+   */
+  private assertTrustProxyConfigured(request: Request): void {
+    const found = this.untrustedProxyHeader(request.headers);
     if (!found) return;
     if (!this.trustProxyWarned) {
       this.trustProxyWarned = true;
@@ -6809,50 +6848,67 @@ function securityMarkersFromHooks(
   };
   for (const hooks of layers) expand(hooks);
 
-  // `flattened` is in execution order: compare the earliest replay layer
-  // against the latest tenancy or budget layer so any replay mounted ahead of
-  // any tenancy / rate-limit / throttle layer is caught, including inside every().
-  let cacheIndex = -1;
-  let tenancyIndex = -1;
-  let replayIndex = -1;
-  let replayName = "";
-  let budgetIndex = -1;
-  for (let i = 0; i < flattened.length; i++) {
-    const record = flattened[i] as Record<PropertyKey, unknown>;
-    if (
-      cacheIndex === -1 &&
-      (record[RESPONSE_CACHE_HOOK_MARKER] === true ||
-        record[IDEMPOTENCY_HOOK_MARKER] === true)
-    )
-      cacheIndex = i;
-    if (record[TENANCY_HOOK_MARKER] === true)
-      tenancyIndex = i;
-    if (replayIndex === -1) {
-      if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
-        replayIndex = i;
-        replayName = "responseCache()";
-      } else if (record[IDEMPOTENCY_HOOK_MARKER] === true) {
-        replayIndex = i;
-        replayName = "idempotency()";
+  const scan = (ordered: readonly Hooks[]): void => {
+    let cacheIndex = -1;
+    let tenancyIndex = -1;
+    let replayIndex = -1;
+    let replayName = "";
+    let budgetIndex = -1;
+    for (let i = 0; i < ordered.length; i++) {
+      const record = ordered[i] as Record<PropertyKey, unknown>;
+      if (
+        cacheIndex === -1 &&
+        (record[RESPONSE_CACHE_HOOK_MARKER] === true ||
+          record[IDEMPOTENCY_HOOK_MARKER] === true)
+      )
+        cacheIndex = i;
+      if (record[TENANCY_HOOK_MARKER] === true)
+        tenancyIndex = i;
+      if (replayIndex === -1) {
+        if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
+          replayIndex = i;
+          replayName = "responseCache()";
+        } else if (record[IDEMPOTENCY_HOOK_MARKER] === true) {
+          replayIndex = i;
+          replayName = "idempotency()";
+        }
       }
+      if (
+        Array.isArray(record[EARLY_REJECTION_MARKER]) &&
+        (record[EARLY_REJECTION_MARKER] as unknown[]).length > 0
+      )
+        budgetIndex = i;
     }
-    if (
-      Array.isArray(record[EARLY_REJECTION_MARKER]) &&
-      (record[EARLY_REJECTION_MARKER] as unknown[]).length > 0
-    )
-      budgetIndex = i;
-  }
-  return {
-    hasSession,
-    hasCsrf,
-    hasAuth,
-    cacheBeforeTenancy:
-      cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex,
-    replayBeforeBudget:
-      replayIndex !== -1 && budgetIndex !== -1 && replayIndex < budgetIndex
-        ? replayName
-        : null,
+    if (cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex) {
+      cacheBeforeTenancy = true;
+    }
+    if (replayIndex !== -1 && budgetIndex !== -1 && replayIndex < budgetIndex) {
+      replayBeforeBudget ??= replayName;
+    }
   };
+  let cacheBeforeTenancy = false;
+  let replayBeforeBudget: string | null = null;
+  // Registration order, with every() expanded: catches a replay written ahead
+  // of a tenancy / rate-limit / throttle layer, including inside every().
+  scan(flattened);
+  // Execution order: the replay reordering can move an opaque auth-and-replay
+  // bundle (except(every(auth, idempotency()))) ahead of an earlier opaque
+  // bundle that holds the rate limit or the tenancy resolver. Judge what
+  // actually runs first as well, expanding each bundle only to read markers.
+  const executed: Hooks[] = [];
+  const expandForMarkers = (hooks: Hooks): void => {
+    const combined = (hooks as Record<PropertyKey, unknown>)[COMBINED_BEFORE_HANDLE_LAYERS] as
+      | CombinedBeforeHandleLayers
+      | undefined;
+    if (combined !== undefined && combined !== null && Array.isArray(combined.layers)) {
+      for (const inner of combined.layers) expandForMarkers(inner);
+      return;
+    }
+    executed.push(hooks);
+  };
+  for (const bundle of _replayOrderedBundles(layers)) expandForMarkers(bundle);
+  scan(executed);
+  return { hasSession, hasCsrf, hasAuth, cacheBeforeTenancy, replayBeforeBudget };
 }
 
 function isStateChangingMethod(method: HttpMethod): boolean {

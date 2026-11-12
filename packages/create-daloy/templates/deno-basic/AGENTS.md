@@ -20,7 +20,7 @@ A [DaloyJS](https://daloyjs.dev) REST API for the [Deno](https://deno.com) runti
 - `deno task contract` — run the focused OpenAPI contract test
 - `deno task hooks:install` — enable the optional pre-push contract gate
 
-The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint yet). Run `npx @hey-api/openapi-ts -i generated/openapi.json -o generated/client` if you need the client.
+The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint yet). Ask the user first, then run `npx --ignore-scripts @hey-api/openapi-ts@0.0.0-next-20260930190945 -i generated/openapi.json -o generated/client` (it runs a package outside `deno.lock`).
 
 ## Project shape
 
@@ -46,12 +46,13 @@ The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint 
 
 ## Secure-by-default (do not let an AI strip these)
 
-Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): _"If you tell an AI to make something work, it might remove the very security checks that protect you."_ When a guard rejects a request, **satisfy it, do not delete it.**
+AI agents tend to remove the checks that block them ([why](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development)). When a guard rejects a request, **satisfy it, do not delete it.**
 
 - Keep `secureHeaders()`, `requestId()`, `rateLimit()` registered, and `bodyLimitBytes` / `requestTimeoutMs` set on `new App({...})`. Tighten per-route; never raise globally to pass a test.
 - Keep Deno permissions narrow. Never add `--allow-all`; never broaden `--allow-net` / `--allow-read` / `--allow-env` to silence a prompt — add the specific host / path / var.
 - Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. For other validators, use the strict / no-extra-keys equivalent. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
 - Every protected route attaches an auth `beforeHandle` and ships an unhappy-path test proving an unauthenticated request returns `401` (and wrong scope returns `403`) — the HTTP-boundary equivalent of Supabase's pgTAP policy tests.
+- Keep `fetchGuard()` on outbound fetches, `isForbiddenObjectKey` checks, and exact `except()` paths.
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use a constant-time comparison, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - `.env`, secrets, and private keys never get committed — the template `_gitignore` is the source of truth.

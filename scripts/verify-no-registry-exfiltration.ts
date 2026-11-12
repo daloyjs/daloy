@@ -327,6 +327,7 @@
  * @since 0.50.0
  */
 
+import { stripSource } from "./lib/strip-source.js";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1582,31 +1583,15 @@ export function findForbiddenRegistryExfilCalls(
   const out: ForbiddenRegistryExfilCall[] = [];
   const lines = source.split(/\r?\n/);
   const codeLines: string[] = new Array(lines.length).fill("");
-  let inBlockComment = false;
+  // Comments are removed by a whole-file scan (see strip-source.ts): a
+  // per-line guess mistook `"/*"` in a string for a comment opener.
+  const views = stripSource(source);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    let working = raw;
-    if (inBlockComment) {
-      const end = working.indexOf("*/");
-      if (end < 0) continue;
-      working = working.slice(end + 2);
-      inBlockComment = false;
-    }
-    const blockOpen = working.lastIndexOf("/*");
-    const blockClose = working.lastIndexOf("*/");
-    if (blockOpen >= 0 && blockClose < blockOpen) {
-      working = working.slice(0, blockOpen);
-      inBlockComment = true;
-    }
-    // Strip inline block comments (`/* ... */` on the same line) before
-    // the line-comment scan so a token inside an inline block comment
-    // does not trip the gate.
-    working = working.replace(/\/\*[\s\S]*?\*\//g, " ");
-    const lineCommentIndex = findLineCommentStart(working);
-    const noComments = lineCommentIndex >= 0 ? working.slice(0, lineCommentIndex) : working;
+    const noComments = views.noComments[i]!;
     if (noComments.trim().length === 0) continue;
 
-    const codeOnly = noComments.replace(STRING_LITERAL_RE, '""');
+    const codeOnly = views.code[i]!;
     codeLines[i] = codeOnly;
     for (const pattern of FORBIDDEN_PATTERNS) {
       const haystack = pattern.keepStrings ? noComments : codeOnly;

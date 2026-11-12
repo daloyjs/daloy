@@ -117,6 +117,8 @@ The arrival-order queue is bounded per connection (since 1.23.0): while an async
 
 On the Node adapter, once a close has started (yours or the peer's) no further message reaches `message()` or the schema validator, and a peer that does not complete the close handshake within 5 seconds has its socket destroyed. A CLOSE frame whose reason is not valid UTF-8 is answered with `1002`.
 
+Upgrades follow the same forwarded-header rule as HTTP requests: in production, with no `behindProxy` / `trustProxy` posture declared, an upgrade carrying `X-Forwarded-For` or a similar header is refused with `500` on the Node and Bun adapters, so `beforeUpgrade` never sees a client-supplied address.
+
 Routes without `request.body` behave as before: `message()` gets the raw string or bytes and `body` is `undefined`. Leave it off for binary protocols, validate inside `message()` yourself, and use `meta.receive` to document the format in [AsyncAPI](/docs/asyncapi).
 
 ## Connection API
