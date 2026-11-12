@@ -40,7 +40,8 @@ app.ws("/chat/:room", {
   },
   message(conn, data, isBinary) {
     // Echo back, upper-cased for text frames
-    conn.send(typeof data === "string" ? data.toUpperCase() : data, { binary: isBinary });
+    // send() picks text or binary from the value's type.
+    conn.send(typeof data === "string" ? data.toUpperCase() : data);
   },
   close(conn, code, reason) {
     // release any per-connection resources here
@@ -57,9 +58,9 @@ Use `defineWebSocket()` for full type-inference on path params (`ctx.params`), q
 ```ts
 import { defineWebSocket } from "@daloyjs/core";
 
-const chatHandler = defineWebSocket({
+// Name the path pattern so ctx.params is typed from it.
+const chatHandler = defineWebSocket<"/chat/:room">({
   open(conn, ctx) {
-    // ctx.params is typed from the path pattern "/chat/:room"
     conn.data = { room: ctx.params.room, joinedAt: Date.now() };
   },
   message(conn, data) {

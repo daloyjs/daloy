@@ -187,14 +187,19 @@ const MCP_JSON_RESPONSE_SCHEMA: StandardSchemaV1 & {
  * @since 1.0.0
  */
 export type McpJsonValue =
-  null | boolean | number | string | McpJsonValue[] | { [key: string]: McpJsonValue };
+  | null
+  | boolean
+  | number
+  | string
+  | readonly McpJsonValue[]
+  | { readonly [key: string]: McpJsonValue };
 
 /**
  * JSON object used for MCP tool arguments and structured payloads.
  *
  * @since 1.0.0
  */
-export type McpJsonObject = { [key: string]: McpJsonValue };
+export type McpJsonObject = { readonly [key: string]: McpJsonValue };
 
 /**
  * JSON Schema fragment advertised to MCP clients for a tool or prompt

@@ -256,7 +256,7 @@ Hook 在固定的生命周期节点上附加行为：
 
 - `onRequest`：最早执行，在解析之前。
 - `preBody`：在路由匹配之后、schema 校验或请求体 I/O 之前。内置的请求头/JWT/basic/mTLS 认证在这里运行。
-- `beforeHandle`：在校验之后、你的处理函数之前。返回一个 `Response` 即可短路。
+- `beforeHandle`：在校验之后、你的处理函数之前。返回一个 `Response` 即可短路。也可以抛出 `UnauthorizedError` 这样的类型化错误。返回其他任何值（例如 `{ status: 401 }`）都不算拒绝：`preBody` 和 `beforeHandle` 会对此返回 `500`，这样写的守卫就不会放行请求。
 - `afterHandle`：在响应序列化之前包装或转换处理函数的结果。
 - `onError`：观察或替换错误响应。
 - `onSend`：就地修改传出的响应头，或返回一个新的 `Response`。在成功、错误和 `OPTIONS` 预检路径上都会运行。

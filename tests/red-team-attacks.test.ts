@@ -265,7 +265,12 @@ test("[jwt] a tampered signature is rejected as invalid_signature", async () => 
   const signer = createJwtSigner({ alg: "HS256", key: HS, maxLifetimeSeconds: 3600 });
   const token = await signer.sign({ sub: "user", iat: NOW, exp: NOW + 600 });
   const parts = token.split(".");
-  const tampered = `${parts[0]}.${parts[1]}.${parts[2]!.slice(0, -2)}AA`;
+  // Change the first signature character to a different one. Overwriting the
+  // tail with a fixed "AA" left the token unchanged whenever the signature
+  // already ended that way, so the test failed about once in a thousand runs.
+  const signature = parts[2]!;
+  const flipped = signature[0] === "A" ? "B" : "A";
+  const tampered = `${parts[0]}.${parts[1]}.${flipped}${signature.slice(1)}`;
   const verifier = createJwtVerifier({ algorithms: ["HS256"], key: HS });
   await assert.rejects(verifier.verify(tampered), (e: any) => e instanceof JwtError);
 });

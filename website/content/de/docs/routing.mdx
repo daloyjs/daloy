@@ -256,7 +256,7 @@ Hooks hängen Verhalten an feste Punkte im Lebenszyklus:
 
 - `onRequest`: am frühesten, vor dem Parsen.
 - `preBody`: nach dem Routen-Matching, vor Schema-Validierung und Body-I/O. Die eingebaute Authentifizierung per Header, JWT, Basic und mTLS läuft hier.
-- `beforeHandle`: nach der Validierung, vor Ihrem Handler. Geben Sie eine `Response` zurück, um abzukürzen.
+- `beforeHandle`: nach der Validierung, vor Ihrem Handler. Geben Sie eine `Response` zurück, um abzukürzen. Oder werfen Sie einen typisierten Fehler wie `UnauthorizedError`. Jeder andere Rückgabewert, zum Beispiel `{ status: 401 }`, ist keine Ablehnung: `preBody` und `beforeHandle` antworten darauf mit `500`, damit ein so geschriebener Guard keine Anfrage durchlässt.
 - `afterHandle`: umhüllt oder transformiert das Ergebnis des Handlers vor der Serialisierung der Antwort.
 - `onError`: beobachtet oder ersetzt die Fehlerantwort.
 - `onSend`: ändert ausgehende Header direkt oder gibt eine neue `Response` zurück. Läuft auf Erfolgs-, Fehler- und `OPTIONS`-Preflight-Pfaden.

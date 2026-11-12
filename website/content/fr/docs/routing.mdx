@@ -256,7 +256,7 @@ Les hooks attachent un comportement à des points fixes du cycle de vie :
 
 - `onRequest` : le plus tôt, avant l’analyse.
 - `preBody` : après la correspondance de route, avant la validation des schémas ou toute E/S sur le corps. L’authentification intégrée par en-tête, JWT, basic ou mTLS s’exécute ici.
-- `beforeHandle` : après la validation, avant votre handler. Renvoyez une `Response` pour court-circuiter.
+- `beforeHandle` : après la validation, avant votre handler. Renvoyez une `Response` pour court-circuiter. Ou levez une erreur typée comme `UnauthorizedError`. Renvoyer autre chose, par exemple `{ status: 401 }`, n’est pas un rejet : `preBody` et `beforeHandle` répondent `500` pour qu’un garde écrit ainsi ne laisse pas passer la requête.
 - `afterHandle` : enveloppe ou transforme le résultat du handler avant la sérialisation de la réponse.
 - `onError` : observe ou remplace la réponse d’erreur.
 - `onSend` : modifie en place les en-têtes sortants ou renvoie une nouvelle `Response`. S’exécute sur les chemins de succès, d’erreur et de preflight `OPTIONS`.

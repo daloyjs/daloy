@@ -6032,6 +6032,7 @@ export class App<
             state.log = log;
           }
         }
+        if (preBody !== undefined && !(preBody instanceof Response)) refuseHookResult("preBody", preBody);
         if (preBody instanceof Response) {
           if (
             preBody.status < 400 &&
@@ -6110,6 +6111,7 @@ export class App<
             state.log = log;
           }
         }
+        if (before !== undefined && !(before instanceof Response)) refuseHookResult("beforeHandle", before);
         if (before instanceof Response) {
           // A cache hit or an idempotent replay answers here; it must not
           // serve a protected route's stored response to an unauthenticated
@@ -7360,9 +7362,32 @@ function firstResponse<F extends (...args: any[]) => any>(
     for (const fn of fns) {
       const r = await fn(...args);
       if (r instanceof Response) return r;
+      if (r !== undefined) refuseHookResult("hook", r);
     }
     return undefined;
   }) as unknown as F;
+}
+
+/**
+ * Refuse a hook result that is neither nothing nor a `Response`.
+ *
+ * A guard written as `return { status: 401, body: ... }` looks like a
+ * rejection but is not one: only a `Response` (or a thrown error) stops the
+ * request. Silently ignoring the value would let the request through, so the
+ * request fails with a `500` instead and the mistake is visible on first use.
+ * `null` is tolerated as "nothing".
+ *
+ * @param phase - Hook phase, for the message.
+ * @param value - What the hook returned.
+ * @throws InternalError always, unless `value` is `null`.
+ */
+function refuseHookResult(phase: string, value: unknown): void {
+  if (value === null) return;
+  throw new InternalError(
+    `A ${phase} hook returned a value that is not a Response. To reject a request, throw a typed ` +
+      `error (for example UnauthorizedError) or return a Response; any other return value is not a ` +
+      `rejection, so the request is refused instead of being let through.`,
+  );
 }
 
 function pipeline<F extends (ctx: any, value: any) => any>(

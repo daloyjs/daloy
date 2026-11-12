@@ -182,7 +182,13 @@ A route can declare `auth: { scheme, ... }` so the generated OpenAPI document ad
 The built-in auth middlewares (`bearerAuth`, `basicAuth`, `jwk`, `httpSignatureAuth`, `clientCertAuth`) satisfy the guard automatically. For a custom auth hook, or when authentication is actually enforced by an upstream gateway, wrap the hook with the exported `markAuthHook()` so the guard can see it.
 
 ```ts
-import { App, bearerAuth, markAuthHook, timingSafeEqual } from "@daloyjs/core";
+import {
+  App,
+  bearerAuth,
+  markAuthHook,
+  timingSafeEqual,
+  UnauthorizedError,
+} from "@daloyjs/core";
 
 const app = new App({ env: "production" });
 
@@ -193,9 +199,10 @@ app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.API_TOKEN!)
 app.use(
   markAuthHook({
     beforeHandle: (ctx) => {
-      if (!isAuthorized(ctx.request)) {
-        return { status: 401, body: { error: "unauthorized" } };
-      }
+      // Reject by throwing a typed error (or returning a Response). A plain
+      // object such as { status: 401 } is not a rejection: the framework
+      // answers 500 for it rather than letting the request through.
+      if (!isAuthorized(ctx.request)) throw new UnauthorizedError();
     },
   })
 );
@@ -301,6 +308,8 @@ alsoGood.use(idempotency({ ttlSeconds: 86_400 }));
 Ordering the limiter first does mean cache hits and replays spend budget. That is the intended reading of a rate limit: the cap is on what a caller may ask for, not on what happened to be expensive to produce.
 
 Since 1.22.0 guards 7 and 8 look inside `every()` bundles and compare the earliest stored-response layer against the *latest* tenancy or budget layer in the route's effective chain. `every(responseCache(), tenancy(...))`, and a route-level `rateLimit()` registered after a global `responseCache()` (even with another limiter ahead of the cache), are refused too. Mount every budget the route relies on ahead of the first stored-response hook.
+
+Both guards also judge the order the hooks actually run in. When an authentication hook sits behind a stored-response hook, DaloyJS moves it ahead at runtime; with two wrapped bundles such as `except(paths, every(rateLimit(), responseCache()))` followed by `except(paths, every(bearerAuth(), idempotency()))`, that move would put the second bundle's replay ahead of the first bundle's limiter. That composition is refused at boot. Write the bundles as plain `every()` calls, or register the limiter (or `tenancy()`) on its own first.
 
 ## 9. Unauthenticated `a2aRoutes()` endpoint [#9-unauthenticated-a2a-endpoint]
 

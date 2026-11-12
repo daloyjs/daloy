@@ -238,7 +238,14 @@ import {
 
 const client = ioredisAdapter(redis);
 
-app.use(rateLimit({ trustedHops: 1, store: redisRateLimitStore({ client }) }));
+app.use(
+  rateLimit({
+    windowMs: 60_000,
+    max: 120,
+    trustedHops: 1,
+    store: redisRateLimitStore({ client }),
+  }),
+);
 app.use(
   autoBan({
     trustedHops: 1,

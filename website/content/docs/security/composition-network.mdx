@@ -92,7 +92,7 @@ app.use(some(
 
 ## 3. `ipRestriction()`: CIDR allow / deny [#3-iprestriction-cidr-allow-deny]
 
-Block or allow requests by source IP or CIDR range. Pairs naturally with `trustProxyHeaders: true` behind a trusted proxy so the matched address is the real client, not your load balancer. Supports IPv4, IPv6, and IPv4-mapped IPv6 (`::ffff:a.b.c.d`). `deny` always wins over `allow`.
+Block or allow requests by source IP or CIDR range. Pairs naturally with `trustProxyHeaders: true` behind a trusted proxy so the matched address is the real client, not your load balancer. Supports IPv4, IPv6, and IPv4-mapped IPv6 (`::ffff:a.b.c.d`) on both sides: a mapped client matches an IPv4 rule, and a rule written in mapped form (as Node prints a dual-stack peer) matches the plain IPv4 client. `deny` always wins over `allow`.
 
 ```ts
 import { App, ipRestriction } from "@daloyjs/core";

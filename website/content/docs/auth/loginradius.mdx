@@ -193,8 +193,8 @@ app.get(
   ({ state }) => ({
     status: 200,
     body: {
-      userId: state.user!.sub,
-      email: state.user!.email,
+      userId: state.user!.sub!, // verified tokens always carry `sub`
+      email: state.user!.claims.email as string | undefined,
     },
   }),
 );

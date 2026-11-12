@@ -189,7 +189,7 @@ export const app = new App();
 
 // A guarded fetch: loopback, RFC1918, link-local, and cloud-metadata
 // IPs are refused; only the hosts you allow get through.
-const safeFetch = fetchGuard({ allow: ["https://api.weather.example"] });
+const safeFetch = fetchGuard({ allowHosts: ["api.weather.example"] });
 
 const getWeather = tool({
   description: "Get the current weather for a city.",
@@ -256,10 +256,10 @@ export const app = new App({
 app.use(secureHeaders());
 app.use(requestId());
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
-app.use(loadShedding({ maxQueueDepth: 100, maxEventLoopDelayMs: 50 }));
+app.use(loadShedding({ maxEventLoopDelayMs: 50 }));
 
 // Every AI endpoint authenticates. The model is a caller, not a user.
-app.use("/api/*", bearerAuth({ verify: (token) => sessions.verify(token) }));
+app.use(bearerAuth({ validate: (token) => sessions.verify(token) }));
 ```
 
 For the full argument behind this (why the deployment-time layer must hold when the model fails), see the blog post [on the International AI Safety Report](/blog/international-ai-safety-report-2026-minimum-safety-baseline-for-ai-backends), and the [secure-by-default](/docs/security/secure-defaults) guide.

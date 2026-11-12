@@ -256,7 +256,7 @@ Os hooks acrescentam comportamento em pontos fixos do ciclo de vida:
 
 - `onRequest`: o primeiro, antes do parsing.
 - `preBody`: depois da correspondência da rota, antes da validação do schema ou de qualquer I/O do corpo. A autenticação embutida por cabeçalho/JWT/basic/mTLS roda aqui.
-- `beforeHandle`: depois da validação, antes do seu handler. Devolva uma `Response` para interromper o fluxo.
+- `beforeHandle`: depois da validação, antes do seu handler. Devolva uma `Response` para interromper o fluxo. Ou lance um erro tipado como `UnauthorizedError`. Devolver qualquer outra coisa, por exemplo `{ status: 401 }`, não é uma rejeição: `preBody` e `beforeHandle` respondem `500` para que um guard escrito assim não deixe a requisição passar.
 - `afterHandle`: envolve ou transforma o resultado do handler antes da serialização da resposta.
 - `onError`: observa ou substitui a resposta de erro.
 - `onSend`: altera os cabeçalhos de saída no lugar ou devolve uma nova `Response`. Roda nos caminhos de sucesso, de erro e de preflight `OPTIONS`.

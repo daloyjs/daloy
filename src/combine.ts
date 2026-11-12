@@ -6,6 +6,7 @@
  * @since 0.19.0
  */
 
+import { InternalError } from "./errors.js";
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { AUTH_OPTIONAL_PASS, AUTH_RAN } from "./internal-auth.js";
 import {
@@ -183,6 +184,15 @@ export function some(...layers: Hooks[]): Hooks {
       for (const fn of candidates) {
         try {
           const r = await fn(ctx);
+          // A branch that returns something other than a Response or nothing
+          // (`return { status: 401 }`) has not rejected and has not passed.
+          // Count it as a failed branch, never as the winner.
+          if (r !== undefined && r !== null && !(r instanceof Response)) {
+            throw new InternalError(
+              "A some() branch returned a value that is not a Response. To reject a request, throw a typed " +
+                "error (for example UnauthorizedError) or return a Response.",
+            );
+          }
           if (r instanceof Response) {
             rollbackRequestFinalizers(ctx, finalizerMark);
             restoreState(state, snapshot);

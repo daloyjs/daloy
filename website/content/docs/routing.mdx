@@ -256,7 +256,7 @@ Hooks attach behavior at fixed lifecycle points:
 
 - `onRequest`: earliest, before parsing.
 - `preBody`: after route matching, before schema validation or body I/O. Built-in header/JWT/basic/mTLS auth runs here.
-- `beforeHandle`: after validation, before your handler. Return a `Response` to short-circuit.
+- `beforeHandle`: after validation, before your handler. Return a `Response` to short-circuit, or throw a typed error such as `UnauthorizedError`. Returning anything else, for example `{ status: 401 }`, is not a rejection: `preBody` and `beforeHandle` answer `500` for it so a guard written that way cannot let a request through.
 - `afterHandle`: wrap or transform the handler result before response serialization.
 - `onError`: observe or replace the error response.
 - `onSend`: mutate outgoing headers in place or return a new `Response`. Runs on success, error, and `OPTIONS` preflight paths.

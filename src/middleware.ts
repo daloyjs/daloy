@@ -7,7 +7,7 @@
 
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
-import { TooManyRequestsError, ForbiddenError } from "./errors.js";
+import { TooManyRequestsError, ForbiddenError, InternalError } from "./errors.js";
 import {
   isForbiddenObjectKey,
   parseBearerToken,
@@ -913,6 +913,14 @@ export function _mergePreBodyWithEarlyRejections(
         throw err;
       }
       if (!(result instanceof Response)) {
+        // Anything else that is not "nothing" looks like a rejection but is
+        // not one (`return { status: 401 }`); refuse it instead of passing.
+        if (result !== undefined && result !== null) {
+          throw new InternalError(
+            "A preBody hook returned a value that is not a Response. To reject a request, throw a typed " +
+              "error (for example UnauthorizedError) or return a Response.",
+          );
+        }
         if (step.handlesOwnEarly) {
           for (const hook of step.early) pending.push(hook);
         }

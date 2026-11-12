@@ -17,6 +17,33 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- **A hook that returns a plain object no longer lets the request through.**
+  A guard written as `return { status: 401, body: ... }` in `preBody` or
+  `beforeHandle` was silently ignored, so the request reached the handler.
+  One boot-guards docs sample was written that way. A hook result that is
+  neither nothing nor a `Response` is now answered with `500`, and inside
+  `some()` such a branch counts as failed, never as the winner. Reject by
+  throwing a typed error or returning a `Response`.
+
+### Changed
+
+- A handler may return `{ status: 204 }` with no `body` when the response
+  declares no body schema. `body` stays required when a schema is declared.
+- MCP JSON types accept read-only values, so an input schema written with
+  `as const` can be passed to `validateMcpInput()` and tool definitions.
+
+### Fixed
+
+- Docs: samples that did not match the API are corrected. `fetchGuard()`
+  takes `allowHosts`, `loadShedding()` has no `maxQueueDepth`, `bearerAuth()`
+  takes `validate`, `rateLimit()` needs `windowMs` and `max`, WebSocket
+  `send()` takes one argument, `defineWebSocket` needs the path as a type
+  argument for typed params, and custom claims are read from
+  `state.user.claims`. Every TypeScript sample that imports the framework was
+  type-checked against the source to find these.
+
 ## [1.24.1] - 2026-11-12
 
 ### Security

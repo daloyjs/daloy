@@ -165,18 +165,26 @@ export type StatusOf<R extends ResponsesMap> = Extract<keyof R, number>;
 /**
  * Discriminated union of legal return values for a handler. The status code
  * is a literal type so TypeScript enforces that every returned response is
- * declared in the route's `responses` map.
+ * declared in the route's `responses` map. `body` is required when that
+ * response declares a body schema and optional when it does not, so a `204`
+ * can be returned as `{ status: 204 }`.
  *
  * @since 0.1.0
  */
 export type HandlerReturn<R extends ResponsesMap> = {
-  [S in StatusOf<R>]: {
-    status: S;
-    body: R[S] extends { body: StandardSchemaV1 }
-    ? StandardSchemaV1.InferInput<NonNullable<R[S]>["body"] & StandardSchemaV1>
-    : unknown;
-    headers?: Record<string, string>;
-  };
+  [S in StatusOf<R>]: R[S] extends { body: StandardSchemaV1 }
+    ? {
+        status: S;
+        body: StandardSchemaV1.InferInput<NonNullable<R[S]>["body"] & StandardSchemaV1>;
+        headers?: Record<string, string>;
+      }
+    : {
+        status: S;
+        // A response declared without a body schema (`204`, a bare `201`)
+        // has nothing to return, so `body` may be left out.
+        body?: unknown;
+        headers?: Record<string, string>;
+      };
 }[StatusOf<R>];
 
 // ---------- Auth ----------
