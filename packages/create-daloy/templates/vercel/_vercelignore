@@ -5,6 +5,7 @@
 !.env.example
 *.pem
 *.key
+*.p12
 .githooks/
 tests/
 coverage/

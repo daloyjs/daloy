@@ -1,0 +1,3 @@
+# This project is an API, not a website: keep crawlers out.
+User-agent: *
+Disallow: /

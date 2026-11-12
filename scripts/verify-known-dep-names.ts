@@ -246,7 +246,8 @@ export function findAliasedDependencySpecifiers(
     const map = pkg[block];
     if (!map || typeof map !== "object") continue;
     for (const [name, spec] of Object.entries(map)) {
-      if (typeof spec === "string" && spec.startsWith("npm:")) {
+      // Trimmed: npm ignores leading whitespace, so `" npm:evil@1"` is an alias too.
+      if (typeof spec === "string" && spec.trim().startsWith("npm:")) {
         out.push({ source, block, name, specifier: spec });
       }
     }
@@ -293,6 +294,14 @@ const GIT_SPECIFIER_PATTERN =
 const URL_SPECIFIER_PATTERN = /^https?:\/\//i;
 
 /**
+ * Specifiers that resolve outside the registry without a recognisable
+ * prefix: GitHub shorthand (`owner/repo`, `owner/repo#ref`) and another
+ * registry (`jsr:`). `workspace:`, `catalog:` and `file:` stay allowed; they
+ * resolve inside this repository.
+ */
+const OTHER_NON_REGISTRY_PATTERN = /^(?:jsr:|[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#.*)?$)/;
+
+/**
  * Find every dependency entry in `pkg` whose specifier is sourced
  * from a Git repository or a raw HTTP(S) URL instead of the
  * configured npm registry.
@@ -328,12 +337,24 @@ export function findGitOrUrlDependencySpecifiers(
     if (!map || typeof map !== "object") continue;
     for (const [name, spec] of Object.entries(map)) {
       if (typeof spec !== "string") continue;
-      if (GIT_SPECIFIER_PATTERN.test(spec)) {
+      const trimmed = spec.trim();
+      if (GIT_SPECIFIER_PATTERN.test(trimmed)) {
         out.push({ source, block, name, specifier: spec, kind: "git" });
         continue;
       }
-      if (URL_SPECIFIER_PATTERN.test(spec)) {
+      if (URL_SPECIFIER_PATTERN.test(trimmed)) {
         out.push({ source, block, name, specifier: spec, kind: "url" });
+        continue;
+      }
+      // `owner/repo` is npm's GitHub shorthand and `jsr:` is another registry.
+      if (OTHER_NON_REGISTRY_PATTERN.test(trimmed)) {
+        out.push({
+          source,
+          block,
+          name,
+          specifier: spec,
+          kind: /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#.*)?$/.test(trimmed) ? "git" : "url",
+        });
       }
     }
   }

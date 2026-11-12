@@ -25,6 +25,14 @@ curl http://localhost:3000/books/1
 
 <!-- daloy-minimal:strip-start docs -->
 
+## The `public/` directory
+
+Keep `public/` in the project, even if it only holds `robots.txt`. With no
+framework preset, Vercel serves static files from `public/` when it exists
+and from the project root when it does not. Without it, files such as
+`README.md`, `package.json` or anything under `src/` could be served as
+static assets ahead of the rewrite to `/api`.
+
 ## API documentation
 
 - API docs (Scalar, development only): <http://localhost:3000/docs>

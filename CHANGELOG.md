@@ -19,57 +19,26 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Security
 
-- **WebSocket upgrades honour the spoofed-proxy-header refusal.** With no
-  proxy posture declared, production HTTP requests carrying
-  `X-Forwarded-For` (or another forwarded / certificate-identity header) are
-  refused, but an upgrade on the Node or Bun adapter skipped that check, so a
-  `beforeUpgrade` hook or IP-keyed guard could act on a client-supplied
-  address. Upgrades now get the same refusal.
-- **create-daloy:** on Yarn older than 4 the CLI now says that the 24h
-  cooldown is not enforced (Yarn 1 has no release-age setting) and skips the
-  automatic install; the generated README says which Yarn the cooldown needs.
-  Every Bun scaffold, not only `bun-basic`, declares `engines.bun >= 1.3.0`,
-  the first Bun that reads the `bunfig.toml` cooldown.
+- **CI gates, second round.** `verify:secret-comparisons` audits every file
+  under `src/` (it audited four) and recognises credentials under ordinary
+  names (`provided`, `signature`, `password`, `secret`) and wrapped across
+  lines, while ignoring shape checks; a `// daloy-allow-compare: <reason>`
+  marker opts a line out. `verify:no-registry-exfiltration` refuses the
+  `rejectUnauthorized` and `checkServerIdentity` options in any spelling.
+  `verify:no-encoded-payloads` finds a blob behind a `data:` prefix or in a
+  doc comment. `verify:known-dep-names` treats GitHub shorthand, `jsr:` and
+  whitespace-prefixed aliases as non-registry.
+- **A GET or HEAD that declares a body** now gives the client one second to
+  read the response before the connection is cut, so the reply is not lost
+  to a reset.
+- **create-daloy:** the Vercel template ships a `public/` directory (with a
+  `robots.txt`), so Vercel serves static files from there and not from the
+  project root, and its `.vercelignore` covers `*.p12`.
 
-- **Boot guards judge the order hooks actually run in (medium).** Two wrapped
-  bundles such as `except(paths, every(rateLimit(), responseCache()))`
-  followed by `except(paths, every(bearerAuth(), idempotency()))` passed the
-  `replay-before-budget` / `cache-before-tenancy` guards, but at runtime the
-  second bundle was moved ahead of the first. Replays were then served
-  before the rate limit was counted or the tenant resolved. The guards now
-  check execution order as well and refuse that composition.
-- **Upgrades with duplicate `Host`, `Content-Length` or `Transfer-Encoding`
-  headers are refused** on the Node and Bun adapters, as HTTP requests
-  already were.
-- **A GET or HEAD that declares a body** is answered and the connection
-  closed. Node previously drained the unread body without limit.
-- **IP rules written in IPv4-mapped form** (`::ffff:1.2.3.4`, as Node prints
-  a dual-stack peer) now match a client that arrives in dotted form.
-- `requireRoles()` and `tenantFromClaim` read `claims` / `credentials` as own
-  properties only, like scopes.
-- **CI gates:** five source-scanning gates stopped scanning after a `"/*"`
-  or `"*/*"` inside a string, leaving 685 lines of `src/` unchecked; they now
-  share a whole-file scanner that also looks inside `${...}`. No violation
-  was hiding in those lines. The gates also catch aliases, computed access
-  and bare-statement forms (`const r = Math.random`, `Buffer["allocUnsafe"]`,
-  `eval(x);`, `Bun.spawn`), the standard `.npmrc` auth-token line,
-  variation-selector and filler characters, `(A) AND (B)` license
-  expressions, and install hooks in template manifests.
-- **create-daloy templates:** the Cloudflare and Vercel skills point agents
-  at `createJwtVerifier()` / `jwk()`, not hand-rolled Web Crypto checks; all
-  skills state `422` for validation failures; every template `AGENTS.md`
-  lists `fetchGuard()`, `isForbiddenObjectKey` and `except()`; the Deno
-  template pins its `npx` generator command; the generated end-of-life check
-  no longer skips Node versions written with a minor number, and generated
-  deploy workflows read `$GITHUB_ACTOR`, not an inline expression.
+### Fixed
 
-### Added
-
-- `tests/gate-composition-properties.test.ts`: seeded property tests that
-  build random trees of `every()` / `some()` over pre-body, `beforeHandle`
-  and optional-mode gates and check admission, handler-visible state and
-  stored-response replay against a reference model. A failure prints the
-  seed and the tree.
+- The secret-scan workflow failed on the RFC 6455 sample handshake key in two
+  new test files; the tests now build that key at runtime.
 
 ## [1.24.0] - 2026-11-12
 

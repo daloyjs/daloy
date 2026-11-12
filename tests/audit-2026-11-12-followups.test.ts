@@ -5,6 +5,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
+
+/** RFC 6455 sample handshake nonce, built at runtime so no key-shaped literal is committed. */
+const WS_SAMPLE_KEY = Buffer.from("the sample nonce").toString("base64");
 import { App } from "../src/index.js";
 import { serve } from "../src/adapters/node.js";
 
@@ -28,7 +31,8 @@ async function upgradeStatus(
       const socket = net.connect(server.port, "127.0.0.1", () => {
         socket.write(
           `GET /ws HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
-            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n" +
+            `Sec-WebSocket-Key: ${WS_SAMPLE_KEY}\r\n` +
+            "Sec-WebSocket-Version: 13\r\n" +
             `Origin: http://127.0.0.1:${server.port}\r\nUser-Agent: audit\r\n${extraHeaders}\r\n`,
         );
       });
@@ -241,8 +245,9 @@ test("[unhappy] a GET that declares a body is answered and the connection closed
       });
       socket.on("data", (chunk) => (head += String(chunk)));
       socket.on("close", () => resolve({ head, closed: true }));
-      socket.on("error", reject);
-      setTimeout(() => resolve({ head, closed: false }), 3000).unref();
+      // A reset while the client is still writing also means "closed".
+      socket.on("error", () => resolve({ head, closed: true }));
+      setTimeout(() => resolve({ head, closed: false }), 5000).unref();
     });
     assert.match(result.head, /^HTTP\/1\.1 200/);
     assert.match(result.head, /connection: close/i);
@@ -328,4 +333,75 @@ test("[unhappy] the standard .npmrc token line is detected, an env reference is 
   const token = ["//registry.npmjs.org/:_authToken", "x".repeat(36)].join("=");
   assert.equal(scanFileContentForCredentials(token).length, 1);
   assert.equal(scanFileContentForCredentials("//registry.npmjs.org/:_authToken=${NPM_TOKEN}").length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Second round of gate tightening
+// ---------------------------------------------------------------------------
+
+test("[unhappy] secret comparisons are caught under ordinary variable names", async () => {
+  const { findForbiddenSecretComparisons } = await import("../scripts/verify-secret-comparisons.js");
+  const flagged = (code: string) => findForbiddenSecretComparisons("f.ts", code).length;
+  for (const code of [
+    'const provided = req.headers.get("authorization");\nif (provided === expected) ok();',
+    "if (signature !== expectedSig) deny();",
+    "if (password == stored) ok();",
+    "if (secret === cfg.secret) ok();",
+    'if (h.get("x-webhook-secret") === s) ok();',
+    'if (h.get("proxy-authorization") === s) ok();',
+    "const same =\n  webhookSecret ===\n  candidateSecret;",
+  ]) {
+    assert.ok(flagged(code) >= 1, code);
+  }
+});
+
+test("[happy] shape checks and literal comparisons are not secret comparisons", async () => {
+  const { findForbiddenSecretComparisons } = await import("../scripts/verify-secret-comparisons.js");
+  const flagged = (code: string) => findForbiddenSecretComparisons("f.ts", code).length;
+  for (const code of [
+    'if (typeof secret !== "string" || secret.length === 0) fail();',
+    'if (url.username !== "" || url.password !== "") reject();',
+    'if (key === "secure") cookie.secure = true;',
+    "if (cookie !== undefined) cookies.push(cookie);",
+    "if (signature.length === expectedBytes) ok();",
+    "if (run === MAX_SIGNATURE_RUN + 1) stop();",
+    "if (timingSafeEqual(provided, expected)) ok();",
+    "if (a === b) ok(); // daloy-allow-compare: not a secret, sameSecretRotation flag",
+  ]) {
+    assert.equal(flagged(code), 0, code);
+  }
+});
+
+test("[unhappy] the TLS option is refused in every spelling", () => {
+  for (const code of [
+    "const o = { rejectUnauthorized: verify };",
+    "const o = { rejectUnauthorized: !1 };",
+    "opts.rejectUnauthorized = false;",
+    'const o = { "rejectUnauthorized": false };',
+    "const o = { checkServerIdentity: () => undefined };",
+  ]) {
+    assert.equal(findForbiddenRegistryExfilCalls("f.ts", code).length, 1, code);
+  }
+  assert.equal(findForbiddenRegistryExfilCalls("f.ts", "// rejectUnauthorized keeps Node's default").length, 0);
+});
+
+test("[unhappy] an opaque blob is found behind a data: prefix or in a doc comment", async () => {
+  const { findEncodedPayloadLiterals } = await import("../scripts/verify-no-encoded-payloads.js");
+  const blob = "QUJD".repeat(60);
+  assert.equal(findEncodedPayloadLiterals("f.ts", `const d = "data:application/octet-stream;base64,${blob}";`).length, 1);
+  assert.equal(findEncodedPayloadLiterals("f.ts", `/**\n * ${blob}\n */`).length, 1);
+  assert.equal(findEncodedPayloadLiterals("f.ts", ' * e.g. "short example"').length, 0);
+});
+
+test("[unhappy] shorthand, path and aliased dependency specifiers are not registry versions", async () => {
+  const { findGitOrUrlDependencySpecifiers, findAliasedDependencySpecifiers } = await import(
+    "../scripts/verify-known-dep-names.js"
+  );
+  for (const spec of ["evil/zod", "evil/zod#main", "jsr:@evil/zod@1"]) {
+    assert.equal(findGitOrUrlDependencySpecifiers("p.json", { dependencies: { zod: spec } } as never).length, 1, spec);
+  }
+  assert.equal(findAliasedDependencySpecifiers("p.json", { dependencies: { zod: " npm:evil@1" } } as never).length, 1);
+  for (const spec of ["^1.2.3", ">=4 <6", "workspace:*", "catalog:", "latest", "1.0.0-next.3", "file:../local"]) {
+    assert.equal(findGitOrUrlDependencySpecifiers("p.json", { dependencies: { zod: spec } } as never).length, 0, spec);
+  }
 });

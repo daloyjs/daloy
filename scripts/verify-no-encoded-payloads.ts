@@ -90,10 +90,11 @@ const HEX_ESCAPE_RUN_RE = /(?:\\x[0-9a-fA-F]{2}){4,}/;
 const UNICODE_ESCAPE_RUN_RE = /(?:\\u00[2-7][0-9a-fA-F]){4,}|(?:\\u\{0{0,4}[2-7][0-9a-fA-F]\}){4,}/;
 
 /**
- * 200+ char body of base64 / base64url alphabet, no whitespace. The
- * surrounding quote characters are stripped before this regex runs.
+ * A run of 200+ characters of the base64 / base64url alphabet anywhere in a
+ * string literal.
  */
-const OPAQUE_BASE64_BLOB_RE = /^[A-Za-z0-9+/=_-]{200,}$/;
+// Unanchored: a `data:...;base64,` prefix or surrounding text must not hide the run.
+const OPAQUE_BASE64_BLOB_RE = /[A-Za-z0-9+/_-]{200,}={0,2}/;
 
 const STRING_LITERAL_RE = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|`((?:\\.|[^`\\])*)`/g;
 
@@ -110,7 +111,20 @@ export function findEncodedPayloadLiterals(
     // because a malicious blob hidden in a JSDoc is still a malicious
     // blob shipped in the tarball).
     const trimmed = raw.trimStart();
-    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+    if (trimmed.startsWith("//")) continue;
+    // A doc-comment line may quote an escape sequence as an example, so the
+    // escape-run rules skip it. A long opaque blob is not documentation
+    // wherever it sits, so that rule still applies to the whole line.
+    if (trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+      if (OPAQUE_BASE64_BLOB_RE.test(raw)) {
+        out.push({
+          file,
+          line: i + 1,
+          text: raw.trim().slice(0, 120) + (raw.length > 120 ? "…" : ""),
+          reason:
+            "opaque base64/base64url blob (>=200 chars, no whitespace) inside a comment — a blob hidden in a doc comment still ships in the tarball",
+        });
+      }
       continue;
     }
     STRING_LITERAL_RE.lastIndex = 0;

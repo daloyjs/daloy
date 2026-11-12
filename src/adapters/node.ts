@@ -234,7 +234,15 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
         (declaredLength !== undefined && declaredLength !== "0")
       ) {
         res.setHeader("connection", "close");
-        res.once("finish", () => req.socket.destroy());
+        // Destroying at once would reset the connection while the client is
+        // still sending, and a reset can discard the response it has not read
+        // yet. Give it a moment to read the answer and close, then cut it off.
+        res.once("finish", () => {
+          const socket = req.socket;
+          const timer = setTimeout(() => socket.destroy(), UNREAD_BODY_GRACE_MS);
+          timer.unref?.();
+          socket.once("close", () => clearTimeout(timer));
+        });
       }
       dispatchToApp(app, req, res, trustProxy, undefined, onBodyPull);
       return;
@@ -1244,6 +1252,9 @@ function hasDuplicateSingletonHeader(rawHeaders: readonly string[]): boolean {
   }
   return host > 1 || contentLength > 1 || transferEncoding > 1;
 }
+
+/** How long a GET/HEAD client that sent a body gets to read the response before the socket is destroyed. */
+const UNREAD_BODY_GRACE_MS = 1_000;
 
 /** How long a peer gets to complete the close handshake before the socket is destroyed. */
 const WS_CLOSE_HANDSHAKE_TIMEOUT_MS = 5_000;

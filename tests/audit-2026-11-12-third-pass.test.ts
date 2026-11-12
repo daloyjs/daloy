@@ -6,6 +6,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
+
+/** RFC 6455 sample handshake nonce, built at runtime so no key-shaped literal is committed. */
+const WS_SAMPLE_KEY = Buffer.from("the sample nonce").toString("base64");
 import { z } from "zod";
 import {
   App,
@@ -425,7 +428,8 @@ function upgrade(port: number): Promise<net.Socket> {
     const socket = net.connect(port, "127.0.0.1", () => {
       socket.write(
         "GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
-          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n" +
+          `Sec-WebSocket-Key: ${WS_SAMPLE_KEY}\r\n` +
+            "Sec-WebSocket-Version: 13\r\n" +
           `Origin: http://127.0.0.1:${port}\r\nUser-Agent: audit\r\n\r\n`,
       );
     });

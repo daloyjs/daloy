@@ -358,10 +358,29 @@ interface ForbiddenPattern {
 const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
   // ---- TLS verification bypass (GemStuffer's `VERIFY_NONE`) ----
   {
-    re: /\brejectUnauthorized\s*:\s*false\b/,
+    // The option name itself, in any spelling: `rejectUnauthorized: verify`
+    // with `verify = false`, `!1` or an assignment all turn certificate
+    // validation off, and core never needs to set it. Strings are blanked
+    // here so a message that mentions the option does not trip.
+    re: /\brejectUnauthorized\b/,
     reason:
-      "`rejectUnauthorized: false` disables TLS certificate validation (GemStuffer-class VERIFY_NONE); " +
-      "use the system CA bundle and a real hostname instead",
+      "`rejectUnauthorized` can disable TLS certificate validation (GemStuffer-class VERIFY_NONE); " +
+      "core must leave Node's default and use the system CA bundle and a real hostname",
+    keepStrings: false,
+  },
+  {
+    // The quoted-key spelling, which blanking strings would hide.
+    re: /["'`]rejectUnauthorized["'`]\s*:/,
+    reason:
+      "`\"rejectUnauthorized\": ...` can disable TLS certificate validation (GemStuffer-class VERIFY_NONE); " +
+      "core must leave Node's default",
+    keepStrings: true,
+  },
+  {
+    re: /\bcheckServerIdentity\b/,
+    reason:
+      "overriding `checkServerIdentity` can accept a certificate for the wrong host; " +
+      "core must leave Node's default hostname check in place",
     keepStrings: false,
   },
   {

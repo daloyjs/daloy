@@ -3560,3 +3560,15 @@ test("every bun scaffold declares the Bun floor its cooldown needs", async () =>
     }
   }
 });
+
+test("vercel template keeps a public/ directory so the project root is not served statically", async () => {
+  const { tmpDir, dir } = await scaffold("vercel");
+  try {
+    const robots = await readFile(path.join(dir, "public", "robots.txt"), "utf8");
+    assert.match(robots, /Disallow: \//);
+    const ignore = await readFile(path.join(dir, ".vercelignore"), "utf8");
+    assert.match(ignore, /^\*\.p12$/m);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
