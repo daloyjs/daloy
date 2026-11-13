@@ -38,6 +38,11 @@ paths = [
   '''(?:^|/)tests/websocket(?:-cswsh)?\.test\.ts$''',
   '''(?:^|/)tests/node-adapter\.test\.ts$''',
   '''(?:^|/)red-team-live/[^/]+\.ts$''',
+  # Two audit test files carried the same RFC vector as a literal in commits
+  # a2c7bc98 and 64ef2025. The files now build it at runtime, but the daily
+  # history sweep (`gitleaks git`) still reads those commits, and history is
+  # not rewritten. The regex below still limits this to the public RFC nonce.
+  '''(?:^|/)tests/audit-2026-11-12-(?:followups|third-pass)\.test\.ts$''',
 ]
 regexes = [
   '''(?i)(?:sec-websocket-key["': =]+|acceptKey,?\s*)(?:"|')?(?:dGhlIHNhbXBsZSBub25jZQ==|s3pPLMBiTxaQ9kYGzzhZRbK\+xOo=)(?:"|')?''',
