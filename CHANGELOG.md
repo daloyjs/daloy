@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.24.2] - 2026-11-13
+
 ### Security
 
 - **A hook that returns a plain object no longer lets the request through.**
@@ -43,6 +45,17 @@ For the forward-looking plan and the full thematic release log, see
   argument for typed params, and custom claims are read from
   `state.user.claims`. Every TypeScript sample that imports the framework was
   type-checked against the source to find these.
+- Docs: the integration pages were checked against each vendor's own
+  documentation. Corrected, among others: the Entra ID audience and token
+  version, AI SDK 7 calls (and a structured-output sample that declared its
+  response under `schema`, which the framework does not read, so it was
+  never validated), Mollie secret rotation, the Adyen HMAC sample, the
+  PlanetScale driver pin, the Supabase anonymous sign-in note, and Cloudflare
+  size limits and `pg` minimum.
+- Docs: API reference signatures and the claims about which hooks run before
+  the body is read.
+- A flaky JWT tamper test failed CI about once in a thousand runs; it is now
+  deterministic.
 
 ## [1.24.1] - 2026-11-12
 
