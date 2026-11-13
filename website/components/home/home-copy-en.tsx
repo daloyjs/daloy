@@ -56,7 +56,7 @@ export const HOME_COPY_EN: HomeCopy = {
   },
   hero: {
     title:
-      "Contract-first TypeScript REST APIs with secure defaults, built for AI-assisted teams",
+      "The First TypeScript REST API framework with comprehensive secure defaults, built for AI-assisted teams",
     subtitle:
       "DaloyJS ships secure defaults, refuses to start in production on the misconfigurations it knows about, and runs with zero runtime dependencies and a hardened, provenance-signed publish pipeline. No framework makes an app fully secure or stops every supply-chain attack, so the docs say what is on by default, what you turn on, and the risks that remain.",
     primaryCta: "Get started: Install Daloy",

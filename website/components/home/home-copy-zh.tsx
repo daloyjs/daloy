@@ -127,7 +127,7 @@ export const HOME_COPY_ZH: HomeCopy = {
     blog: "/blog",
   },
   hero: {
-    title: "契约优先、默认安全的 TypeScript REST API，为 AI 辅助开发团队打造",
+    title: "首个具备全面默认安全配置的 TypeScript REST API 框架，为 AI 辅助开发团队打造",
     subtitle:
       "DaloyJS 自带默认安全配置，在生产环境中遇到已知的错误配置会拒绝启动，零运行时依赖，并拥有经过加固、带来源证明签名的发布流程。没有任何框架能让应用绝对安全，也无法阻止所有供应链攻击，所以文档会写清楚哪些默认开启、哪些需要你自己开启，以及还剩哪些风险。",
     primaryCta: "开始使用：安装 Daloy",

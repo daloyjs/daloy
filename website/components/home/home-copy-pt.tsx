@@ -128,7 +128,7 @@ export const HOME_COPY_PT: HomeCopy = {
   },
   hero: {
     title:
-      "APIs REST em TypeScript orientadas a contrato e seguras por padrão, feitas para equipes que desenvolvem com IA",
+      "O primeiro framework de APIs REST em TypeScript com padrões seguros abrangentes, feito para equipes que desenvolvem com IA",
     subtitle:
       "O DaloyJS traz configurações seguras por padrão, se recusa a iniciar em produção diante dos erros de configuração que conhece e roda com zero dependências em tempo de execução, com um pipeline de publicação reforçado e assinado com proveniência. Nenhum framework torna um aplicativo totalmente seguro nem impede todos os ataques à cadeia de suprimentos, então a documentação diz o que vem ativado por padrão, o que você ativa e quais riscos permanecem.",
     primaryCta: "Comece: instale o Daloy",

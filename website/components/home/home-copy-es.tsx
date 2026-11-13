@@ -128,7 +128,7 @@ export const HOME_COPY_ES: HomeCopy = {
   },
   hero: {
     title:
-      "APIs REST en TypeScript con enfoque contract-first, seguras por defecto y pensadas para equipos que trabajan con IA",
+      "El primer framework de APIs REST en TypeScript con valores seguros por defecto integrales, pensado para equipos que trabajan con IA",
     subtitle:
       "DaloyJS incluye configuración segura por defecto, se niega a iniciarse en producción si detecta alguno de los errores de configuración que tiene identificados, y funciona sin dependencias en tiempo de ejecución, con un proceso de publicación reforzado y firmado con procedencia verificable (provenance). Ningún framework hace que una aplicación sea completamente segura ni detiene todos los ataques a la cadena de suministro; por eso la documentación indica qué está activado por defecto, qué debes activar tú y qué riesgos persisten.",
     primaryCta: "Empieza: instalar Daloy",
