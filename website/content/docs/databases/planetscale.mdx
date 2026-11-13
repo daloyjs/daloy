@@ -45,8 +45,10 @@ Create a database at [app.planetscale.com](https://app.planetscale.com), generat
 ## 2. Install
 
 ```package-install
-@planetscale/database
+@planetscale/database@^1
 ```
+
+<Callout type="warning">Stay on `^1` for now. `@planetscale/database` 2.0 removed query parameters from `execute()`: passing an array throws. This guide, Drizzle's `planetscale-serverless` driver and `kysely-planetscale` all use the 1.x `execute(sql, params)` signature.</Callout>
 
 ## 3. Create a PlanetScale plugin
 

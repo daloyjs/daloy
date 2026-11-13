@@ -6,8 +6,8 @@ keywords:
   - AI SDK 7
   - streamText DaloyJS
   - AI chat backend
-  - toUIMessageStreamResponse
-  - generateObject
+  - createUIMessageStreamResponse
+  - generateText structured output
   - AI tool calling SSRF
   - AI SDK integration
   - secure AI backend
@@ -51,7 +51,7 @@ Every AI request flows through the same guardrails as the rest of your API befor
           {
             eyebrow: "model",
             label: "AI SDK call",
-            detail: "streamText / generateObject",
+            detail: "streamText / generateText + Output",
           },
           {
             eyebrow: "tools",
@@ -69,7 +69,7 @@ Every AI request flows through the same guardrails as the rest of your API befor
 
 ## Streaming chat
 
-The AI SDK's `result.toUIMessageStreamResponse()` returns a web-standard `Response`, and a DaloyJS handler can return a raw `Response` directly after explicitly setting `acknowledgeNoResponseBodySchema: true`. Without that acknowledgement, the route fails closed instead of silently bypassing response validation. The acknowledged stream passes through, backpressure and all, and the framework still finalizes it: it adds the request id, applies `secureHeaders()` and CORS, runs your `onSend` hooks, and strips fingerprint headers, exactly as it does for a structured result. This endpoint works with the AI SDK's `useChat()` hook on the client with no extra wiring.
+The AI SDK's `createUIMessageStreamResponse()` returns a web-standard `Response` (v7 deprecates the older `result.toUIMessageStreamResponse()` method in its favour), and a DaloyJS handler can return a raw `Response` directly after explicitly setting `acknowledgeNoResponseBodySchema: true`. Without that acknowledgement, the route fails closed instead of silently bypassing response validation. The acknowledged stream passes through, backpressure and all, and the framework still finalizes it: it adds the request id, applies `secureHeaders()` and CORS, runs your `onSend` hooks, and strips fingerprint headers, exactly as it does for a structured result. This endpoint works with the AI SDK's `useChat()` hook on the client with no extra wiring.
 
 ```ts
 // A streaming chat endpoint, compatible with the AI SDK's
@@ -79,7 +79,12 @@ The AI SDK's `result.toUIMessageStreamResponse()` returns a web-standard `Respon
 // fingerprint stripping) like any other response.
 import { z } from "zod";
 import { App } from "@daloyjs/core";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import { openai } from "@ai-sdk/openai";
 
 export const app = new App();
@@ -107,20 +112,22 @@ app.post(
   async ({ body, request }) => {
     const result = streamText({
       model: openai("gpt-5.1"),
-      messages: convertToModelMessages(body.messages as never),
+      messages: await convertToModelMessages(body.messages as never),
       // Cancel the upstream model call if the client disconnects.
       abortSignal: request.signal,
     });
 
     // Return the Response as-is. No mapping, no adapter.
-    return result.toUIMessageStreamResponse();
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream({ stream: result.stream }),
+    });
   },
 );
 ```
 
 ## Structured output, validated by your contract
 
-This is the pattern that is meaningfully better on a contract-first framework. With `generateObject()`, the model is constrained to a Zod schema. Reuse that *same* schema as the route's response schema and it becomes your OpenAPI shape and your typed client too: one source of truth. The model output is then validated twice, once by the AI SDK and once by DaloyJS at the HTTP boundary, so a drifting model or a schema mismatch becomes a controlled error instead of a malformed body on the wire.
+This is the pattern that is meaningfully better on a contract-first framework. With `generateText()` and an `Output.object()` setting (the v7 replacement for the deprecated `generateObject()`), the model is constrained to a Zod schema. Reuse that *same* schema as the route's response schema and it becomes your OpenAPI shape and your typed client too: one source of truth. The model output is then validated twice, once by the AI SDK and once by DaloyJS at the HTTP boundary, so a drifting model or a schema mismatch becomes a controlled error instead of a malformed body on the wire.
 
 ```ts
 // This is the pattern that is genuinely better on a contract-first
@@ -130,7 +137,7 @@ This is the pattern that is meaningfully better on a contract-first framework. W
 // HTTP boundary), so a drifting model can never leak a malformed body.
 import { z } from "zod";
 import { App } from "@daloyjs/core";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 export const app = new App();
@@ -152,20 +159,20 @@ app.post(
     },
     responses: {
       // Reuse the exact schema the model is constrained to.
-      200: { description: "analysis", schema: Analysis },
+      200: { description: "analysis", body: Analysis },
     },
   },
   async ({ body }) => {
-    const { object } = await generateObject({
+    const { output } = await generateText({
       model: openai("gpt-5.1"),
-      schema: Analysis,
+      output: Output.object({ schema: Analysis }),
       prompt: body.text,
     });
 
-    // 'object' was validated by the AI SDK. DaloyJS validates it
+    // 'output' was validated by the AI SDK. DaloyJS validates it
     // AGAIN against the response schema before it leaves, so even an
     // SDK or schema mismatch becomes a controlled 500, never a leak.
-    return { status: 200 as const, body: object };
+    return { status: 200 as const, body: output };
   },
 );
 ```
@@ -182,7 +189,14 @@ AI SDK 7's tool loop is where prompt injection becomes a server-side request for
 // of attack is default-denied, including redirects.
 import { z } from "zod";
 import { App, fetchGuard } from "@daloyjs/core";
-import { streamText, convertToModelMessages, tool, stepCountIs } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+  tool,
+  isStepCount,
+} from "ai";
 import { openai } from "@ai-sdk/openai";
 
 export const app = new App();
@@ -215,15 +229,17 @@ app.post(
   async ({ body, request }) => {
     const result = streamText({
       model: openai("gpt-5.1"),
-      messages: convertToModelMessages(body.messages as never),
+      messages: await convertToModelMessages(body.messages as never),
       tools: { getWeather },
       // AI SDK 7 multi-step tool loop, bounded so a runaway agent
       // cannot loop forever on your dime.
-      stopWhen: stepCountIs(5),
+      stopWhen: isStepCount(5),
       abortSignal: request.signal,
     });
 
-    return result.toUIMessageStreamResponse();
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream({ stream: result.stream }),
+    });
   },
 );
 ```
@@ -266,7 +282,7 @@ For the full argument behind this (why the deployment-time layer must hold when 
 
 ## What about OpenAPI and the typed client?
 
-Account for the trade-off. A pure streaming endpoint cannot carry a meaningful response-body schema, so OpenAPI documents it as a stream and the typed client treats it as such. Endpoints that return structured output (the `generateObject()` pattern above) get the full treatment: response schema, OpenAPI shape, typed client, and response validation, all from the one Zod schema. You can mix the two. Stream the chat and contract the structured calls.
+Account for the trade-off. A pure streaming endpoint cannot carry a meaningful response-body schema, so OpenAPI documents it as a stream and the typed client treats it as such. Endpoints that return structured output (the `generateText()` + `Output.object()` pattern above) get the full treatment: response schema, OpenAPI shape, typed client, and response validation, all from the one Zod schema. You can mix the two. Stream the chat and contract the structured calls.
 
 ## Next steps
 

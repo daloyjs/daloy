@@ -419,7 +419,7 @@ Kysely itself runs anywhere JavaScript does (its README lists Node.js, Deno, Bun
 | core `PostgresDialect` + Neon `Pool` | Neon Postgres | WebSocket | Yes |
 | `kysely-d1` | Cloudflare D1 | Worker binding | No, the dialect throws on `transaction()` |
 | `@libsql/kysely-libsql` | Turso / libSQL | HTTP or WebSocket | Supported by the dialect; not verified with DaloyJS |
-| `kysely-planetscale` | PlanetScale (MySQL) | HTTP (`@planetscale/database`) | Supported by the dialect; not verified with DaloyJS |
+| `kysely-planetscale` | PlanetScale (MySQL) | HTTP (`@planetscale/database@^1`; 2.0 dropped the parameters this dialect passes) | Supported by the dialect; not verified with DaloyJS |
 
 `kysely-neon` is maintained in the kysely-org; `kysely-d1`, `kysely-planetscale`, and `@libsql/kysely-libsql` are community or vendor packages with their own release cadence (`kysely-d1` and `kysely-planetscale` were last published in 2025), so pin them and test upgrades.
 

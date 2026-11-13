@@ -381,7 +381,7 @@ export default {
 
 ## Attachments
 
-Attachments go through the binding directly (the shared `EmailMessage` has no attachment field). Each entry is `{ content, filename, type, disposition: "attachment" | "inline", contentId? }`, where `content` is a base64 string, an `ArrayBuffer`, or an `ArrayBufferView`. The whole message may be at most 5 MiB (25 MiB to verified destinations) with up to 32 attachments, so do not put files on the queue (messages max out at 128 KB): enqueue an R2 object key and read the bytes in the consumer.
+Attachments go through the binding directly (the shared `EmailMessage` has no attachment field). Each entry is `{ content, filename, type, disposition: "attachment" | "inline", contentId? }`, where `content` is a base64 string, an `ArrayBuffer`, or an `ArrayBufferView`. The whole message, attachments included, may be at most 25 MiB, so do not put files on the queue (messages max out at 128 KB): enqueue an R2 object key and read the bytes in the consumer.
 
 ```ts
 const pdf = await env.INVOICES.get(`invoices/${invoice.id}.pdf`); // an R2 binding
@@ -402,7 +402,7 @@ Under plain `wrangler dev` the email binding is simulated and binary attachment 
 
 ## REST API from other runtimes [#rest-api]
 
-Outside Workers (Node, Lambda, another cloud), call `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send` with a Cloudflare API token that has email sending permission. Field names differ from the binding: `from` and `reply_to` objects use `address` (not `email`), keys are snake_case, and attachment `content` is always base64. The response groups recipients into `delivered`, `permanent_bounces`, and `queued` instead of returning a message id.
+Outside Workers (Node, Lambda, another cloud), call `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send` with a Cloudflare API token that has email sending permission. Field names differ from the binding: `from` and `reply_to` objects use `address` (not `email`), keys are snake_case, and attachment `content` is always base64. The response groups recipients into `delivered`, `permanent_bounces`, and `queued`. Cloudflare's API reference also lists a `message_id` (and `suppressed_recipients`), while the REST guide's example shows only the three arrays, so treat `message_id` as optional.
 
 ```ts title="src/email/cloudflare-rest.ts"
 import type { EmailSender } from "../plugins/email.ts";
@@ -428,10 +428,12 @@ export const sender: EmailSender = {
         }),
       },
     );
-    const out = (await res.json()) as { success: boolean; errors?: { code: number }[]; result?: { permanent_bounces: string[] } };
+    const out = (await res.json()) as { success: boolean; errors?: { code: number }[]; result?: { permanent_bounces: string[]; message_id?: string } };
     if (!res.ok || !out.success) throw new Error(`Cloudflare email error ${out.errors?.[0]?.code ?? res.status}`);
     for (const email of out.result?.permanent_bounces ?? []) await markUndeliverable(email.toLowerCase(), "hard_bounce");
-    return { id: "" }; // the REST API returns per-recipient status, not a message id
+    // The API reference lists `message_id` in the result; the REST guide's
+    // example omits it. Use it when present and do not depend on it.
+    return { id: out.result?.message_id ?? "" };
   },
 };
 
@@ -443,7 +445,7 @@ Add `CF_ACCOUNT_ID`, `CF_EMAIL_TOKEN`, and `EMAIL_FROM_ADDRESS` (`z.email()`) to
 ## Limits at a glance
 
 - 50 recipients per message (`to` + `cc` + `bcc`), subject up to 998 characters, 16 KB of custom headers.
-- 5 MiB per message including attachments (25 MiB to verified destinations), 32 attachments.
+- 25 MiB per message including attachments.
 - A daily quota that starts low and rises; request more through Cloudflare's limit increase form.
 - Inbound: 25 MiB per message, 200 routing rules per domain.
 

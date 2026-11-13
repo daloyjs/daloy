@@ -206,7 +206,7 @@ Set `acceptsToken` to `"m2m_token"`, `"oauth_token"`, or an array like `["sessio
 
 ## Webhooks
 
-Clerk delivers user, organization, and session events via Svix-signed webhooks. Use `clerk.verifyWebhook(request)` to validate the signature before processing the payload, never trust an unverified webhook body.
+Clerk delivers user, organization, and session events via Svix-signed webhooks. Use `verifyWebhook(request)` (`import { verifyWebhook } from "@clerk/backend/webhooks"`) to validate the signature before processing the payload, never trust an unverified webhook body.
 
 ## Runtimes
 

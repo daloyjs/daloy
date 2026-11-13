@@ -26,7 +26,7 @@ The pages in this section cover **where your data lives**: managed hosts and the
 
 Long-lived servers (Node, Bun, Deno) and Node-based serverless functions (Lambda, Vercel, Netlify, Azure Functions) open ordinary TCP connections, so the standard `pg` and `mysql2` drivers work there.
 
-Cloudflare Workers can open outbound TCP too, through the `connect()` API from `cloudflare:sockets`, and `pg` (8.13.0 or later) and `mysql2` (3.13.0 or later) run on Workers with the `nodejs_compat` flag. A Worker cannot keep a connection open between requests, though, so every request would pay a fresh TCP, TLS and auth handshake to a database that may be far away. Cloudflare recommends putting [Hyperdrive](/docs/databases/hyperdrive) in front of Postgres or MySQL: it keeps a warm connection pool near the database and can cache reads. The other two options on Workers are an **HTTP / WebSocket driver** (Neon, PlanetScale MySQL, Turso, Supabase) and a **Workers binding** (D1).
+Cloudflare Workers can open outbound TCP too, through the `connect()` API from `cloudflare:sockets`, and `pg` (8.16.3 or later, per Cloudflare's Postgres tutorial) and `mysql2` run on Workers with the `nodejs_compat` flag. A Worker cannot keep a connection open between requests, though, so every request would pay a fresh TCP, TLS and auth handshake to a database that may be far away. Cloudflare recommends putting [Hyperdrive](/docs/databases/hyperdrive) in front of Postgres or MySQL: it keeps a warm connection pool near the database and can cache reads. The other two options on Workers are an **HTTP / WebSocket driver** (Neon, PlanetScale MySQL, Turso, Supabase) and a **Workers binding** (D1).
 
 <LayerStack title="What sits between your handler and the data" flow="down" layers={[
           {

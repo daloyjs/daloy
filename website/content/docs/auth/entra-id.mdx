@@ -20,7 +20,7 @@ keywords:
             from: "Client app",
             to: "Entra ID",
             label: "User signs in. Entra ID mints a v2.0 access token (RS256)",
-            detail: "aud = api://my-daloy-api",
+            detail: "aud = the API app's client ID (GUID)",
             kind: "async",
           },
           {
@@ -55,8 +55,9 @@ keywords:
 
 1. In the [Microsoft Entra admin center](https://entra.microsoft.com), go to **Entra ID -\> App registrations -\> New registration** and register your API app.
 2. Under **Expose an API**, set an **Application ID URI** (e.g. `api://my-daloy-api`) and add one or more **scopes** (e.g. `access_as_user`).
-3. Register your client app separately and grant it permission to the scope above. Note the **tenant ID** and the API app's **Application (client) ID**.
-4. The OIDC discovery document lives at `https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid-configuration` and references the JWKS at `https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys`.
+3. In the API app's **Manifest**, set `api.requestedAccessTokenVersion` to `2`. The default (`null`) issues v1.0 access tokens, whose `iss` does not end in `/v2.0` and whose `aud` may be the Application ID URI, so the configuration below would reject them.
+4. Register your client app separately and grant it permission to the scope above. Note the **tenant ID** and the API app's **Application (client) ID**.
+5. The OIDC discovery document lives at `https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid-configuration` and references the JWKS at `https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys`.
 
 ## 2. Install
 
@@ -67,7 +68,7 @@ Nothing beyond `@daloyjs/core`. Add `@azure/msal-node` only if the API itself ne
 ```bash
 # .env
 ENTRA_TENANT_ID=11111111-2222-3333-4444-555555555555
-ENTRA_API_AUDIENCE=api://my-daloy-api   # or the API app's client ID GUID
+ENTRA_API_AUDIENCE=00001111-aaaa-2222-bbbb-3333cccc4444   # the API app's Application (client) ID; v2.0 tokens never carry the api:// URI in aud
 ```
 
 ## 4. Verify tokens and guard routes

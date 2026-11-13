@@ -159,7 +159,7 @@ declare module "@daloyjs/core" {
 }
 ```
 
-The SDK's own `paddle.webhooks.unmarshal(rawBody, secret, signature)` validates the same header and returns a typed, camelCased event entity. It is fine to use, but as of 3.10 it reads a single `h1` and compares digests with a plain string comparison, so this guide verifies with the core helper (constant-time, rotation-aware) and keeps `unmarshal()` out of the hot path. If you prefer the SDK:
+The SDK's own `paddle.webhooks.unmarshal(rawBody, secret, signature)` validates the same header and returns a typed, camelCased event entity. It is fine to use, but it reads a single `h1` (and before 3.12 compared digests with a plain string comparison), so this guide verifies with the core helper (constant-time, rotation-aware) and keeps `unmarshal()` out of the hot path. If you prefer the SDK:
 
 ```ts
 // rawText must be the exact body string; unmarshal throws on a bad signature.

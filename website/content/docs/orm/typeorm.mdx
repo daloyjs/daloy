@@ -200,7 +200,7 @@ await app.ready();
 serve(app, { port: 3000 });
 ```
 
-<Callout type="security">**Never let `undefined` reach a `where`.** On TypeORM 0.3, `repo.findOneBy({ id: undefined })` drops the condition and returns the **first row in the table**, a classic account-takeover bug when an ID comes from an optional field. TypeORM 1.0 throws on `null` and `undefined` in `find*` and repository `where` options by default; keep that default (do not set `invalidWhereValuesBehavior` to `"ignore"`), and keep IDs required in your Zod schemas. Use `IsNull()` when you really mean `IS NULL`.</Callout>
+<Callout type="security">**Never let `undefined` reach a `where`.** On TypeORM 0.3, `repo.findOneBy({ id: undefined })` drops the condition and returns the **first row in the table**, a classic account-takeover bug when an ID comes from an optional field. TypeORM 1.0 throws on `null` and `undefined` in `find*` and repository `where` options by default; keep that default (do not set `invalidWhereValuesBehavior: { null: "ignore", undefined: "ignore" }`), and keep IDs required in your Zod schemas. Use `IsNull()` when you really mean `IS NULL`.</Callout>
 
 ## Transactions
 

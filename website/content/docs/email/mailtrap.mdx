@@ -97,7 +97,7 @@ const client =
     : new MailtrapClient({
         token: cfg.MAILTRAP_SANDBOX_TOKEN!,
         sandbox: true,
-        testInboxId: cfg.MAILTRAP_TEST_INBOX_ID!,
+        sandboxId: cfg.MAILTRAP_TEST_INBOX_ID!, // `testInboxId` is the deprecated name for this option
       });
 
 export const sender: EmailSender = {

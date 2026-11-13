@@ -58,7 +58,7 @@ import type { App } from "@daloyjs/core";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   // Pin the API version your code was written against; upgrade deliberately.
-  apiVersion: "2026-09-30.endive",
+  apiVersion: "2026-10-28.endive", // the version stripe@23.1 ships; match it to your installed SDK
   maxNetworkRetries: 2,
   timeout: 20_000,
   // Cloudflare Workers / other fetch-only runtimes:
@@ -372,7 +372,7 @@ The SDK throws `Stripe.errors.StripeError` subclasses for API, card, authenticat
 
 - Do not make Stripe a framework dependency. Keep it in the application, behind a plugin, so apps that use Braintree, Adyen, Square, or no payments at all keep a dependency-free DaloyJS core.
 - Use Checkout first, Payment Intents when you need control. Payment Intents are the lower-level API for custom payment forms and advanced flows.
-- Pin `apiVersion` deliberately. stripe-node types track the latest API version at release, and a new API version comes with a new SDK major. Upgrade both together and read the changelog.
+- Pin `apiVersion` deliberately. stripe-node types track the latest API version at release: monthly API versions arrive in SDK minor releases, and a new named release (for example `endive`) comes with a new SDK major. Upgrade the SDK and `apiVersion` together and read the changelog.
 - Never use real card details in test mode. Use Stripe test cards or test `PaymentMethod` IDs.
 
 See also the [payments overview](/docs/payments), [Braintree guide](/docs/payments/braintree), [Square guide](/docs/payments/square), and [problem+json errors](/docs/errors).

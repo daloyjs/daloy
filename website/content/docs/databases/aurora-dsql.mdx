@@ -134,7 +134,7 @@ Keep the `declare module` block in the module that creates the pool, not in a se
 AWS recommends its [Aurora DSQL Connector for node-postgres](https://github.com/awslabs/aurora-dsql-connectors/tree/main/node/node-postgres) (`@aws/aurora-dsql-node-postgres-connector`, pre-1.0 on npm). It wraps `pg` `Client` and `Pool`, generates a token per connection, reads the region from the hostname, and has a `transaction()` helper that retries optimistic-concurrency conflicts:
 
 ```package-install
-@aws/aurora-dsql-node-postgres-connector @aws-sdk/credential-providers @aws-sdk/dsql-signer pg
+@aws/aurora-dsql-node-postgres-connector pg pg-connection-string
 ```
 
 ```ts title="src/db/dsql.ts"

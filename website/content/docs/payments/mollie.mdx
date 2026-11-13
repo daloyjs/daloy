@@ -39,7 +39,7 @@ mollie-api-typescript
 ```bash title=".env"
 MOLLIE_API_KEY=test_replace_me                 # or live_...
 MOLLIE_WEBHOOK_SECRET=replace_me               # next-gen webhooks only
-MOLLIE_WEBHOOK_SECRET_PREVIOUS=                # set during a secret rotation
+MOLLIE_WEBHOOK_SECRET_PREVIOUS=                # the old secret; set it before rotating, Mollie has no overlap window
 APP_URL=https://your-app.example.com
 ```
 
@@ -53,7 +53,7 @@ const mollie = new Client({
   security: { apiKey: process.env.MOLLIE_API_KEY! },
 });
 
-// Accept the current and (during a rotation) the previous signing secret.
+// Accept the current and the previous signing secret, so a rotation needs no synchronized deploy.
 const validator = new SignatureValidator(
   [process.env.MOLLIE_WEBHOOK_SECRET, process.env.MOLLIE_WEBHOOK_SECRET_PREVIOUS].filter(
     (s): s is string => !!s,
@@ -108,7 +108,7 @@ export const mollieClient: MollieClient = {
 
   async verifySignedWebhook(rawBody, signatureHeader) {
     if (!signatureHeader) return false;
-    // During a rotation Mollie sends two signature headers; Headers joins them with ", ".
+    // Headers joins repeated X-Mollie-Signature headers with ", "; validate each value.
     const signatures = signatureHeader.split(",").map((s) => s.trim());
     try {
       return await validator.validatePayload(rawBody, signatures);
@@ -304,7 +304,7 @@ Mollie retries a delivery that does not get a 2xx (its docs describe 10 attempts
           },
         ]} caption="Next-gen webhooks are signed, so require a valid signature, dedupe atomically on the event id, and still refetch the payment in the worker because deliveries can arrive late or out of order." />
 
-Next-gen webhooks post a JSON event (`resource: "event"`, an `id` like `event_...`, a `type` such as `payment.paid`, the `entityId`, and optionally an embedded entity snapshot) and sign the raw body with HMAC-SHA256 in `X-Mollie-Signature` (`sha256=<hex>`). The signature covers no timestamp, so the event `id` is your replay and dedupe key. When you rotate the secret, Mollie sends two signature headers for 24 hours; the plugin accepts either secret during that window. Mollie's own docs still mark parts of this API as beta, so check which event types your account can subscribe to.
+Next-gen webhooks post a JSON event (`resource: "event"`, an `id` like `event_...`, a `type` such as `payment.paid`, the `entityId`, and optionally an embedded entity snapshot) and sign the raw body with HMAC-SHA256 in `X-Mollie-Signature` (`sha256=<hex>`). The signature covers no timestamp, so the event `id` is your replay and dedupe key. Rotating the signing secret takes effect immediately: Mollie revokes the old secret and signs with the new one in the same step, with no overlap window. Deploy the new secret alongside the old one before you rotate, which is why the plugin accepts two secrets. Mollie's own docs still mark parts of this API as beta, so check which event types your account can subscribe to.
 
 ```ts title="src/webhooks/mollie-signed.ts"
 import { z } from "zod";

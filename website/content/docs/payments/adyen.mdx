@@ -50,14 +50,14 @@ ADYEN_CLIENT_KEY=test_...replace_me            # public key, ships to the browse
 ## 4. Plugin
 
 ```ts title="src/plugins/adyen.ts"
-import { Client, CheckoutAPI, Types, hmacValidator } from "@adyen/api-library";
+import { Client, CheckoutAPI, EnvironmentEnum, Types, hmacValidator } from "@adyen/api-library";
 import type { App } from "@daloyjs/core";
 
 export const ADYEN_ENVIRONMENT = process.env.ADYEN_ENVIRONMENT === "LIVE" ? "LIVE" : "TEST";
 
 const client = new Client({
   apiKey: process.env.ADYEN_API_KEY!,
-  environment: ADYEN_ENVIRONMENT,
+  environment: ADYEN_ENVIRONMENT === "LIVE" ? EnvironmentEnum.LIVE : EnvironmentEnum.TEST,
   ...(ADYEN_ENVIRONMENT === "LIVE" ? { liveEndpointUrlPrefix: process.env.ADYEN_LIVE_URL_PREFIX! } : {}),
 });
 
@@ -108,7 +108,14 @@ export const adyenClient: AdyenClient = {
   },
 
   verifyWebhookItem(item) {
-    return validator.validateHMAC(item, process.env.ADYEN_HMAC_KEY!);
+    // validateHMAC throws (not returns false) when the item carries no
+    // hmacSignature or is malformed. Treat that as a failed check so the
+    // route answers 401, not 500.
+    try {
+      return validator.validateHMAC(item, process.env.ADYEN_HMAC_KEY!);
+    } catch {
+      return false;
+    }
   },
 };
 

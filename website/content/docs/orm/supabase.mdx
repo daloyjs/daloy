@@ -153,7 +153,7 @@ export function supabaseAuth(app: App) {
 }
 ```
 
-The JWKS endpoint only serves keys once your project uses asymmetric JWT signing keys ([JWTs](https://supabase.com/docs/guides/auth/jwts)). A project still on the legacy shared HS256 secret has nothing to verify against, and `jwk()` refuses symmetric algorithms by design: migrate the project to asymmetric signing keys. Supabase's own SDK route to the same check is `supabase.auth.getClaims()`. Anonymous sign-ins carry `aud: "anon"`; add it to `audience` only if you accept them. For roles and scopes on top, see [`requireRoles()`](/docs/auth).
+The JWKS endpoint only serves keys once your project uses asymmetric JWT signing keys ([JWTs](https://supabase.com/docs/guides/auth/jwts)). A project still on the legacy shared HS256 secret has nothing to verify against, and `jwk()` refuses symmetric algorithms by design: migrate the project to asymmetric signing keys. Supabase's own SDK route to the same check is `supabase.auth.getClaims()`. Anonymous sign-ins (`signInAnonymously()`) also get the `authenticated` role and are marked by the `is_anonymous: true` claim, so `audience: "authenticated"` does not exclude them. If you do not accept them, reject `state.user.claims.is_anonymous === true` in a hook and in your RLS policies. For roles and scopes on top, see [`requireRoles()`](/docs/auth).
 
 ## 6. Use it in routes
 

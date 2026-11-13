@@ -413,7 +413,7 @@ Private Link merchants use a `pl-` prefixed subdomain, which the SDK also accept
 
 ## Errors
 
-The SDK throws errors whose `name` identifies the failure (`AuthenticationError` 401, `ActionNotAllowed` 403, `NotFoundError` 404, `ValidationError` 422 with `error_codes`, `TooManyRequestsError` 429, `BadGateway` 502). Log the name, status, `request_id`, and error codes, and return a generic [problem+json](/docs/errors) 502. A concurrent request with the same idempotency key gets `409`; wait before retrying rather than generating a new key.
+The SDK throws errors whose `name` identifies the failure (`AuthenticationError` 401, `ActionNotAllowed` 403, `NotFoundError` 404, `ValidationError` 422 with `error_codes`, `TooManyRequestsError` 429, `BadGateway` 502, whose `name` is the string `"Bad gateway"`, so match it with `instanceof` or `http_code`). Log the name, status, `request_id`, and error codes, and return a generic [problem+json](/docs/errors) 502. A concurrent request with the same idempotency key gets `409`; wait before retrying rather than generating a new key.
 
 ## Modernisation notes
 

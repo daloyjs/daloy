@@ -103,8 +103,8 @@ type LoginRadiusClient = {
     authValidateAccessToken(token: string): Promise<LoginRadiusAccessTokenInfo>;
     getProfileByAccessToken(
       token: string,
-      emailTemplate?: string | null,
       fields?: string | null,
+      emailTemplate?: string | null,
       verificationUrl?: string | null,
       welcomeEmailTemplate?: string | null,
     ): Promise<LoginRadiusProfile>;
