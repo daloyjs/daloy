@@ -77,6 +77,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "DaloyJS MCP server", href: "/docs/mcp" as Route },
       { title: "A2A agent endpoint", href: "/docs/a2a" as Route, badge: "new" },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
+      { title: "Agent evals", href: "/docs/agent-evals" as Route, badge: "new" },
     ],
   },
   {

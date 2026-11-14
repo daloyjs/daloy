@@ -66,3 +66,5 @@ tmp/
 .claude/skills/automated-release/**
 
 daloyjs_podcasts/
+# Agent-eval run output (`pnpm eval`); results are artifacts, not sources.
+evals/results/

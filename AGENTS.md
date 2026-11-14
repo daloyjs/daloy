@@ -27,6 +27,8 @@ docs/marketing site (`website/`).
 - `pnpm hooks:install` — install the repo's git hooks (staged-secret scan, pre-push gates)
 - `pnpm scan:staged-secrets` — scan staged changes for leaked credentials
 - `pnpm bench` / `pnpm bench:serverless` — router and serverless-cold-path benchmarks
+- `pnpm eval:calibrate` — prove every agent-eval task's graders accept its reference solution and catch its unsafe variants (needs `pnpm build`; no AI, no network)
+- `pnpm eval --agent <name>` — run AI coding agents against the eval tasks (live agents need `--sandbox-ack` and an isolated sandbox; see `evals/README.md`)
 - `cd website && pnpm dev | build | typecheck` — docs site
 
 The `verify:*` scripts run the individual CI gates (see the guardrails section below for the security-critical set). All are defined in the root `package.json` `scripts`; run any of them as `pnpm <script>`.
@@ -37,6 +39,7 @@ The `verify:*` scripts run the individual CI gates (see the guardrails section b
 - `tests/` — the framework test suite, including `red-team-attacks*.test.ts`.
 - `scripts/` — codegen (`dump-openapi.ts`, `generate-sbom.ts`) and the `verify-*.ts` CI gates.
 - `bench/` — performance benchmarks; validate hot-path changes here (see the performance rule under "Editing the codebase").
+- `evals/` — agent-eval harness: tasks (`evals/tasks/<id>/task.ts` + `hidden/` tests) that measure whether AI agents build DaloyJS apps correctly from the shipped `AGENTS.md` and skills without weakening secure defaults. Graders are deterministic; never loosen a grader or hidden test to make an agent score pass. See [`evals/README.md`](evals/README.md).
 - `packages/create-daloy/` — the scaffolder CLI (`bin/`), its tests (`test/templates.test.mjs`), and the five project templates (`templates/`). Has no separate agent guide; this file governs it. See **Editing create-daloy templates** below before touching `_agents`, `_gitignore`, or other underscore-prefixed template files.
 - `skills/` — standalone agent skills for DaloyJS users, installable with `npx skills add daloyjs/daloy --skill <name>`. `skills/express-to-daloyjs/SKILL.md` is the Express migration playbook; its body (everything after the frontmatter) must stay byte-identical to `packages/create-daloy/templates/*/_agents/skills/daloyjs-best-practices/references/migrating-from-express.md` (enforced by `packages/create-daloy/test/templates.test.mjs`), and it must agree with the [Express migration guide](website/content/docs/migrating/express.mdx). Update all three together.
 - `website/` — the docs/marketing site. **Read [`website/AGENTS.md`](website/AGENTS.md) before editing anything under it.**
@@ -125,7 +128,9 @@ the ones agents miss when they treat a template like a normal app.
   only when the skill says to **read** them.
 - After template or CLI changes, update assertions in
   `packages/create-daloy/test/templates.test.mjs` and run
-  `pnpm --filter create-daloy test`.
+  `pnpm --filter create-daloy test`. Also run `pnpm build && pnpm
+  eval:calibrate`: the eval tasks edit the `node-basic` template's
+  `src/build-app.ts` by anchor, so a template change can break them.
 
 ## Website and Blog Authoring
 

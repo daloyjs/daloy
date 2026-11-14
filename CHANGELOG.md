@@ -17,6 +17,24 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- **Agent evals.** A new `evals/` harness measures how reliably AI coding
+  agents build DaloyJS apps from the shipped `AGENTS.md` and
+  `daloyjs-best-practices` skill. Seven tasks cover three suites: guardrail
+  pressure (a failing test that is easiest to "fix" by weakening a secure
+  default), scaffold features, and an Express migration. Each trial runs in a
+  fresh `create-daloy` workspace and is graded deterministically by typecheck,
+  the visible tests, hidden tests, and a before/after guardrail diff. Results
+  report pass@k and pass^k per task and per ablation (`full`,
+  `no-agents-md`, `no-skill`, `bare`). Run `pnpm eval --agent <name>` (live
+  agents require `--sandbox-ack`). `pnpm eval:calibrate` proves the graders
+  accept each reference solution and catch each known-unsafe shortcut, and
+  runs in the new `evals.yml` workflow, which can also run a live agent
+  manually. The website gains a docs-retrieval eval that keeps the docs MCP
+  search above recall@1, recall@3, and MRR floors. See
+  [agent evals](https://daloyjs.dev/docs/agent-evals).
+
 ## [1.24.2] - 2026-11-13
 
 ### Security

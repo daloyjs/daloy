@@ -1,0 +1,227 @@
+# Agent evals: measure how well AI coding agents build DaloyJS apps from the
+# shipped agent instructions, without stripping secure defaults.
+#
+# Two jobs:
+#
+#   calibrate      Deterministic, no AI, no secrets. Proves every eval task's
+#                  graders accept the known-good reference solution, fail when
+#                  nothing is done, and catch every known-unsafe shortcut
+#                  (raising the global body limit, `.passthrough()`, deleting
+#                  `rateLimit()`, `===` on an API key, ...). Runs when the
+#                  harness, the templates the agents work in, or the framework
+#                  changes, plus weekly so template drift surfaces even on
+#                  quiet weeks.
+#
+#   agent-evals    Manual only (workflow_dispatch). Runs a real headless agent
+#                  (Codex CLI, Claude Code, or GitHub Copilot CLI) against the
+#                  tasks and publishes pass@k / pass^k to the job summary.
+#                  The ephemeral GitHub-hosted runner is the sandbox the
+#                  harness's `--sandbox-ack` asks for. The agent's API key is
+#                  the only secret, scoped to the protected `agent-evals`
+#                  environment; nothing runs on pull_request, so a fork can
+#                  never reach it.
+#
+# Hardening (same floor as the rest of .github/workflows):
+#   * `permissions: {}` at the top level; each job opts in to `contents: read`.
+#   * SHA-pinned actions, `persist-credentials: false`, harden-runner.
+#   * `pnpm install --frozen-lockfile --ignore-scripts`; the agent CLI is
+#     installed at an exact, validated version with `--ignore-scripts`.
+#   * workflow_dispatch inputs reach shell steps only through `env:`, never
+#     `${{ }}` interpolation inside `run:` (template-injection safe), and are
+#     validated against allowlists before use.
+#   * egress-policy audit: the agent's model API host differs per vendor and
+#     changes over time; audit mode records every destination for review.
+
+name: Agent evals
+
+on:
+  pull_request:
+    paths:
+      - "evals/**"
+      - "packages/create-daloy/**"
+      - "src/**"
+      - "tests/evals-harness.test.ts"
+      - ".github/workflows/evals.yml"
+  schedule:
+    - cron: "37 9 * * 1" # Mondays 09:37 UTC
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: "Agent to evaluate (none = calibration only)"
+        type: choice
+        options: [none, codex, claude, copilot]
+        default: none
+      cli_version:
+        description: "Exact agent CLI version to install (e.g. 1.2.3)"
+        type: string
+        default: ""
+      model:
+        description: "Model id passed to the agent CLI (optional)"
+        type: string
+        default: ""
+      suite:
+        description: "Suites to run"
+        type: string
+        default: "guardrail,scaffold,migration"
+      ablation:
+        description: "Ablations (full,no-agents-md,no-skill,bare)"
+        type: string
+        default: "full"
+      trials:
+        description: "Trials per task and ablation"
+        type: string
+        default: "3"
+      fail_under:
+        description: "Fail the job below this overall pass rate (0-1)"
+        type: string
+        default: "0"
+
+permissions: {}
+
+concurrency:
+  group: evals-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calibrate:
+    name: Calibrate eval graders
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Build @daloyjs/core (workspaces copy dist/)
+        run: pnpm build
+
+      - name: Calibrate graders (reference passes, noop and unsafe variants fail)
+        run: pnpm eval:calibrate
+
+  agent-evals:
+    name: Agent evals (${{ inputs.agent }})
+    if: github.event_name == 'workflow_dispatch' && inputs.agent != 'none'
+    needs: calibrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    environment: agent-evals
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Build @daloyjs/core
+        run: pnpm build
+
+      - name: Validate inputs
+        env:
+          AGENT: ${{ inputs.agent }}
+          CLI_VERSION: ${{ inputs.cli_version }}
+          MODEL: ${{ inputs.model }}
+          SUITE: ${{ inputs.suite }}
+          ABLATION: ${{ inputs.ablation }}
+          TRIALS: ${{ inputs.trials }}
+          FAIL_UNDER: ${{ inputs.fail_under }}
+        run: |
+          set -euo pipefail
+          [[ "$AGENT" =~ ^(codex|claude|copilot)$ ]] || { echo "bad agent"; exit 1; }
+          [[ "$CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "cli_version must be an exact semver"; exit 1; }
+          [[ -z "$MODEL" || "$MODEL" =~ ^[A-Za-z0-9._:/-]{1,80}$ ]] || { echo "bad model id"; exit 1; }
+          [[ "$SUITE" =~ ^[a-z,]+$ ]] || { echo "bad suite"; exit 1; }
+          [[ "$ABLATION" =~ ^[a-z,-]+$ ]] || { echo "bad ablation"; exit 1; }
+          [[ "$TRIALS" =~ ^[1-9][0-9]?$ ]] || { echo "trials must be 1-99"; exit 1; }
+          [[ "$FAIL_UNDER" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]] || { echo "fail_under must be 0-1"; exit 1; }
+
+      - name: Install agent CLI (exact version, no lifecycle scripts)
+        env:
+          AGENT: ${{ inputs.agent }}
+          CLI_VERSION: ${{ inputs.cli_version }}
+        run: |
+          set -euo pipefail
+          case "$AGENT" in
+            codex) PKG="@openai/codex" ;;
+            claude) PKG="@anthropic-ai/claude-code" ;;
+            copilot) PKG="@github/copilot" ;;
+          esac
+          npm install --global --ignore-scripts "${PKG}@${CLI_VERSION}"
+
+      - name: Run agent evals
+        env:
+          AGENT: ${{ inputs.agent }}
+          MODEL: ${{ inputs.model }}
+          SUITE: ${{ inputs.suite }}
+          ABLATION: ${{ inputs.ablation }}
+          TRIALS: ${{ inputs.trials }}
+          FAIL_UNDER: ${{ inputs.fail_under }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          args=(--agent "$AGENT" --sandbox-ack --suite "$SUITE" --ablation "$ABLATION" \
+                --trials "$TRIALS" --fail-under "$FAIL_UNDER" --out evals/results/run.json)
+          if [[ -n "$MODEL" ]]; then args+=(--model "$MODEL"); fi
+          pnpm eval "${args[@]}"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agent-evals-${{ inputs.agent }}-${{ github.run_id }}
+          path: evals/results/
+          retention-days: 30
+          if-no-files-found: warn
