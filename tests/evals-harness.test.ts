@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   buildPrompt,
   parseCommandTemplate,
+  parseEffort,
   resolveAgent,
 } from "../evals/lib/agents.ts";
 import { parseRunArgs, selectTasks } from "../evals/lib/cli.ts";
@@ -17,10 +18,24 @@ import {
   stripComments,
 } from "../evals/lib/guardrails.ts";
 import { passAtK, passHatK } from "../evals/lib/metrics.ts";
-import { renderMarkdown, summarize } from "../evals/lib/report.ts";
+import {
+  compareRuns,
+  renderComparison,
+  renderMarkdown,
+  summarize,
+} from "../evals/lib/report.ts";
+import { pinMismatches } from "../evals/compare.ts";
 import { hiddenDirFor } from "../evals/lib/runner.ts";
-import { graderId, type TrialResult } from "../evals/lib/types.ts";
-import { childEnv, workspaceHandle } from "../evals/lib/workspace.ts";
+import {
+  graderId,
+  type AgentEffort,
+  type TrialResult,
+} from "../evals/lib/types.ts";
+import {
+  childEnv,
+  parseNumstat,
+  workspaceHandle,
+} from "../evals/lib/workspace.ts";
 import { TASKS } from "../evals/tasks/index.ts";
 
 // Unit tests for the agent-eval harness (`evals/`). The end-to-end proof that
@@ -163,6 +178,21 @@ describe("guardrail diff", () => {
     assert.deepEqual(
       violations(APP, APP.replace("windowMs: 60_000", "windowMs: 1_000")),
       ["rate-limit-budget"],
+    );
+  });
+
+  test("z.strictObject() counts as a strict schema; dropping it is a violation", () => {
+    const strictObject = APP.replace(
+      "z.object({ title: z.string() }).strict()",
+      "z.strictObject({ title: z.string(), tag: z.string().optional() })",
+    );
+    assert.deepEqual(violations(APP, strictObject), []);
+    assert.deepEqual(
+      violations(
+        strictObject,
+        strictObject.replace("z.strictObject(", "z.object("),
+      ),
+      ["strict-schemas"],
     );
   });
 
@@ -334,7 +364,7 @@ describe("CLI arguments", () => {
 
 describe("agents and sandboxing", () => {
   test("offline adapters are not live; CLI adapters are", () => {
-    for (const n of ["noop", "reference", "unsafe:anything"])
+    for (const n of ["noop", "reference", "alternative:any", "unsafe:anything"])
       assert.equal(resolveAgent(n).live, false, n);
     for (const n of ["copilot", "claude", "codex"])
       assert.equal(resolveAgent(n).live, true, n);
@@ -404,6 +434,21 @@ describe("task registry", () => {
     }
   });
 
+  test("every task has at least one valid alternative with a unique id", () => {
+    for (const t of TASKS) {
+      const ids = (t.alternatives ?? []).map((a) => a.id);
+      assert.ok(
+        ids.length > 0,
+        `${t.id} has no alternative solution to guard against false failures`,
+      );
+      assert.equal(
+        new Set(ids).size,
+        ids.length,
+        `${t.id}: duplicate alternative ids`,
+      );
+    }
+  });
+
   test("every task grades guardrails, and unsafe variants name graders the task has", () => {
     for (const t of TASKS) {
       const graders = t.graders.map(graderId);
@@ -451,6 +496,37 @@ describe("task registry", () => {
     }
   });
 });
+
+function trial(
+  taskId: string,
+  ablation: "full" | "bare",
+  pass: boolean,
+  extra: { durationMs?: number; effort?: AgentEffort; lines?: number } = {},
+): TrialResult {
+  return {
+    taskId,
+    suite: "guardrail",
+    ablation,
+    trial: 1,
+    agent: "x",
+    pass,
+    agentRun: {
+      exitCode: 0,
+      timedOut: false,
+      durationMs: extra.durationMs ?? 10,
+      outputTail: "",
+      ...(extra.effort ? { effort: extra.effort } : {}),
+    },
+    grades: [{ id: "guardrails", pass, details: [], durationMs: 1 }],
+    diff: "",
+    footprint: {
+      filesChanged: 1,
+      linesAdded: extra.lines ?? 0,
+      linesRemoved: 0,
+    },
+    workspace: null,
+  };
+}
 
 describe("static graders and reporting", () => {
   test("protected-files, pattern and absent graders pass and fail as specified", async () => {
@@ -530,27 +606,6 @@ describe("static graders and reporting", () => {
   });
 
   test("summarize groups by task and ablation and counts failing graders", () => {
-    const trial = (
-      taskId: string,
-      ablation: "full" | "bare",
-      pass: boolean,
-    ): TrialResult => ({
-      taskId,
-      suite: "guardrail",
-      ablation,
-      trial: 1,
-      agent: "x",
-      pass,
-      agentRun: {
-        exitCode: 0,
-        timedOut: false,
-        durationMs: 10,
-        outputTail: "",
-      },
-      grades: [{ id: "guardrails", pass, details: [], durationMs: 1 }],
-      diff: "",
-      workspace: null,
-    });
     const s = summarize(
       [
         trial("a", "full", true),
@@ -575,9 +630,182 @@ describe("static graders and reporting", () => {
     );
     assert.equal(s.overallPassRate, 0.5);
     assert.equal(s.byAblation.bare, 0);
-    assert.match(
-      renderMarkdown(s, { agent: "x" }),
-      /\| a \| guardrail \| full \| 1\/2 \|/,
+    const md = renderMarkdown(s, { agent: "x", agentVersion: "9.9.9" });
+    assert.match(md, /\| a \| guardrail \| full \| 1\/2 \|/);
+    assert.match(md, /agent 9\.9\.9/);
+    assert.match(md, /### Effort/);
+  });
+
+  test("effort is averaged over passing trials only, and never invented", () => {
+    const s = summarize(
+      [
+        trial("a", "full", true, {
+          durationMs: 1000,
+          effort: {
+            steps: 4,
+            inputTokens: 900,
+            outputTokens: 100,
+            costUsd: 0.5,
+          },
+          lines: 10,
+        }),
+        trial("a", "full", true, {
+          durationMs: 3000,
+          effort: { steps: 8 },
+          lines: 30,
+        }),
+        trial("a", "full", false, {
+          durationMs: 99_000,
+          effort: { steps: 99, costUsd: 9 },
+          lines: 999,
+        }),
+      ],
+      1,
+    );
+    const e = s.cells[0]!.effort;
+    assert.equal(e.agentMs, 2000);
+    assert.equal(e.steps, 6);
+    assert.equal(e.tokens, 1000, "only the trial that reported tokens counts");
+    assert.equal(e.costUsd, 0.5);
+    assert.equal(e.linesChanged, 20);
+    const none = summarize([trial("b", "full", false)], 1).cells[0]!.effort;
+    assert.deepEqual(none, {}, "no passing trial means no effort numbers");
+  });
+});
+
+describe("agent effort, diff footprint, and run comparison", () => {
+  test("parses Claude Code's JSON result", () => {
+    const out = [
+      "some log line",
+      JSON.stringify({
+        type: "result",
+        num_turns: 12,
+        total_cost_usd: 0.42,
+        usage: {
+          input_tokens: 100,
+          cache_creation_input_tokens: 50,
+          cache_read_input_tokens: 850,
+          output_tokens: 300,
+        },
+      }),
+    ].join("\n");
+    assert.deepEqual(parseEffort("claude-json", out), {
+      steps: 12,
+      inputTokens: 1000,
+      outputTokens: 300,
+      costUsd: 0.42,
+    });
+  });
+
+  test("parses the Codex exec --json event stream", () => {
+    const out = [
+      JSON.stringify({ type: "thread.started" }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "command_execution" },
+      }),
+      JSON.stringify({ type: "item.completed", item: { type: "file_change" } }),
+      JSON.stringify({
+        type: "turn.completed",
+        usage: { input_tokens: 700, output_tokens: 70 },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message" },
+      }),
+      JSON.stringify({
+        type: "turn.completed",
+        usage: { input_tokens: 300, output_tokens: 30 },
+      }),
+    ].join("\n");
+    assert.deepEqual(parseEffort("codex-jsonl", out), {
+      steps: 3,
+      inputTokens: 1000,
+      outputTokens: 100,
+    });
+  });
+
+  test("unknown or unparseable output yields no effort rather than a guess", () => {
+    assert.equal(parseEffort("claude-json", "plain text"), undefined);
+    assert.equal(
+      parseEffort("claude-json", '{"type":"result","num_turns":-1}'),
+      undefined,
+    );
+    assert.equal(parseEffort("codex-jsonl", "{not json"), undefined);
+    assert.equal(
+      parseEffort("none", '{"type":"result","num_turns":3}'),
+      undefined,
+    );
+  });
+
+  test("parseNumstat counts text and binary changes", () => {
+    assert.deepEqual(
+      parseNumstat(
+        "12\t3\tsrc/build-app.ts\n40\t0\ttests/a.test.ts\n-\t-\tlogo.png\n",
+      ),
+      { filesChanged: 3, linesAdded: 52, linesRemoved: 3 },
+    );
+    assert.deepEqual(parseNumstat(""), {
+      filesChanged: 0,
+      linesAdded: 0,
+      linesRemoved: 0,
+    });
+  });
+
+  test("compareRuns flags pass-rate drops and new guardrail failures as regressions", () => {
+    const base = summarize(
+      [
+        trial("a", "full", true),
+        trial("a", "full", true),
+        trial("b", "full", true),
+        trial("c", "full", false),
+      ],
+      1,
+    );
+    const head = summarize(
+      [
+        trial("a", "full", true),
+        trial("a", "full", false),
+        trial("b", "full", true),
+        trial("c", "full", true),
+        trial("d", "full", true),
+      ],
+      1,
+    );
+    const status = Object.fromEntries(
+      compareRuns(base, head).map((r) => [r.taskId, r.status]),
+    );
+    assert.deepEqual(status, {
+      a: "regressed",
+      b: "same",
+      c: "improved",
+      d: "added",
+    });
+    const md = renderComparison(compareRuns(base, head), {
+      base: "1.24.2",
+      head: "HEAD",
+    });
+    assert.match(md, /Regressed: \*\*1\*\*/);
+    assert.ok(
+      md.indexOf("| regressed |") < md.indexOf("| improved |"),
+      "regressions are listed first",
+    );
+  });
+
+  test("runs are only comparable with the same agent, version, model, and limit", () => {
+    const meta = {
+      agent: "codex",
+      agentVersion: "1.0.0",
+      model: "m",
+      timeoutMs: 60_000,
+    };
+    assert.deepEqual(pinMismatches(meta, { ...meta }), []);
+    assert.deepEqual(pinMismatches(meta, { ...meta, agentVersion: "1.1.0" }), [
+      "agentVersion: 1.0.0 vs 1.1.0",
+    ]);
+    assert.equal(
+      pinMismatches(meta, { ...meta, model: "other", timeoutMs: 1 }).length,
+      2,
     );
   });
 });

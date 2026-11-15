@@ -29,7 +29,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Ablation, EvalTask, WorkspaceHandle } from "./types.ts";
+import type {
+  Ablation,
+  DiffFootprint,
+  EvalTask,
+  WorkspaceHandle,
+} from "./types.ts";
 
 /**
  * Absolute path of the repository root: the nearest ancestor holding
@@ -359,6 +364,46 @@ export async function workspaceDiff(
   return diff.output.length > maxChars
     ? `${diff.output.slice(0, maxChars)}\n[diff truncated]`
     : diff.output;
+}
+
+/**
+ * Parse `git diff --numstat` output. Binary files (`-\t-`) count as changed
+ * files with no line counts.
+ *
+ * @param numstat - The command's output.
+ * @returns Files changed and lines added / removed.
+ */
+export function parseNumstat(numstat: string): DiffFootprint {
+  let filesChanged = 0;
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  for (const line of numstat.split("\n")) {
+    const m = /^(\d+|-)\t(\d+|-)\t./.exec(line);
+    if (!m) continue;
+    filesChanged++;
+    if (m[1] !== "-") linesAdded += Number(m[1]);
+    if (m[2] !== "-") linesRemoved += Number(m[2]);
+  }
+  return { filesChanged, linesAdded, linesRemoved };
+}
+
+/**
+ * Size of the agent's changes since the baseline, new files included. Call
+ * after {@link workspaceDiff}, which marks new files with intent-to-add.
+ *
+ * @param dir - Workspace root.
+ * @returns Files changed and lines added / removed.
+ */
+export async function workspaceFootprint(dir: string): Promise<DiffFootprint> {
+  const r = await git(dir, [
+    "--no-pager",
+    "diff",
+    "--numstat",
+    "--",
+    ".",
+    ":(exclude)node_modules",
+  ]);
+  return parseNumstat(r.output);
 }
 
 /**

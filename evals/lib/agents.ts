@@ -13,7 +13,7 @@
  */
 
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
-import type { AgentRunResult, EvalTask } from "./types.ts";
+import type { AgentEffort, AgentRunResult, EvalTask } from "./types.ts";
 
 /** What an adapter receives for one trial. */
 export interface AgentInvocation {
@@ -32,6 +32,8 @@ export interface AgentAdapter {
   readonly name: string;
   /** `true` when the adapter executes a real, tool-using agent. */
   readonly live: boolean;
+  /** Executable for live agents; `<command> --version` is recorded in results. */
+  readonly command?: string;
   run(inv: AgentInvocation): Promise<AgentRunResult>;
 }
 
@@ -80,15 +82,105 @@ function offline(
   };
 }
 
+/** Which CLI output format {@link parseEffort} should read. */
+export type EffortFormat = "claude-json" | "codex-jsonl" | "none";
+
+const num = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
+
+function jsonLines(output: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const line of output.split("\n")) {
+    const t = line.trim();
+    if (!t.startsWith("{")) continue;
+    try {
+      const v: unknown = JSON.parse(t);
+      if (v && typeof v === "object" && !Array.isArray(v))
+        out.push(v as Record<string, unknown>);
+    } catch {
+      // Not a JSON line (agent chatter, stderr).
+    }
+  }
+  return out;
+}
+
+function compact(e: AgentEffort): AgentEffort | undefined {
+  const entries = Object.entries(e).filter(([, v]) => v !== undefined);
+  return entries.length > 0
+    ? (Object.fromEntries(entries) as AgentEffort)
+    : undefined;
+}
+
+/**
+ * Read the effort an agent CLI reports in its own output: Claude Code's
+ * `--output-format json` result object (`num_turns`, `usage`,
+ * `total_cost_usd`) or Codex's `exec --json` event stream (`usage` on
+ * `turn.completed`, one step per completed item). Unknown shapes yield
+ * `undefined` instead of a guess.
+ *
+ * @param format - Which CLI produced the output.
+ * @param output - Captured stdout/stderr.
+ * @returns The reported effort, or `undefined` when none was found.
+ */
+export function parseEffort(
+  format: EffortFormat,
+  output: string,
+): AgentEffort | undefined {
+  if (format === "claude-json") {
+    const result = jsonLines(output)
+      .reverse()
+      .find((o) => o.type === "result" || "total_cost_usd" in o);
+    if (!result) return undefined;
+    const usage = (result.usage ?? {}) as Record<string, unknown>;
+    const input = [
+      usage.input_tokens,
+      usage.cache_creation_input_tokens,
+      usage.cache_read_input_tokens,
+    ]
+      .map(num)
+      .filter((v): v is number => v !== undefined);
+    return compact({
+      steps: num(result.num_turns),
+      inputTokens:
+        input.length > 0 ? input.reduce((a, b) => a + b, 0) : undefined,
+      outputTokens: num(usage.output_tokens),
+      costUsd: num(result.total_cost_usd),
+    });
+  }
+  if (format === "codex-jsonl") {
+    let input: number | undefined;
+    let outputTokens: number | undefined;
+    let steps = 0;
+    for (const ev of jsonLines(output)) {
+      if (ev.type === "item.completed") steps++;
+      const usage = ev.usage as Record<string, unknown> | undefined;
+      if (ev.type === "turn.completed" && usage) {
+        const i = num(usage.input_tokens);
+        const o = num(usage.output_tokens);
+        if (i !== undefined) input = (input ?? 0) + i;
+        if (o !== undefined) outputTokens = (outputTokens ?? 0) + o;
+      }
+    }
+    return compact({
+      steps: steps > 0 ? steps : undefined,
+      inputTokens: input,
+      outputTokens,
+    });
+  }
+  return undefined;
+}
+
 function cli(
   name: string,
   command: string,
   envKeys: readonly string[],
   args: (inv: AgentInvocation) => string[],
+  effortFormat: EffortFormat = "none",
 ): AgentAdapter {
   return {
     name,
     live: true,
+    command,
     async run(inv) {
       const r = await runProcess(command, args(inv), {
         cwd: inv.dir,
@@ -100,6 +192,11 @@ function cli(
         timedOut: r.timedOut,
         durationMs: r.durationMs,
         outputTail: r.output.slice(-OUTPUT_TAIL_CHARS),
+        transcript: r.output,
+        ...(() => {
+          const effort = parseEffort(effortFormat, r.output);
+          return effort ? { effort } : {};
+        })(),
       };
     },
   };
@@ -142,7 +239,8 @@ export function parseCommandTemplate(raw: string | undefined): string[] {
 /**
  * Resolve an adapter by name.
  *
- * @param name - `noop`, `reference`, `unsafe:<variant>`, `copilot`, `claude`,
+ * @param name - `noop`, `reference`, `alternative:<id>`, `unsafe:<variant>`,
+ *   `copilot`, `claude`,
  *   `codex`, or `command`.
  * @param env - Environment to read `DALOY_EVAL_AGENT_CMD` from.
  * @returns The adapter.
@@ -157,6 +255,15 @@ export function resolveAgent(
     return offline(name, async ({ task, dir }) =>
       task.reference(workspaceHandle(dir)),
     );
+  }
+  if (name.startsWith("alternative:")) {
+    const altId = name.slice("alternative:".length);
+    return offline(name, async ({ task, dir }) => {
+      const alt = task.alternatives?.find((a) => a.id === altId);
+      if (!alt)
+        throw new Error(`task ${task.id} has no valid alternative "${altId}"`);
+      await alt.apply(workspaceHandle(dir));
+    });
   }
   if (name.startsWith("unsafe:")) {
     const variantId = name.slice("unsafe:".length);
@@ -196,19 +303,27 @@ export function resolveAgent(
           "bypassPermissions",
           ...withModel("--model", inv),
         ],
+        "claude-json",
       );
     case "codex":
       // Codex CLI with its own OS sandbox limited to the workspace.
-      return cli(name, "codex", ["OPENAI_API_KEY", "CODEX_HOME"], (inv) => [
-        "exec",
-        "--sandbox",
-        "workspace-write",
-        "--skip-git-repo-check",
-        "-C",
-        inv.dir,
-        ...withModel("-m", inv),
-        inv.prompt,
-      ]);
+      return cli(
+        name,
+        "codex",
+        ["OPENAI_API_KEY", "CODEX_HOME"],
+        (inv) => [
+          "exec",
+          "--json",
+          "--sandbox",
+          "workspace-write",
+          "--skip-git-repo-check",
+          "-C",
+          inv.dir,
+          ...withModel("-m", inv),
+          inv.prompt,
+        ],
+        "codex-jsonl",
+      );
     case "command": {
       const template = parseCommandTemplate(env.DALOY_EVAL_AGENT_CMD);
       const passthrough = (env.DALOY_EVAL_AGENT_ENV ?? "")
@@ -225,7 +340,7 @@ export function resolveAgent(
     }
     default:
       throw new Error(
-        `unknown agent "${name}". Use one of: noop, reference, unsafe:<variant>, copilot, claude, codex, command`,
+        `unknown agent "${name}". Use one of: noop, reference, alternative:<id>, unsafe:<variant>, copilot, claude, codex, command`,
       );
   }
 }

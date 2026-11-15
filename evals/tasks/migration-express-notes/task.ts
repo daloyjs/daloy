@@ -1,4 +1,4 @@
-import { addBeforeReturn } from "../helpers.ts";
+import { addBeforeReturn, BUILD_APP, replaceOnce } from "../helpers.ts";
 import type { EvalTask, WorkspaceHandle } from "../../lib/types.ts";
 
 /** The legacy Express app the agent ports. Never executed: `express` is not installed. */
@@ -86,11 +86,9 @@ test("unknown notes 404 and invalid input 422s", async () => {
 
 async function port(
   ws: WorkspaceHandle,
-  opts: { deleteLegacy: boolean; createdStatus: 200 | 201 },
+  opts: { deleteLegacy: boolean; createdStatus: 200 | 201; module?: boolean },
 ): Promise<void> {
-  await addBeforeReturn(
-    ws,
-    `
+  const code = `
   const Note = z.object({ id: z.string(), title: z.string(), done: z.boolean() }).strict();
   const notes = new Map<string, z.infer<typeof Note>>([["1", { id: "1", title: "Welcome", done: false }]]);
   let nextNoteId = 2;
@@ -165,8 +163,24 @@ async function port(
       return { status: 204 as const, body: undefined };
     }
   );
-`,
-  );
+`;
+  if (opts.module) {
+    await ws.write(
+      "src/notes.ts",
+      `import { z } from "zod";\nimport { NotFoundError, type App } from "@daloyjs/core";\n\n` +
+        `/** Notes routes, ported from the legacy Express app. */\n` +
+        `export function registerNotes(app: App): void {${code}}\n`,
+    );
+    await replaceOnce(
+      ws,
+      BUILD_APP,
+      `import { z } from "zod";`,
+      `import { z } from "zod";\nimport { registerNotes } from "./notes.ts";`,
+    );
+    await addBeforeReturn(ws, "  registerNotes(app);");
+  } else {
+    await addBeforeReturn(ws, code);
+  }
   await ws.write("tests/notes.test.ts", NOTES_TEST);
   if (opts.deleteLegacy) await ws.remove("legacy");
 }
@@ -212,6 +226,14 @@ response bodies; error responses should use DaloyJS's standard problem+json erro
     { kind: "absent", id: "legacy-removed", paths: ["legacy"] },
   ],
   reference: (ws) => port(ws, { deleteLegacy: true, createdStatus: 201 }),
+  alternatives: [
+    {
+      id: "separate-module",
+      description: "Notes routes in src/notes.ts, registered from buildApp()",
+      apply: (ws) =>
+        port(ws, { deleteLegacy: true, createdStatus: 201, module: true }),
+    },
+  ],
   unsafe: [
     {
       id: "keep-legacy",

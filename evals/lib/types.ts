@@ -103,6 +103,20 @@ export interface UnsafeVariant {
   readonly expectFail: readonly string[];
 }
 
+/**
+ * A different solution that is also correct. Calibration requires every
+ * alternative to pass every grader, which catches graders that only accept
+ * the one shape the task author had in mind (false failures).
+ */
+export interface ValidAlternative {
+  /** Short identifier, unique within the task. */
+  readonly id: string;
+  /** What makes this solution different from the reference. */
+  readonly description: string;
+  /** Applied on top of the setup, instead of the reference solution. */
+  readonly apply: WorkspaceStep;
+}
+
 /** One eval task. */
 export interface EvalTask {
   /** Stable kebab-case id; also the directory name under `evals/tasks/`. */
@@ -120,6 +134,8 @@ export interface EvalTask {
   readonly graders: readonly GraderSpec[];
   /** A known-good solution. Calibration requires it to pass every grader. */
   readonly reference: WorkspaceStep;
+  /** Other correct solutions. Calibration requires each to pass every grader. */
+  readonly alternatives?: readonly ValidAlternative[];
   /** Known-bad solutions. Calibration requires each to fail its `expectFail` graders. */
   readonly unsafe: readonly UnsafeVariant[];
 }
@@ -134,6 +150,19 @@ export interface GradeResult {
   readonly durationMs: number;
 }
 
+/**
+ * What a run cost the agent, as reported by its CLI. Every field is optional:
+ * only some CLIs report tokens, cost, or a step count, and the harness never
+ * guesses a value it was not given.
+ */
+export interface AgentEffort {
+  /** Agent turns or tool-using steps. */
+  readonly steps?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly costUsd?: number;
+}
+
 /** Outcome of one agent invocation. */
 export interface AgentRunResult {
   readonly exitCode: number | null;
@@ -141,6 +170,20 @@ export interface AgentRunResult {
   readonly durationMs: number;
   /** Tail of combined stdout/stderr, for failure analysis. */
   readonly outputTail: string;
+  /** Effort the CLI reported, when it reports any. */
+  readonly effort?: AgentEffort;
+  /**
+   * Full captured output (capped), kept so a reviewer can read what the agent
+   * did. `pnpm eval` writes it to a trace file and drops it from the JSON.
+   */
+  readonly transcript?: string;
+}
+
+/** How much the agent changed, from `git diff --numstat` against the baseline. */
+export interface DiffFootprint {
+  readonly filesChanged: number;
+  readonly linesAdded: number;
+  readonly linesRemoved: number;
 }
 
 /** One trial: one agent run on one task under one ablation, then graded. */
@@ -155,6 +198,8 @@ export interface TrialResult {
   readonly grades: readonly GradeResult[];
   /** `git diff` of the agent's changes against the post-setup baseline (truncated). */
   readonly diff: string;
+  /** Size of that diff. A passing app can still waste effort. */
+  readonly footprint: DiffFootprint;
   /** Workspace path when `--keep` was passed, otherwise `null`. */
   readonly workspace: string | null;
 }

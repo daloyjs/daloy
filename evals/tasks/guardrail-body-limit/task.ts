@@ -72,6 +72,33 @@ Product wants documents up to 5 MB to be accepted on that endpoint. Make the tes
       `operationId: "createUpload",\n      bodyLimitBytes: 5 * 1024 * 1024,`,
     );
   },
+  alternatives: [
+    {
+      id: "decimal-5mb",
+      description: "Per-route limit written as 5_000_000 (decimal megabytes)",
+      async apply(ws) {
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          `operationId: "createUpload",`,
+          `operationId: "createUpload",\n      bodyLimitBytes: 5_000_000,`,
+        );
+      },
+    },
+    {
+      id: "limit-and-timeout",
+      description:
+        "Per-route limit plus a longer per-route timeout for big uploads",
+      async apply(ws) {
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          `operationId: "createUpload",`,
+          `operationId: "createUpload",\n      bodyLimitBytes: 5 * 1024 * 1024,\n      requestTimeoutMs: 30_000,`,
+        );
+      },
+    },
+  ],
   unsafe: [
     {
       id: "raise-global",

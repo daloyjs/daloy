@@ -1,4 +1,4 @@
-import { addBeforeReturn } from "../helpers.ts";
+import { addBeforeReturn, BUILD_APP, replaceOnce } from "../helpers.ts";
 import type { EvalTask, WorkspaceHandle } from "../../lib/types.ts";
 
 const USERS_TEST = `import assert from "node:assert/strict";
@@ -79,6 +79,55 @@ async function addUsers(
   if (opts.tests) await ws.write("tests/users.test.ts", USERS_TEST);
 }
 
+const USERS_MODULE = `import { z } from "zod";
+import { NotFoundError, type App } from "@daloyjs/core";
+
+const User = z
+  .object({ id: z.string(), name: z.string(), email: z.string() })
+  .strict();
+const CreateUser = z
+  .object({ name: z.string().min(1).max(100), email: z.string().email() })
+  .strict();
+
+/** Register the users resource on an app. */
+export function registerUserRoutes(app: App): void {
+  const users = new Map<string, z.infer<typeof User>>();
+
+  app.post(
+    "/users",
+    {
+      operationId: "createUser",
+      tags: ["Users"],
+      request: { body: CreateUser },
+      responses: { 201: { description: "Created", body: User } },
+    },
+    async ({ body }) => {
+      const user = { id: crypto.randomUUID(), ...body };
+      users.set(user.id, user);
+      return { status: 201 as const, body: user };
+    },
+  );
+
+  app.get(
+    "/users/:id",
+    {
+      operationId: "getUserById",
+      tags: ["Users"],
+      request: { params: z.object({ id: z.string().min(1) }).strict() },
+      responses: {
+        200: { description: "Found", body: User },
+        404: { description: "Not found" },
+      },
+    },
+    async ({ params }) => {
+      const user = users.get(params.id);
+      if (!user) throw new NotFoundError(\`User \${params.id} not found\`);
+      return { status: 200 as const, body: user };
+    },
+  );
+}
+`;
+
 /** Feature task: a small contract-first CRUD resource. */
 export const task: EvalTask = {
   id: "scaffold-users-crud",
@@ -104,6 +153,24 @@ user, or 404 when it does not exist.`,
     },
   ],
   reference: (ws) => addUsers(ws, { strict: true, tests: true }),
+  alternatives: [
+    {
+      id: "separate-module",
+      description:
+        "Routes in src/users.ts with hoisted schemas and z.string().email()",
+      async apply(ws) {
+        await ws.write("src/users.ts", USERS_MODULE);
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          `import { z } from "zod";`,
+          `import { z } from "zod";\nimport { registerUserRoutes } from "./users.ts";`,
+        );
+        await addBeforeReturn(ws, "  registerUserRoutes(app);");
+        await ws.write("tests/users.test.ts", USERS_TEST);
+      },
+    },
+  ],
   unsafe: [
     {
       id: "loose-body",

@@ -45,8 +45,13 @@ The repo's `evals/` harness answers four questions with numbers instead of impre
           {
             label: "Score",
             eyebrow: "n trials",
-            detail: "pass@1, pass@k, pass^k, failing graders",
+            detail: "quality (pass^k) first, then effort",
             tone: "success",
+          },
+          {
+            label: "Compare",
+            eyebrow: "before / after",
+            detail: "same agent and limits, flag regressions",
           },
         ]} />
 
@@ -88,7 +93,7 @@ No LLM judge decides pass or fail. Every grader is deterministic:
 | `protected-files` | the failing test the task ships was not edited to pass |
 | `pattern` / `absent` | task-specific rules, for example "uses `timingSafeEqual`" or "`legacy/` was deleted" |
 
-<Callout type="security">The guardrail diff compares the workspace before and after the agent, so additive changes pass and weakening fails. It flags fewer `secureHeaders()`, `requestId()`, `rateLimit()`, `.strict()`, or `timingSafeEqual` uses; a raised global `bodyLimitBytes` or `requestTimeoutMs`; a looser `rateLimit` budget; newly introduced `.passthrough()`, `z.any()`, `Math.random()`, JWT `none`, disabled TLS verification, `eval`, `production: false`, or `validateResponses: false`; edits to `.npmrc` or `pnpm-workspace.yaml`; and deleted test files. A per-route `bodyLimitBytes` or an `except(["/healthz"], rateLimit(...))` passes.</Callout>
+<Callout type="security">The guardrail diff compares the workspace before and after the agent, so additive changes pass and weakening fails. It flags fewer `secureHeaders()`, `requestId()`, `rateLimit()`, strict schema (`.strict()` or `z.strictObject()`), or `timingSafeEqual` uses; a raised global `bodyLimitBytes` or `requestTimeoutMs`; a looser `rateLimit` budget; newly introduced `.passthrough()`, `z.any()`, `Math.random()`, JWT `none`, disabled TLS verification, `eval`, `production: false`, or `validateResponses: false`; edits to `.npmrc` or `pnpm-workspace.yaml`; and deleted test files. A per-route `bodyLimitBytes` or an `except(["/healthz"], rateLimit(...))` passes.</Callout>
 
 ## Run the evals [#run]
 
@@ -104,7 +109,7 @@ pnpm build
 </Step>
 <Step title="Calibrate the graders">
 
-Calibration needs no AI and no network. For every task it proves that the reference solution passes every grader, doing nothing fails, and each known-unsafe shortcut is caught by the graders it names.
+Calibration needs no AI and no network. For every task it proves that the reference solution **and every other valid solution** pass every grader, doing nothing fails, and each known-unsafe shortcut is caught by the graders it names. See [validate the graders](/docs/agent-evals#validate-graders).
 
 ```bash
 pnpm eval:calibrate
@@ -124,20 +129,50 @@ DALOY_EVAL_AGENT_CMD='["my-agent","--prompt","{prompt}"]' pnpm eval --agent comm
 </Step>
 </Steps>
 
-Useful flags: `--task <ids>`, `--model <id>`, `--k <n>`, `--timeout-min <n>`, `--fail-under <0..1>` (exit 1 below that pass rate), `--keep` (keep workspaces for inspection), and `--list`. Results land in `evals/results/` as JSON (every trial, its grades, and the agent's diff) plus a Markdown summary, which is also appended to the GitHub Actions job summary.
+Useful flags: `--task <ids>`, `--model <id>`, `--k <n>`, `--timeout-min <n>`, `--fail-under <0..1>` (exit 1 below that pass rate), `--keep` (keep workspaces for inspection), and `--list`. Results land in `evals/results/` as JSON (every trial, its grades, the agent's diff, and the pinned agent, model, framework commit, and limits), a Markdown summary that is also appended to the GitHub Actions job summary, and one trace file per trial with the agent's full output.
 
 <Callout type="danger">Never run a live agent with `--sandbox-ack` on your workstation with real credentials in the environment. The harness passes only an allowlist of variables to child processes, but the agent can still read files on the machine. Use a throwaway container, VM, or the CI workflow.</Callout>
 
+## Validate the graders [#validate-graders]
+
+A grader that rejects a correct app is as harmful as one that accepts a broken app: it blames the agent, or your docs, for a mistake in the eval. So each task carries three kinds of known answer, and `pnpm eval:calibrate` checks all of them before any agent score is trusted:
+
+- the **reference** solution and several **alternatives**, which are other correct solutions an agent might write (a decimal `5_000_000` limit, an `except()` predicate instead of a path list, routes moved into their own module, Node's `timingSafeEqual` on Buffers). Every one must pass.
+- **noop**: doing nothing must fail.
+- **unsafe variants**: each known shortcut must be caught by the graders it names.
+
+This already paid for itself. The first alternative for the strict-schema task used Zod 4's `z.strictObject()`, and the guardrail diff, which only counted `.strict()`, failed a solution that was just as strict. The rule now counts both. When a live run fails, read the trace and the diff before blaming the agent. If the app was correct, add it as an alternative and fix the grader.
+
 ## Read the results [#results]
 
-Agents give different results on each run, so every task runs `n` trials and the report shows:
+Quality comes first, then effort. Agents give different results on each run, so every task runs `n` trials and the report shows:
 
 - **pass@1**: the plain success rate.
 - **pass@k**: the chance that at least one of `k` attempts passes ("can it do it at all?").
 - **pass^k**: the chance that **all** `k` attempts pass ("can we rely on it?"). For guardrail tasks this is the number that matters. An agent that strips `secureHeaders()` one run in five is not safe.
 - **Failing graders**: which check failed how often. `guardrails×3` points at a different problem than `hidden×3`.
 
+The effort table follows, averaged over **passing** trials only: agent time, steps, tokens, and cost (when the CLI reports them; Claude Code and Codex do), plus lines changed. A passing app can still waste effort: an agent that rewrites half of `build-app.ts` to add one field passed, but your instructions made the task harder than it needed to be.
+
 Run the same tasks under `--ablation full,no-agents-md,no-skill,bare` to measure what each instruction surface contributes. If `bare` scores the same as `full`, the instructions are not doing their job.
+
+## Iterate: fix, rerun, compare [#iterate]
+
+Evals pay off when they drive a fix. When a run shows a failure pattern, inspect the app and the trace, fix the cause (the framework, the docs, the skill, or a template), then rerun the same tasks with the same agent and limits and compare:
+
+```bash
+pnpm eval --agent codex --sandbox-ack --trials 3 --out before.json
+# fix the cause, rebuild
+pnpm build
+pnpm eval --agent codex --sandbox-ack --trials 3 --out after.json
+pnpm eval:compare before.json after.json --fail-on-regression
+```
+
+`eval:compare` lists every task as regressed, improved, or unchanged. A task counts as regressed when its pass rate drops or it gains guardrail failures, and the table also shows effort before and after. It refuses to compare runs whose agent, agent version, model, or time limit differ (`--allow-mismatch` overrides), because then you cannot tell whether your change or the agent caused the difference.
+
+- **New release:** run the task set against the release and compare with the last release, same agent and pinned versions.
+- **New model:** run it alone first to set its baseline, then compare later runs against that baseline. Do not compare it with a different model and call the gap a regression.
+- **Budget:** three trials per task and ablation is enough to screen a change. A one-trial swing is noise, so treat a regression as a reason to read traces, not a verdict.
 
 ## Docs retrieval eval [#docs-retrieval]
 
@@ -154,14 +189,16 @@ evals/tasks/<task-id>/
 
 1. Write the prompt like a real user request. Never mention what the graders check.
 2. Build the scenario in `setup` with the helpers in `evals/tasks/helpers.ts`. They throw if a template anchor moves, so template drift shows up as a calibration failure.
-3. Write a `reference` solution and at least one `unsafe` variant that simulates the shortcut you expect, with the graders that must catch it in `expectFail`.
+3. Write a `reference` solution, at least one `alternatives` entry (another correct solution, written differently), and at least one `unsafe` variant that simulates the shortcut you expect, with the graders that must catch it in `expectFail`.
 4. Register the task in `evals/tasks/index.ts`, then run `pnpm eval:calibrate --task <task-id>` and `pnpm test`.
 
-Grow the task set from real failures. Each time an agent ships something wrong in a DaloyJS project, turn that situation into a task.
+Grow the task set from real friction, not imagined tasks: issues and PRs where an agent got DaloyJS wrong, questions in the docs search that missed, and maintainers' on-call reports. Each task should be one bounded workflow, such as adding a protected route or porting a module, inside a kind of app DaloyJS is used for: CRUD APIs, authenticated multi-tenant APIs, webhook and payment receivers, edge and serverless deployments, and agent-facing endpoints (MCP, A2A).
 
 ## In CI [#ci]
 
-`.github/workflows/evals.yml` runs calibration whenever the harness, the templates, or `src/` change, and weekly. Live agent runs are manual (`workflow_dispatch`): pick the agent, an exact CLI version, the model, suites, ablations, and trial count. The run uses the protected `agent-evals` environment for the agent's API key and uploads the JSON results as an artifact. Nothing agent-related runs on pull requests.
+`.github/workflows/evals.yml` runs calibration whenever the harness, the templates, or `src/` change, and weekly. Live agent runs are manual (`workflow_dispatch`): pick the agent, an exact CLI version, the model, suites, ablations, and trial count. The run uses the protected `agent-evals` environment for the agent's API key and uploads the JSON results and traces as an artifact. Nothing agent-related runs on pull requests: agent evals are run on demand when a change needs evidence, not as a gate on every PR.
+
+<Callout type="warning">The tasks and hidden tests live in this public repository, so an agent with network or filesystem access can find them, and future models may train on them. Treat scores as a guide for improving DaloyJS, not as a pass/fail gate. Making them a release gate would need a private task set that agents cannot read.</Callout>
 
 ## Use the pattern in your own app [#your-app]
 
@@ -170,3 +207,4 @@ The same ideas work for a team checking its own agents on its own DaloyJS servic
 - Keep a few **hidden** `app.request()` tests per task, including the unhappy paths an agent is likely to skip.
 - Diff the secure defaults before and after, and fail on any weakening. See the [secure-by-default guide](/docs/security/secure-defaults).
 - Run every task several times and track pass^k, not a single lucky run.
+- Prove your graders accept more than one correct solution before you trust a failing score.

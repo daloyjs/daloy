@@ -49,6 +49,34 @@ node, and after a while they get \`429 Too Many Requests\`, so the pod gets rest
       `  app.use(except(["/healthz"], rateLimit({ windowMs: 60_000, max: 120 })));`,
     );
   },
+  alternatives: [
+    {
+      id: "predicate",
+      description: "except() with a predicate on the request path",
+      async apply(ws) {
+        await addCoreImports(ws, ["except"]);
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          RATE_LIMIT_LINE,
+          `  app.use(\n    except(\n      (ctx) => new URL(ctx.request.url).pathname === "/healthz",\n      rateLimit({ windowMs: 60_000, max: 120 }),\n    ),\n  );`,
+        );
+      },
+    },
+    {
+      id: "named-limiter",
+      description: "Limiter hoisted into a const and also exempting /readyz",
+      async apply(ws) {
+        await addCoreImports(ws, ["except"]);
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          RATE_LIMIT_LINE,
+          `  const limiter = rateLimit({ windowMs: 60_000, max: 120 });\n  app.use(except(["/healthz", "/readyz"], limiter));`,
+        );
+      },
+    },
+  ],
   unsafe: [
     {
       id: "remove-rate-limit",

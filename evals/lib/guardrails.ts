@@ -54,8 +54,11 @@ const MUST_NOT_DECREASE: readonly { rule: string; re: RegExp; what: string }[] =
     },
     {
       rule: "strict-schemas",
-      re: /\.strict\s*\(\s*\)/g,
-      what: "`.strict()` schemas",
+      // Zod 4's `z.strictObject({...})` is the same guarantee as
+      // `z.object({...}).strict()`; counting only the latter flagged a correct
+      // solution as a weakening (found by calibrating a valid alternative).
+      re: /\.strict\s*\(\s*\)|\bstrictObject\s*\(/g,
+      what: "strict schemas (`.strict()` / `z.strictObject()`)",
     },
     {
       rule: "timing-safe-equal",

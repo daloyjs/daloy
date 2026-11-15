@@ -29,8 +29,19 @@ DALOY_EVAL_AGENT_ENV=MY_AGENT_API_KEY \
 ```
 
 `pnpm eval --help` lists every flag. Results go to `evals/results/`
-(gitignored): one JSON file with every trial, its grades and the agent's diff,
-plus a Markdown summary.
+(gitignored): one JSON file with every trial, its grades, the agent's diff and
+the pinned run metadata (agent and CLI version, model, commit, limits), a
+Markdown summary, and a `<run>-traces/` directory with each trial's full agent
+output.
+
+Compare two runs (fix something, rerun with the same agent and limits):
+
+```sh
+pnpm eval:compare before.json after.json --fail-on-regression
+```
+
+It refuses runs whose agent, agent version, model, or time limit differ unless
+`--allow-mismatch` is passed. Baseline a new model on its own first.
 
 ## How a trial works
 
@@ -44,7 +55,10 @@ plus a Markdown summary.
 4. The task's `setup` builds the scenario; a git baseline is committed.
 5. The agent runs with the prompt (an environment preamble plus the task prompt)
    and a minimal, allowlisted environment.
-6. Graders run: `typecheck`, `tests`, `hidden` (copied in only now),
+6. The diff footprint (`git diff --numstat`) and any effort the CLI reports
+   (Claude Code: turns, tokens, cost; Codex: completed items, tokens) are
+   recorded. Effort is reported over passing trials only: quality first.
+7. Graders run: `typecheck`, `tests`, `hidden` (copied in only now),
    `guardrails` (see `lib/guardrails.ts`), `protected-files`, and task-specific
    `pattern` / `absent` checks. A trial passes only if every grader passes.
 
@@ -70,11 +84,26 @@ evals/
   If a grader rejects a legitimately good solution, fix the grader and add
   that solution shape to `tests/evals-harness.test.ts`.
 - **Prompts never mention what is graded** (enforced by the harness tests).
-- **Every task needs a reference and at least one unsafe variant**, and
-  `pnpm eval:calibrate` must pass. Calibration is what makes a score
-  trustworthy. It already caught one wrong assumption while the harness was
-  built: DaloyJS answers validation failures with 422, not 400.
+- **Every task needs a reference, at least one valid alternative, and at
+  least one unsafe variant**, and `pnpm eval:calibrate` must pass.
+  Calibration is what makes a score trustworthy. Alternatives guard against
+  false failures (a grader that only accepts the author's solution shape).
+  Calibration has caught two grader bugs so far: hidden tests that expected
+  400 where DaloyJS answers 422, and a guardrail rule that ignored Zod 4's
+  `z.strictObject()`.
+- **Read the trace before blaming the agent.** If a failing app was correct,
+  add it as an alternative and fix the grader.
+- **Not a gate.** Tasks and hidden tests are public, so agents can find them
+  and models may train on them. Use scores to find things to fix in DaloyJS,
+  not as a release gate.
 - **Live agents run only in a sandbox** (`--sandbox-ack`). The harness strips
   the environment to an allowlist, but an agent with shell access can still
   read the machine's files.
-- Grow the task set from real agent failures.
+- Grow the task set from real friction (issues, PRs, docs-search misses,
+  on-call reports). Each task is one bounded workflow inside a kind of app
+  DaloyJS is used for.
+
+The "validate the grader with valid alternatives", "quality first, then
+effort", and "fix, rerun, compare with pinned versions" practices follow the
+approach the Next.js team described for its agent evals
+([nextjs.org/evals](https://nextjs.org/evals)).

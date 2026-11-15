@@ -18,10 +18,16 @@ test("GET /books rejects an out-of-range limit", async () => {
 });
 `;
 
-async function addList(ws: WorkspaceHandle, bounded: boolean): Promise<void> {
-  const limit = bounded
-    ? "z.coerce.number().int().min(1).max(50).default(10)"
-    : "z.coerce.number().default(10)";
+async function addList(
+  ws: WorkspaceHandle,
+  shape: "bounded" | "optional" | "unbounded",
+): Promise<void> {
+  const limit = {
+    bounded: "z.coerce.number().int().min(1).max(50).default(10)",
+    optional: "z.coerce.number().int().positive().max(50).optional()",
+    unbounded: "z.coerce.number().default(10)",
+  }[shape];
+  const take = shape === "optional" ? "query.limit ?? 10" : "query.limit";
   await addBeforeReturn(
     ws,
     `
@@ -35,7 +41,7 @@ async function addList(ws: WorkspaceHandle, bounded: boolean): Promise<void> {
     },
     async ({ query }) => ({
       status: 200 as const,
-      body: { items: [...books.values()].slice(0, query.limit) },
+      body: { items: [...books.values()].slice(0, ${take}) },
     })
   );
 `,
@@ -66,12 +72,19 @@ from 1 to 50, default 10) and returns \`{ items: Book[] }\` with at most \`limit
       mustMatch: true,
     },
   ],
-  reference: (ws) => addList(ws, true),
+  reference: (ws) => addList(ws, "bounded"),
+  alternatives: [
+    {
+      id: "optional-limit",
+      description: "Optional limit with the default applied in the handler",
+      apply: (ws) => addList(ws, "optional"),
+    },
+  ],
   unsafe: [
     {
       id: "unbounded-limit",
       description: "limit accepted without integer / range validation",
-      apply: (ws) => addList(ws, false),
+      apply: (ws) => addList(ws, "unbounded"),
       expectFail: ["hidden"],
     },
   ],

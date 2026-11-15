@@ -34,6 +34,15 @@ For the forward-looking plan and the full thematic release log, see
   manually. The website gains a docs-retrieval eval that keeps the docs MCP
   search above recall@1, recall@3, and MRR floors. See
   [agent evals](https://daloyjs.dev/docs/agent-evals).
+- **Agent evals: grader validation, effort, and comparisons.** Every task now
+  ships valid alternative solutions that calibration requires to pass, which
+  found and fixed a false failure (the guardrail diff ignored Zod 4's
+  `z.strictObject()`). Reports put quality first and then effort over passing
+  trials: agent time, steps, tokens and cost when the CLI reports them
+  (Claude Code, Codex), and lines changed. Each run records the pinned agent,
+  CLI version, model, commit and limits, and writes per-trial agent traces.
+  `pnpm eval:compare <before> <after>` flags regressions between two runs and
+  refuses runs that are not comparable.
 
 ## [1.24.2] - 2026-11-13
 

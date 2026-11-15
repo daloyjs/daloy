@@ -34,7 +34,8 @@ export interface RunOptions {
 export const USAGE = `Usage: pnpm eval --agent <name> [options]
 
 Agents:
-  noop | reference | unsafe:<variant>   offline, for calibration
+  noop | reference | alternative:<id> | unsafe:<variant>
+                                        offline, for calibration
   copilot | claude | codex | command    live; require --sandbox-ack
 
 Options:

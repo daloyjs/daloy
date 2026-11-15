@@ -17,15 +17,57 @@
  *   pnpm eval --agent claude --sandbox-ack --ablation full,bare --trials 3
  */
 
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { resolveAgent } from "./lib/agents.ts";
 import { parseRunArgs, selectTasks, USAGE } from "./lib/cli.ts";
-import { renderMarkdown, summarize } from "./lib/report.ts";
+import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
 import { runTrial } from "./lib/runner.ts";
-import { REPO_ROOT } from "./lib/workspace.ts";
+import { childEnv, REPO_ROOT, runProcess } from "./lib/workspace.ts";
+import type { AgentAdapter } from "./lib/agents.ts";
 import { TASKS } from "./tasks/index.ts";
 import type { TrialResult } from "./lib/types.ts";
+
+/** First line of a command's output, or `undefined` when it fails. */
+async function firstLine(
+  command: string,
+  args: string[],
+  extraEnv: readonly string[] = [],
+): Promise<string | undefined> {
+  const r = await runProcess(command, args, {
+    cwd: REPO_ROOT,
+    env: childEnv(extraEnv),
+    timeoutMs: 30_000,
+  });
+  const line = r.output.trim().split("\n")[0]?.trim();
+  return r.exitCode === 0 && line ? line.slice(0, 120) : undefined;
+}
+
+/**
+ * Record what this run is pinned to, so a later run can be compared against
+ * it only when the agent, its version, and the limits match.
+ */
+async function runMeta(
+  agent: AgentAdapter,
+  opts: { model: string | undefined; trials: number; timeoutMs: number },
+): Promise<RunMeta> {
+  const pkg = JSON.parse(
+    await readFile(join(REPO_ROOT, "package.json"), "utf8"),
+  ) as { version?: string };
+  const entries = Object.entries({
+    agent: agent.name,
+    model: opts.model,
+    agentVersion: agent.command
+      ? await firstLine(agent.command, ["--version"])
+      : undefined,
+    gitSha: await firstLine("git", ["rev-parse", "HEAD"]),
+    coreVersion: pkg.version,
+    node: process.version,
+    trials: opts.trials,
+    timeoutMs: opts.timeoutMs,
+  }).filter(([, v]) => v !== undefined);
+  return Object.fromEntries(entries) as unknown as RunMeta;
+}
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -82,10 +124,8 @@ async function main(): Promise<void> {
   }
 
   const summary = summarize(trials, opts.k);
-  const markdown = renderMarkdown(summary, {
-    agent: agent.name,
-    ...(opts.model ? { model: opts.model } : {}),
-  });
+  const meta = await runMeta(agent, opts);
+  const markdown = renderMarkdown(summary, meta);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const out =
     opts.out ??
@@ -96,9 +136,24 @@ async function main(): Promise<void> {
       `${stamp}-${agent.name.replace(/[^\w-]/g, "_")}.json`,
     );
   await mkdir(dirname(out), { recursive: true });
+
+  // Agent traces go to their own files: reviewers read them next to the app,
+  // and they would bloat the results JSON.
+  const traceDir = out.replace(/\.json$/, "") + "-traces";
+  const stored = [];
+  for (const t of trials) {
+    const { transcript, ...agentRun } = t.agentRun;
+    let tracePath: string | null = null;
+    if (transcript) {
+      await mkdir(traceDir, { recursive: true });
+      tracePath = join(traceDir, `${t.taskId}__${t.ablation}__${t.trial}.log`);
+      await writeFile(tracePath, transcript);
+    }
+    stored.push({ ...t, agentRun, tracePath });
+  }
   await writeFile(
     out,
-    `${JSON.stringify({ agent: agent.name, model: opts.model ?? null, startedAt: stamp, options: { ...opts, out }, summary, trials }, null, 2)}\n`,
+    `${JSON.stringify({ meta, startedAt: stamp, options: { ...opts, out }, summary, trials: stored }, null, 2)}\n`,
   );
   await writeFile(out.replace(/\.json$/, ".md"), markdown);
   if (process.env.GITHUB_STEP_SUMMARY)

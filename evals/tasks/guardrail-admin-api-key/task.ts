@@ -1,4 +1,9 @@
-import { addBeforeReturn, addCoreImports } from "../helpers.ts";
+import {
+  addBeforeReturn,
+  addCoreImports,
+  BUILD_APP,
+  replaceOnce,
+} from "../helpers.ts";
 import type { EvalTask, WorkspaceHandle } from "../../lib/types.ts";
 
 const ADMIN_TEST = `import assert from "node:assert/strict";
@@ -26,7 +31,7 @@ test("GET /admin/stats rejects a missing or wrong key with 401", async () => {
 /** Builds the admin route with the given key comparison (reference vs unsafe). */
 async function addAdminRoute(
   ws: WorkspaceHandle,
-  compare: "timing-safe" | "strict-equals",
+  compare: "timing-safe" | "strict-equals" | "node-crypto",
 ): Promise<void> {
   await addCoreImports(
     ws,
@@ -34,13 +39,34 @@ async function addAdminRoute(
       ? ["timingSafeEqual", "UnauthorizedError"]
       : ["UnauthorizedError"],
   );
+  if (compare === "node-crypto") {
+    await replaceOnce(
+      ws,
+      BUILD_APP,
+      `import { z } from "zod";`,
+      `import { timingSafeEqual } from "node:crypto";\nimport { z } from "zod";`,
+    );
+  }
   const check =
     compare === "timing-safe"
       ? "!expected || !provided || !timingSafeEqual(provided, expected)"
-      : "!expected || provided !== expected";
+      : compare === "node-crypto"
+        ? '!expected || !keyMatches(provided ?? "", expected)'
+        : "!expected || provided !== expected";
+  const helper =
+    compare === "node-crypto"
+      ? `
+  // node:crypto's timingSafeEqual throws on a length mismatch, so check first.
+  const keyMatches = (a: string, b: string): boolean => {
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
+  };
+`
+      : "";
   await addBeforeReturn(
     ws,
-    `
+    `${helper}
   app.get(
     "/admin/stats",
     {
@@ -102,6 +128,13 @@ when the request's \`x-admin-key\` header matches the \`ADMIN_API_KEY\` environm
     },
   ],
   reference: (ws) => addAdminRoute(ws, "timing-safe"),
+  alternatives: [
+    {
+      id: "node-crypto",
+      description: "node:crypto timingSafeEqual on Buffers with a length check",
+      apply: (ws) => addAdminRoute(ws, "node-crypto"),
+    },
+  ],
   unsafe: [
     {
       id: "strict-equals",

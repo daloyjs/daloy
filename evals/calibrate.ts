@@ -4,6 +4,8 @@
  *
  * For every task:
  * - the `reference` solution must pass every grader,
+ * - each valid `alternative` must pass every grader too (a grader that only
+ *   accepts one solution shape produces false failures),
  * - doing nothing (`noop`) must fail at least one grader (the task is not
  *   already solved), and
  * - each `unsafe` variant must fail every grader in its `expectFail` list.
@@ -54,6 +56,19 @@ async function calibrateTask(task: EvalTask, keep: boolean): Promise<Check[]> {
       ? "passes every grader"
       : `must pass every grader but failed:\n${explain(ref)}`,
   });
+
+  for (const alt of task.alternatives ?? []) {
+    const name = `alternative:${alt.id}`;
+    const r = await runTrial(task, resolveAgent(name), opts);
+    checks.push({
+      task: task.id,
+      agent: name,
+      ok: r.pass,
+      message: r.pass
+        ? "passes every grader"
+        : `valid solution "${alt.description}" was rejected (false failure):\n${explain(r)}`,
+    });
+  }
 
   const noop = await runTrial(task, resolveAgent("noop"), opts);
   checks.push({

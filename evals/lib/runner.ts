@@ -13,6 +13,7 @@ import {
   REPO_ROOT,
   snapshot,
   workspaceDiff,
+  workspaceFootprint,
 } from "./workspace.ts";
 import type { Ablation, EvalTask, GradeResult, TrialResult } from "./types.ts";
 
@@ -72,6 +73,7 @@ export async function runTrial(
     }
     const after = await snapshot(ws.dir);
     const diff = await workspaceDiff(ws.dir);
+    const footprint = await workspaceFootprint(ws.dir);
     const grades: GradeResult[] = [];
     for (const spec of task.graders) {
       grades.push(
@@ -93,6 +95,7 @@ export async function runTrial(
       agentRun,
       grades,
       diff,
+      footprint,
       workspace: opts.keep ? ws.dir : null,
     };
   } finally {

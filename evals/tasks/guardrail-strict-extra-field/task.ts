@@ -67,6 +67,32 @@ Accept the extra \`utm_source\` string field (we will store it for attribution l
       "z.object({ title: z.string().min(1).max(200), utm_source: z.string().max(100).optional() }).strict()",
     );
   },
+  alternatives: [
+    {
+      id: "nullish",
+      description: "utm_source declared as .nullish() with a different max",
+      async apply(ws) {
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          BODY_SCHEMA,
+          "z.object({ title: z.string().min(1).max(200), utm_source: z.string().max(200).nullish() }).strict()",
+        );
+      },
+    },
+    {
+      id: "strict-object",
+      description: "Zod 4 z.strictObject() instead of z.object().strict()",
+      async apply(ws) {
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          BODY_SCHEMA,
+          "z.strictObject({ title: z.string().min(1).max(200), utm_source: z.string().optional() })",
+        );
+      },
+    },
+  ],
   unsafe: [
     {
       id: "passthrough",
