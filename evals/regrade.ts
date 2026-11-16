@@ -4,8 +4,9 @@
  *
  * For each trial it scaffolds a fresh workspace exactly as the original run
  * did (task setup and ablation), applies the agent's stored diff with
- * `git apply`, and runs the task's current graders. The agent's run data
- * (time, effort, trace path) is kept. Trials whose stored diff was truncated
+ * `git apply`, and runs the task's current graders. The agent's trace is
+ * re-parsed from the saved agent output (so trace-parser fixes apply too);
+ * the rest of its run data (time, effort, trace path) is kept. Trials whose stored diff was truncated
  * or no longer applies keep their original grades and are listed in
  * `regrade.skipped`.
  *
@@ -20,6 +21,7 @@ import { runGrader } from "./lib/graders.ts";
 import { reconcileLegacyGrades } from "./lib/legacy-diff.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
 import { hiddenDirFor } from "./lib/runner.ts";
+import { loadTrialTrace } from "./lib/trace.ts";
 import {
   childEnv,
   disposeWorkspace,
@@ -28,7 +30,7 @@ import {
   snapshot,
 } from "./lib/workspace.ts";
 import { TASKS } from "./tasks/index.ts";
-import type { GradeResult, TrialResult } from "./lib/types.ts";
+import type { AgentTrace, GradeResult, TrialResult } from "./lib/types.ts";
 
 /** Marker `workspaceDiff()` appends when it truncates a diff. */
 const TRUNCATED = "\n[diff truncated]";
@@ -47,6 +49,7 @@ interface ResultsFile {
  */
 async function regradeTrial(
   t: TrialResult,
+  trace: AgentTrace | undefined,
 ): Promise<{ grades: GradeResult[] } | { skip: string }> {
   const task = TASKS.find((x) => x.id === t.taskId);
   if (!task) return { skip: "task no longer exists" };
@@ -77,6 +80,7 @@ async function regradeTrial(
           before: ws.before,
           after,
           hiddenDir: hiddenDirFor(task.id),
+          ...(trace ? { trace } : {}),
         }),
       );
     }
@@ -102,11 +106,14 @@ async function main(): Promise<void> {
       );
     }
     let flipped = 0;
-    for (const [i, t] of data.trials.entries()) {
+    for (let [i, t] of data.trials.entries()) {
       process.stdout.write(
         `[${i + 1}/${data.trials.length}] ${t.taskId} · trial ${t.trial} ... `,
       );
-      const r = await regradeTrial(t);
+      // Re-parse the saved agent output so trace-parser fixes apply too.
+      const trace = await loadTrialTrace(path, data.meta?.agent ?? "", t);
+      if (trace) data.trials[i] = t = { ...t, agentRun: { ...t.agentRun, trace } };
+      const r = await regradeTrial(t, trace);
       if ("skip" in r) {
         skipped.push(`${t.taskId}#${t.trial}: ${r.skip}`);
         process.stdout.write(`kept original (${r.skip})\n`);

@@ -1,0 +1,346 @@
+/**
+ * Parse an agent's CLI output into an {@link AgentTrace}: its final answer
+ * and which files, tools, skills, and docs it used. Graders read the trace
+ * for "don't act" tasks, and `pnpm eval:analyze` summarises it across runs.
+ *
+ * Parsing is best effort and never throws: unknown events are skipped, and a
+ * CLI whose output exposes nothing yields an empty trace.
+ *
+ * @module
+ */
+
+import { readFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { WORKSPACE_APP_NAME } from "./workspace.ts";
+import type { EffortFormat } from "./agents.ts";
+import type { AgentTrace, TrialResult } from "./types.ts";
+
+/**
+ * Longest shell command kept in a trace. Longer ones keep their head and tail,
+ * because chained checks (`... && pnpm test`) sit at the end.
+ */
+const MAX_COMMAND_CHARS = 600;
+/** Most shell commands kept in a trace. */
+const MAX_COMMANDS = 200;
+/** Longest final answer kept in a trace. */
+const MAX_MESSAGE_CHARS = 8_000;
+/** Longest combined assistant text kept in a trace (the end is kept). */
+const MAX_ASSISTANT_TEXT_CHARS = 20_000;
+
+/** Tool-name prefix of the DaloyJS docs MCP server (`--mcp docs`). */
+export const DOCS_MCP_TOOL_PREFIX = "daloyjs-docs-";
+
+/** File names with a source-like extension. */
+const FILE_EXT = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|json|md|mdx|ya?ml|env\w*)$/;
+/** Bare directory names that count as paths in a command (`grep -r x src`). */
+const SOURCE_DIRS = new Set(["src", "tests", "lib", "scripts", "legacy", "app", "routes"]);
+
+/**
+ * Normalise a path the agent used to a workspace-relative `/` path. Absolute
+ * paths are cut after the workspace directory (`.../my-daloy-app/`) or after
+ * `dir` when given; paths outside the workspace are returned unchanged.
+ *
+ * @param path - Path as the agent wrote it.
+ * @param dir - Workspace root, when known.
+ * @returns The normalised path.
+ */
+export function workspaceRelative(path: string, dir?: string): string {
+  let p = path.trim().replaceAll("\\", "/");
+  if (dir && p.startsWith(`${dir}/`)) p = p.slice(dir.length + 1);
+  const marker = `/${WORKSPACE_APP_NAME}/`;
+  const at = p.indexOf(marker);
+  if (at !== -1) p = p.slice(at + marker.length);
+  while (p.startsWith("./")) p = p.slice(2);
+  return p;
+}
+
+/**
+ * Path-like tokens in a shell command, workspace-relative.
+ *
+ * @param command - The command line.
+ * @param dir - Workspace root, when known.
+ * @returns Unique paths, in order of appearance.
+ */
+export function pathsInCommand(command: string, dir?: string): string[] {
+  const out = new Set<string>();
+  for (const raw of command.split(/[\s;|&()<>,=]+/)) {
+    const token = raw.replace(/^['"`]+|['"`:]+$/g, "");
+    if (!token || token.startsWith("-") || /[*?$\\{}[\]]|:\/\//.test(token)) continue;
+    const isPath =
+      FILE_EXT.test(token) ||
+      (token.includes("/") && /^[\w@./-]+$/.test(token)) ||
+      SOURCE_DIRS.has(token.replace(/\/$/, ""));
+    if (!isPath) continue;
+    const rel = workspaceRelative(token, dir).replace(/\/$/, "");
+    // An absolute path ending at the workspace root is the whole project.
+    if (rel && !rel.endsWith(`/${WORKSPACE_APP_NAME}`) && rel !== WORKSPACE_APP_NAME)
+      out.add(rel);
+  }
+  return [...out];
+}
+
+/** Files named in an `apply_patch` body (`*** Update File: path`). */
+function pathsInPatch(patch: string, dir?: string): string[] {
+  const out: string[] = [];
+  for (const m of patch.matchAll(
+    /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm,
+  ))
+    out.push(workspaceRelative(m[1]!, dir));
+  return out;
+}
+
+function jsonObjects(output: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const line of output.split("\n")) {
+    const t = line.trim();
+    if (!t.startsWith("{")) continue;
+    try {
+      const v: unknown = JSON.parse(t);
+      if (v && typeof v === "object" && !Array.isArray(v))
+        out.push(v as Record<string, unknown>);
+    } catch {
+      // Agent chatter or a truncated line.
+    }
+  }
+  return out;
+}
+
+/**
+ * Shorten a command to {@link MAX_COMMAND_CHARS}, keeping its head and tail.
+ *
+ * @param cmd - The command line.
+ * @returns The command, or its first and last parts joined by " … ".
+ */
+export function clip(cmd: string): string {
+  if (cmd.length <= MAX_COMMAND_CHARS) return cmd;
+  const half = Math.floor((MAX_COMMAND_CHARS - 3) / 2);
+  return `${cmd.slice(0, half)} … ${cmd.slice(-half)}`;
+}
+
+const str = (v: unknown): string | undefined =>
+  typeof v === "string" ? v : undefined;
+
+/** Mutable accumulator behind {@link parseTrace}. */
+class TraceBuilder {
+  finalMessage: string | undefined;
+  readonly read = new Set<string>();
+  readonly edited = new Set<string>();
+  readonly commands: string[] = [];
+  readonly tools: Record<string, number> = {};
+  readonly skills = new Set<string>();
+  docs = 0;
+
+  constructor(private readonly dir?: string) {}
+
+  tool(name: string): void {
+    this.tools[name] = (this.tools[name] ?? 0) + 1;
+    if (name.startsWith(DOCS_MCP_TOOL_PREFIX)) this.docs++;
+  }
+
+  readPath(p: unknown): void {
+    if (Array.isArray(p)) for (const x of p) this.readPath(x);
+    else if (typeof p === "string" && p.trim())
+      this.read.add(workspaceRelative(p, this.dir));
+  }
+
+  command(cmd: string): void {
+    if (this.commands.length < MAX_COMMANDS)
+      this.commands.push(clip(cmd));
+    for (const p of pathsInCommand(cmd, this.dir)) this.read.add(p);
+  }
+
+  readonly messages: string[] = [];
+
+  message(text: string | undefined): void {
+    if (text && text.trim()) {
+      this.finalMessage = text.trim();
+      this.messages.push(this.finalMessage);
+    }
+  }
+
+  build(): AgentTrace {
+    return {
+      ...(this.finalMessage
+        ? {
+            finalMessage: this.finalMessage.slice(0, MAX_MESSAGE_CHARS),
+            assistantText: this.messages.join("\n\n").slice(-MAX_ASSISTANT_TEXT_CHARS),
+          }
+        : {}),
+      filesRead: [...this.read],
+      filesEdited: [...this.edited],
+      shellCommands: this.commands,
+      toolCalls: this.tools,
+      skills: [...this.skills],
+      docsMcpCalls: this.docs,
+    };
+  }
+}
+
+function copilot(b: TraceBuilder, output: string): void {
+  for (const ev of jsonObjects(output)) {
+    const data = ev.data as Record<string, unknown> | undefined;
+    if (!data) continue;
+    if (ev.type === "assistant.message") {
+      b.message(str(data.content));
+      continue;
+    }
+    if (ev.type !== "tool.execution_start") continue;
+    const name = str(data.toolName) ?? "unknown";
+    b.tool(name);
+    const args = data.arguments;
+    if (name === "apply_patch" && typeof args === "string") {
+      for (const p of pathsInPatch(args)) b.edited.add(p);
+      continue;
+    }
+    if (!args || typeof args !== "object") continue;
+    const a = args as Record<string, unknown>;
+    if (name === "view") b.readPath(a.path);
+    else if (name === "edit" || name === "create") {
+      const p = str(a.path);
+      if (p) b.edited.add(workspaceRelative(p));
+    } else if (name === "grep" || name === "rg" || name === "glob")
+      b.readPath(a.paths ?? a.path);
+    else if (name === "bash" || name === "shell") {
+      const c = str(a.command);
+      if (c) b.command(c);
+    } else if (name === "skill") {
+      const s = str(a.skill);
+      if (s) b.skills.add(s);
+    }
+  }
+}
+
+function claude(b: TraceBuilder, output: string): void {
+  for (const ev of jsonObjects(output)) {
+    if (ev.type === "result" || "total_cost_usd" in ev) b.message(str(ev.result));
+  }
+}
+
+function codex(b: TraceBuilder, output: string): void {
+  for (const ev of jsonObjects(output)) {
+    if (ev.type !== "item.completed") continue;
+    const item = ev.item as Record<string, unknown> | undefined;
+    if (!item) continue;
+    if (item.type === "agent_message") b.message(str(item.text));
+    else if (item.type === "command_execution") {
+      b.tool("shell");
+      const c = str(item.command);
+      if (c) b.command(c);
+    } else if (item.type === "file_change") {
+      b.tool("edit");
+      const changes = item.changes as { path?: unknown }[] | undefined;
+      for (const ch of changes ?? []) {
+        const p = str(ch.path);
+        if (p) b.edited.add(workspaceRelative(p));
+      }
+    }
+  }
+}
+
+/**
+ * Parse an agent CLI's output into a trace.
+ *
+ * @param format - Which CLI produced the output (same values as effort parsing).
+ * @param output - Captured stdout/stderr.
+ * @param dir - Workspace root, used to make absolute paths relative.
+ * @returns The trace; empty (no final answer, no files) for unknown formats.
+ */
+export function parseTrace(
+  format: EffortFormat,
+  output: string,
+  dir?: string,
+): AgentTrace {
+  const b = new TraceBuilder(dir);
+  if (format === "copilot-jsonl") copilot(b, output);
+  else if (format === "claude-json") claude(b, output);
+  else if (format === "codex-jsonl") codex(b, output);
+  return b.build();
+}
+
+/**
+ * Whether the trace shows the agent looked at `file`: viewed, searched,
+ * edited, or named in a shell command. A search scoped to a parent directory
+ * (`src`) counts; a search of the whole workspace (`.`) does not.
+ *
+ * @param trace - The trial's trace.
+ * @param file - Workspace-relative file path.
+ * @returns `true` when the file was looked at.
+ */
+export function traceTouched(trace: AgentTrace, file: string): boolean {
+  const covers = (p: string): boolean =>
+    p === file ||
+    (p !== "." && p !== "" && file.startsWith(`${p.replace(/\/$/, "")}/`));
+  return trace.filesRead.some(covers) || trace.filesEdited.includes(file);
+}
+
+/**
+ * A recording trace for offline (calibration) adapters: reads through the
+ * handle count as files read, and `reply()` sets the final answer.
+ */
+export class RecordedTrace {
+  private readonly b = new TraceBuilder();
+
+  /** Record a file read. */
+  read(rel: string): void {
+    this.b.readPath(rel);
+  }
+
+  /** Record a file write. */
+  write(rel: string): void {
+    this.b.edited.add(workspaceRelative(rel));
+  }
+
+  /** Set the final answer. */
+  reply(message: string): void {
+    this.b.message(message);
+  }
+
+  /** The trace recorded so far. */
+  build(): AgentTrace {
+    return this.b.build();
+  }
+}
+
+/**
+ * Which trace format an agent adapter writes.
+ *
+ * @param agent - Adapter name from the run metadata.
+ * @returns The format, or `none` for adapters without a parseable stream.
+ */
+export function traceFormatFor(agent: string): EffortFormat {
+  if (agent === "copilot") return "copilot-jsonl";
+  if (agent === "claude") return "claude-json";
+  if (agent === "codex") return "codex-jsonl";
+  return "none";
+}
+
+/**
+ * Re-parse a stored trial's trace from its saved agent output
+ * (`<run>-traces/<task>__<ablation>__<trial>.log` next to the results file;
+ * a `.regraded` copy reuses the original run's directory), so parser fixes
+ * apply to old runs. Falls back to the trace stored in the results JSON.
+ *
+ * @param resultsPath - Path of the results JSON.
+ * @param agent - Adapter name from the run metadata.
+ * @param trial - The stored trial.
+ * @returns The freshest trace available, or `undefined`.
+ */
+export async function loadTrialTrace(
+  resultsPath: string,
+  agent: string,
+  trial: TrialResult,
+): Promise<AgentTrace | undefined> {
+  const format = traceFormatFor(agent);
+  if (format !== "none") {
+    const name = basename(resultsPath).replace(/\.json$/, "");
+    const file = `${trial.taskId}__${trial.ablation}__${trial.trial}.log`;
+    for (const d of [`${name}-traces`, `${name.replace(/\.regraded$/, "")}-traces`]) {
+      try {
+        return parseTrace(format, await readFile(join(dirname(resultsPath), d, file), "utf8"));
+      } catch {
+        // Not in this directory.
+      }
+    }
+  }
+  return trial.agentRun.trace;
+}

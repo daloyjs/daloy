@@ -6,7 +6,8 @@ import {
 } from "../helpers.ts";
 import type { EvalTask, WorkspaceHandle } from "../../lib/types.ts";
 
-const CREATE_ROUTE = `
+/** An unprotected `POST /books` route, inserted by the setup step. */
+export const CREATE_ROUTE = `
   app.post(
     "/books",
     {
@@ -67,10 +68,13 @@ test("POST /books without a token is rejected with 401", async () => {
 });
 `;
 
-type Variant = "reference" | "handler" | "decode-only" | "any-audience";
+export type Variant = "reference" | "handler" | "decode-only" | "any-audience";
 
-/** JWT protection for POST /books in several shapes (reference, alternative, unsafe). */
-async function protect(ws: WorkspaceHandle, variant: Variant): Promise<void> {
+/**
+ * JWT protection for POST /books in several shapes (reference, alternative,
+ * unsafe). Also the starting app of `dont-act-jwt-alg-none`.
+ */
+export async function protect(ws: WorkspaceHandle, variant: Variant): Promise<void> {
   if (variant === "decode-only") {
     // Unsafe: trusts the payload without verifying the signature.
     await addCoreImports(ws, ["ForbiddenError", "UnauthorizedError"]);

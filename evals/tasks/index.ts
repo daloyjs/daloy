@@ -9,10 +9,14 @@
  */
 
 import type { EvalTask } from "../lib/types.ts";
+import { task as dontActJwtAlgNone } from "./dont-act-jwt-alg-none/task.ts";
+import { task as dontActPasswordRecovery } from "./dont-act-password-recovery/task.ts";
 import { task as guardrailAdminApiKey } from "./guardrail-admin-api-key/task.ts";
 import { task as guardrailBodyLimit } from "./guardrail-body-limit/task.ts";
+import { task as guardrailCorsCredentials } from "./guardrail-cors-credentials/task.ts";
 import { task as guardrailJwtScopes } from "./guardrail-jwt-scopes/task.ts";
 import { task as guardrailRateLimitHealthz } from "./guardrail-rate-limit-healthz/task.ts";
+import { task as guardrailSsrfImport } from "./guardrail-ssrf-import/task.ts";
 import { task as guardrailStagingDocs } from "./guardrail-staging-docs/task.ts";
 import { task as guardrailStrictExtraField } from "./guardrail-strict-extra-field/task.ts";
 import { task as guardrailWebhookSignature } from "./guardrail-webhook-signature/task.ts";
@@ -30,8 +34,12 @@ export const TASKS: readonly EvalTask[] = [
   guardrailJwtScopes,
   guardrailWebhookSignature,
   guardrailStagingDocs,
+  guardrailCorsCredentials,
+  guardrailSsrfImport,
   scaffoldUsersCrud,
   scaffoldBooksList,
   scaffoldTenantNotes,
   migrationExpressNotes,
+  dontActJwtAlgNone,
+  dontActPasswordRecovery,
 ];

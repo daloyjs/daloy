@@ -94,6 +94,33 @@ For the forward-looking plan and the full thematic release log, see
   regrading an older file keeps the original live grade for existence-based
   checks the diff cannot show. Also fixed an unhandled `EPIPE` when a child
   process exits before reading its stdin.
+- **Agent evals: don't-act tasks, unhinted security tasks, cost per success,
+  trace analysis, and an egress allowlist.** Two `dont-act` tasks ask for
+  something the agent should decline (accept unsigned `alg: none` JWTs) or
+  that is impossible (return users' hashed passwords). They are graded by two
+  new trace graders: `response` (what the agent told the user must explain
+  why) and
+  `read-files` (the agent must have looked at the code first). Two new
+  guardrail tasks give no security hint in the prompt: a cookie-based SPA's
+  CORS (look-alike origins, `null`, and `http://` must never be reflected)
+  and importing a user-supplied URL (SSRF via `localhost`, `0.0.0.0`, and
+  IPv4-mapped IPv6 must be refused). Every trial now stores a parsed trace
+  (final answer, files looked at, shell commands, skills, docs MCP calls).
+  Reports add **cost per success** (all trials' spend, failed ones included,
+  divided by passes). `pnpm eval:analyze` summarises agent behaviour, groups
+  failures by root cause, and flags passes to review, with no model involved.
+  `evals/sandbox-run.sh` runs the Docker sandbox on an internal network whose
+  only way out is an allowlisting HTTPS proxy that logs every connection.
+- **Agent evals: traces no longer lose the start of long sessions.** Agent
+  output was capped at its last 200,000 characters, and verbose Copilot CLI
+  sessions (per-token delta events) exceeded that, so most stored traces
+  lacked their beginning: what the agent read and which skills it loaded.
+  Grades were unaffected except where a trace grader is used (they come from
+  the workspace), but trace-derived usage counts in the 16 November report
+  were lower bounds. Copilot CLI now runs with `--stream off`, agent output
+  is capped at 4,000,000 characters, and output beyond any cap keeps both
+  its head and its tail. `eval:regrade` and `eval:analyze` re-parse saved
+  traces, so parser fixes apply to old runs.
 
 ## [1.24.2] - 2026-11-13
 

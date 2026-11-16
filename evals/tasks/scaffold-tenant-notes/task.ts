@@ -209,7 +209,10 @@ export const task: EvalTask = {
       id: "module-split",
       description: "The feature must live in its own module under src/notes/",
       paths: ["src/notes"],
-      pattern: /\/notes/,
+      // Any non-empty source under src/notes/. (It once required the text
+      // "/notes" there, which failed a correct module mounted with
+      // `app.register(plugin, { prefix: "/notes" })` from buildApp().)
+      pattern: /\S/,
       mustMatch: true,
     },
     {
@@ -224,6 +227,24 @@ export const task: EvalTask = {
   ],
   reference: (ws) => addNotes(ws, { scopedGet: true }),
   alternatives: [
+    {
+      id: "path-prefix-from-build-app",
+      description:
+        "A plugin mounted with app.register(..., { prefix: \"/notes\" }), so the module never spells \"/notes\" (a live Sonnet run)",
+      async apply(ws) {
+        await addNotes(ws, { scopedGet: true });
+        const routes = (await ws.read("src/notes/routes.ts"))
+          .replaceAll('"/notes/:id"', '"/:id"')
+          .replaceAll('"/notes"', '"/"');
+        await ws.write("src/notes/routes.ts", routes);
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          "  registerNotes(app);",
+          '  app.register((notes) => registerNotes(notes), { prefix: "/notes" });',
+        );
+      },
+    },
     {
       id: "forbidden-for-unknown-key",
       description:

@@ -281,6 +281,7 @@
     "smoke:bun": "bun scripts/runtime-smoke/bun.mjs",
     "smoke:workerd": "node scripts/runtime-smoke/workerd.mjs",
     "eval": "node --import tsx evals/run.ts",
+    "eval:analyze": "node --import tsx evals/analyze.ts",
     "eval:calibrate": "node --import tsx evals/calibrate.ts",
     "eval:compare": "node --import tsx evals/compare.ts",
     "eval:regrade": "node --import tsx evals/regrade.ts",

@@ -6,6 +6,8 @@
  * first, and effort (agent time, steps, tokens, cost, diff size) is averaged
  * over its **passing** trials only, so a cheap failure never looks efficient
  * and a passing app that took three times the effort still stands out.
+ * Alongside it, "per success" divides what **every** trial spent (failed ones
+ * included) by the number of passes: the price of one working result.
  *
  * @module
  */
@@ -22,6 +24,18 @@ export interface EffortSummary {
   readonly premiumRequests?: number;
   /** Lines added plus removed, from the diff footprint. */
   readonly linesChanged?: number;
+}
+
+/**
+ * What one passing result really cost: the total over every trial in a cell,
+ * failed ones included, divided by its passes. Absent when nothing passed or
+ * no trial reported the field.
+ */
+export interface PerSuccessSummary {
+  readonly agentMs?: number;
+  readonly tokens?: number;
+  readonly costUsd?: number;
+  readonly premiumRequests?: number;
 }
 
 /** Aggregate for one (task, ablation) cell. */
@@ -41,6 +55,8 @@ export interface CellSummary {
   readonly meanAgentMs: number;
   /** Mean effort over passing trials. */
   readonly effort: EffortSummary;
+  /** Total effort over all trials divided by passes. */
+  readonly perSuccess: PerSuccessSummary;
 }
 
 /** Full summary of a run. */
@@ -83,13 +99,54 @@ function mean(values: readonly (number | undefined)[]): number | undefined {
     : defined.reduce((a, b) => a + b, 0) / defined.length;
 }
 
+const tokensOf = (t: TrialResult): number | undefined => {
+  const e = t.agentRun.effort;
+  if (e?.inputTokens === undefined && e?.outputTokens === undefined)
+    return undefined;
+  return (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
+};
+
+/**
+ * Total of a per-trial value over all trials, divided by passes. Undefined
+ * when nothing passed or no trial reported the value; trials that did not
+ * report it count as zero, so the figure is a lower bound.
+ */
+function perPass(
+  trials: readonly TrialResult[],
+  passes: number,
+  value: (t: TrialResult) => number | undefined,
+): number | undefined {
+  if (passes === 0) return undefined;
+  const values = trials.map(value);
+  if (values.every((v) => v === undefined)) return undefined;
+  return values.reduce<number>((a, v) => a + (v ?? 0), 0) / passes;
+}
+
+/**
+ * Effort per passing result for a cell, counting failed trials' spend.
+ *
+ * @param trials - Every trial in the cell.
+ * @returns Per-success totals; empty when nothing passed.
+ */
+export function perSuccessOf(
+  trials: readonly TrialResult[],
+): PerSuccessSummary {
+  const passes = trials.filter((t) => t.pass).length;
+  const entries = Object.entries({
+    agentMs: perPass(trials, passes, (t) => t.agentRun.durationMs),
+    tokens: perPass(trials, passes, tokensOf),
+    costUsd: perPass(trials, passes, (t) => t.agentRun.effort?.costUsd),
+    premiumRequests: perPass(
+      trials,
+      passes,
+      (t) => t.agentRun.effort?.premiumRequests,
+    ),
+  }).filter(([, v]) => v !== undefined);
+  return Object.fromEntries(entries) as PerSuccessSummary;
+}
+
 function effortOf(passing: readonly TrialResult[]): EffortSummary {
-  const tokens = (t: TrialResult): number | undefined => {
-    const e = t.agentRun.effort;
-    if (e?.inputTokens === undefined && e?.outputTokens === undefined)
-      return undefined;
-    return (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
-  };
+  const tokens = tokensOf;
   const entries = Object.entries({
     agentMs: mean(passing.map((t) => t.agentRun.durationMs)),
     steps: mean(passing.map((t) => t.agentRun.effort?.steps)),
@@ -153,6 +210,7 @@ export function summarize(
       failures,
       meanAgentMs: list.reduce((s, t) => s + t.agentRun.durationMs, 0) / n,
       effort: effortOf(passing),
+      perSuccess: perSuccessOf(list),
     });
   }
   const byAblation: Partial<Record<Ablation, number>> = {};
@@ -238,6 +296,27 @@ export function renderMarkdown(summary: RunSummary, meta: RunMeta): string {
   for (const c of summary.cells) {
     lines.push(
       `| ${c.taskId} | ${c.ablation} | ${fmtEffort(c.effort).join(" | ")} |`,
+    );
+  }
+  lines.push("");
+  lines.push("### Cost per success (all trials, failed ones included, ÷ passes)");
+  lines.push("");
+  lines.push("| Task | Ablation | Time | Tokens | Cost |");
+  lines.push("|---|---|---|---|---|");
+  for (const c of summary.cells) {
+    const e = c.perSuccess;
+    const none = c.passes === 0 ? "no passes" : dash;
+    lines.push(
+      `| ${c.taskId} | ${c.ablation} | ` +
+        `${e.agentMs === undefined ? none : `${(e.agentMs / 1000).toFixed(0)}s`} | ` +
+        `${e.tokens === undefined ? none : `${(e.tokens / 1000).toFixed(0)}k`} | ` +
+        `${
+          e.costUsd !== undefined
+            ? `$${e.costUsd.toFixed(2)}`
+            : e.premiumRequests !== undefined
+              ? `${e.premiumRequests.toFixed(1)} req`
+              : none
+        } |`,
     );
   }
   const ablations = Object.entries(summary.byAblation);

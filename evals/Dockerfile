@@ -4,13 +4,17 @@
 # container it sees only a copy of this repository (no host home directory,
 # SSH keys, cloud credentials, or `gh` config), runs as the unprivileged
 # `node` user, and gets only the variables you pass with `-e`. Results are
-# written to a bind-mounted `evals/results/`. The network stays open because
-# the agent must reach its model API; see evals/README.md for the remaining
-# risks and the recommended fine-grained token.
+# written to a bind-mounted `evals/results/`. evals/sandbox-run.sh limits the
+# network to the model API through an allowlisting proxy (evals/egress-proxy.ts);
+# see evals/README.md for the remaining risks and the recommended
+# fine-grained token.
 #
 # Build (from the repo root):
 #   docker build -f evals/Dockerfile -t daloy-evals .
-# Run:
+# Run with egress limited to an allowlist (recommended):
+#   COPILOT_GITHUB_TOKEN=$(gh auth token) evals/sandbox-run.sh \
+#     --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 3
+# Or with an open network:
 #   docker run --rm --cap-drop=ALL --security-opt no-new-privileges \
 #     -e COPILOT_GITHUB_TOKEN -v "$PWD/evals/results:/home/node/daloy/evals/results" \
 #     daloy-evals --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 3

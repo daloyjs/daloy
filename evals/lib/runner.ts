@@ -20,6 +20,7 @@ import type {
   EvalTask,
   GradeResult,
   McpMode,
+  AgentRunResult,
   TrialResult,
 } from "./types.ts";
 
@@ -62,7 +63,7 @@ export async function runTrial(
 ): Promise<TrialResult> {
   const ws = await prepareWorkspace(task, opts.ablation);
   try {
-    let agentRun;
+    let agentRun: AgentRunResult;
     try {
       agentRun = await agent.run({
         task,
@@ -91,6 +92,7 @@ export async function runTrial(
           before: ws.before,
           after,
           hiddenDir: hiddenDirFor(task.id),
+          ...(agentRun.trace ? { trace: agentRun.trace } : {}),
         }),
       );
     }

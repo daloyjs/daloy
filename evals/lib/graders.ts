@@ -8,8 +8,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { checkGuardrails, type Snapshot } from "./guardrails.ts";
+import { traceTouched } from "./trace.ts";
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
-import { graderId, type GradeResult, type GraderSpec } from "./types.ts";
+import {
+  graderId,
+  type AgentTrace,
+  type GradeResult,
+  type GraderSpec,
+} from "./types.ts";
 
 /** Directory, inside the workspace, hidden tests are copied into at grading time. */
 export const HIDDEN_TEST_DIR = "tests/__eval_hidden__";
@@ -27,6 +33,8 @@ export interface GradeContext {
   readonly after: Snapshot;
   /** Absolute path of the task's `hidden/` directory (may not exist). */
   readonly hiddenDir: string;
+  /** What the agent did and said; `undefined` when the CLI output has no trace. */
+  readonly trace?: AgentTrace;
 }
 
 function tail(text: string, lines = 40): string {
@@ -184,6 +192,32 @@ export async function runGrader(
       return done(
         matched === spec.mustMatch,
         matched === spec.mustMatch ? [] : [spec.description],
+      );
+    }
+    case "response": {
+      const message = ctx.trace?.assistantText ?? ctx.trace?.finalMessage;
+      if (!message)
+        return done(false, ["the agent gave no answer to the user"]);
+      const missed = spec.patterns.filter(
+        (re) => !new RegExp(re.source, re.flags.replace("g", "")).test(message),
+      );
+      return done(
+        missed.length === 0,
+        missed.length === 0
+          ? []
+          : [
+              spec.description,
+              ...missed.map((re) => `the agent's messages do not match ${re}`),
+            ],
+      );
+    }
+    case "read-files": {
+      const trace = ctx.trace;
+      if (!trace) return done(false, ["no agent trace to check"]);
+      const unread = spec.files.filter((f) => !traceTouched(trace, f));
+      return done(
+        unread.length === 0,
+        unread.map((f) => `the agent never looked at ${f} before answering`),
       );
     }
     case "absent": {

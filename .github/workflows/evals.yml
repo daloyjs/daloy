@@ -62,7 +62,7 @@ on:
       suite:
         description: "Suites to run"
         type: string
-        default: "guardrail,scaffold,migration"
+        default: "guardrail,scaffold,migration,dont-act"
       ablation:
         description: "Ablations (full,no-agents-md,no-skill,bare)"
         type: string
@@ -181,7 +181,7 @@ jobs:
           [[ "$AGENT" =~ ^(codex|claude|copilot)$ ]] || { echo "bad agent"; exit 1; }
           [[ "$CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "cli_version must be an exact semver"; exit 1; }
           [[ -z "$MODEL" || "$MODEL" =~ ^[A-Za-z0-9._:/-]{1,80}$ ]] || { echo "bad model id"; exit 1; }
-          [[ "$SUITE" =~ ^[a-z,]+$ ]] || { echo "bad suite"; exit 1; }
+          [[ "$SUITE" =~ ^[a-z,-]+$ ]] || { echo "bad suite"; exit 1; }
           [[ "$ABLATION" =~ ^[a-z,-]+$ ]] || { echo "bad ablation"; exit 1; }
           [[ "$TRIALS" =~ ^[1-9][0-9]?$ ]] || { echo "trials must be 1-99"; exit 1; }
           [[ "$FAIL_UNDER" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]] || { echo "fail_under must be 0-1"; exit 1; }
@@ -216,6 +216,15 @@ jobs:
                 --trials "$TRIALS" --fail-under "$FAIL_UNDER" --out evals/results/run.json)
           if [[ -n "$MODEL" ]]; then args+=(--model "$MODEL"); fi
           pnpm eval "${args[@]}"
+
+      - name: Analyse traces (deterministic, no AI)
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f evals/results/run.json ]]; then
+            pnpm eval:analyze evals/results/run.json --out evals/results/analysis.md
+            cat evals/results/analysis.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload results
         if: always()

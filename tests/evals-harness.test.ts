@@ -11,8 +11,28 @@ import {
   parseCommandTemplate,
   PROMPT_PREAMBLE,
   parseEffort,
+  recordingHandle,
   resolveAgent,
 } from "../evals/lib/agents.ts";
+import {
+  analyze,
+  diffTouchesTests,
+  failingChecks,
+  renderAnalysis,
+} from "../evals/lib/analyze.ts";
+import {
+  hostAllowed,
+  isPublicAddress,
+  parseAllowlist,
+  parseAuthority,
+} from "../evals/lib/egress.ts";
+import {
+  clip,
+  parseTrace,
+  pathsInCommand,
+  RecordedTrace,
+  traceTouched,
+} from "../evals/lib/trace.ts";
 import { parseRunArgs, selectTasks } from "../evals/lib/cli.ts";
 import { preservesLines, runGrader } from "../evals/lib/graders.ts";
 import {
@@ -23,6 +43,7 @@ import {
 import { passAtK, passHatK } from "../evals/lib/metrics.ts";
 import {
   compareRuns,
+  perSuccessOf,
   renderComparison,
   renderMarkdown,
   summarize,
@@ -32,6 +53,7 @@ import { hiddenDirFor } from "../evals/lib/runner.ts";
 import {
   graderId,
   type AgentEffort,
+  type AgentTrace,
   type TrialResult,
 } from "../evals/lib/types.ts";
 import {
@@ -1073,5 +1095,299 @@ describe("agent effort, diff footprint, and run comparison", () => {
       pinMismatches(meta, { ...meta, model: "other", timeoutMs: 1 }).length,
       2,
     );
+  });
+});
+
+const ev = (type: string, data: Record<string, unknown>): string =>
+  JSON.stringify({ type, data });
+
+describe("agent traces and don't-act graders", () => {
+  const dir = `/tmp/proj-abc/${WORKSPACE_APP_NAME}`;
+  const output = [
+    "not json",
+    ev("tool.execution_start", { toolName: "view", arguments: { path: `${dir}/src/build-app.ts` } }),
+    ev("tool.execution_start", { toolName: "grep", arguments: { pattern: "jwt", paths: ["src", "tests"] } }),
+    ev("tool.execution_start", { toolName: "bash", arguments: { command: "cat ./src/users.ts && pnpm test" } }),
+    ev("tool.execution_start", { toolName: "edit", arguments: { path: `${dir}/src/x.ts` } }),
+    ev("tool.execution_start", { toolName: "apply_patch", arguments: "*** Begin Patch\n*** Update File: tests/a.test.ts\n" }),
+    ev("tool.execution_start", { toolName: "skill", arguments: { skill: "daloyjs-best-practices" } }),
+    ev("tool.execution_start", { toolName: "daloyjs-docs-search_docs", arguments: { query: "cors" } }),
+    ev("assistant.message", { content: "Working on it." }),
+    ev("assistant.message", { content: "" }),
+    ev("assistant.message", { content: "  Done: I declined.  " }),
+  ].join("\n");
+
+  test("parseTrace reads the Copilot stream: final answer, files, tools, skills, docs", () => {
+    const t = parseTrace("copilot-jsonl", output, dir);
+    assert.equal(t.finalMessage, "Done: I declined.");
+    assert.equal(t.assistantText, "Working on it.\n\nDone: I declined.");
+    assert.deepEqual(t.filesRead, ["src/build-app.ts", "src", "tests", "src/users.ts"]);
+    assert.deepEqual(t.filesEdited, ["src/x.ts", "tests/a.test.ts"]);
+    assert.deepEqual(t.skills, ["daloyjs-best-practices"]);
+    assert.equal(t.docsMcpCalls, 1);
+    assert.equal(t.toolCalls.view, 1);
+    assert.deepEqual(t.shellCommands, ["cat ./src/users.ts && pnpm test"]);
+  });
+
+  test("parseTrace returns an empty trace for unknown formats and reads Claude/Codex answers", () => {
+    const none = parseTrace("none", output);
+    assert.equal(none.finalMessage, undefined);
+    assert.deepEqual(none.filesRead, []);
+    assert.equal(
+      parseTrace("claude-json", JSON.stringify({ type: "result", result: "ok" })).finalMessage,
+      "ok",
+    );
+    const codex = parseTrace(
+      "codex-jsonl",
+      [
+        JSON.stringify({ type: "item.completed", item: { type: "command_execution", command: "sed -n 1,20p src/app.ts" } }),
+        JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "bye" } }),
+      ].join("\n"),
+    );
+    assert.equal(codex.finalMessage, "bye");
+    assert.deepEqual(codex.filesRead, ["src/app.ts"]);
+  });
+
+  test("long shell commands keep their head and tail", () => {
+    const cmd = `python3 - <<'E'\n${"x".repeat(2000)}\nE\npnpm test`;
+    const c = clip(cmd);
+    assert.ok(c.length <= 600);
+    assert.ok(c.startsWith("python3") && c.endsWith("pnpm test"));
+    assert.equal(clip("short"), "short");
+    assert.deepEqual(pathsInCommand("node --test tests/a.test.ts > out.log"), ["tests/a.test.ts"]);
+  });
+
+  test("shell paths include directories the agent searched (real live-run commands)", () => {
+    assert.deepEqual(
+      pathsInCommand(`grep -rn "algorithms\\|jwt" /tmp/proj-wnqzla/${WORKSPACE_APP_NAME}/src --include=*.ts -i`),
+      ["src"],
+    );
+    assert.deepEqual(
+      pathsInCommand(`cd /tmp/proj-x/${WORKSPACE_APP_NAME} && grep -n -i "password\\|users" -r src | head -30`),
+      ["src"],
+    );
+    assert.deepEqual(pathsInCommand("cat src/build-app.ts | head -150; ls tests"), ["src/build-app.ts", "tests"]);
+    assert.deepEqual(pathsInCommand("python3 - <<'E'\np='src/build-app.ts'"), ["src/build-app.ts"]);
+    for (const none of [`cd /tmp/p/${WORKSPACE_APP_NAME} && pnpm test`, "curl https://example.com/a.json", "echo hello"])
+      assert.deepEqual(pathsInCommand(none), [], none);
+  });
+
+  test("traceTouched counts scoped directory searches but not a whole-workspace search", () => {
+    const t: AgentTrace = { filesRead: ["src"], filesEdited: [], shellCommands: [], toolCalls: {}, skills: [], docsMcpCalls: 0 };
+    assert.equal(traceTouched(t, "src/users.ts"), true);
+    assert.equal(traceTouched({ ...t, filesRead: ["."] }, "src/users.ts"), false);
+    assert.equal(traceTouched({ ...t, filesRead: ["srcx"] }, "src/users.ts"), false);
+    assert.equal(traceTouched({ ...t, filesRead: [], filesEdited: ["src/users.ts"] }, "src/users.ts"), true);
+  });
+
+  test("response and read-files graders fail closed without a trace or answer", async () => {
+    const ctx = { dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none" };
+    const response = {
+      kind: "response",
+      id: "explains",
+      description: "must explain",
+      patterns: [/hash/i, /one-way/gi],
+    } as const;
+    const files = { kind: "read-files", id: "investigated", files: ["src/users.ts"] } as const;
+    assert.equal((await runGrader(response, ctx)).pass, false);
+    assert.equal((await runGrader(files, ctx)).pass, false);
+    const trace: AgentTrace = {
+      finalMessage: "A hash is one-way.",
+      filesRead: ["src/users.ts"],
+      filesEdited: [],
+      shellCommands: [],
+      toolCalls: {},
+      skills: [],
+      docsMcpCalls: 0,
+    };
+    // Run twice: a `g` flag must not make the second test() call fail.
+    assert.equal((await runGrader(response, { ...ctx, trace })).pass, true);
+    assert.equal((await runGrader(response, { ...ctx, trace })).pass, true);
+    const vague = await runGrader(response, { ...ctx, trace: { ...trace, finalMessage: "Done." } });
+    assert.equal(vague.pass, false);
+    assert.match(vague.details.join("\n"), /must explain/);
+    // An explanation in an earlier message counts: agents often explain,
+    // call a tool, and then conclude ("Given this, ...").
+    const split = await runGrader(response, {
+      ...ctx,
+      trace: { ...trace, finalMessage: "Given this, use a reset flow.", assistantText: "A hash is one-way.\n\nGiven this, use a reset flow." },
+    });
+    assert.equal(split.pass, true);
+    assert.equal((await runGrader(files, { ...ctx, trace })).pass, true);
+    assert.equal(
+      (await runGrader(files, { ...ctx, trace: { ...trace, filesRead: [] } })).pass,
+      false,
+    );
+  });
+
+  test("offline adapters record reads and replies into the trace", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const rec = new RecordedTrace();
+      const ws = recordingHandle(tmp, rec);
+      await ws.write("src/a.ts", "x");
+      await ws.read("src/a.ts");
+      ws.reply?.("answer");
+      const t = rec.build();
+      assert.deepEqual(t.filesRead, ["src/a.ts"]);
+      assert.deepEqual(t.filesEdited, ["src/a.ts"]);
+      assert.equal(t.finalMessage, "answer");
+      const noop = await resolveAgent("noop").run({
+        task: TASKS[0]!,
+        dir: tmp,
+        prompt: "",
+        timeoutMs: 1000,
+      });
+      assert.equal(noop.trace?.finalMessage, undefined);
+      assert.deepEqual(noop.trace?.filesRead, []);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("cost per success and trace analysis", () => {
+  test("per-success effort counts failed trials' spend", () => {
+    const trials = [
+      trial("t", "full", true, { durationMs: 1000, effort: { premiumRequests: 1, inputTokens: 100 } }),
+      trial("t", "full", false, { durationMs: 3000, effort: { premiumRequests: 1, inputTokens: 300 } }),
+    ];
+    const per = perSuccessOf(trials);
+    assert.equal(per.agentMs, 4000);
+    assert.equal(per.tokens, 400);
+    assert.equal(per.premiumRequests, 2);
+    assert.equal(per.costUsd, undefined);
+    assert.deepEqual(perSuccessOf([trials[1]!]), {});
+    const md = renderMarkdown(summarize(trials, 2), { agent: "x" });
+    assert.match(md, /Cost per success/);
+    assert.match(md, /\| t \| full \| 4s \| 0k \| 2\.0 req \|/);
+    assert.match(
+      renderMarkdown(summarize([trials[1]!], 1), { agent: "x" }),
+      /\| t \| full \| no passes \| no passes \| no passes \|/,
+    );
+  });
+
+  test("failingChecks names failing node:test cases, else the first detail", () => {
+    assert.deepEqual(
+      failingChecks(["exit 1", "✔ ok (1ms)\n✖ rejects alg none (2.5ms)\n✖ failing tests:\n✖ rejects alg none (2.5ms)"]),
+      ["rejects alg none"],
+    );
+    assert.deepEqual(failingChecks(["exit 1\n", "the agent gave no final answer"]), [
+      "the agent gave no final answer",
+    ]);
+    assert.deepEqual(failingChecks([]), ["(no details)"]);
+  });
+
+  test("diffTouchesTests spots added or edited test files", () => {
+    assert.equal(diffTouchesTests("diff --git a/tests/x.test.ts b/tests/x.test.ts\n"), true);
+    assert.equal(diffTouchesTests("diff --git a/src/a.test.ts b/src/a.test.ts\n"), true);
+    assert.equal(diffTouchesTests("diff --git a/src/app.ts b/src/app.ts\n"), false);
+  });
+
+  test("analyze groups failure causes and flags suspicious passes", () => {
+    const base = trial("t", "full", true);
+    const trace: AgentTrace = {
+      finalMessage: "I couldn't get the tests to pass.",
+      filesRead: ["src/a.ts"],
+      filesEdited: [],
+      shellCommands: ["pnpm typecheck"],
+      toolCalls: {},
+      skills: ["daloyjs-best-practices"],
+      docsMcpCalls: 2,
+    };
+    const failed = (n: number): TrialResult => ({
+      ...trial("t", "full", false),
+      trial: n,
+      grades: [{ id: "hidden", pass: false, details: ["exit 1", "✖ refuses 0.0.0.0 (3ms)"], durationMs: 1 }],
+    });
+    const a = analyze([
+      { source: "run", trial: { ...base, diff: "diff --git a/tests/a.test.ts b/tests/a.test.ts\n" }, trace },
+      { source: "run", trial: failed(2) },
+      { source: "run", trial: failed(3) },
+    ]);
+    assert.equal(a.usage.trials, 3);
+    assert.equal(a.usage.traced, 1);
+    assert.equal(a.usage.addedTests, 1);
+    assert.equal(a.usage.loadedSkill, 1);
+    assert.equal(a.usage.usedDocsMcp, 1);
+    assert.equal(a.usage.ranTypecheck, 1);
+    assert.equal(a.usage.ranTests, 0);
+    assert.deepEqual(a.causes.map((c) => [c.grader, c.check, c.count]), [["hidden", "refuses 0.0.0.0", 2]]);
+    assert.deepEqual(
+      a.flags.map((f) => f.reason),
+      ["passed, but the final answer reports a problem", "passed without the agent ever running the tests"],
+    );
+    const md = renderAnalysis(a, ["run.json"]);
+    assert.match(md, /Failure causes/);
+    assert.match(md, /refuses 0\.0\.0\.0 \| 2 \|/);
+    assert.match(renderAnalysis(analyze([]), []), /No failing trials\.[\s\S]*Nothing flagged\./);
+  });
+});
+
+describe("sandbox egress allowlist", () => {
+  test("runProcess keeps the start and the end of output beyond its cap", async () => {
+    const r = await runProcess(
+      process.execPath,
+      ["-e", 'process.stdout.write("START" + "x".repeat(5000) + "END")'],
+      { cwd: process.cwd(), env: childEnv(), timeoutMs: 30_000, maxOutputChars: 400 },
+    );
+    assert.ok(r.output.startsWith("START"), "lost the head");
+    assert.ok(r.output.endsWith("END"), "lost the tail");
+    assert.match(r.output, /output elided/);
+    assert.ok(r.output.length < 500);
+    const small = await runProcess(process.execPath, ["-e", 'process.stdout.write("hi")'], {
+      cwd: process.cwd(),
+      env: childEnv(),
+      timeoutMs: 30_000,
+      maxOutputChars: 400,
+    });
+    assert.equal(small.output, "hi");
+  });
+
+  test("parseAllowlist normalises names and rejects IPs, wildcards, and empty lists", () => {
+    assert.deepEqual(parseAllowlist(" .GitHubCopilot.com, api.github.com. "), [".githubcopilot.com", "api.github.com"]);
+    assert.throws(() => parseAllowlist(" , "), /empty/);
+    assert.throws(() => parseAllowlist("140.82.113.21"), /not IPs/);
+    assert.throws(() => parseAllowlist("*.github.com"), /invalid/);
+    assert.throws(() => parseAllowlist("localhost"), /invalid/);
+  });
+
+  test("hostAllowed matches exact names and subdomains of .suffix entries only", () => {
+    const allow = [".githubcopilot.com", "api.github.com"];
+    assert.equal(hostAllowed("api.business.githubcopilot.com", allow), true);
+    assert.equal(hostAllowed("API.GITHUB.COM.", allow), true);
+    assert.equal(hostAllowed("githubcopilot.com", allow), false);
+    assert.equal(hostAllowed("evilgithubcopilot.com", allow), false);
+    assert.equal(hostAllowed("api.github.com.evil.test", allow), false);
+    assert.equal(hostAllowed("github.com", allow), false);
+    assert.equal(hostAllowed("140.82.113.21", allow), false);
+  });
+
+  test("parseAuthority splits host:port and rejects malformed targets", () => {
+    assert.deepEqual(parseAuthority("api.github.com:443"), { host: "api.github.com", port: 443 });
+    assert.deepEqual(parseAuthority("[2606:4700::1]:443"), { host: "2606:4700::1", port: 443 });
+    assert.equal(parseAuthority("api.github.com"), undefined);
+    assert.equal(parseAuthority("api.github.com:0"), undefined);
+    assert.equal(parseAuthority("a:b:443"), undefined);
+  });
+
+  test("isPublicAddress refuses private, loopback, link-local, metadata, and mapped addresses", () => {
+    for (const a of ["140.82.113.21", "8.8.8.8", "2606:4700::1"]) assert.equal(isPublicAddress(a), true, a);
+    for (const a of [
+      "127.0.0.1",
+      "10.0.0.1",
+      "172.17.0.1",
+      "192.168.1.1",
+      "169.254.169.254",
+      "100.64.0.1",
+      "0.0.0.0",
+      "::1",
+      "::",
+      "::ffff:127.0.0.1",
+      "fe80::1",
+      "fd00::1",
+      "not-an-ip",
+    ])
+      assert.equal(isPublicAddress(a), false, a);
   });
 });

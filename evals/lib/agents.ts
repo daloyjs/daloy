@@ -14,6 +14,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { parseTrace, RecordedTrace } from "./trace.ts";
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
 import {
   DOCS_MCP_URL,
@@ -21,6 +22,7 @@ import {
   type AgentRunResult,
   type EvalTask,
   type McpMode,
+  type WorkspaceHandle,
 } from "./types.ts";
 
 /** What an adapter receives for one trial. */
@@ -74,9 +76,43 @@ export function buildPrompt(task: EvalTask): string {
 
 const OUTPUT_TAIL_CHARS = 8_000;
 
+/**
+ * Cap on a live agent's captured output (its trace). Long sessions keep their
+ * start and end; see `runProcess`. 200,000 characters (the old cap) lost the
+ * start of verbose Copilot sessions, and with it what the agent had read.
+ */
+export const AGENT_OUTPUT_CAP_CHARS = 4_000_000;
+
+/**
+ * A workspace handle that records reads, writes, and `reply()` into a trace,
+ * so offline solutions are graded by the same trace graders as live agents.
+ *
+ * @param dir - Workspace root.
+ * @param trace - Recorder to write into.
+ * @returns The recording handle.
+ */
+export function recordingHandle(
+  dir: string,
+  trace: RecordedTrace,
+): WorkspaceHandle {
+  const ws = workspaceHandle(dir);
+  return {
+    ...ws,
+    async read(rel) {
+      trace.read(rel);
+      return ws.read(rel);
+    },
+    async write(rel, content) {
+      trace.write(rel);
+      await ws.write(rel, content);
+    },
+    reply: (message) => trace.reply(message),
+  };
+}
+
 function offline(
   name: string,
-  step: (inv: AgentInvocation) => Promise<void>,
+  step: (inv: AgentInvocation, ws: WorkspaceHandle) => Promise<void>,
 ): AgentAdapter {
   return {
     name,
@@ -84,12 +120,14 @@ function offline(
     mcpModes: ["none", "docs"],
     async run(inv) {
       const started = Date.now();
-      await step(inv);
+      const trace = new RecordedTrace();
+      await step(inv, recordingHandle(inv.dir, trace));
       return {
         exitCode: 0,
         timedOut: false,
         durationMs: Date.now() - started,
         outputTail: "",
+        trace: trace.build(),
       };
     },
   };
@@ -238,6 +276,7 @@ function cli(
         cwd: inv.dir,
         env: { ...childEnv(envKeys), ...(extraEnv ? await extraEnv(inv) : {}) },
         timeoutMs: inv.timeoutMs,
+        maxOutputChars: AGENT_OUTPUT_CAP_CHARS,
       });
       return {
         exitCode: r.exitCode,
@@ -245,6 +284,7 @@ function cli(
         durationMs: r.durationMs,
         outputTail: r.output.slice(-OUTPUT_TAIL_CHARS),
         transcript: r.output,
+        trace: parseTrace(effortFormat, r.output, inv.dir),
         ...(() => {
           const effort = parseEffort(effortFormat, r.output);
           return effort ? { effort } : {};
@@ -314,6 +354,21 @@ export const COPILOT_SECRET_ENV_VARS: readonly string[] = [
 ];
 
 /**
+ * Proxy settings passed to live agents (only when set), so the sandbox's
+ * egress proxy (`evals/sandbox-run.sh`) carries their traffic. Graders never
+ * get them: hidden tests must reach local test servers directly.
+ */
+export const AGENT_PROXY_ENV_VARS: readonly string[] = [
+  "HTTPS_PROXY",
+  "https_proxy",
+  "HTTP_PROXY",
+  "http_proxy",
+  "NO_PROXY",
+  "no_proxy",
+  "NODE_USE_ENV_PROXY",
+];
+
+/**
  * Resolve an adapter by name.
  *
  * @param name - `noop`, `reference`, `alternative:<id>`, `unsafe:<variant>`,
@@ -329,26 +384,24 @@ export function resolveAgent(
 ): AgentAdapter {
   if (name === "noop") return offline(name, async () => {});
   if (name === "reference") {
-    return offline(name, async ({ task, dir }) =>
-      task.reference(workspaceHandle(dir)),
-    );
+    return offline(name, async ({ task }, ws) => task.reference(ws));
   }
   if (name.startsWith("alternative:")) {
     const altId = name.slice("alternative:".length);
-    return offline(name, async ({ task, dir }) => {
+    return offline(name, async ({ task }, ws) => {
       const alt = task.alternatives?.find((a) => a.id === altId);
       if (!alt)
         throw new Error(`task ${task.id} has no valid alternative "${altId}"`);
-      await alt.apply(workspaceHandle(dir));
+      await alt.apply(ws);
     });
   }
   if (name.startsWith("unsafe:")) {
     const variantId = name.slice("unsafe:".length);
-    return offline(name, async ({ task, dir }) => {
+    return offline(name, async ({ task }, ws) => {
       const variant = task.unsafe.find((v) => v.id === variantId);
       if (!variant)
         throw new Error(`task ${task.id} has no unsafe variant "${variantId}"`);
-      await variant.apply(workspaceHandle(dir));
+      await variant.apply(ws);
     });
   }
   switch (name) {
@@ -361,7 +414,7 @@ export function resolveAgent(
       return cli(
         name,
         "copilot",
-        ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
+        ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", ...AGENT_PROXY_ENV_VARS],
         (inv) => [
           "-p",
           inv.prompt,
@@ -374,6 +427,10 @@ export function resolveAgent(
           `--secret-env-vars=${COPILOT_SECRET_ENV_VARS.join(",")}`,
           "--output-format",
           "json",
+          // No per-token delta events: they made up most of the output and
+          // add nothing the complete messages and tool events do not have.
+          "--stream",
+          "off",
           ...copilotMcpArgs(inv.mcp),
           ...withModel("--model", inv),
         ],
@@ -397,7 +454,7 @@ export function resolveAgent(
       return cli(
         name,
         "claude",
-        ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "XDG_CONFIG_HOME"],
+        ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "XDG_CONFIG_HOME", ...AGENT_PROXY_ENV_VARS],
         (inv) => [
           "-p",
           inv.prompt,
@@ -414,7 +471,7 @@ export function resolveAgent(
       return cli(
         name,
         "codex",
-        ["OPENAI_API_KEY", "CODEX_HOME"],
+        ["OPENAI_API_KEY", "CODEX_HOME", ...AGENT_PROXY_ENV_VARS],
         (inv) => [
           "exec",
           "--json",

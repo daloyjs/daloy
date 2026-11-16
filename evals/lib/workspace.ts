@@ -70,8 +70,11 @@ export const WORKSPACE_APP_NAME = "my-daloy-app";
 const SNAPSHOT_SKIP = new Set(["node_modules", ".git", "dist", "generated"]);
 /** Files above this size are not snapshotted (they are never source). */
 const SNAPSHOT_MAX_BYTES = 512 * 1024;
-/** Cap on captured process output, to bound memory and report size. */
+/** Default cap on captured process output, to bound memory and report size. */
 const OUTPUT_CAP_CHARS = 200_000;
+
+/** Marker inserted where {@link runProcess} dropped the middle of long output. */
+export const OUTPUT_ELIDED = "\n[... output elided ...]\n";
 
 /**
  * Environment variables passed to every child process. Everything else in the
@@ -119,7 +122,11 @@ export interface ProcessResult {
   readonly exitCode: number | null;
   readonly timedOut: boolean;
   readonly durationMs: number;
-  /** Combined stdout + stderr, capped. */
+  /**
+   * Combined stdout + stderr. Beyond the cap, the first quarter and the most
+   * recent output are kept around {@link OUTPUT_ELIDED}: an agent trace needs
+   * both how the session started (what it read) and how it ended.
+   */
   readonly output: string;
 }
 
@@ -129,7 +136,8 @@ export interface ProcessResult {
  *
  * @param command - Executable (resolved via `PATH`).
  * @param args - Arguments, passed verbatim (no shell interpolation).
- * @param opts - Working directory, environment, timeout, optional stdin.
+ * @param opts - Working directory, environment, timeout, optional stdin, and
+ *   output cap in characters (default 200,000).
  * @returns Exit code, timeout flag, duration, and captured output.
  */
 export function runProcess(
@@ -140,17 +148,31 @@ export function runProcess(
     env: NodeJS.ProcessEnv;
     timeoutMs: number;
     stdin?: string;
+    maxOutputChars?: number;
   },
 ): Promise<ProcessResult> {
   const started = Date.now();
+  const cap = opts.maxOutputChars ?? OUTPUT_CAP_CHARS;
+  const headCap = Math.floor(cap / 4);
   return new Promise((resolvePromise) => {
-    let output = "";
+    let head = "";
+    let tail = "";
+    let elided = false;
     let timedOut = false;
     const append = (chunk: Buffer): void => {
-      output += chunk.toString("utf8");
-      if (output.length > OUTPUT_CAP_CHARS)
-        output = output.slice(-OUTPUT_CAP_CHARS);
+      let text = chunk.toString("utf8");
+      if (head.length < headCap) {
+        const room = headCap - head.length;
+        head += text.slice(0, room);
+        text = text.slice(room);
+      }
+      tail += text;
+      if (tail.length > cap - headCap) {
+        tail = tail.slice(-(cap - headCap));
+        elided = true;
+      }
     };
+    const output = (): string => (elided ? head + OUTPUT_ELIDED + tail : head + tail);
     const child = spawn(command, [...args], {
       cwd: opts.cwd,
       env: opts.env,
@@ -174,7 +196,7 @@ export function runProcess(
     child.stdout.on("data", append);
     child.stderr.on("data", append);
     child.on("error", (err) => {
-      output += `\n[spawn error] ${err.message}`;
+      tail += `\n[spawn error] ${err.message}`;
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -182,7 +204,7 @@ export function runProcess(
         exitCode: code,
         timedOut,
         durationMs: Date.now() - started,
-        output,
+        output: output(),
       });
     });
     // A child that exits before reading stdin (fast tools, failed spawns)

@@ -11,8 +11,12 @@
  * @module
  */
 
-/** Which family of behaviour a task measures. */
-export type EvalSuite = "guardrail" | "scaffold" | "migration";
+/**
+ * Which family of behaviour a task measures. `dont-act` tasks ask for
+ * something the agent should decline (or that is impossible); the right
+ * outcome is an explanation after investigating, not a code change.
+ */
+export type EvalSuite = "guardrail" | "scaffold" | "migration" | "dont-act";
 
 /**
  * Which agent-instruction surfaces are present in the workspace. Running the
@@ -55,6 +59,7 @@ export const SUITES: readonly EvalSuite[] = [
   "guardrail",
   "scaffold",
   "migration",
+  "dont-act",
 ];
 
 /** A mutable view of a scaffolded workspace handed to setup and solution steps. */
@@ -69,6 +74,11 @@ export interface WorkspaceHandle {
   remove(rel: string): Promise<void>;
   /** Whether a path relative to the root exists. */
   exists(rel: string): Promise<boolean>;
+  /**
+   * Set the agent's final answer to the user. Offline calibration adapters
+   * provide it so "don't act" tasks can be calibrated; setup steps ignore it.
+   */
+  reply?(message: string): void;
 }
 
 /** A deterministic step that mutates a workspace (setup, reference, unsafe). */
@@ -109,6 +119,28 @@ export type GraderSpec =
       readonly kind: "absent";
       readonly id: string;
       readonly paths: readonly string[];
+    }
+  /**
+   * Every regex must match what the agent told the user (all its messages;
+   * see `AgentTrace.assistantText`). Fails closed when the agent wrote
+   * nothing. Used by "don't act" tasks, where the right outcome is an
+   * explanation, not a code change.
+   */
+  | {
+      readonly kind: "response";
+      readonly id: string;
+      readonly description: string;
+      readonly patterns: readonly RegExp[];
+    }
+  /**
+   * The agent must have looked at every listed file (viewed, searched, edited,
+   * or named it in a shell command) before finishing. Catches a "don't act"
+   * answer given without investigating. Fails closed without a trace.
+   */
+  | {
+      readonly kind: "read-files";
+      readonly id: string;
+      readonly files: readonly string[];
     };
 
 /** A known-bad solution used to prove the graders catch it (grader calibration). */
@@ -185,6 +217,34 @@ export interface AgentEffort {
   readonly premiumRequests?: number;
 }
 
+/**
+ * What the agent did, parsed from its CLI output (or recorded by an offline
+ * adapter). Paths are workspace-relative. Only the Copilot CLI stream yields
+ * every field; other CLIs fill what their output exposes.
+ */
+export interface AgentTrace {
+  /** The agent's last message to the user, when one was found. */
+  readonly finalMessage?: string;
+  /**
+   * Everything the agent wrote to the user, every message in order (capped,
+   * keeping the end). Agents often explain in one message, call a tool, and
+   * conclude in the next; a reader sees both.
+   */
+  readonly assistantText?: string;
+  /** Files the agent viewed, searched, or named in a shell command. */
+  readonly filesRead: readonly string[];
+  /** Files the agent created or edited through its edit tools. */
+  readonly filesEdited: readonly string[];
+  /** Shell commands, each truncated. */
+  readonly shellCommands: readonly string[];
+  /** Tool name to call count. */
+  readonly toolCalls: Readonly<Record<string, number>>;
+  /** Skills the agent loaded. */
+  readonly skills: readonly string[];
+  /** Calls to the DaloyJS docs MCP server. */
+  readonly docsMcpCalls: number;
+}
+
 /** Outcome of one agent invocation. */
 export interface AgentRunResult {
   readonly exitCode: number | null;
@@ -199,6 +259,8 @@ export interface AgentRunResult {
    * did. `pnpm eval` writes it to a trace file and drops it from the JSON.
    */
   readonly transcript?: string;
+  /** Parsed actions and final answer, kept in the results JSON. */
+  readonly trace?: AgentTrace;
 }
 
 /** How much the agent changed, from `git diff --numstat` against the baseline. */
@@ -234,7 +296,5 @@ export interface TrialResult {
  * @returns The grader id used in results and in `UnsafeVariant.expectFail`.
  */
 export function graderId(spec: GraderSpec): string {
-  return spec.kind === "pattern" || spec.kind === "absent"
-    ? spec.id
-    : spec.kind;
+  return "id" in spec ? spec.id : spec.kind;
 }
