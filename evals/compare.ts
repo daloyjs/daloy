@@ -3,7 +3,7 @@
  * cell by cell: fix the framework, docs, or skill, rerun the same tasks with
  * the same agent and limits, and see what moved.
  *
- * Refuses to compare runs whose agent, agent version, model, or time limit
+ * Refuses to compare runs whose agent, agent version, model, MCP mode, or time limit
  * differ unless `--allow-mismatch` is passed: otherwise the difference could
  * come from the agent, not the change under test. A new model is baselined
  * with its own run first, then compared against itself.
@@ -31,6 +31,7 @@ const PINNED: readonly (keyof RunMeta)[] = [
   "agent",
   "agentVersion",
   "model",
+  "mcp",
   "timeoutMs",
 ];
 
@@ -45,9 +46,12 @@ export function pinMismatches(
   base: RunMeta | undefined,
   head: RunMeta | undefined,
 ): string[] {
-  return PINNED.filter((k) => base?.[k] !== head?.[k]).map(
+  // Runs recorded before `--mcp` existed had no MCP servers: read them as `none`.
+  const value = (m: RunMeta | undefined, k: keyof RunMeta): unknown =>
+    k === "mcp" ? (m?.mcp ?? "none") : m?.[k];
+  return PINNED.filter((k) => value(base, k) !== value(head, k)).map(
     (k) =>
-      `${k}: ${String(base?.[k] ?? "unset")} vs ${String(head?.[k] ?? "unset")}`,
+      `${k}: ${String(value(base, k) ?? "unset")} vs ${String(value(head, k) ?? "unset")}`,
   );
 }
 
@@ -76,7 +80,8 @@ async function main(): Promise<void> {
   if (mismatches.length > 0 && !args.includes("--allow-mismatch")) {
     throw new Error(
       `runs are not comparable (${mismatches.join("; ")}). ` +
-        "Rerun with the same agent, version, model, and limits, or pass --allow-mismatch.",
+        "Rerun with the same agent, version, model, MCP mode, and limits, or pass --allow-mismatch " +
+        "when that difference is exactly what you are measuring (for example --mcp none vs docs).",
     );
   }
 

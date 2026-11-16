@@ -6,7 +6,9 @@ import { join } from "node:path";
 
 import {
   buildPrompt,
+  copilotMcpArgs,
   parseCommandTemplate,
+  PROMPT_PREAMBLE,
   parseEffort,
   resolveAgent,
 } from "../evals/lib/agents.ts";
@@ -34,6 +36,7 @@ import {
 import {
   childEnv,
   parseNumstat,
+  WORKSPACE_APP_NAME,
   workspaceHandle,
 } from "../evals/lib/workspace.ts";
 import { TASKS } from "../evals/tasks/index.ts";
@@ -178,6 +181,33 @@ describe("guardrail diff", () => {
     assert.deepEqual(
       violations(APP, APP.replace("windowMs: 60_000", "windowMs: 1_000")),
       ["rate-limit-budget"],
+    );
+  });
+
+  test("an empty opaque object made loose is not a weakening; loosening real fields is", () => {
+    const opaque = APP.replace(
+      "  return app;",
+      "  const Event = z.object({ id: z.string(), data: z.object({}).passthrough() });\n  return app;",
+    );
+    assert.deepEqual(violations(APP, opaque), []);
+    assert.deepEqual(
+      violations(
+        APP,
+        APP.replace(
+          "  return app;",
+          "  const D = z.looseObject({});\n  return app;",
+        ),
+      ),
+      [],
+    );
+    assert.ok(
+      violations(
+        APP,
+        APP.replace(
+          "  return app;",
+          "  const B = z.looseObject({ role: z.string() });\n  return app;",
+        ),
+      ).includes("passthrough-schema"),
     );
   });
 
@@ -416,6 +446,69 @@ describe("agents and sandboxing", () => {
     const ws = workspaceHandle("/tmp/daloy-eval-root");
     await assert.rejects(() => ws.read("../etc/passwd"), /escapes workspace/);
     await assert.rejects(() => ws.write("/etc/x", "y"), /escapes workspace/);
+  });
+});
+
+describe("MCP opt-in and workspace neutrality", () => {
+  test("--mcp defaults to none, accepts docs, and rejects anything else", () => {
+    assert.equal(parseRunArgs(["--agent", "copilot"]).mcp, "none");
+    assert.equal(
+      parseRunArgs(["--agent", "copilot", "--mcp", "docs"]).mcp,
+      "docs",
+    );
+    assert.equal(parseRunArgs(["--agent=copilot", "--mcp=docs"]).mcp, "docs");
+    assert.throws(
+      () => parseRunArgs(["--agent", "x", "--mcp", "github"]),
+      /--mcp must be one of/,
+    );
+    assert.throws(
+      () => parseRunArgs(["--agent", "x", "--mcp"]),
+      /--mcp must be one of/,
+    );
+  });
+
+  test("docs mode adds only the public docs server, with no credential", () => {
+    assert.deepEqual(copilotMcpArgs("none"), []);
+    assert.deepEqual(copilotMcpArgs(undefined), []);
+    const [flag, json] = copilotMcpArgs("docs");
+    assert.equal(flag, "--additional-mcp-config");
+    const servers = (
+      JSON.parse(json!) as {
+        mcpServers: Record<string, Record<string, unknown>>;
+      }
+    ).mcpServers;
+    assert.deepEqual(Object.keys(servers), ["daloyjs-docs"]);
+    assert.equal(servers["daloyjs-docs"]!.url, "https://daloyjs.dev/mcp");
+    assert.ok(
+      !/token|auth|header|github/i.test(json!),
+      "no credentials or GitHub server in the config",
+    );
+  });
+
+  test("only adapters that can provide the docs MCP advertise it", () => {
+    assert.deepEqual(resolveAgent("copilot").mcpModes, ["none", "docs"]);
+    assert.deepEqual(resolveAgent("codex").mcpModes, ["none"]);
+    assert.deepEqual(resolveAgent("claude").mcpModes, ["none"]);
+  });
+
+  test("runs with different MCP modes are not comparable; a missing mode means none", () => {
+    const meta = { agent: "copilot", model: "m", timeoutMs: 1 };
+    assert.deepEqual(pinMismatches(meta, { ...meta, mcp: "none" }), []);
+    assert.deepEqual(
+      pinMismatches({ ...meta, mcp: "none" }, { ...meta, mcp: "docs" }),
+      ["mcp: none vs docs"],
+    );
+  });
+
+  test("nothing the agent can see names the evaluation", () => {
+    assert.ok(
+      !/eval|grade|bench|test/i.test(WORKSPACE_APP_NAME),
+      WORKSPACE_APP_NAME,
+    );
+    assert.ok(
+      !/eval|grade/i.test(PROMPT_PREAMBLE),
+      "preamble mentions the evaluation",
+    );
   });
 });
 

@@ -1,6 +1,63 @@
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildApp } from "../../src/build-app.ts";
+
+/**
+ * Start the app in a brand-new Node process with `env` applied and send one
+ * request. A real server that boots without a secret starts fresh, so this is
+ * the honest fail-closed check: module-level caches filled by earlier tests in
+ * this process cannot leak in. Returns "refused-to-boot" when importing or
+ * building the app throws (also fail-closed).
+ */
+function freshStatus(
+  env: Record<string, string | undefined>,
+  req: {
+    path: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  },
+): number | "refused-to-boot" {
+  const appUrl = pathToFileURL(resolve("src/build-app.ts")).href;
+  const script = [
+    "let app;",
+    `try { app = (await import(${JSON.stringify(appUrl)})).buildApp(); }`,
+    'catch { console.log("__REFUSED__"); process.exit(0); }',
+    "const r = JSON.parse(process.env.__FRESH_REQ__);",
+    'const res = await app.request(r.path, { method: r.method ?? "GET", headers: r.headers ?? {}, body: r.body });',
+    'console.log("__STATUS__ " + res.status);',
+  ].join("\n");
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    __FRESH_REQ__: JSON.stringify(req),
+  };
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete childEnv[k];
+    else childEnv[k] = v;
+  }
+  const r = spawnSync(
+    process.execPath,
+    ["--no-warnings", "--input-type=module", "-e", script],
+    {
+      env: childEnv,
+      encoding: "utf8",
+      timeout: 60_000,
+    },
+  );
+  if (r.stdout.includes("__REFUSED__")) return "refused-to-boot";
+  const m = /__STATUS__ (\d+)/.exec(r.stdout);
+  if (!m)
+    throw new Error(
+      `fresh process failed: ${(r.stderr || r.stdout).slice(0, 600)}`,
+    );
+  return Number(m[1]);
+}
+
+const failsClosed = (s: number | "refused-to-boot"): boolean =>
+  s === "refused-to-boot" || s >= 400;
 
 const ACME = "eval-acme-key-6b2f9c1d8e7a";
 const GLOBEX = "eval-globex-key-3a8d5e0f1c2b";
@@ -102,26 +159,34 @@ test("missing, unknown, or malformed keys are rejected", async () => {
 
 test("an unset TENANT_API_KEYS still boots and fails closed", async () => {
   // The existing tests build the app without the variable, so it must boot.
-  delete process.env.TENANT_API_KEYS;
-  const app = buildApp();
-  assert.equal((await app.request("/healthz")).status, 200);
-  const s = (await call(app, ACME, "GET", "/notes")).status;
-  assert.ok(s >= 400, `unset TENANT_API_KEYS let a request through (${s})`);
+  const health = freshStatus(
+    { TENANT_API_KEYS: undefined },
+    { path: "/healthz" },
+  );
+  assert.equal(
+    health,
+    200,
+    `app did not boot without TENANT_API_KEYS (${health})`,
+  );
+  const s = freshStatus(
+    { TENANT_API_KEYS: undefined },
+    { path: "/notes", headers: { authorization: `Bearer ${ACME}` } },
+  );
+  assert.ok(
+    failsClosed(s),
+    `unset TENANT_API_KEYS let a request through (${s})`,
+  );
 });
 
 test("a malformed TENANT_API_KEYS either refuses to boot or fails closed", async () => {
   // Refusing to boot on bad config and rejecting every request are both safe.
   for (const value of ["not json", "[]", '{"k":42}']) {
-    process.env.TENANT_API_KEYS = value;
-    let app: ReturnType<typeof buildApp>;
-    try {
-      app = buildApp();
-    } catch {
-      continue;
-    }
-    const s = (await call(app, ACME, "GET", "/notes")).status;
+    const s = freshStatus(
+      { TENANT_API_KEYS: value },
+      { path: "/notes", headers: { authorization: `Bearer ${ACME}` } },
+    );
     assert.ok(
-      s >= 400,
+      failsClosed(s),
       `TENANT_API_KEYS=${JSON.stringify(value)} let a request through (${s})`,
     );
   }

@@ -49,7 +49,12 @@ async function firstLine(
  */
 async function runMeta(
   agent: AgentAdapter,
-  opts: { model: string | undefined; trials: number; timeoutMs: number },
+  opts: {
+    model: string | undefined;
+    mcp: string;
+    trials: number;
+    timeoutMs: number;
+  },
 ): Promise<RunMeta> {
   const pkg = JSON.parse(
     await readFile(join(REPO_ROOT, "package.json"), "utf8"),
@@ -57,6 +62,7 @@ async function runMeta(
   const entries = Object.entries({
     agent: agent.name,
     model: opts.model,
+    mcp: opts.mcp,
     agentVersion: agent.command
       ? await firstLine(agent.command, ["--version"])
       : undefined,
@@ -94,6 +100,11 @@ async function main(): Promise<void> {
     );
   }
   if (tasks.length === 0) throw new Error("no tasks selected");
+  if (!agent.mcpModes.includes(opts.mcp)) {
+    throw new Error(
+      `agent "${agent.name}" does not support --mcp ${opts.mcp} (supported: ${agent.mcpModes.join(", ")})`,
+    );
+  }
 
   const trials: TrialResult[] = [];
   const total = tasks.length * opts.ablations.length * opts.trials;
@@ -111,6 +122,7 @@ async function main(): Promise<void> {
           timeoutMs: opts.timeoutMs,
           keep: opts.keep,
           ...(opts.model ? { model: opts.model } : {}),
+          mcp: opts.mcp,
         });
         trials.push(result);
         const failed = result.grades.filter((g) => !g.pass).map((g) => g.id);

@@ -52,6 +52,13 @@ function findRepoRoot(start: string): string {
   }
 }
 
+/**
+ * Project name `create-daloy` scaffolds for every trial. Deliberately the
+ * same kind of name a real user would pick, so nothing in the workspace says
+ * it is an evaluation.
+ */
+export const WORKSPACE_APP_NAME = "my-daloy-app";
+
 /** Directory names never read into a snapshot. */
 const SNAPSHOT_SKIP = new Set(["node_modules", ".git", "dist", "generated"]);
 /** Files above this size are not snapshotted (they are never source). */
@@ -291,8 +298,11 @@ export async function prepareWorkspace(
   task: EvalTask,
   ablation: Ablation,
 ): Promise<PreparedWorkspace> {
-  const root = await mkdtemp(join(tmpdir(), `daloy-eval-${task.id}-`));
-  const name = "daloy-eval-app";
+  // Neutral names only: the agent can see its working directory, package
+  // name, and git log, and an earlier run read "daloy-eval-guardrail-body-
+  // limit" from the path as a hint about what was being graded.
+  const root = await mkdtemp(join(tmpdir(), "proj-"));
+  const name = WORKSPACE_APP_NAME;
   const scaffold = await runProcess(
     process.execPath,
     [
@@ -326,16 +336,16 @@ export async function prepareWorkspace(
   await git(dir, ["add", "-A"]);
   await git(dir, [
     "-c",
-    "user.name=daloy-eval",
+    "user.name=Developer",
     "-c",
-    "user.email=eval@daloyjs.invalid",
+    "user.email=dev@example.invalid",
     "-c",
     "commit.gpgsign=false",
     "commit",
     "--quiet",
     "--no-verify",
     "-m",
-    "eval baseline",
+    "Initial commit",
   ]);
 
   return { dir, root, before: await snapshot(dir) };

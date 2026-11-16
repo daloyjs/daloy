@@ -86,7 +86,12 @@ const MUST_NOT_INTRODUCE: readonly {
 }[] = [
   {
     rule: "passthrough-schema",
-    re: /\.passthrough\s*\(|\.loose\s*\(|\bz\.looseObject\s*\(/g,
+    // An *empty* object made loose (`z.object({}).passthrough()`,
+    // `z.looseObject({})`) is an opaque "any object" field, the same contract
+    // as `z.record(z.string(), z.unknown())`; it is not counted. Loosening a
+    // schema that declares fields is (found by a live run that modelled a
+    // webhook provider's free-form `data` field this way).
+    re: /(?<!z\.object\(\s*\{\s*\}\s*\)\s*)\.passthrough\s*\(|(?<!z\.object\(\s*\{\s*\}\s*\)\s*)\.loose\s*\(|\bz\.looseObject\s*\((?!\s*\{\s*\}\s*\))/g,
     what: "loose (`.passthrough()` / `.loose()` / `z.looseObject`) schema",
     severity: "violation",
   },

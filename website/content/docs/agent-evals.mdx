@@ -133,7 +133,7 @@ DALOY_EVAL_AGENT_CMD='["my-agent","--prompt","{prompt}"]' pnpm eval --agent comm
 </Step>
 </Steps>
 
-Useful flags: `--task <ids>`, `--model <id>`, `--k <n>`, `--timeout-min <n>`, `--fail-under <0..1>` (exit 1 below that pass rate), `--keep` (keep workspaces for inspection), and `--list`. Results land in `evals/results/` as JSON (every trial, its grades, the agent's diff, and the pinned agent, model, framework commit, and limits), a Markdown summary that is also appended to the GitHub Actions job summary, and one trace file per trial with the agent's full output.
+Useful flags: `--task <ids>`, `--model <id>`, `--mcp docs` (offer the [DaloyJS docs MCP](/docs/mcp), Copilot CLI only), `--k <n>`, `--timeout-min <n>`, `--fail-under <0..1>` (exit 1 below that pass rate), `--keep` (keep workspaces for inspection), and `--list`. Results land in `evals/results/` as JSON (every trial, its grades, the agent's diff, and the pinned agent, model, framework commit, and limits), a Markdown summary that is also appended to the GitHub Actions job summary, and one trace file per trial with the agent's full output.
 
 <Callout type="danger">Never run a live agent with `--sandbox-ack` on your workstation with real credentials in the environment. The harness passes only an allowlist of variables to child processes, but the agent can still read files on the machine. Use the Docker image below, a VM, or the CI workflow.</Callout>
 
@@ -172,6 +172,8 @@ Quality comes first, then effort. Agents give different results on each run, so 
 The effort table follows, averaged over **passing** trials only: agent time, steps, tokens, and cost (when the CLI reports them; Claude Code and Codex do), plus lines changed. A passing app can still waste effort: an agent that rewrites half of `build-app.ts` to add one field passed, but your instructions made the task harder than it needed to be.
 
 Run the same tasks under `--ablation full,no-agents-md,no-skill,bare` to measure what each instruction surface contributes. If `bare` scores the same as `full`, the instructions are not doing their job.
+
+The docs MCP is a separate, opt-in axis: run once with the default `--mcp none` and once with `--mcp docs`, then compare. `--mcp docs` offers only the public, read-only docs server; GitHub's built-in MCP servers stay off in every mode, because they can search the repository that holds the hidden tests. Templates configure the docs server in `.vscode/mcp.json`, which editors read but headless agent CLIs do not, so without `--mcp docs` an eval agent never sees it.
 
 ## Iterate: fix, rerun, compare [#iterate]
 

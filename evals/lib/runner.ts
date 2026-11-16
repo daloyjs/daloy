@@ -15,7 +15,13 @@ import {
   workspaceDiff,
   workspaceFootprint,
 } from "./workspace.ts";
-import type { Ablation, EvalTask, GradeResult, TrialResult } from "./types.ts";
+import type {
+  Ablation,
+  EvalTask,
+  GradeResult,
+  McpMode,
+  TrialResult,
+} from "./types.ts";
 
 /** Options for {@link runTrial}. */
 export interface TrialOptions {
@@ -26,6 +32,8 @@ export interface TrialOptions {
   /** Keep the workspace on disk for inspection. */
   readonly keep: boolean;
   readonly model?: string;
+  /** MCP servers offered to the agent. */
+  readonly mcp?: McpMode;
 }
 
 /**
@@ -62,6 +70,7 @@ export async function runTrial(
         prompt: buildPrompt(task),
         timeoutMs: opts.timeoutMs,
         ...(opts.model ? { model: opts.model } : {}),
+        ...(opts.mcp ? { mcp: opts.mcp } : {}),
       });
     } catch (err) {
       agentRun = {

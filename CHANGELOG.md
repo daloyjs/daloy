@@ -68,6 +68,25 @@ For the forward-looking plan and the full thematic release log, see
   three more over-strict hidden tests, now fixed and calibrated with matching
   alternatives: a wrong-key 403, and refusing to boot without a required
   secret.
+- **Agent evals: opt-in docs MCP and neutral workspaces.** `pnpm eval --mcp
+  docs` offers Copilot CLI agents the public DaloyJS docs MCP (the default
+  stays `none`; GitHub's built-in MCP servers stay off because they can search
+  the hidden tests). Runs record the MCP mode and `eval:compare` refuses to
+  mix modes. Trial workspaces no longer reveal the evaluation: a neutral temp
+  folder, the `my-daloy-app` project name, and an "Initial commit" baseline
+  (one model had read the task id from the old `daloy-eval-<task>` path).
+  The first `--mcp` comparison run also found an eighth grader bug: the
+  guardrail diff flagged `z.object({}).passthrough()` for a webhook's
+  free-form `data` field, which is the same contract as
+  `z.record(z.string(), z.unknown())`. Loose *empty* objects no longer count;
+  loosening a schema that declares fields still does.
+- **Agent evals: fresh-process fail-closed checks and the first report.** The
+  "secret not configured" hidden tests (admin key, JWT, webhook, tenant keys)
+  now start the app in a new Node process, as a real server would, so a
+  module-level cache filled by an earlier test cannot fake a fail-open; a
+  hard-coded fallback secret is still caught. `evals/reports/2026-11-16/`
+  commits the charts and numbers from the first runs, including a 2x2 of
+  instructions (AGENTS.md + skill vs none) and the docs MCP (off vs on).
 
 ## [1.24.2] - 2026-11-13
 

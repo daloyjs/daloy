@@ -219,6 +219,20 @@ From the provider's docs:
   reference: (ws) => addWebhook(ws, "reference"),
   alternatives: [
     {
+      id: "opaque-data-passthrough",
+      description:
+        "Free-form provider `data` as z.object({}).passthrough(), top-level event not strict (a live Sonnet run)",
+      async apply(ws) {
+        await addWebhook(ws, "reference");
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          "data: z.record(z.string(), z.unknown()) })\n    .strict();",
+          "data: z.object({}).passthrough() });",
+        );
+      },
+    },
+    {
       id: "node-crypto",
       description:
         "node:crypto createHmac + timingSafeEqual with a manual timestamp check",

@@ -62,6 +62,8 @@ export interface RunSummary {
 export interface RunMeta {
   readonly agent: string;
   readonly model?: string;
+  /** MCP servers offered to the agent (`none` when absent, for older runs). */
+  readonly mcp?: string;
   /** `<cli> --version` output for live agents. */
   readonly agentVersion?: string;
   readonly gitSha?: string;
@@ -182,6 +184,7 @@ function fmtEffort(e: EffortSummary): string[] {
 function pins(meta: RunMeta): string {
   const parts = [
     meta.agentVersion && `agent ${meta.agentVersion}`,
+    meta.mcp && meta.mcp !== "none" && `MCP: ${meta.mcp}`,
     meta.coreVersion && `@daloyjs/core ${meta.coreVersion}`,
     meta.gitSha && `commit ${meta.gitSha.slice(0, 10)}`,
     meta.node && `node ${meta.node}`,

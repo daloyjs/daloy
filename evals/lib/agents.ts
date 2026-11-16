@@ -15,7 +15,13 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
-import type { AgentEffort, AgentRunResult, EvalTask } from "./types.ts";
+import {
+  DOCS_MCP_URL,
+  type AgentEffort,
+  type AgentRunResult,
+  type EvalTask,
+  type McpMode,
+} from "./types.ts";
 
 /** What an adapter receives for one trial. */
 export interface AgentInvocation {
@@ -27,6 +33,8 @@ export interface AgentInvocation {
   readonly timeoutMs: number;
   /** Optional model override, passed to CLIs that accept one. */
   readonly model?: string;
+  /** MCP servers offered to the agent (default `none`). */
+  readonly mcp?: McpMode;
 }
 
 /** A named way to run an agent. */
@@ -36,6 +44,8 @@ export interface AgentAdapter {
   readonly live: boolean;
   /** Executable for live agents; `<command> --version` is recorded in results. */
   readonly command?: string;
+  /** MCP modes this adapter can provide. Offline adapters ignore MCP. */
+  readonly mcpModes: readonly McpMode[];
   run(inv: AgentInvocation): Promise<AgentRunResult>;
 }
 
@@ -71,6 +81,7 @@ function offline(
   return {
     name,
     live: false,
+    mcpModes: ["none", "docs"],
     async run(inv) {
       const started = Date.now();
       await step(inv);
@@ -215,11 +226,13 @@ function cli(
   args: (inv: AgentInvocation) => string[],
   effortFormat: EffortFormat = "none",
   extraEnv?: (inv: AgentInvocation) => Promise<Record<string, string>>,
+  mcpModes: readonly McpMode[] = ["none"],
 ): AgentAdapter {
   return {
     name,
     live: true,
     command,
+    mcpModes,
     async run(inv) {
       const r = await runProcess(command, args(inv), {
         cwd: inv.dir,
@@ -243,6 +256,24 @@ function cli(
 
 const withModel = (flag: string, inv: AgentInvocation): string[] =>
   inv.model ? [flag, inv.model] : [];
+
+/**
+ * Copilot CLI `--additional-mcp-config` JSON for an MCP mode: the DaloyJS
+ * docs server only, read-only and keyless. No credential is ever forwarded to
+ * it (`--mcp-oauth-*` flags are not used).
+ *
+ * @param mode - The run's MCP mode.
+ * @returns Extra CLI arguments (empty for `none`).
+ */
+export function copilotMcpArgs(mode: McpMode | undefined): string[] {
+  if (mode !== "docs") return [];
+  const config = {
+    mcpServers: {
+      "daloyjs-docs": { type: "http", url: DOCS_MCP_URL, tools: ["*"] },
+    },
+  };
+  return ["--additional-mcp-config", JSON.stringify(config)];
+}
 
 /**
  * Parse `DALOY_EVAL_AGENT_CMD`: a JSON array of strings where `{prompt}` and
@@ -343,6 +374,7 @@ export function resolveAgent(
           `--secret-env-vars=${COPILOT_SECRET_ENV_VARS.join(",")}`,
           "--output-format",
           "json",
+          ...copilotMcpArgs(inv.mcp),
           ...withModel("--model", inv),
         ],
         "copilot-jsonl",
@@ -358,6 +390,7 @@ export function resolveAgent(
             COPILOT_DISABLE_LOGIN_SHELL_ENV: "1",
           };
         },
+        ["none", "docs"],
       );
     case "claude":
       // Claude Code in print mode; permissions bypassed because the sandbox is the boundary.

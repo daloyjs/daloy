@@ -45,6 +45,25 @@ The network stays open (the agent must reach its model API), and the token is
 readable by processes in the container, so use a fine-grained token limited
 to Copilot.
 
+Offer the DaloyJS docs MCP (opt-in, `copilot` only):
+
+```sh
+pnpm eval --agent copilot --sandbox-ack --mcp docs --trials 3
+```
+
+`--mcp docs` adds only the public, read-only, keyless docs server
+(`https://daloyjs.dev/mcp`, the one templates put in `.vscode/mcp.json`, which
+Copilot CLI does not read). The default `--mcp none` matches every run made
+before the option existed. GitHub's built-in MCP servers stay off in both
+modes, because they can search this repository's hidden tests. `eval:compare`
+refuses to compare runs with different MCP modes unless you pass
+`--allow-mismatch`, which is exactly what you do when the MCP mode is the
+thing you are measuring:
+
+```sh
+pnpm eval:compare sonnet-mcp-none.json sonnet-mcp-docs.json --allow-mismatch
+```
+
 Other live agents (in an isolated container or VM only):
 
 ```sh
@@ -108,6 +127,7 @@ whose diff was truncated keep their original grades and are listed under
 evals/
 ├── run.ts             pnpm eval
 ├── calibrate.ts       pnpm eval:calibrate
+├── reports/           committed summaries and charts of notable runs (raw results stay in results/)
 ├── lib/               harness (types, workspace, agents, graders, guardrails, metrics, report, cli)
 └── tasks/
     ├── index.ts       registry
@@ -131,15 +151,21 @@ evals/
   least one unsafe variant**, and `pnpm eval:calibrate` must pass.
   Calibration is what makes a score trustworthy. Alternatives guard against
   false failures (a grader that only accepts the author's solution shape).
-  Calibration and the live runs have caught seven grader bugs so far: hidden
+  Calibration and the live runs have caught eight grader bugs so far: hidden
   tests that expected 400 where DaloyJS answers 422; a guardrail rule that
   ignored Zod 4's `z.strictObject()`; a `protected-files` rule that failed
   agents for appending a good extra test; a constant-time-compare pattern that
   an import line satisfied; a tenant test that demanded 401 where
   `bearerAuth()` itself answers 403 for a wrong key; and two tests that
   demanded the app boot without a required secret, when refusing to boot is
-  also fail-closed. Every one was found by reading the trace of a "failed"
+  also fail-closed; and a guardrail rule that flagged `z.object({}).passthrough()`
+  for a webhook's free-form `data` field, the same contract as
+  `z.record(z.string(), z.unknown())`. Every one was found by reading the trace of a "failed"
   run that was actually correct.
+- **Nothing the agent sees may name the evaluation.** Workspaces live in a
+  neutral temp folder, the project is `my-daloy-app`, and the baseline commit
+  is "Initial commit". Runs before 16 Nov 2026 (afternoon) used folder names
+  like `daloy-eval-guardrail-body-limit`, which one model read as a hint.
 - **Read the trace before blaming the agent.** If a failing app was correct,
   add it as an alternative and fix the grader.
 - **Not a gate.** Tasks and hidden tests are public, so agents can find them

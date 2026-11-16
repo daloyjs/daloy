@@ -7,10 +7,12 @@
 
 import {
   ABLATIONS,
+  MCP_MODES,
   SUITES,
   type Ablation,
   type EvalSuite,
   type EvalTask,
+  type McpMode,
 } from "./types.ts";
 
 /** Parsed `pnpm eval` options. */
@@ -26,6 +28,8 @@ export interface RunOptions {
   readonly keep: boolean;
   readonly sandboxAck: boolean;
   readonly model: string | undefined;
+  /** MCP servers offered to the agent; `none` unless `--mcp docs`. */
+  readonly mcp: McpMode;
   readonly failUnder: number | undefined;
   readonly list: boolean;
 }
@@ -46,6 +50,7 @@ Options:
   --k <n>               k for pass@k / pass^k (default: trials)
   --timeout-min <n>     agent wall-clock budget per trial (default: 20)
   --model <id>          model passed to the agent CLI
+  --mcp <mode>          ${MCP_MODES.join(" | ")}: offer the DaloyJS docs MCP (copilot only; default: none)
   --out <file>          JSON results path (default: evals/results/<time>-<agent>.json)
   --fail-under <0..1>   exit 1 when the overall pass rate is below this
   --keep                keep trial workspaces for inspection
@@ -87,6 +92,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
   let out: string | undefined;
   let keep = false;
   let sandboxAck = false;
+  let mcp: McpMode = "none";
   let model: string | undefined;
   let failUnder: number | undefined;
   let listOnly = false;
@@ -135,6 +141,13 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
       case "--model":
         model = next();
         break;
+      case "--mcp": {
+        const v = next();
+        if (!MCP_MODES.includes(v as McpMode))
+          throw new Error(`--mcp must be one of: ${MCP_MODES.join(", ")}`);
+        mcp = v as McpMode;
+        break;
+      }
       case "--fail-under": {
         const v = Number(next());
         if (!Number.isFinite(v) || v < 0 || v > 1)
@@ -170,6 +183,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     keep,
     sandboxAck,
     model,
+    mcp,
     failUnder,
     list: listOnly,
   };

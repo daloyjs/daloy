@@ -25,6 +25,23 @@ export type EvalSuite = "guardrail" | "scaffold" | "migration";
  */
 export type Ablation = "full" | "no-agents-md" | "no-skill" | "bare";
 
+/**
+ * Which MCP servers the agent may use.
+ *
+ * - `none` — no MCP servers (the default, and every run before this option).
+ * - `docs` — only the public, read-only DaloyJS docs MCP
+ *   (`https://daloyjs.dev/mcp`), the same server `create-daloy` templates
+ *   configure in `.vscode/mcp.json`. GitHub's built-in MCP servers stay off
+ *   either way, because they can search this repository's hidden tests.
+ */
+export type McpMode = "none" | "docs";
+
+/** Every supported MCP mode. */
+export const MCP_MODES: readonly McpMode[] = ["none", "docs"];
+
+/** URL of the DaloyJS docs MCP server offered by `--mcp docs`. */
+export const DOCS_MCP_URL = "https://daloyjs.dev/mcp";
+
 /** Every supported ablation, in report order. */
 export const ABLATIONS: readonly Ablation[] = [
   "full",
