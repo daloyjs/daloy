@@ -45,7 +45,11 @@ For the forward-looking plan and the full thematic release log, see
   refuses runs that are not comparable.
 - **Agent evals: Copilot CLI adapter hardened and first live runs.** The
   `copilot` adapter isolates each trial in a fresh `COPILOT_HOME`, disables
-  built-in MCP servers, and parses token and premium-request usage. The first
+  built-in MCP servers, stops the CLI from re-exporting the user's login-shell
+  profile into the agent's commands (`COPILOT_DISABLE_LOGIN_SHELL_ENV`, a
+  confirmed leak past the harness's environment allowlist), strips the GitHub
+  token variables from the agent's shell (`--secret-env-vars`), and parses
+  token and premium-request usage. The first
   run (four frontier models, 84 trials) found a false failure: the
   `protected-files` grader rejected agents that appended an extra test to the
   shipped test file. It now allows appending and still fails any change to an

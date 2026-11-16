@@ -275,6 +275,13 @@ export function parseCommandTemplate(raw: string | undefined): string[] {
   return parsed as string[];
 }
 
+/** Token variables the Copilot CLI may read but its agent's shell must never see. */
+export const COPILOT_SECRET_ENV_VARS: readonly string[] = [
+  "COPILOT_GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+];
+
 /**
  * Resolve an adapter by name.
  *
@@ -331,6 +338,9 @@ export function resolveAgent(
           "--no-ask-user",
           "--disable-builtin-mcps",
           "--no-auto-update",
+          // Strip the auth token from the agent's shell and MCP environments
+          // (and mask it in JSON output). The CLI itself still uses it.
+          `--secret-env-vars=${COPILOT_SECRET_ENV_VARS.join(",")}`,
           "--output-format",
           "json",
           ...withModel("--model", inv),
@@ -339,7 +349,14 @@ export function resolveAgent(
         async (inv) => {
           const home = join(dirname(inv.dir), "copilot-home");
           await mkdir(home, { recursive: true });
-          return { COPILOT_HOME: home, COPILOT_AUTO_UPDATE: "false" };
+          return {
+            COPILOT_HOME: home,
+            COPILOT_AUTO_UPDATE: "false",
+            // Without this the CLI re-reads your login shell (`bash -l`) and
+            // re-exports its variables into the agent's shell commands,
+            // undoing the harness's environment allowlist.
+            COPILOT_DISABLE_LOGIN_SHELL_ENV: "1",
+          };
         },
       );
     case "claude":

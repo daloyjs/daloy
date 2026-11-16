@@ -19,7 +19,13 @@ pnpm eval --agent reference     # smoke-test the harness (always 100%)
 
 Copilot CLI runs with a fresh, per-trial `COPILOT_HOME` (your own
 instructions, skills, MCP servers and hooks never load), built-in MCP servers
-off (it cannot search this repo for the hidden tests), and auth from a token:
+off (it cannot search this repo for the hidden tests),
+`COPILOT_DISABLE_LOGIN_SHELL_ENV=1` (otherwise the CLI re-reads your login
+shell and re-exports your profile's variables into the agent's commands,
+bypassing the harness's environment allowlist), and
+`--secret-env-vars` for the GitHub token variables (stripped from the agent's
+shell and masked in output). Auth comes from a token; prefer a fine-grained
+token limited to Copilot over your full `gh auth token`:
 
 ```sh
 COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox-ack --model claude-sonnet-5.5
