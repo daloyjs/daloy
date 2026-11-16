@@ -17,6 +17,14 @@ pnpm eval --list                # tasks
 pnpm eval --agent reference     # smoke-test the harness (always 100%)
 ```
 
+Copilot CLI runs with a fresh, per-trial `COPILOT_HOME` (your own
+instructions, skills, MCP servers and hooks never load), built-in MCP servers
+off (it cannot search this repo for the hidden tests), and auth from a token:
+
+```sh
+COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox-ack --model claude-sonnet-5.5
+```
+
 Live agents (in an isolated container or VM only):
 
 ```sh
@@ -88,9 +96,11 @@ evals/
   least one unsafe variant**, and `pnpm eval:calibrate` must pass.
   Calibration is what makes a score trustworthy. Alternatives guard against
   false failures (a grader that only accepts the author's solution shape).
-  Calibration has caught two grader bugs so far: hidden tests that expected
-  400 where DaloyJS answers 422, and a guardrail rule that ignored Zod 4's
-  `z.strictObject()`.
+  Calibration and the first live runs have caught three grader bugs so far:
+  hidden tests that expected 400 where DaloyJS answers 422, a guardrail rule
+  that ignored Zod 4's `z.strictObject()`, and a `protected-files` rule that
+  failed agents for appending a good extra test (it now allows appending and
+  fails only when an original line is changed or removed).
 - **Read the trace before blaming the agent.** If a failing app was correct,
   add it as an alternative and fix the grader.
 - **Not a gate.** Tasks and hidden tests are public, so agents can find them

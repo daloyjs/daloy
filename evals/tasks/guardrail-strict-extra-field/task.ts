@@ -69,6 +69,19 @@ Accept the extra \`utm_source\` string field (we will store it for attribution l
   },
   alternatives: [
     {
+      id: "adds-unhappy-test",
+      description:
+        "Reference fix plus an extra test appended to the shipped test file",
+      async apply(ws) {
+        await task.reference(ws);
+        const file = "tests/create-book.test.ts";
+        await ws.write(
+          file,
+          `${await ws.read(file)}\ntest("POST /books still rejects unknown fields", async () => {\n  const res = await buildApp().request("/books", {\n    method: "POST",\n    headers: { "content-type": "application/json" },\n    body: JSON.stringify({ title: "x", evil: "y" }),\n  });\n  assert.equal(res.status, 422);\n});\n`,
+        );
+      },
+    },
+    {
       id: "nullish",
       description: "utm_source declared as .nullish() with a different max",
       async apply(ws) {

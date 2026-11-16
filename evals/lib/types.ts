@@ -70,7 +70,10 @@ export type GraderSpec =
   | { readonly kind: "hidden" }
   /** Static before/after diff of secure-by-default controls; see `guardrails.ts`. */
   | { readonly kind: "guardrails" }
-  /** Files that must be byte-identical after the run (no editing the failing test). */
+  /**
+   * Files whose original lines must all survive, in order (no editing the
+   * failing test). Appending new tests is allowed.
+   */
   | { readonly kind: "protected-files"; readonly files: readonly string[] }
   /**
    * A regex that must (or must not) match the concatenated text of the files
@@ -161,6 +164,8 @@ export interface AgentEffort {
   readonly inputTokens?: number;
   readonly outputTokens?: number;
   readonly costUsd?: number;
+  /** GitHub Copilot premium requests (Copilot CLI bills in these, not USD). */
+  readonly premiumRequests?: number;
 }
 
 /** Outcome of one agent invocation. */

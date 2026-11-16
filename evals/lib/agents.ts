@@ -12,6 +12,8 @@
  * @module
  */
 
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
 import type { AgentEffort, AgentRunResult, EvalTask } from "./types.ts";
 
@@ -83,7 +85,8 @@ function offline(
 }
 
 /** Which CLI output format {@link parseEffort} should read. */
-export type EffortFormat = "claude-json" | "codex-jsonl" | "none";
+export type EffortFormat =
+  "claude-json" | "codex-jsonl" | "copilot-jsonl" | "none";
 
 const num = (v: unknown): number | undefined =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
@@ -114,8 +117,10 @@ function compact(e: AgentEffort): AgentEffort | undefined {
 /**
  * Read the effort an agent CLI reports in its own output: Claude Code's
  * `--output-format json` result object (`num_turns`, `usage`,
- * `total_cost_usd`) or Codex's `exec --json` event stream (`usage` on
- * `turn.completed`, one step per completed item). Unknown shapes yield
+ * `total_cost_usd`), Codex's `exec --json` event stream (`usage` on
+ * `turn.completed`, one step per completed item), or Copilot CLI's
+ * `--output-format json` stream (per-model tokens in the last
+ * `session.usage_checkpoint`, premium requests, one step per turn). Unknown shapes yield
  * `undefined` instead of a guess.
  *
  * @param format - Which CLI produced the output.
@@ -147,6 +152,39 @@ export function parseEffort(
       costUsd: num(result.total_cost_usd),
     });
   }
+  if (format === "copilot-jsonl") {
+    let steps = 0;
+    let snapshot: Record<string, unknown> | undefined;
+    let premium: number | undefined;
+    for (const ev of jsonLines(output)) {
+      if (ev.type === "assistant.turn_start") steps++;
+      const data = ev.data as Record<string, unknown> | undefined;
+      if (ev.type === "session.usage_checkpoint" && data) {
+        snapshot = data.accountingSnapshot as
+          Record<string, unknown> | undefined;
+        premium = num(data.totalPremiumRequests) ?? premium;
+      }
+      const usage = ev.usage as Record<string, unknown> | undefined;
+      if (ev.type === "result" && usage)
+        premium = num(usage.premiumRequests) ?? premium;
+    }
+    let input: number | undefined;
+    let outputTokens: number | undefined;
+    const metrics = snapshot?.modelMetrics as
+      Record<string, { usage?: Record<string, unknown> }> | undefined;
+    for (const m of Object.values(metrics ?? {})) {
+      const i = num(m.usage?.inputTokens);
+      const o = num(m.usage?.outputTokens);
+      if (i !== undefined) input = (input ?? 0) + i;
+      if (o !== undefined) outputTokens = (outputTokens ?? 0) + o;
+    }
+    return compact({
+      steps: steps > 0 ? steps : undefined,
+      inputTokens: input,
+      outputTokens,
+      premiumRequests: premium,
+    });
+  }
   if (format === "codex-jsonl") {
     let input: number | undefined;
     let outputTokens: number | undefined;
@@ -176,6 +214,7 @@ function cli(
   envKeys: readonly string[],
   args: (inv: AgentInvocation) => string[],
   effortFormat: EffortFormat = "none",
+  extraEnv?: (inv: AgentInvocation) => Promise<Record<string, string>>,
 ): AgentAdapter {
   return {
     name,
@@ -184,7 +223,7 @@ function cli(
     async run(inv) {
       const r = await runProcess(command, args(inv), {
         cwd: inv.dir,
-        env: childEnv(envKeys),
+        env: { ...childEnv(envKeys), ...(extraEnv ? await extraEnv(inv) : {}) },
         timeoutMs: inv.timeoutMs,
       });
       return {
@@ -276,17 +315,32 @@ export function resolveAgent(
   }
   switch (name) {
     case "copilot":
-      // GitHub Copilot CLI, non-interactive.
+      // GitHub Copilot CLI, non-interactive. Each trial gets a fresh
+      // COPILOT_HOME next to the workspace, so the user's own instructions,
+      // skills, MCP servers, and hooks never load; auth comes from the token.
+      // Built-in MCP servers are off so the agent cannot search this
+      // repository (and its hidden tests) through the GitHub MCP server.
       return cli(
         name,
         "copilot",
-        ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "XDG_CONFIG_HOME"],
+        ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
         (inv) => [
           "-p",
           inv.prompt,
           "--allow-all-tools",
+          "--no-ask-user",
+          "--disable-builtin-mcps",
+          "--no-auto-update",
+          "--output-format",
+          "json",
           ...withModel("--model", inv),
         ],
+        "copilot-jsonl",
+        async (inv) => {
+          const home = join(dirname(inv.dir), "copilot-home");
+          await mkdir(home, { recursive: true });
+          return { COPILOT_HOME: home, COPILOT_AUTO_UPDATE: "false" };
+        },
       );
     case "claude":
       // Claude Code in print mode; permissions bypassed because the sandbox is the boundary.

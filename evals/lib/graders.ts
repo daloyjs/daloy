@@ -66,6 +66,31 @@ function textUnder(snapshot: Snapshot, paths: readonly string[]): string {
 }
 
 /**
+ * Whether every line of `before` still appears in `after`, in order. Adding
+ * lines (an extra unhappy-path test, as the template AGENTS.md asks for)
+ * passes; editing, deleting, or reordering an original line fails. A strict
+ * byte comparison failed agents that did the right thing and added a test.
+ *
+ * @param before - Original file content (`undefined` when it did not exist).
+ * @param after - Content after the run (`undefined` when deleted).
+ * @returns `true` when the original lines are all preserved.
+ */
+export function preservesLines(
+  before: string | undefined,
+  after: string | undefined,
+): boolean {
+  if (before === undefined) return true;
+  if (after === undefined) return false;
+  const want = before.split("\n").map((l) => l.trimEnd());
+  const have = after.split("\n").map((l) => l.trimEnd());
+  let i = 0;
+  for (const line of have) {
+    if (i < want.length && line === want[i]) i++;
+  }
+  return i === want.length;
+}
+
+/**
  * Run one grader.
  *
  * @param spec - The grader definition from the task.
@@ -140,12 +165,13 @@ export async function runGrader(
     }
     case "protected-files": {
       const changed = spec.files.filter(
-        (f) => ctx.before.get(f) !== ctx.after.get(f),
+        (f) => !preservesLines(ctx.before.get(f), ctx.after.get(f)),
       );
       return done(
         changed.length === 0,
         changed.map(
-          (f) => `${f} was modified or deleted; fix the code, not the test`,
+          (f) =>
+            `${f} had original lines changed or removed; fix the code, not the test`,
         ),
       );
     }

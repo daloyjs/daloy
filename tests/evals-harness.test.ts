@@ -11,7 +11,7 @@ import {
   resolveAgent,
 } from "../evals/lib/agents.ts";
 import { parseRunArgs, selectTasks } from "../evals/lib/cli.ts";
-import { runGrader } from "../evals/lib/graders.ts";
+import { preservesLines, runGrader } from "../evals/lib/graders.ts";
 import {
   checkGuardrails,
   evalNumericLiteral,
@@ -605,6 +605,24 @@ describe("static graders and reporting", () => {
     }
   });
 
+  test("protected files may gain tests but not lose or change original lines", () => {
+    const orig = 'test("a", () => {\n  assert.equal(x, 1);\n});\n';
+    assert.equal(preservesLines(orig, orig), true);
+    assert.equal(preservesLines(orig, `${orig}\ntest("b", () => {});\n`), true);
+    assert.equal(preservesLines(orig, `import x from "y";\n${orig}`), true);
+    assert.equal(preservesLines(orig, orig.replace("1", "2")), false);
+    assert.equal(
+      preservesLines(orig, orig.replace("  assert.equal(x, 1);\n", "")),
+      false,
+    );
+    assert.equal(
+      preservesLines(orig, undefined),
+      false,
+      "deleting the file fails",
+    );
+    assert.equal(preservesLines(undefined, "anything"), true);
+  });
+
   test("summarize groups by task and ablation and counts failing graders", () => {
     const s = summarize(
       [
@@ -722,6 +740,36 @@ describe("agent effort, diff footprint, and run comparison", () => {
       steps: 3,
       inputTokens: 1000,
       outputTokens: 100,
+    });
+  });
+
+  test("parses the Copilot CLI --output-format json stream", () => {
+    const out = [
+      JSON.stringify({ type: "assistant.turn_start", data: {} }),
+      JSON.stringify({ type: "assistant.turn_start", data: {} }),
+      JSON.stringify({
+        type: "session.usage_checkpoint",
+        data: {
+          totalPremiumRequests: 1,
+          accountingSnapshot: {
+            modelMetrics: {
+              "model-a": { usage: { inputTokens: 900, outputTokens: 40 } },
+              "model-b": { usage: { inputTokens: 100, outputTokens: 60 } },
+            },
+          },
+        },
+      }),
+      JSON.stringify({
+        type: "result",
+        exitCode: 0,
+        usage: { premiumRequests: 2 },
+      }),
+    ].join("\n");
+    assert.deepEqual(parseEffort("copilot-jsonl", out), {
+      steps: 2,
+      inputTokens: 1000,
+      outputTokens: 100,
+      premiumRequests: 2,
     });
   });
 

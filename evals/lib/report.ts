@@ -19,6 +19,7 @@ export interface EffortSummary {
   readonly steps?: number;
   readonly tokens?: number;
   readonly costUsd?: number;
+  readonly premiumRequests?: number;
   /** Lines added plus removed, from the diff footprint. */
   readonly linesChanged?: number;
 }
@@ -92,6 +93,9 @@ function effortOf(passing: readonly TrialResult[]): EffortSummary {
     steps: mean(passing.map((t) => t.agentRun.effort?.steps)),
     tokens: mean(passing.map(tokens)),
     costUsd: mean(passing.map((t) => t.agentRun.effort?.costUsd)),
+    premiumRequests: mean(
+      passing.map((t) => t.agentRun.effort?.premiumRequests),
+    ),
     linesChanged: mean(
       passing.map((t) =>
         t.footprint
@@ -166,7 +170,11 @@ function fmtEffort(e: EffortSummary): string[] {
     e.agentMs === undefined ? dash : `${(e.agentMs / 1000).toFixed(0)}s`,
     e.steps === undefined ? dash : e.steps.toFixed(0),
     e.tokens === undefined ? dash : `${(e.tokens / 1000).toFixed(0)}k`,
-    e.costUsd === undefined ? dash : `$${e.costUsd.toFixed(2)}`,
+    e.costUsd !== undefined
+      ? `$${e.costUsd.toFixed(2)}`
+      : e.premiumRequests !== undefined
+        ? `${e.premiumRequests.toFixed(1)} req`
+        : dash,
     e.linesChanged === undefined ? dash : e.linesChanged.toFixed(0),
   ];
 }

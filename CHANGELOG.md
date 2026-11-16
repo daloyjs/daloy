@@ -43,6 +43,13 @@ For the forward-looking plan and the full thematic release log, see
   CLI version, model, commit and limits, and writes per-trial agent traces.
   `pnpm eval:compare <before> <after>` flags regressions between two runs and
   refuses runs that are not comparable.
+- **Agent evals: Copilot CLI adapter hardened and first live runs.** The
+  `copilot` adapter isolates each trial in a fresh `COPILOT_HOME`, disables
+  built-in MCP servers, and parses token and premium-request usage. The first
+  run (four frontier models, 84 trials) found a false failure: the
+  `protected-files` grader rejected agents that appended an extra test to the
+  shipped test file. It now allows appending and still fails any change to an
+  original line.
 
 ## [1.24.2] - 2026-11-13
 
