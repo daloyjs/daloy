@@ -87,6 +87,13 @@ For the forward-looking plan and the full thematic release log, see
   hard-coded fallback secret is still caught. `evals/reports/2026-11-16/`
   commits the charts and numbers from the first runs, including a 2x2 of
   instructions (AGENTS.md + skill vs none) and the docs MCP (off vs on).
+- **Agent evals: stored diffs now include deleted files.** `workspaceDiff()`
+  staged deletions before diffing, so deleted files vanished from the stored
+  diff, the lines-changed footprint, and `eval:regrade` replays (live grading
+  was unaffected; it compares snapshots). Results now record `diffFormat: 2`;
+  regrading an older file keeps the original live grade for existence-based
+  checks the diff cannot show. Also fixed an unhandled `EPIPE` when a child
+  process exits before reading its stdin.
 
 ## [1.24.2] - 2026-11-13
 

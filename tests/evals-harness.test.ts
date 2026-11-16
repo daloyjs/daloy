@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, stat } from "node:fs/promises";
@@ -36,9 +37,13 @@ import {
 import {
   childEnv,
   parseNumstat,
+  runProcess,
   WORKSPACE_APP_NAME,
+  workspaceDiff,
+  workspaceFootprint,
   workspaceHandle,
 } from "../evals/lib/workspace.ts";
+import { reconcileLegacyGrades } from "../evals/lib/legacy-diff.ts";
 import { TASKS } from "../evals/tasks/index.ts";
 
 // Unit tests for the agent-eval harness (`evals/`). The end-to-end proof that
@@ -446,6 +451,121 @@ describe("agents and sandboxing", () => {
     const ws = workspaceHandle("/tmp/daloy-eval-root");
     await assert.rejects(() => ws.read("../etc/passwd"), /escapes workspace/);
     await assert.rejects(() => ws.write("/etc/x", "y"), /escapes workspace/);
+  });
+});
+
+describe("stored diffs and regrading", () => {
+  test("the stored diff and footprint include deleted files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const ws = workspaceHandle(dir);
+      await ws.write("legacy/server.js", "a\nb\nc\n");
+      await ws.write("src/app.ts", "one\n");
+      const g = (...args: string[]): void => {
+        execFileSync(
+          "git",
+          [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            ...args,
+          ],
+          { cwd: dir, stdio: "ignore" },
+        );
+      };
+      g("init", "--quiet");
+      g("add", "-A");
+      g("commit", "--quiet", "-m", "base");
+      await ws.remove("legacy");
+      await ws.write("src/app.ts", "one\ntwo\n");
+      await ws.write("src/new.ts", "x\n");
+      const diff = await workspaceDiff(dir);
+      assert.match(
+        diff,
+        /^deleted file mode/m,
+        "deletion missing from the stored diff",
+      );
+      assert.match(diff, /^diff --git a\/legacy\/server\.js/m);
+      assert.match(diff, /^diff --git a\/src\/new\.ts/m);
+      assert.deepEqual(await workspaceFootprint(dir), {
+        filesChanged: 3,
+        linesAdded: 2,
+        linesRemoved: 3,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a child that exits without reading stdin does not crash the harness (EPIPE)", async () => {
+    const r = await runProcess(process.execPath, ["-e", "process.exit(0)"], {
+      cwd: tmpdir(),
+      env: childEnv(),
+      timeoutMs: 30_000,
+      stdin: "x".repeat(4 * 1024 * 1024),
+    });
+    assert.equal(r.exitCode, 0);
+  });
+
+  test("legacy (deletion-less) diffs keep original existence-based grades", () => {
+    const task = TASKS.find((t) => t.id === "migration-express-notes")!;
+    const grade = (id: string, pass: boolean, details: string[] = []) => ({
+      id,
+      pass,
+      details,
+      durationMs: 1,
+    });
+    const original = {
+      ...trial("migration-express-notes", "full", true),
+      diff: "diff --git a/src/build-app.ts b/src/build-app.ts\n+x\n",
+      grades: [grade("legacy-removed", true), grade("hidden", true)],
+    };
+    // Replay could not delete legacy/, so the regrade sees it: keep the live pass.
+    const fixed = reconcileLegacyGrades(task, original, [
+      grade("legacy-removed", false),
+      grade("hidden", false),
+    ]);
+    assert.deepEqual(fixed.kept, ["legacy-removed"]);
+    assert.equal(
+      fixed.grades.find((g) => g.id === "legacy-removed")!.pass,
+      true,
+    );
+    assert.equal(
+      fixed.grades.find((g) => g.id === "hidden")!.pass,
+      false,
+      "other graders use the regrade",
+    );
+    // When the diff shows the path, the regrade stands.
+    const touched = {
+      ...original,
+      diff: "diff --git a/legacy/server.js b/legacy/server.js\n-x\n",
+    };
+    assert.deepEqual(
+      reconcileLegacyGrades(task, touched, [grade("legacy-removed", false)])
+        .kept,
+      [],
+    );
+
+    const strict = TASKS.find((t) => t.id === "guardrail-strict-extra-field")!;
+    const deletedProtected = {
+      ...original,
+      grades: [
+        grade("protected-files", false),
+        grade("guardrails", false, ["[violation] deleted-tests: x"]),
+      ],
+    };
+    const r = reconcileLegacyGrades(strict, deletedProtected, [
+      grade("protected-files", true),
+      grade("guardrails", true),
+    ]);
+    assert.deepEqual(
+      r.kept.sort(),
+      ["guardrails", "protected-files"],
+      "a deleted protected test must not regrade as a pass",
+    );
   });
 });
 

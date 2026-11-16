@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="820" viewBox="0 0 1100 820" font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
-<rect width="1100" height="820" fill="#f6f4ef"/>
-<rect x="4" y="4" width="1092" height="812" fill="none" stroke="#3a3a3a" stroke-width="1.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="850" viewBox="0 0 1100 850" font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
+<rect width="1100" height="850" fill="#f6f4ef"/>
+<rect x="4" y="4" width="1092" height="842" fill="none" stroke="#3a3a3a" stroke-width="1.5"/>
 <text x="34" y="52" font-size="19" font-weight="700" fill="#1c1c1c">DaloyJS Agent Evals</text>
-<text x="1068" y="52" font-size="17" fill="#6f6f6f" text-anchor="end">Accuracy vs Cost</text>
+<text x="1068" y="52" font-size="17" fill="#6f6f6f" text-anchor="end">Accuracy vs Tokens</text>
 <circle cx="528.2" cy="102" r="9" fill="#3aa37a" stroke="#222" stroke-width="1.2"/>
 <text x="544.2" y="108" font-size="16.5" font-weight="700" fill="#1c1c1c">Sonnet 5.5</text>
 <circle cx="658.2" cy="102" r="9" fill="#e06c3c" stroke="#222" stroke-width="1.2"/>
@@ -38,22 +38,21 @@
 <text x="451.8" y="690" font-size="15" fill="#6f6f6f" text-anchor="middle">300k</text>
 <text x="689.0" y="690" font-size="15" fill="#6f6f6f" text-anchor="middle">500k</text>
 <text x="1010.8" y="690" font-size="15" fill="#6f6f6f" text-anchor="middle">1000k</text>
-<text x="592.5" y="734" font-size="16" fill="#1c1c1c" text-anchor="middle">Cost per attempt (tokens, log scale)</text>
+<text x="592.5" y="734" font-size="16" fill="#1c1c1c" text-anchor="middle">Tokens per attempt (log scale)</text>
 <text x="52" y="421.0" font-size="16" fill="#1c1c1c" text-anchor="middle" transform="rotate(-90 52 421.0)">Score (%)</text>
-<polyline points="291.1,232.0 391.7,232.0" fill="none" stroke="#3aa37a" stroke-width="3.2"/>
 <circle cx="291.1" cy="232.0" r="9" fill="#3aa37a" stroke="#222" stroke-width="1.2"/>
 <text x="291.1" y="212.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard</text>
-<circle cx="391.7" cy="232.0" r="9" fill="#3aa37a" stroke="#222" stroke-width="1.2"/>
+<circle cx="391.7" cy="232.0" r="8" fill="#f6f4ef" stroke="#3aa37a" stroke-width="3.5"/>
 <text x="391.7" y="212.0" font-size="14" fill="#1c1c1c" text-anchor="middle">hard</text>
 <circle cx="521.0" cy="232.0" r="9" fill="#e06c3c" stroke="#222" stroke-width="1.2"/>
-<text x="521.0" y="262.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard</text>
-<polyline points="652.4,232.0 779.3,232.0" fill="none" stroke="#5f5f5f" stroke-width="3.2"/>
+<text x="521.0" y="262.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard · 15 req</text>
 <circle cx="652.4" cy="232.0" r="9" fill="#5f5f5f" stroke="#222" stroke-width="1.2"/>
 <text x="652.4" y="212.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard</text>
-<circle cx="779.3" cy="232.0" r="9" fill="#5f5f5f" stroke="#222" stroke-width="1.2"/>
+<circle cx="779.3" cy="232.0" r="8" fill="#f6f4ef" stroke="#5f5f5f" stroke-width="3.5"/>
 <text x="779.3" y="212.0" font-size="14" fill="#1c1c1c" text-anchor="middle">hard</text>
 <circle cx="929.1" cy="232.0" r="9" fill="#e8b03a" stroke="#222" stroke-width="1.2"/>
 <text x="929.1" y="262.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard</text>
-<text x="130" y="774" font-size="13" fill="#6f6f6f">Standard set: 7 tasks x 3 attempts. Hard set (JWT scopes, signed webhooks, staging docs, multi-tenant module): 4 tasks x 5 attempts.</text>
-<text x="130" y="796" font-size="13" fill="#6f6f6f">GitHub Copilot CLI 1.0.112, 16 Nov 2026. Cost is tokens because Copilot bills by plan, not per token. All runs scored 100% after grader validation.</text>
+<text x="130" y="776" font-size="13" fill="#6f6f6f">Filled = standard set (7 tasks x 3 attempts). Hollow = hard set (JWT scopes, signed webhooks, staging docs, multi-tenant module; 4 tasks x 5).</text>
+<text x="130" y="800" font-size="13" fill="#6f6f6f">All runs 100% with the current graders. Billing is premium requests, not tokens: 1 per attempt for Sonnet, GPT and Gemini, 15 for Opus.</text>
+<text x="130" y="824" font-size="13" fill="#6f6f6f">Token counts are not strictly comparable across vendors (different tokenizers). GitHub Copilot CLI 1.0.112, 16 Nov 2026.</text>
 </svg>

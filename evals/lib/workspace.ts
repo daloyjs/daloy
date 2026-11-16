@@ -53,6 +53,13 @@ function findRepoRoot(start: string): string {
 }
 
 /**
+ * Version of the stored-diff format in results files. `2` (from 16 Nov 2026)
+ * includes deleted files; files without the field were written by the
+ * earlier format, whose diffs omit deletions.
+ */
+export const DIFF_FORMAT = 2;
+
+/**
  * Project name `create-daloy` scaffolds for every trial. Deliberately the
  * same kind of name a real user would pick, so nothing in the workspace says
  * it is an evaluation.
@@ -178,6 +185,9 @@ export function runProcess(
         output,
       });
     });
+    // A child that exits before reading stdin (fast tools, failed spawns)
+    // closes the pipe; without a listener the EPIPE crashes the harness.
+    child.stdin.on("error", () => {});
     child.stdin.end(opts.stdin ?? "");
   });
 }
@@ -352,7 +362,8 @@ export async function prepareWorkspace(
 }
 
 /**
- * The agent's changes since the baseline commit, including new files.
+ * The agent's changes since the baseline commit, including new and deleted
+ * files.
  *
  * @param dir - Workspace root.
  * @param maxChars - Truncation limit for the report.
@@ -362,11 +373,16 @@ export async function workspaceDiff(
   dir: string,
   maxChars = 60_000,
 ): Promise<string> {
-  await git(dir, ["add", "-A", "--intent-to-add"]);
+  // Stage everything and diff the index against the baseline commit, so new,
+  // modified, AND deleted files all appear. (The earlier `add -A -N` + plain
+  // `git diff` staged deletions and so dropped them from the diff.)
+  await git(dir, ["add", "-A"]);
   const diff = await git(dir, [
     "--no-pager",
     "diff",
+    "--cached",
     "--no-color",
+    "HEAD",
     "--",
     ".",
     ":(exclude)node_modules",
@@ -398,17 +414,20 @@ export function parseNumstat(numstat: string): DiffFootprint {
 }
 
 /**
- * Size of the agent's changes since the baseline, new files included. Call
- * after {@link workspaceDiff}, which marks new files with intent-to-add.
+ * Size of the agent's changes since the baseline, new and deleted files
+ * included.
  *
  * @param dir - Workspace root.
  * @returns Files changed and lines added / removed.
  */
 export async function workspaceFootprint(dir: string): Promise<DiffFootprint> {
+  await git(dir, ["add", "-A"]);
   const r = await git(dir, [
     "--no-pager",
     "diff",
+    "--cached",
     "--numstat",
+    "HEAD",
     "--",
     ".",
     ":(exclude)node_modules",

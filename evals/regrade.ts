@@ -17,6 +17,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runGrader } from "./lib/graders.ts";
+import { reconcileLegacyGrades } from "./lib/legacy-diff.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
 import { hiddenDirFor } from "./lib/runner.ts";
 import {
@@ -92,6 +93,14 @@ async function main(): Promise<void> {
   for (const path of files) {
     const data = JSON.parse(await readFile(path, "utf8")) as ResultsFile;
     const skipped: string[] = [];
+    // Results written before DIFF_FORMAT 2 store diffs without deleted files.
+    const legacy = typeof data.diffFormat !== "number" || data.diffFormat < 2;
+    const legacyKept: string[] = [];
+    if (legacy) {
+      process.stdout.write(
+        `${path}: legacy diff format (no deletions); existence-based graders keep their original grade when the diff cannot show a deletion\n`,
+      );
+    }
     let flipped = 0;
     for (const [i, t] of data.trials.entries()) {
       process.stdout.write(
@@ -103,6 +112,15 @@ async function main(): Promise<void> {
         process.stdout.write(`kept original (${r.skip})\n`);
         continue;
       }
+      let grades = r.grades;
+      if (legacy) {
+        const task = TASKS.find((x) => x.id === t.taskId)!;
+        const fixed = reconcileLegacyGrades(task, t, grades);
+        grades = fixed.grades;
+        if (fixed.kept.length > 0)
+          legacyKept.push(`${t.taskId}#${t.trial}: ${fixed.kept.join(", ")}`);
+      }
+      r.grades = grades;
       const pass = r.grades.every((g) => g.pass);
       if (pass !== t.pass) flipped++;
       process.stdout.write(
@@ -121,7 +139,7 @@ async function main(): Promise<void> {
     const out = path.replace(/\.json$/, ".regraded.json");
     await writeFile(
       out,
-      `${JSON.stringify({ ...data, summary, regrade: { at: new Date().toISOString(), flipped, skipped } }, null, 2)}\n`,
+      `${JSON.stringify({ ...data, summary, regrade: { at: new Date().toISOString(), flipped, skipped, legacyDiff: legacy, legacyKept } }, null, 2)}\n`,
     );
     await writeFile(
       out.replace(/\.json$/, ".md"),

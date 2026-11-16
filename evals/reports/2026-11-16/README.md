@@ -43,16 +43,26 @@ Takeaways:
 3. No attempt removed a security control. The security rules belong in
    `AGENTS.md`, the one surface agents reliably read.
 
-## Accuracy vs cost
+## Accuracy vs tokens
 
-![Accuracy vs cost](./accuracy-vs-cost.png)
+![Accuracy vs tokens](./accuracy-vs-cost.png)
 
-Every model solved every task after grader validation, so the chart compares
-cost: tokens per attempt on a log scale. Standard set: 7 tasks x 3 attempts for
-Sonnet 5.5, Opus 5.5, GPT-6.1 Sol and Gemini 4 Argon. Hard set: the four tasks
-above x 5 attempts for Sonnet 5.5 and GPT-6.1 Sol. The standard-set runs were
-made before workspaces were neutrally named, so one model could see the task
-id in its folder path; the hard-set and 2x2 runs could not.
+Every model solved every task with the current graders (all six runs were
+regraded with `pnpm eval:regrade` on 16 Nov 2026), so the chart compares
+tokens per attempt on a log scale. Filled markers: standard set, 7 tasks x 3
+attempts for Sonnet 5.5, Opus 5.5, GPT-6.1 Sol and Gemini 4 Argon. Hollow
+markers: the four hard tasks above x 5 attempts for Sonnet 5.5 and GPT-6.1 Sol.
+
+Read it with three caveats:
+
+- Tokens are not the bill. Copilot charges premium requests: 1 per attempt for
+  Sonnet, GPT and Gemini, 15 for Opus. Opus sits left of GPT on tokens but is
+  the most expensive model here.
+- Vendors count tokens with different tokenizers, so cross-vendor token
+  numbers are approximate. Within a vendor (Sonnet vs Opus) they compare well.
+- The standard-set runs were made before workspaces were neutrally named, so
+  an agent could see the task id in its folder path. The hard-set and 2x2 runs
+  could not.
 
 ## Reproduce
 

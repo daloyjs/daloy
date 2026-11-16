@@ -23,7 +23,12 @@ import { resolveAgent } from "./lib/agents.ts";
 import { parseRunArgs, selectTasks, USAGE } from "./lib/cli.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
 import { runTrial } from "./lib/runner.ts";
-import { childEnv, REPO_ROOT, runProcess } from "./lib/workspace.ts";
+import {
+  childEnv,
+  DIFF_FORMAT,
+  REPO_ROOT,
+  runProcess,
+} from "./lib/workspace.ts";
 import type { AgentAdapter } from "./lib/agents.ts";
 import { TASKS } from "./tasks/index.ts";
 import type { TrialResult } from "./lib/types.ts";
@@ -165,7 +170,7 @@ async function main(): Promise<void> {
   }
   await writeFile(
     out,
-    `${JSON.stringify({ meta, startedAt: stamp, options: { ...opts, out }, summary, trials: stored }, null, 2)}\n`,
+    `${JSON.stringify({ meta, diffFormat: DIFF_FORMAT, startedAt: stamp, options: { ...opts, out }, summary, trials: stored }, null, 2)}\n`,
   );
   await writeFile(out.replace(/\.json$/, ".md"), markdown);
   if (process.env.GITHUB_STEP_SUMMARY)
