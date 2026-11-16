@@ -31,7 +31,21 @@ token limited to Copilot over your full `gh auth token`:
 COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox-ack --model claude-sonnet-5.5
 ```
 
-Live agents (in an isolated container or VM only):
+Docker sandbox (recommended for live agents; the agent sees no host files or
+credentials, runs as an unprivileged user, and gets only the `-e` variables):
+
+```sh
+docker build -f evals/Dockerfile -t daloy-evals .
+docker run --rm --cap-drop=ALL --security-opt no-new-privileges \
+  -e COPILOT_GITHUB_TOKEN -v "$PWD/evals/results:/home/node/daloy/evals/results" \
+  daloy-evals --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 5
+```
+
+The network stays open (the agent must reach its model API), and the token is
+readable by processes in the container, so use a fine-grained token limited
+to Copilot.
+
+Other live agents (in an isolated container or VM only):
 
 ```sh
 pnpm eval --agent codex   --sandbox-ack --trials 5 --suite guardrail
@@ -56,6 +70,18 @@ pnpm eval:compare before.json after.json --fail-on-regression
 
 It refuses runs whose agent, agent version, model, or time limit differ unless
 `--allow-mismatch` is passed. Baseline a new model on its own first.
+
+Regrade saved runs after a grader fix, without paying for new agent runs:
+
+```sh
+pnpm eval:regrade evals/results/<run>.json   # writes <run>.regraded.json + .md
+```
+
+It replays each trial's stored diff onto a fresh scaffold and runs the current
+graders. Grading executes the agent's code, so run it in the Docker sandbox
+(`--entrypoint node daloy-evals --import tsx evals/regrade.ts ...`). Trials
+whose diff was truncated keep their original grades and are listed under
+`regrade.skipped`.
 
 ## How a trial works
 
@@ -98,15 +124,22 @@ evals/
   If a grader rejects a legitimately good solution, fix the grader and add
   that solution shape to `tests/evals-harness.test.ts`.
 - **Prompts never mention what is graded** (enforced by the harness tests).
+- **Pattern graders match calls, not names.** `timingSafeEqual\s*\(` and not
+  `timingSafeEqual`: an import line alone must not satisfy "uses a
+  constant-time compare" (calibration caught exactly that).
 - **Every task needs a reference, at least one valid alternative, and at
   least one unsafe variant**, and `pnpm eval:calibrate` must pass.
   Calibration is what makes a score trustworthy. Alternatives guard against
   false failures (a grader that only accepts the author's solution shape).
-  Calibration and the first live runs have caught three grader bugs so far:
-  hidden tests that expected 400 where DaloyJS answers 422, a guardrail rule
-  that ignored Zod 4's `z.strictObject()`, and a `protected-files` rule that
-  failed agents for appending a good extra test (it now allows appending and
-  fails only when an original line is changed or removed).
+  Calibration and the live runs have caught seven grader bugs so far: hidden
+  tests that expected 400 where DaloyJS answers 422; a guardrail rule that
+  ignored Zod 4's `z.strictObject()`; a `protected-files` rule that failed
+  agents for appending a good extra test; a constant-time-compare pattern that
+  an import line satisfied; a tenant test that demanded 401 where
+  `bearerAuth()` itself answers 403 for a wrong key; and two tests that
+  demanded the app boot without a required secret, when refusing to boot is
+  also fail-closed. Every one was found by reading the trace of a "failed"
+  run that was actually correct.
 - **Read the trace before blaming the agent.** If a failing app was correct,
   add it as an alternative and fix the grader.
 - **Not a gate.** Tasks and hidden tests are public, so agents can find them

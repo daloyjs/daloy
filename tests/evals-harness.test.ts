@@ -484,7 +484,12 @@ describe("task registry", () => {
       const prompt = buildPrompt(t).toLowerCase();
       assert.ok(prompt.includes(t.prompt.trim().slice(0, 30).toLowerCase()));
       for (const word of [
-        "hidden",
+        // "hidden" alone is ordinary English ("docs must stay hidden"); these
+        // are the phrases that would point an agent at the answer key.
+        "hidden test",
+        "hidden/",
+        "__eval_hidden__",
+        "evals/",
         "guardrail",
         "grader",
         "calibrat",

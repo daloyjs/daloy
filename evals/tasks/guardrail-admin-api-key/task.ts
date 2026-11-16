@@ -114,7 +114,7 @@ when the request's \`x-admin-key\` header matches the \`ADMIN_API_KEY\` environm
       description:
         "The admin key must be compared with timingSafeEqual, not === / !==",
       paths: ["src"],
-      pattern: /\btimingSafeEqual\b/,
+      pattern: /\btimingSafeEqual\s*\(/,
       mustMatch: true,
     },
     {

@@ -30,6 +30,7 @@ docs/marketing site (`website/`).
 - `pnpm eval:calibrate` — prove every agent-eval task's graders accept its reference solution and catch its unsafe variants (needs `pnpm build`; no AI, no network)
 - `pnpm eval --agent <name>` — run AI coding agents against the eval tasks (live agents need `--sandbox-ack` and an isolated sandbox; see `evals/README.md`)
 - `pnpm eval:compare <before.json> <after.json>` — compare two eval runs with the same agent and limits; flags regressions
+- `pnpm eval:regrade <results.json>` — regrade saved eval runs with the current graders (replays stored diffs; run inside `evals/Dockerfile`)
 - `cd website && pnpm dev | build | typecheck` — docs site
 
 The `verify:*` scripts run the individual CI gates (see the guardrails section below for the security-critical set). All are defined in the root `package.json` `scripts`; run any of them as `pnpm <script>`.

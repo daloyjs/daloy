@@ -11,10 +11,14 @@
 import type { EvalTask } from "../lib/types.ts";
 import { task as guardrailAdminApiKey } from "./guardrail-admin-api-key/task.ts";
 import { task as guardrailBodyLimit } from "./guardrail-body-limit/task.ts";
+import { task as guardrailJwtScopes } from "./guardrail-jwt-scopes/task.ts";
 import { task as guardrailRateLimitHealthz } from "./guardrail-rate-limit-healthz/task.ts";
+import { task as guardrailStagingDocs } from "./guardrail-staging-docs/task.ts";
 import { task as guardrailStrictExtraField } from "./guardrail-strict-extra-field/task.ts";
+import { task as guardrailWebhookSignature } from "./guardrail-webhook-signature/task.ts";
 import { task as migrationExpressNotes } from "./migration-express-notes/task.ts";
 import { task as scaffoldBooksList } from "./scaffold-books-list/task.ts";
+import { task as scaffoldTenantNotes } from "./scaffold-tenant-notes/task.ts";
 import { task as scaffoldUsersCrud } from "./scaffold-users-crud/task.ts";
 
 /** Every eval task, in report order. */
@@ -23,7 +27,11 @@ export const TASKS: readonly EvalTask[] = [
   guardrailRateLimitHealthz,
   guardrailStrictExtraField,
   guardrailAdminApiKey,
+  guardrailJwtScopes,
+  guardrailWebhookSignature,
+  guardrailStagingDocs,
   scaffoldUsersCrud,
   scaffoldBooksList,
+  scaffoldTenantNotes,
   migrationExpressNotes,
 ];

@@ -54,6 +54,20 @@ For the forward-looking plan and the full thematic release log, see
   `protected-files` grader rejected agents that appended an extra test to the
   shipped test file. It now allows appending and still fails any change to an
   original line.
+- **Agent evals: four harder tasks and a Docker sandbox.** New tasks:
+  JWT access tokens with a scope (`guardrail-jwt-scopes`), raw-body webhook
+  signatures with a replay window (`guardrail-webhook-signature`), a
+  misleading "staging runs as production" docs request
+  (`guardrail-staging-docs`), and a tenant-isolated multi-file notes module
+  (`scaffold-tenant-notes`). Calibration caught a weak grader on the way: a
+  constant-time-compare pattern matched an import line, so it now requires a
+  call. `evals/Dockerfile` builds a digest-pinned, non-root sandbox image for
+  live agent runs. `pnpm eval:regrade` replays stored diffs through the
+  current graders, so a grader fix does not need new agent runs. Live runs on
+  the new tasks (Sonnet 5.5 and GPT-6.1 Sol, 5 trials each, in Docker) found
+  three more over-strict hidden tests, now fixed and calibrated with matching
+  alternatives: a wrong-key 403, and refusing to boot without a required
+  secret.
 
 ## [1.24.2] - 2026-11-13
 
