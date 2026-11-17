@@ -175,6 +175,21 @@ For the forward-looking plan and the full thematic release log, see
   address, so containers on the default bridge cannot use it; it also gets a
   PID limit and closes tunnels that do not connect within 15 s or idle for
   5 minutes.
+- **Agent evals: trace evidence is no longer overstated.**
+  - A trace is complete only when its end event was captured too (Copilot's
+    and Claude's `result`, Codex's `turn.completed`). A stream holding only
+    `session.start` used to count as complete, so a cut-off run "said
+    nothing" and failed the `response` check instead of being unverified.
+  - Assistant text over 20,000 characters kept only its end, so an early
+    explanation could be dropped and graded as a failure. It now keeps the
+    head and the tail, and a pattern missing from clipped text is
+    unverified.
+  - A `view`, search, or edit counts only when the CLI reports the call
+    succeeded (Copilot `success`, Claude `is_error`). A `view` of a path that
+    does not exist used to count as reading it, which could pass an
+    investigation check.
+  - Re-parsing every saved trace with the new parser changes none of the 168
+    stored trace grades.
 
 ## [1.24.2] - 2026-11-13
 

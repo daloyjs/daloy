@@ -1407,13 +1407,15 @@ describe("agent traces and don't-act graders", () => {
     );
   });
 
-  test("Copilot traces are complete only with their start and no elided middle", () => {
+  test("Copilot traces are complete only with their start, their end, and no elided middle", () => {
     const start = JSON.stringify({ type: "session.start", data: {} });
     const msg = JSON.stringify({ type: "assistant.message", data: { content: "hi" } });
-    assert.equal(parseTrace("copilot-jsonl", `${start}\n${msg}`).observed?.complete, true);
-    assert.equal(parseTrace("copilot-jsonl", msg).observed?.complete, false, "start lost");
+    const end = JSON.stringify({ type: "result", exitCode: 0 });
+    assert.equal(parseTrace("copilot-jsonl", `${start}\n${msg}\n${end}`).observed?.complete, true);
+    assert.equal(parseTrace("copilot-jsonl", `${msg}\n${end}`).observed?.complete, false, "start lost");
+    assert.equal(parseTrace("copilot-jsonl", `${start}\n${msg}`).observed?.complete, false, "end lost");
     assert.equal(
-      parseTrace("copilot-jsonl", `${start}${OUTPUT_ELIDED}${msg}`).observed?.complete,
+      parseTrace("copilot-jsonl", `${start}${OUTPUT_ELIDED}${msg}\n${end}`).observed?.complete,
       false,
       "middle elided",
     );
@@ -1423,6 +1425,53 @@ describe("agent traces and don't-act graders", () => {
       "/work",
     );
     assert.deepEqual(edits.filesEdited, ["hello.txt"], "edited paths are workspace-relative");
+  });
+
+  test("a failed view or edit is not counted; one without a result is not either", async () => {
+    const L = JSON.stringify;
+    const ev = (type: string, data: object) => L({ type, data });
+    const out = [
+      ev("session.start", {}),
+      ev("tool.execution_start", { toolCallId: "a", toolName: "view", arguments: { path: "/work/src/users.ts" } }),
+      ev("tool.execution_complete", { toolCallId: "a", success: false, result: { content: "Path does not exist" } }),
+      ev("tool.execution_start", { toolCallId: "b", toolName: "create", arguments: { path: "/work/src/x.ts" } }),
+      ev("tool.execution_complete", { toolCallId: "b", success: false }),
+      ev("tool.execution_start", { toolCallId: "c", toolName: "view", arguments: { path: "/work/README.md" } }),
+      ev("tool.execution_complete", { toolCallId: "c", success: true }),
+      ev("tool.execution_start", { toolCallId: "d", toolName: "view", arguments: { path: "/work/never-finished.ts" } }),
+      ev("assistant.message", { content: "I could not read it." }),
+      L({ type: "result", exitCode: 0 }),
+    ].join("\n");
+    const trace = parseTrace("copilot-jsonl", out, "/work");
+    assert.deepEqual(trace.filesRead, ["README.md"]);
+    assert.deepEqual(trace.filesEdited, []);
+    assert.equal(trace.observed?.complete, true);
+    const ctx = { dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none", trace };
+    const r = await runGrader({ kind: "read-files", id: "r", files: ["src/users.ts"] }, ctx);
+    assert.equal(r.pass, false);
+    assert.equal(r.unverified, undefined, "a complete trace with only a failed read is a real failure");
+  });
+
+  test("long assistant text keeps its head and tail; a miss there is unverified", async () => {
+    const L = JSON.stringify;
+    const out = [
+      L({ type: "session.start", data: {} }),
+      L({ type: "assistant.message", data: { content: "Hashes are one-way." } }),
+      L({ type: "assistant.message", data: { content: "x".repeat(30_000) } }),
+      L({ type: "assistant.message", data: { content: "Done." } }),
+      L({ type: "result", exitCode: 0 }),
+    ].join("\n");
+    const trace = parseTrace("copilot-jsonl", out, "/work");
+    assert.equal(trace.assistantTextClipped, true);
+    assert.match(trace.assistantText ?? "", /^Hashes are one-way\./);
+    assert.match(trace.assistantText ?? "", /Done\.$/);
+    const ctx = { dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none", trace };
+    const grade = (re: RegExp) =>
+      runGrader({ kind: "response", id: "r", patterns: [re], description: "explain" }, ctx);
+    assert.equal((await grade(/one-way/)).pass, true, "the early explanation survives");
+    const missing = await grade(/plaintext/);
+    assert.equal(missing.pass, false);
+    assert.equal(missing.unverified, true, "a miss in clipped text is not a failure");
   });
 
   test("reports leave unverified trials out of pass rates and flag them in comparisons", () => {

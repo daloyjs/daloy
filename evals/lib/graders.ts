@@ -247,6 +247,8 @@ export async function runGrader(
         spec.description,
         ...missed.map((re) => `the agent's messages do not match ${re}`),
       ];
+      if (trace.assistantTextClipped)
+        return unverified([...details, "the agent's messages were clipped, so the explanation may be in the cut middle"]);
       return complete
         ? done(false, details)
         : unverified([...details, "the trace is incomplete, so the explanation may be in a message that was not captured"]);

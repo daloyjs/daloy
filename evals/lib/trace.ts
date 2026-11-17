@@ -25,6 +25,11 @@ const MAX_COMMANDS = 200;
 /** Longest final answer kept in a trace. */
 const MAX_MESSAGE_CHARS = 8_000;
 /** Longest combined assistant text kept in a trace (the end is kept). */
+/**
+ * Longest combined assistant text kept in a trace. Longer text keeps its head
+ * and tail (the explanation often comes first, the conclusion last) and is
+ * flagged `assistantTextClipped`, so a pattern missing from it is unverified.
+ */
 const MAX_ASSISTANT_TEXT_CHARS = 20_000;
 
 /** Tool-name prefix of the DaloyJS docs MCP server (`--mcp docs`). */
@@ -171,6 +176,30 @@ class TraceBuilder {
   sawStart = false;
   /** Output was elided in the middle (see `runProcess`). */
   elided = false;
+  /** The session's end event was captured (set by the format parser). */
+  sawEnd = false;
+  /** Reads and edits waiting for their tool call's result, by call id. */
+  private readonly pending = new Map<string, (() => void)[]>();
+
+  /**
+   * Record a read or edit once its tool call succeeds. A call that failed
+   * ("path does not exist") read nothing. Without a call id (older CLI
+   * output), it is recorded at once.
+   */
+  onSuccess(id: string | undefined, record: () => void): void {
+    if (!id) return record();
+    const list = this.pending.get(id) ?? [];
+    list.push(record);
+    this.pending.set(id, list);
+  }
+
+  /** A tool call finished: apply its reads and edits only if it succeeded. */
+  settle(id: string | undefined, ok: boolean): void {
+    if (!id) return;
+    const list = this.pending.get(id);
+    this.pending.delete(id);
+    if (ok) for (const record of list ?? []) record();
+  }
 
   readonly dir: string | undefined;
 
@@ -214,11 +243,17 @@ class TraceBuilder {
   }
 
   build(): AgentTrace {
+    const text = this.messages.join("\n\n");
+    const clipped = text.length > MAX_ASSISTANT_TEXT_CHARS;
+    const half = MAX_ASSISTANT_TEXT_CHARS / 2;
     return {
       ...(this.finalMessage
         ? {
             finalMessage: this.finalMessage.slice(0, MAX_MESSAGE_CHARS),
-            assistantText: this.messages.join("\n\n").slice(-MAX_ASSISTANT_TEXT_CHARS),
+            assistantText: clipped
+              ? `${text.slice(0, half)}${OUTPUT_ELIDED}${text.slice(-half)}`
+              : text,
+            ...(clipped ? { assistantTextClipped: true } : {}),
           }
         : {}),
       filesRead: [...this.read],
@@ -230,7 +265,7 @@ class TraceBuilder {
       observed: {
         messages: this.messages.length > 0,
         tools: this.toolStream,
-        complete: this.toolStream && this.sawStart && !this.elided,
+        complete: this.toolStream && this.sawStart && this.sawEnd && !this.elided,
       },
     };
   }
@@ -239,6 +274,7 @@ class TraceBuilder {
 function copilot(b: TraceBuilder, output: string): void {
   for (const ev of jsonObjects(output)) {
     if (ev.type === "session.start") b.sawStart = true;
+    if (ev.type === "result") b.sawEnd = true;
     // Any session event means the CLI's event stream was captured.
     if (typeof ev.type === "string" && ev.type.includes(".")) b.toolStream = true;
     const data = ev.data as Record<string, unknown> | undefined;
@@ -247,20 +283,29 @@ function copilot(b: TraceBuilder, output: string): void {
       b.message(str(data.content));
       continue;
     }
+    if (ev.type === "tool.execution_complete") {
+      b.settle(str(data.toolCallId), data.success !== false);
+      continue;
+    }
     if (ev.type !== "tool.execution_start") continue;
     const name = str(data.toolName) ?? "unknown";
+    const id = str(data.toolCallId);
     b.tool(name);
     const args = data.arguments;
     if (name === "apply_patch" && typeof args === "string") {
-      for (const p of pathsInPatch(args, b.dir)) b.edited.add(p);
+      const paths = pathsInPatch(args, b.dir);
+      b.onSuccess(id, () => {
+        for (const p of paths) b.edited.add(p);
+      });
       continue;
     }
     if (!args || typeof args !== "object") continue;
     const a = args as Record<string, unknown>;
-    if (name === "view") b.readPath(a.path);
-    else if (name === "edit" || name === "create") b.editPath(a.path);
+    if (name === "view") b.onSuccess(id, () => b.readPath(a.path));
+    else if (name === "edit" || name === "create")
+      b.onSuccess(id, () => b.editPath(a.path));
     else if (name === "grep" || name === "rg" || name === "glob")
-      b.readPath(a.paths ?? a.path);
+      b.onSuccess(id, () => b.readPath(a.paths ?? a.path));
     else if (name === "bash" || name === "shell") {
       const c = str(a.command);
       if (c) b.command(c);
@@ -283,7 +328,17 @@ function claude(b: TraceBuilder, output: string): void {
   for (const ev of jsonObjects(output)) {
     if (ev.type === "system") b.sawStart = true;
     if (ev.type === "result" || "total_cost_usd" in ev) {
+      b.sawEnd = true;
       resultText = str(ev.result);
+      continue;
+    }
+    if (ev.type === "user") {
+      // Tool results come back in user turns; `is_error` marks a failed call.
+      const m = ev.message as { content?: unknown } | undefined;
+      for (const raw of Array.isArray(m?.content) ? m.content : []) {
+        const r = raw as Record<string, unknown>;
+        if (r.type === "tool_result") b.settle(str(r.tool_use_id), r.is_error !== true);
+      }
       continue;
     }
     if (ev.type !== "assistant") continue;
@@ -297,11 +352,13 @@ function claude(b: TraceBuilder, output: string): void {
       const name = str(item.name) ?? "unknown";
       b.tool(name);
       const input = (item.input ?? {}) as Record<string, unknown>;
-      if (name === "Read" || name === "LS") b.readPath(input.file_path ?? input.path);
-      else if (name === "Grep" || name === "Glob") b.readPath(input.path);
+      const id = str(item.id);
+      if (name === "Read" || name === "LS")
+        b.onSuccess(id, () => b.readPath(input.file_path ?? input.path));
+      else if (name === "Grep" || name === "Glob") b.onSuccess(id, () => b.readPath(input.path));
       else if (name === "Edit" || name === "MultiEdit" || name === "Write")
-        b.editPath(input.file_path);
-      else if (name === "NotebookEdit") b.editPath(input.notebook_path);
+        b.onSuccess(id, () => b.editPath(input.file_path));
+      else if (name === "NotebookEdit") b.onSuccess(id, () => b.editPath(input.notebook_path));
       else if (name === "Bash") {
         const c = str(input.command);
         if (c) b.command(c);
@@ -325,6 +382,7 @@ function codex(b: TraceBuilder, output: string): void {
     if (typeof ev.type === "string") {
       b.toolStream = true;
       if (ev.type === "thread.started" || ev.type === "turn.started") b.sawStart = true;
+      if (ev.type === "turn.completed" || ev.type === "turn.failed") b.sawEnd = true;
     }
     if (ev.type !== "item.completed") continue;
     const item = ev.item as Record<string, unknown> | undefined;
@@ -390,6 +448,7 @@ export class RecordedTrace {
     // Offline solutions record every read through the handle.
     this.b.toolStream = true;
     this.b.sawStart = true;
+    this.b.sawEnd = true;
   }
 
   /** Record a file read. */

@@ -233,11 +233,19 @@ export interface AgentTrace {
   readonly finalMessage?: string;
   /**
    * Everything the agent wrote to the user, every message in order (capped,
-   * keeping the end). Agents often explain in one message, call a tool, and
-   * conclude in the next; a reader sees both.
+   * keeping the head and the tail). Agents often explain in one message, call
+   * a tool, and conclude in the next; a reader sees both.
    */
   readonly assistantText?: string;
-  /** Files the agent viewed, searched, or named in a shell command. */
+  /**
+   * `assistantText` exceeded the cap and lost its middle. A pattern missing
+   * from it may be in the cut part, so the response check is unverified.
+   */
+  readonly assistantTextClipped?: boolean;
+  /**
+   * Files the agent viewed, searched, or named in a shell command. A view or
+   * search counts only when the CLI reports that call succeeded.
+   */
   readonly filesRead: readonly string[];
   /** Files the agent created or edited through its edit tools. */
   readonly filesEdited: readonly string[];
@@ -253,8 +261,8 @@ export interface AgentTrace {
    * What the parser could see. `tools: false` means the output had no tool
    * events (an unsupported CLI mode, unparsable output), so an empty
    * `filesRead` means "unknown", not "read nothing". `complete: false` means
-   * part of the session is missing (its start was not captured, or the
-   * middle was elided), so an absent action may simply be unrecorded.
+   * part of the session is missing (its start or end event was not captured,
+   * or the middle was elided), so an absent action may simply be unrecorded.
    * Missing on traces stored before 17 Nov 2026, which count as incomplete.
    */
   readonly observed?: {

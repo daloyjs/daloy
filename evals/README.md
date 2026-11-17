@@ -204,8 +204,12 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    looked at). A trial passes only if every grader passes. Trace graders
    report **unverified** instead of failing when the trace lacks the
    evidence: no tool events (for example Claude Code's plain `json` output;
-   the adapter uses `stream-json`), or an incomplete trace (its start was
-   not captured, or the middle was elided). A trial with an unverified grade
+   the adapter uses `stream-json`), an incomplete trace (its start or its end
+   event, Copilot's and Claude's `result` or Codex's `turn.completed`, was not
+   captured, or the middle was elided), or assistant text clipped past 20,000
+   characters (head and tail kept) that misses a pattern. A view, search, or
+   edit counts only when the CLI reports the call succeeded: a `view` of a
+   path that does not exist read nothing. A trial with an unverified grade
    and no failed grade is unverified, not failed.
 
 ## Task suites
@@ -285,7 +289,7 @@ evals/
   200,000 characters, and most Copilot sessions were longer, so traces lost
   what the agent read first. Copilot now runs with `--stream off` and long
   output keeps its head and tail. Check a trace starts with `session.start`
-  before drawing conclusions from it.
+  and ends with `result` before drawing conclusions from it.
 - **Nothing the agent sees may name the evaluation.** Workspaces live in a
   neutral temp folder, the project is `my-daloy-app`, and the baseline commit
   is "Initial commit". Runs before 16 Nov 2026 (afternoon) used folder names
