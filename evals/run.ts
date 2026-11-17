@@ -7,14 +7,15 @@
  * are written as JSON plus a Markdown summary (also appended to
  * `$GITHUB_STEP_SUMMARY` when set).
  *
- * Live agents get broad tool permissions inside the workspace, so they are
- * refused unless `--sandbox-ack` confirms the run happens in an isolated
- * container or VM. See `evals/README.md`.
+ * Live agents get broad tool permissions, so they are refused unless
+ * `--sandbox docker` runs them in a container that sees only their workspace
+ * (or `--sandbox-ack` confirms this whole machine is an isolated VM). See
+ * `evals/README.md`.
  *
  * Examples:
  *   pnpm eval --agent reference
- *   pnpm eval --agent codex --sandbox-ack --suite guardrail --trials 5
- *   pnpm eval --agent claude --sandbox-ack --ablation full,bare --trials 3
+ *   pnpm eval --agent codex --sandbox docker --suite guardrail --trials 5
+ *   pnpm eval --agent claude --sandbox docker --ablation full,bare --trials 3
  */
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -175,6 +176,7 @@ async function main(): Promise<void> {
           ...(opts.model ? { model: opts.model } : {}),
           mcp: opts.mcp,
           ...(opts.sandbox === "docker" ? { sandbox: "docker" as const } : {}),
+          ...(egress ? { egressProxy: egress.url } : {}),
         });
         trials.push(result);
         const failed = result.grades.filter((g) => !g.pass).map((g) => g.id);

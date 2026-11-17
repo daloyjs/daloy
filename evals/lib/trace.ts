@@ -39,9 +39,9 @@ const FILE_EXT = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|json|md|mdx|ya?ml|env\w*)$/;
 const SOURCE_DIRS = new Set(["src", "tests", "lib", "scripts", "legacy", "app", "routes"]);
 
 /**
- * Normalise a path the agent used to a workspace-relative `/` path. Absolute
- * paths are cut after the workspace directory (`.../my-daloy-app/`) or after
- * `dir` when given; paths outside the workspace are returned unchanged.
+ * Normalise a path the agent used to a workspace-relative `/` path. With
+ * `dir`, paths under it are cut after it. Other absolute paths are cut after
+ * the last `/my-daloy-app/` segment; relative paths are kept.
  *
  * @param path - Path as the agent wrote it.
  * @param dir - Workspace root, when known.
@@ -51,9 +51,14 @@ export function workspaceRelative(path: string, dir?: string): string {
   let p = path.trim().replaceAll("\\", "/");
   if (dir && (p === dir || p === `${dir}/`)) return ".";
   if (dir && p.startsWith(`${dir}/`)) p = p.slice(dir.length + 1);
-  const marker = `/${WORKSPACE_APP_NAME}/`;
-  const at = p.indexOf(marker);
-  if (at !== -1) p = p.slice(at + marker.length);
+  else if (p.startsWith("/")) {
+    // Only an absolute path outside the known root falls back to the
+    // workspace folder name; a relative path that contains it is already
+    // workspace-relative.
+    const marker = `/${WORKSPACE_APP_NAME}/`;
+    const at = p.lastIndexOf(marker);
+    if (at !== -1) p = p.slice(at + marker.length);
+  }
   while (p.startsWith("./")) p = p.slice(2);
   return p;
 }

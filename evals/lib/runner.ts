@@ -49,6 +49,8 @@ export interface TrialOptions {
    * on this machine (offline adapters, or an already isolated VM).
    */
   readonly sandbox?: "docker";
+  /** Egress proxy URL for a sandboxed live agent. */
+  readonly egressProxy?: string;
 }
 
 /**
@@ -93,6 +95,7 @@ export async function runTrial(
         ...(opts.model ? { model: opts.model } : {}),
         ...(opts.mcp ? { mcp: opts.mcp } : {}),
         ...(docker ? { sandbox: "docker" as const } : {}),
+        ...(opts.egressProxy ? { egressProxy: opts.egressProxy } : {}),
       });
     } catch (err) {
       agentRun = {

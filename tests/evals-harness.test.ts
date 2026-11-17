@@ -28,6 +28,7 @@ import {
 } from "../evals/lib/egress.ts";
 import {
   clip,
+  workspaceRelative,
   parseTrace,
   pathsInCommand,
   RecordedTrace,
@@ -1314,6 +1315,20 @@ describe("agent traces and don't-act graders", () => {
     const plain = parseTrace("claude-json", L({ type: "result", result: "I won't." }));
     assert.equal(plain.finalMessage, "I won't.");
     assert.deepEqual(plain.observed, { messages: true, tools: false, complete: false });
+  });
+
+  test("workspaceRelative cuts at the workspace folder name only for absolute paths outside the root", () => {
+    assert.equal(workspaceRelative("/work", "/work"), ".");
+    assert.equal(workspaceRelative("/work/src/a.ts", "/work"), "src/a.ts");
+    assert.equal(workspaceRelative(`/tmp/proj-1/${WORKSPACE_APP_NAME}/src/a.ts`), "src/a.ts");
+    assert.equal(
+      workspaceRelative(`packages/${WORKSPACE_APP_NAME}/src/index.ts`),
+      `packages/${WORKSPACE_APP_NAME}/src/index.ts`,
+    );
+    assert.equal(
+      workspaceRelative(`/work/src/${WORKSPACE_APP_NAME}/x.ts`, "/work"),
+      `src/${WORKSPACE_APP_NAME}/x.ts`,
+    );
   });
 
   test("Copilot traces are complete only with their start and no elided middle", () => {

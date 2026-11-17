@@ -43,6 +43,8 @@ export interface AgentInvocation {
    * workspace (see `docker-sandbox.ts`). Default: run it directly.
    */
   readonly sandbox?: "docker";
+  /** This run's egress proxy URL; required with `sandbox: "docker"`. */
+  readonly egressProxy?: string;
 }
 
 /** A named way to run an agent. */
@@ -281,6 +283,8 @@ function cli(
       let r;
       let traceDir = inv.dir;
       if (inv.sandbox === "docker") {
+        if (!inv.egressProxy)
+          throw new Error("a sandboxed live agent needs the run's egress proxy");
         // Inside the container the workspace is /work; only the agent's own
         // credentials are forwarded (by name), never the host's PATH, HOME,
         // or proxy settings.
@@ -295,6 +299,7 @@ function cli(
           secrets,
           extraEnv ? await extraEnv(inner) : {},
           inv.timeoutMs,
+          inv.egressProxy,
         );
         traceDir = CONTAINER_WORKDIR;
       } else {

@@ -162,6 +162,8 @@ export async function checkGraderImage(): Promise<void> {
 /** A running egress proxy. */
 export interface EgressProxy {
   readonly name: string;
+  /** Proxy URL for agents on {@link EVAL_NETWORK} (unique per run). */
+  readonly url: string;
   readonly allow: readonly string[];
   /** Save the proxy's decision log to `logPath` and stop it. */
   stop(logPath: string): Promise<void>;
@@ -178,7 +180,9 @@ export interface EgressProxy {
 export async function startEgressProxy(allow: readonly string[]): Promise<EgressProxy> {
   if ((await docker(["network", "inspect", EVAL_NETWORK])).exitCode !== 0) {
     const made = await docker(["network", "create", "--internal", EVAL_NETWORK]);
-    if (made.exitCode !== 0) throw new Error(`docker network create failed: ${made.output}`);
+    // A concurrent run may have created it first; that is fine.
+    if (made.exitCode !== 0 && (await docker(["network", "inspect", EVAL_NETWORK])).exitCode !== 0)
+      throw new Error(`docker network create failed: ${made.output}`);
   }
   const name = `daloy-eval-egress-${process.pid}-${Date.now()}`;
   const evals = join(REPO_ROOT, "evals");
@@ -193,13 +197,26 @@ export async function startEgressProxy(allow: readonly string[]): Promise<Egress
     AGENT_IMAGE, "/proxy/egress-proxy.ts",
   ]);
   if (started.exitCode !== 0) throw new Error(`egress proxy failed to start: ${started.output}`);
-  const connected = await docker(["network", "connect", "--alias", "egress", EVAL_NETWORK, name]);
+  // Reached by its own unique name: a shared alias would make Docker DNS
+  // round-robin between concurrent runs' proxies, mixing allowlists and logs.
+  const connected = await docker(["network", "connect", "--alias", name, EVAL_NETWORK, name]);
   if (connected.exitCode !== 0) {
     await docker(["rm", "-f", name]);
     throw new Error(`egress proxy failed to join ${EVAL_NETWORK}: ${connected.output}`);
   }
+  // Start agents only once the proxy is listening.
+  for (let i = 0; ; i++) {
+    const logs = await docker(["logs", name]);
+    if (logs.output.includes('"event":"listening"')) break;
+    if (i >= 50) {
+      await docker(["rm", "-f", name]);
+      throw new Error(`egress proxy did not start:\n${logs.output.slice(-1000)}`);
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
   return {
     name,
+    url: `http://${name}:3128`,
     allow,
     async stop(logPath) {
       const logs = await docker(["logs", name]);
@@ -247,6 +264,7 @@ async function runContainer(name: string, args: string[], env: NodeJS.ProcessEnv
  *   the docker command line), with their values.
  * @param plainEnv - Non-secret variables, set explicitly.
  * @param timeoutMs - Wall-clock limit; the container is removed on timeout.
+ * @param proxy - This run's egress proxy URL ({@link EgressProxy.url}).
  * @returns The CLI's exit code and output.
  */
 export async function runAgentContainer(
@@ -255,9 +273,9 @@ export async function runAgentContainer(
   secretEnv: NodeJS.ProcessEnv,
   plainEnv: Readonly<Record<string, string>>,
   timeoutMs: number,
+  proxy: string,
 ): Promise<ProcessResult> {
   const name = `daloy-eval-agent-${process.pid}-${Date.now()}`;
-  const proxy = "http://egress:3128";
   const args = [
     ...lockedDown(name, hostDir),
     "--network", EVAL_NETWORK,

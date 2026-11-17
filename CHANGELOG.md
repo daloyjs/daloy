@@ -147,6 +147,13 @@ For the forward-looking plan and the full thematic release log, see
     unverified. It no longer carries the original grade forward as if the
     current graders had confirmed it. This changes the 16 November report:
     see `evals/reports/2026-11-16/README.md`.
+- **Agent evals: concurrent `--sandbox docker` runs no longer share a
+  proxy.** Each run's egress proxy is reached by its own unique name instead
+  of a shared `egress` alias, which made Docker DNS mix two runs' proxies
+  (allowlists and logs). Agents start only once the proxy is listening, and a
+  concurrent network-creation race is tolerated. Trace paths that merely
+  contain the workspace folder name (`packages/my-daloy-app/...`) are no
+  longer cut.
 
 ## [1.24.2] - 2026-11-13
 
