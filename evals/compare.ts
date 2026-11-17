@@ -32,6 +32,7 @@ const PINNED: readonly (keyof RunMeta)[] = [
   "agentVersion",
   "model",
   "mcp",
+  "sandbox",
   "timeoutMs",
 ];
 
@@ -46,9 +47,10 @@ export function pinMismatches(
   base: RunMeta | undefined,
   head: RunMeta | undefined,
 ): string[] {
-  // Runs recorded before `--mcp` existed had no MCP servers: read them as `none`.
+  // Runs recorded before `--mcp` / `--sandbox` existed had no MCP servers and
+  // no agent-only container: read them as `none`.
   const value = (m: RunMeta | undefined, k: keyof RunMeta): unknown =>
-    k === "mcp" ? (m?.mcp ?? "none") : m?.[k];
+    k === "mcp" || k === "sandbox" ? (m?.[k] ?? "none") : m?.[k];
   return PINNED.filter((k) => value(base, k) !== value(head, k)).map(
     (k) =>
       `${k}: ${String(value(base, k) ?? "unset")} vs ${String(value(head, k) ?? "unset")}`,

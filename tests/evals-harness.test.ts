@@ -52,12 +52,14 @@ import { pinMismatches } from "../evals/compare.ts";
 import { hiddenDirFor } from "../evals/lib/runner.ts";
 import {
   graderId,
+  trialOutcome,
   type AgentEffort,
   type AgentTrace,
   type TrialResult,
 } from "../evals/lib/types.ts";
 import {
   childEnv,
+  OUTPUT_ELIDED,
   parseNumstat,
   runProcess,
   WORKSPACE_APP_NAME,
@@ -65,7 +67,9 @@ import {
   workspaceFootprint,
   workspaceHandle,
 } from "../evals/lib/workspace.ts";
-import { reconcileLegacyGrades } from "../evals/lib/legacy-diff.ts";
+import { markLegacyUnverified } from "../evals/lib/legacy-diff.ts";
+import { originalOf, reviseTrial } from "../evals/lib/revision.ts";
+import { DEFAULT_EGRESS, specLabel } from "../evals/lib/docker-sandbox.ts";
 import { TASKS } from "../evals/tasks/index.ts";
 
 // Unit tests for the agent-eval harness (`evals/`). The end-to-end proof that
@@ -532,7 +536,7 @@ describe("stored diffs and regrading", () => {
     assert.equal(r.exitCode, 0);
   });
 
-  test("legacy (deletion-less) diffs keep original existence-based grades", () => {
+  test("legacy (deletion-less) diffs mark existence-based grades unverified, never carry them forward", () => {
     const task = TASKS.find((t) => t.id === "migration-express-notes")!;
     const grade = (id: string, pass: boolean, details: string[] = []) => ({
       id,
@@ -545,29 +549,27 @@ describe("stored diffs and regrading", () => {
       diff: "diff --git a/src/build-app.ts b/src/build-app.ts\n+x\n",
       grades: [grade("legacy-removed", true), grade("hidden", true)],
     };
-    // Replay could not delete legacy/, so the regrade sees it: keep the live pass.
-    const fixed = reconcileLegacyGrades(task, original, [
+    // Replay could not delete legacy/: the regrade cannot verify the check.
+    const marked = markLegacyUnverified(task, original, [
       grade("legacy-removed", false),
       grade("hidden", false),
     ]);
-    assert.deepEqual(fixed.kept, ["legacy-removed"]);
-    assert.equal(
-      fixed.grades.find((g) => g.id === "legacy-removed")!.pass,
-      true,
-    );
-    assert.equal(
-      fixed.grades.find((g) => g.id === "hidden")!.pass,
-      false,
-      "other graders use the regrade",
-    );
+    assert.deepEqual(marked.unverified, ["legacy-removed"]);
+    const legacy = marked.grades.find((g) => g.id === "legacy-removed")!;
+    assert.equal(legacy.pass, false, "the old pass is not copied forward");
+    assert.equal(legacy.unverified, true);
+    assert.match(legacy.details.join("\n"), /live grade was pass/);
+    const hidden = marked.grades.find((g) => g.id === "hidden")!;
+    assert.equal(hidden.pass, false, "other graders use the regrade");
+    assert.equal(hidden.unverified, undefined);
     // When the diff shows the path, the regrade stands.
     const touched = {
       ...original,
       diff: "diff --git a/legacy/server.js b/legacy/server.js\n-x\n",
     };
     assert.deepEqual(
-      reconcileLegacyGrades(task, touched, [grade("legacy-removed", false)])
-        .kept,
+      markLegacyUnverified(task, touched, [grade("legacy-removed", false)])
+        .unverified,
       [],
     );
 
@@ -579,15 +581,48 @@ describe("stored diffs and regrading", () => {
         grade("guardrails", false, ["[violation] deleted-tests: x"]),
       ],
     };
-    const r = reconcileLegacyGrades(strict, deletedProtected, [
+    const r = markLegacyUnverified(strict, deletedProtected, [
       grade("protected-files", true),
       grade("guardrails", true),
     ]);
     assert.deepEqual(
-      r.kept.sort(),
+      r.unverified.sort(),
       ["guardrails", "protected-files"],
       "a deleted protected test must not regrade as a pass",
     );
+    assert.ok(r.grades.every((g) => !g.pass));
+  });
+
+  test("a regrade revision keeps the first grades as history and marks incomplete artifacts unverified", () => {
+    const g = (id: string, pass: boolean, extra: { unverified?: true } = {}) => ({
+      id,
+      pass,
+      details: [],
+      durationMs: 1,
+      ...extra,
+    });
+    const t = { ...trial("t", "full", true), grades: [g("hidden", true)] };
+    const skipped = reviseTrial(t, { skip: "stored diff was truncated" });
+    assert.equal(skipped.pass, false);
+    assert.equal(skipped.unverified, true);
+    assert.equal(skipped.unverifiedReason, "stored diff was truncated");
+    assert.deepEqual(skipped.grades, []);
+    assert.deepEqual(skipped.original, { pass: true, grades: t.grades });
+
+    const failed = reviseTrial(skipped, { grades: [g("hidden", false)] });
+    assert.equal(failed.pass, false);
+    assert.equal(failed.unverified, undefined);
+    assert.equal(failed.unverifiedReason, undefined);
+    assert.deepEqual(failed.original, { pass: true, grades: t.grades }, "history keeps the first grades");
+
+    const mixed = reviseTrial(t, { grades: [g("hidden", true), g("investigated", false, { unverified: true })] });
+    assert.equal(mixed.pass, false);
+    assert.equal(mixed.unverified, true);
+    const realFail = reviseTrial(t, {
+      grades: [g("hidden", false), g("investigated", false, { unverified: true })],
+    });
+    assert.equal(realFail.unverified, undefined, "a real failure outranks unverified");
+    assert.deepEqual(originalOf(t), { pass: true, grades: t.grades });
   });
 });
 
@@ -1180,7 +1215,7 @@ describe("agent traces and don't-act graders", () => {
     assert.equal(traceTouched({ ...t, filesRead: [], filesEdited: ["src/users.ts"] }, "src/users.ts"), true);
   });
 
-  test("response and read-files graders fail closed without a trace or answer", async () => {
+  test("response and read-files graders pass, fail, or report unverified when evidence is missing", async () => {
     const ctx = { dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none" };
     const response = {
       kind: "response",
@@ -1189,8 +1224,12 @@ describe("agent traces and don't-act graders", () => {
       patterns: [/hash/i, /one-way/gi],
     } as const;
     const files = { kind: "read-files", id: "investigated", files: ["src/users.ts"] } as const;
-    assert.equal((await runGrader(response, ctx)).pass, false);
-    assert.equal((await runGrader(files, ctx)).pass, false);
+    // No trace at all: missing evidence, not the agent's failure.
+    for (const spec of [response, files]) {
+      const r = await runGrader(spec, ctx);
+      assert.equal(r.pass, false);
+      assert.equal(r.unverified, true);
+    }
     const trace: AgentTrace = {
       finalMessage: "A hash is one-way.",
       filesRead: ["src/users.ts"],
@@ -1199,12 +1238,14 @@ describe("agent traces and don't-act graders", () => {
       toolCalls: {},
       skills: [],
       docsMcpCalls: 0,
+      observed: { messages: true, tools: true, complete: true },
     };
     // Run twice: a `g` flag must not make the second test() call fail.
     assert.equal((await runGrader(response, { ...ctx, trace })).pass, true);
     assert.equal((await runGrader(response, { ...ctx, trace })).pass, true);
     const vague = await runGrader(response, { ...ctx, trace: { ...trace, finalMessage: "Done." } });
     assert.equal(vague.pass, false);
+    assert.equal(vague.unverified, undefined, "a complete trace that misses the point is a real failure");
     assert.match(vague.details.join("\n"), /must explain/);
     // An explanation in an earlier message counts: agents often explain,
     // call a tool, and then conclude ("Given this, ...").
@@ -1214,10 +1255,133 @@ describe("agent traces and don't-act graders", () => {
     });
     assert.equal(split.pass, true);
     assert.equal((await runGrader(files, { ...ctx, trace })).pass, true);
+    const unread = await runGrader(files, { ...ctx, trace: { ...trace, filesRead: [] } });
+    assert.equal(unread.pass, false);
+    assert.equal(unread.unverified, undefined);
+
+    // Output with no tool events (Claude's plain json mode): reads are unknown.
+    const noTools = { ...trace, filesRead: [], observed: { messages: true, tools: false, complete: false } };
+    const r1 = await runGrader(files, { ...ctx, trace: noTools });
+    assert.equal(r1.unverified, true);
+    assert.match(r1.details.join("\n"), /no tool events/);
+    // An incomplete trace (start lost, middle elided) cannot prove absence.
+    const partial = { ...trace, filesRead: [], finalMessage: "Done.", observed: { messages: true, tools: true, complete: false } };
+    assert.equal((await runGrader(files, { ...ctx, trace: partial })).unverified, true);
+    assert.equal((await runGrader(response, { ...ctx, trace: partial })).unverified, true);
+    // Traces stored before evidence flags existed count as incomplete.
+    const { observed: _drop, ...legacy } = { ...trace, filesRead: [] };
+    assert.equal((await runGrader(files, { ...ctx, trace: legacy })).unverified, true);
+    // A complete session that said nothing really gave no answer.
+    const silent = { ...trace, finalMessage: undefined, assistantText: undefined };
+    const r2 = await runGrader(response, { ...ctx, trace: silent });
+    assert.equal(r2.pass, false);
+    assert.equal(r2.unverified, undefined);
     assert.equal(
-      (await runGrader(files, { ...ctx, trace: { ...trace, filesRead: [] } })).pass,
-      false,
+      (await runGrader(response, { ...ctx, trace: { ...silent, observed: { messages: false, tools: false, complete: false } } })).unverified,
+      true,
     );
+  });
+
+  test("trialOutcome: a real failure outranks unverified", () => {
+    const g = (pass: boolean, unverified?: true) => ({ id: "x", pass, details: [], durationMs: 1, ...(unverified ? { unverified } : {}) });
+    assert.deepEqual(trialOutcome([g(true)]), { pass: true });
+    assert.deepEqual(trialOutcome([g(true), g(false, true)]), { pass: false, unverified: true });
+    assert.deepEqual(trialOutcome([g(false), g(false, true)]), { pass: false });
+  });
+
+  test("Claude Code stream-json traces record tool use; plain json leaves tools unobserved", () => {
+    const L = (o: unknown): string => JSON.stringify(o);
+    const dir = `/tmp/proj-1/${WORKSPACE_APP_NAME}`;
+    const stream = [
+      L({ type: "system", subtype: "init" }),
+      L({ type: "assistant", message: { content: [{ type: "text", text: "Looking." }, { type: "tool_use", name: "Read", input: { file_path: `${dir}/src/users.ts` } }] } }),
+      L({ type: "assistant", message: { content: [
+        { type: "tool_use", name: "Bash", input: { command: "grep -rn hash src" } },
+        { type: "tool_use", name: "mcp__daloyjs-docs__search_docs", input: {} },
+        { type: "tool_use", name: "Edit", input: { file_path: `${dir}/src/x.ts` } },
+      ] } }),
+      L({ type: "assistant", message: { content: [{ type: "text", text: "A hash is one-way." }] } }),
+      L({ type: "result", subtype: "success", result: "A hash is one-way.", num_turns: 3 }),
+    ].join("\n");
+    const t = parseTrace("claude-json", stream, dir);
+    assert.deepEqual(t.filesRead, ["src/users.ts", "src"]);
+    assert.deepEqual(t.filesEdited, ["src/x.ts"]);
+    assert.equal(t.docsMcpCalls, 1);
+    assert.equal(t.assistantText, "Looking.\n\nA hash is one-way.", "the result is not duplicated");
+    assert.deepEqual(t.observed, { messages: true, tools: true, complete: true });
+    assert.equal(parseEffort("claude-json", stream)?.steps, 3);
+
+    const plain = parseTrace("claude-json", L({ type: "result", result: "I won't." }));
+    assert.equal(plain.finalMessage, "I won't.");
+    assert.deepEqual(plain.observed, { messages: true, tools: false, complete: false });
+  });
+
+  test("Copilot traces are complete only with their start and no elided middle", () => {
+    const start = JSON.stringify({ type: "session.start", data: {} });
+    const msg = JSON.stringify({ type: "assistant.message", data: { content: "hi" } });
+    assert.equal(parseTrace("copilot-jsonl", `${start}\n${msg}`).observed?.complete, true);
+    assert.equal(parseTrace("copilot-jsonl", msg).observed?.complete, false, "start lost");
+    assert.equal(
+      parseTrace("copilot-jsonl", `${start}${OUTPUT_ELIDED}${msg}`).observed?.complete,
+      false,
+      "middle elided",
+    );
+    const edits = parseTrace(
+      "copilot-jsonl",
+      JSON.stringify({ type: "tool.execution_start", data: { toolName: "create", arguments: { path: "/work/hello.txt" } } }),
+      "/work",
+    );
+    assert.deepEqual(edits.filesEdited, ["hello.txt"], "edited paths are workspace-relative");
+  });
+
+  test("reports leave unverified trials out of pass rates and flag them in comparisons", () => {
+    const unv = { ...trial("t", "full", false), unverified: true as const };
+    const s = summarize([trial("t", "full", true), trial("t", "full", false), unv], 2);
+    const cell = s.cells[0]!;
+    assert.equal(cell.n, 2);
+    assert.equal(cell.unverified, 1);
+    assert.equal(cell.passAt1, 0.5);
+    assert.equal(s.overallPassRate, 0.5);
+    assert.equal(s.unverified, 1);
+    const md = renderMarkdown(s, { agent: "x" });
+    assert.match(md, /1 unverified/);
+    assert.match(md, /\| guardrails×1 \| 1 \|/);
+    const allUnv = summarize([unv], 1);
+    assert.equal(allUnv.cells[0]!.n, 0);
+    assert.equal(allUnv.cells[0]!.passAt1, 0);
+    const rows = compareRuns(summarize([trial("t", "full", true)], 1), s);
+    assert.deepEqual(rows[0]!.unverified, { base: 0, head: 1 });
+    const cmp = renderComparison(rows, { base: "a", head: "b" });
+    assert.match(cmp, /1 row\(s\) include unverified trials/);
+    assert.match(cmp, /⚠/);
+  });
+
+  test("trace analysis lists unverified trials apart from failure causes", () => {
+    const unv: TrialResult = {
+      ...trial("t", "full", false),
+      unverified: true,
+      grades: [{ id: "investigated", pass: false, unverified: true, details: ["no tool events"], durationMs: 1 }],
+    };
+    const a = analyze([{ source: "run", trial: unv }]);
+    assert.deepEqual(a.causes, []);
+    assert.deepEqual(a.unverified, [{ trial: "run#t/full/1", reason: "investigated" }]);
+    assert.match(renderAnalysis(a, ["run.json"]), /Unverified trials/);
+  });
+
+  test("--sandbox accepts none and docker, and pins compare runs by sandbox", () => {
+    assert.equal(parseRunArgs(["--agent", "copilot"]).sandbox, "none");
+    assert.equal(parseRunArgs(["--agent", "copilot", "--sandbox", "docker"]).sandbox, "docker");
+    assert.throws(() => parseRunArgs(["--agent", "copilot", "--sandbox", "vm"]), /--sandbox must be/);
+    assert.deepEqual(pinMismatches({ agent: "copilot" }, { agent: "copilot", sandbox: "none" }), []);
+    assert.deepEqual(pinMismatches({ agent: "copilot" }, { agent: "copilot", sandbox: "docker" }), [
+      "sandbox: none vs docker",
+    ]);
+  });
+
+  test("the agent image spec label is stable and each agent has a default egress allowlist", () => {
+    const label = specLabel({ pnpm: "1.0.0", copilot: "2.0.0", deps: { zod: "4.0.0", typescript: "7.0.0" } });
+    assert.equal(label, '{"copilot":"2.0.0","deps":{"typescript":"7.0.0","zod":"4.0.0"},"pnpm":"1.0.0"}', "stable, sorted label");
+    assert.deepEqual(DEFAULT_EGRESS.copilot, [".githubcopilot.com", "api.github.com"]);
   });
 
   test("offline adapters record reads and replies into the trace", async () => {

@@ -275,7 +275,13 @@ export async function snapshot(dir: string): Promise<Map<string, string>> {
   return out;
 }
 
-async function linkDependencies(dir: string): Promise<void> {
+/**
+ * Wire dependencies into a workspace. `@daloyjs/core` is always copied from
+ * `dist/`. The others are symlinked: to the root install by default, or, with
+ * `depsRoot`, to that absolute path as seen inside the agent container (the
+ * links dangle on the host, which never runs them in Docker mode).
+ */
+async function linkDependencies(dir: string, depsRoot?: string): Promise<void> {
   const distEntry = join(REPO_ROOT, "dist", "index.js");
   try {
     await stat(distEntry);
@@ -291,7 +297,9 @@ async function linkDependencies(dir: string): Promise<void> {
     await cp(join(REPO_ROOT, entry), join(core, entry), { recursive: true });
   }
   for (const name of ["zod", "typescript", "@types/node"]) {
-    const target = await realpath(join(REPO_ROOT, "node_modules", name));
+    const target = depsRoot
+      ? `${depsRoot}/${name}`
+      : await realpath(join(REPO_ROOT, "node_modules", name));
     await mkdir(dirname(join(nm, name)), { recursive: true });
     await symlink(target, join(nm, name), "dir");
   }
@@ -323,12 +331,15 @@ export interface PreparedWorkspace {
  *
  * @param task - The task (template + setup step).
  * @param ablation - Which agent-instruction surfaces to remove.
+ * @param opts - `depsRoot`: link dependencies to this in-container path
+ *   instead of the root install (Docker mode).
  * @returns The prepared workspace with its baseline snapshot.
  * @throws Error when scaffolding fails or `dist/` has not been built.
  */
 export async function prepareWorkspace(
   task: EvalTask,
   ablation: Ablation,
+  opts: { readonly depsRoot?: string } = {},
 ): Promise<PreparedWorkspace> {
   // Neutral names only: the agent can see its working directory, package
   // name, and git log, and an earlier run read "daloy-eval-guardrail-body-
@@ -361,7 +372,7 @@ export async function prepareWorkspace(
   if (ablation === "no-skill" || ablation === "bare")
     await ws.remove(".agents");
 
-  await linkDependencies(dir);
+  await linkDependencies(dir, opts.depsRoot);
   if (task.setup) await task.setup(ws);
 
   await git(dir, ["init", "--quiet", "--initial-branch=main"]);
@@ -464,4 +475,34 @@ export async function workspaceFootprint(dir: string): Promise<DiffFootprint> {
  */
 export async function disposeWorkspace(root: string): Promise<void> {
   await rm(root, { recursive: true, force: true });
+}
+
+/**
+ * Copy a workspace for grading (symlinks copied as links), so hidden tests
+ * and the agent's code run on a copy and the original stays the record.
+ *
+ * @param dir - Workspace root.
+ * @param dest - Destination directory (must not exist).
+ */
+export async function copyWorkspace(dir: string, dest: string): Promise<void> {
+  await cp(dir, dest, { recursive: true, verbatimSymlinks: true });
+}
+
+/**
+ * Make a temporary directory tree writable by any user, so the unprivileged
+ * user in an agent or grader container can work in it whatever the host
+ * user's uid. Only used on throwaway trial directories. Symlinks are skipped.
+ *
+ * @param dir - Directory to open up.
+ */
+export async function openForContainer(dir: string): Promise<void> {
+  const { chmod, lstat } = await import("node:fs/promises");
+  const walk = async (p: string): Promise<void> => {
+    const st = await lstat(p);
+    if (st.isSymbolicLink()) return;
+    await chmod(p, st.isDirectory() ? 0o777 : 0o666 | (st.mode & 0o111));
+    if (st.isDirectory())
+      for (const e of await readdir(p)) await walk(join(p, e));
+  };
+  await walk(dir);
 }

@@ -16,11 +16,15 @@ crossed with the DaloyJS docs MCP (not offered, or offered with `--mcp docs`).
 
 - Template under test: `create-daloy` `node-basic`, scaffolded fresh for every
   attempt. The other four templates are not evaluated yet.
-- Agent: Claude Sonnet 5.5 via GitHub Copilot CLI 1.0.112, in the
-  `evals/Dockerfile` sandbox with the egress allowlist (`evals/sandbox-run.sh`),
-  3 attempts per task (12 per box).
-- Graded with the current graders (`pnpm eval:regrade`), after the grader fixes
-  listed in `CHANGELOG.md`.
+- Agent: Claude Sonnet 5.5 via GitHub Copilot CLI 1.0.112, 3 attempts per
+  task (12 per box). These runs used the earlier sandbox: one container
+  holding the harness and the repository, with the egress allowlist. The
+  agent could in principle have read the hidden tests there; no trace shows
+  it doing so. Runs since 17 Nov use `--sandbox docker`, where the agent's
+  container holds only its workspace.
+- Graded with the current graders (`pnpm eval:regrade --sandbox docker`, 17
+  Nov 2026, no unverified attempts), after the grader fixes listed in
+  `CHANGELOG.md`.
 
 | Instructions      | Docs MCP    | Fully correct | Test lines / task | Attempts with no tests | Docs MCP used | Time / attempt | Tokens / attempt |
 | ----------------- | ----------- | ------------- | ----------------- | ---------------------- | ------------- | -------------- | ---------------- |
@@ -56,7 +60,8 @@ Takeaways:
 
 ## Don't-act and unhinted security tasks
 
-Four newer tasks, 5 attempts each, regraded on the final harness:
+Four newer tasks, 5 attempts each, regraded on the final harness (17 Nov, in
+the no-network grading container; no unverified attempts):
 
 | Task | What it tests | Sonnet 5.5 | GPT-6.1 Sol |
 | --- | --- | --- | --- |
@@ -85,9 +90,18 @@ a module check that failed a correct plugin mounted with
 
 ![Accuracy vs tokens](./accuracy-vs-cost.png)
 
-Every model solved every task with the current graders (all six runs were
-regraded with `pnpm eval:regrade` on 16 Nov 2026), so the chart compares
-tokens per attempt on a log scale. Filled markers: standard set, 7 tasks x 3
+Every **verified** attempt passed with the current graders, so the chart
+compares tokens per attempt on a log scale. All six runs were regraded with
+`pnpm eval:regrade --sandbox docker` on 17 Nov 2026: 18 of 18 verified
+attempts per model on the standard set, 20 of 20 on the hard set.
+
+> **Correction (17 Nov 2026).** The first version said every run was 100%.
+> On the standard set, the 3 Express-migration attempts per model (12 in
+> all) are **unverified**: their stored diffs predate deleted-file capture,
+> so a regrade cannot see whether `legacy/` was deleted. The original live
+> grades (pass, from real snapshots) are kept as history in the results, but
+> the regrade no longer carries them forward as current. Rerun those attempts
+> to verify them. Filled markers: standard set, 7 tasks x 3
 attempts for Sonnet 5.5, Opus 5.5, GPT-6.1 Sol and Gemini 4 Argon. Hollow
 markers: the four hard tasks above x 5 attempts for Sonnet 5.5 and GPT-6.1 Sol.
 
@@ -106,10 +120,9 @@ Read it with three caveats:
 
 ```sh
 pnpm build
-docker build -f evals/Dockerfile -t daloy-evals .
-COPILOT_GITHUB_TOKEN=$(gh auth token) evals/sandbox-run.sh \
-  --agent copilot --sandbox-ack --model claude-sonnet-5.5 \
-  --ablation bare --mcp docs --trials 3 \
+pnpm eval:image
+COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox docker \
+  --model claude-sonnet-5.5 --ablation bare --mcp docs --trials 3 \
   --task guardrail-jwt-scopes,guardrail-webhook-signature,guardrail-staging-docs,scaffold-tenant-notes
 pnpm eval:analyze evals/results/<run>.json
 ```

@@ -197,6 +197,12 @@ export interface GradeResult {
   /** Grader id: the kind, or the explicit `id` for `pattern` / `absent`. */
   readonly id: string;
   readonly pass: boolean;
+  /**
+   * The grader could not decide: the evidence it needs is missing (an
+   * incomplete trace, a stored diff that cannot show what happened). Always
+   * paired with `pass: false`; it is not the agent's failure.
+   */
+  readonly unverified?: true;
   /** Human-readable reasons, populated on failure (and for guardrail warnings). */
   readonly details: readonly string[];
   readonly durationMs: number;
@@ -243,6 +249,19 @@ export interface AgentTrace {
   readonly skills: readonly string[];
   /** Calls to the DaloyJS docs MCP server. */
   readonly docsMcpCalls: number;
+  /**
+   * What the parser could see. `tools: false` means the output had no tool
+   * events (an unsupported CLI mode, unparsable output), so an empty
+   * `filesRead` means "unknown", not "read nothing". `complete: false` means
+   * part of the session is missing (its start was not captured, or the
+   * middle was elided), so an absent action may simply be unrecorded.
+   * Missing on traces stored before 17 Nov 2026, which count as incomplete.
+   */
+  readonly observed?: {
+    readonly messages: boolean;
+    readonly tools: boolean;
+    readonly complete: boolean;
+  };
 }
 
 /** Outcome of one agent invocation. */
@@ -277,7 +296,14 @@ export interface TrialResult {
   readonly ablation: Ablation;
   readonly trial: number;
   readonly agent: string;
+  /** Every grader passed. */
   readonly pass: boolean;
+  /**
+   * No grader failed, but at least one was unverified. Such a trial is
+   * neither a pass nor a failure: reports count it separately and leave it
+   * out of pass rates.
+   */
+  readonly unverified?: true;
   readonly agentRun: AgentRunResult;
   readonly grades: readonly GradeResult[];
   /** `git diff` of the agent's changes against the post-setup baseline (truncated). */
@@ -286,6 +312,22 @@ export interface TrialResult {
   readonly footprint: DiffFootprint;
   /** Workspace path when `--keep` was passed, otherwise `null`. */
   readonly workspace: string | null;
+}
+
+/**
+ * A trial's outcome from its grades: `pass` when every grader passed,
+ * `unverified` when none failed but at least one could not decide, otherwise
+ * `fail`.
+ *
+ * @param grades - The trial's grades.
+ * @returns The fields to spread into a {@link TrialResult}.
+ */
+export function trialOutcome(
+  grades: readonly GradeResult[],
+): { pass: boolean; unverified?: true } {
+  if (grades.every((g) => g.pass)) return { pass: true };
+  if (grades.some((g) => !g.pass && !g.unverified)) return { pass: false };
+  return { pass: false, unverified: true };
 }
 
 /**

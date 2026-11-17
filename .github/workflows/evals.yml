@@ -15,11 +15,15 @@
 #   agent-evals    Manual only (workflow_dispatch). Runs a real headless agent
 #                  (Codex CLI, Claude Code, or GitHub Copilot CLI) against the
 #                  tasks and publishes pass@k / pass^k to the job summary.
-#                  The ephemeral GitHub-hosted runner is the sandbox the
-#                  harness's `--sandbox-ack` asks for. The agent's API key is
-#                  the only secret, scoped to the protected `agent-evals`
-#                  environment; nothing runs on pull_request, so a fork can
-#                  never reach it.
+#                  `--sandbox docker`: the agent runs in a container built
+#                  with no build context (`pnpm eval:image`) that sees only
+#                  its own workspace, so the checked-out hidden tests,
+#                  reference solutions, and graders stay out of its reach;
+#                  its network goes through an allowlisting egress proxy, and
+#                  grading runs on a workspace copy with no network. The
+#                  agent's API key is the only secret, scoped to the
+#                  protected `agent-evals` environment; nothing runs on
+#                  pull_request, so a fork can never reach it.
 #
 # Hardening (same floor as the rest of .github/workflows):
 #   * `permissions: {}` at the top level; each job opts in to `contents: read`.
@@ -186,22 +190,23 @@ jobs:
           [[ "$TRIALS" =~ ^[1-9][0-9]?$ ]] || { echo "trials must be 1-99"; exit 1; }
           [[ "$FAIL_UNDER" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]] || { echo "fail_under must be 0-1"; exit 1; }
 
-      - name: Install agent CLI (exact version, no lifecycle scripts)
+      - name: Build the agent image (CLI at an exact version, no build context)
         env:
           AGENT: ${{ inputs.agent }}
           CLI_VERSION: ${{ inputs.cli_version }}
         run: |
           set -euo pipefail
           case "$AGENT" in
-            codex) PKG="@openai/codex" ;;
-            claude) PKG="@anthropic-ai/claude-code" ;;
-            copilot) PKG="@github/copilot" ;;
+            codex) export CODEX_VERSION="$CLI_VERSION" ;;
+            claude) export CLAUDE_CODE_VERSION="$CLI_VERSION" ;;
+            copilot) export COPILOT_CLI_VERSION="$CLI_VERSION" ;;
           esac
-          npm install --global --ignore-scripts "${PKG}@${CLI_VERSION}"
+          pnpm eval:image
 
       - name: Run agent evals
         env:
           AGENT: ${{ inputs.agent }}
+          CLI_VERSION: ${{ inputs.cli_version }}
           MODEL: ${{ inputs.model }}
           SUITE: ${{ inputs.suite }}
           ABLATION: ${{ inputs.ablation }}
@@ -212,7 +217,13 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          args=(--agent "$AGENT" --sandbox-ack --suite "$SUITE" --ablation "$ABLATION" \
+          # The image label pins the CLI version; set it the same way here.
+          case "$AGENT" in
+            codex) export CODEX_VERSION="$CLI_VERSION" ;;
+            claude) export CLAUDE_CODE_VERSION="$CLI_VERSION" ;;
+            copilot) export COPILOT_CLI_VERSION="$CLI_VERSION" ;;
+          esac
+          args=(--agent "$AGENT" --sandbox docker --suite "$SUITE" --ablation "$ABLATION" \
                 --trials "$TRIALS" --fail-under "$FAIL_UNDER" --out evals/results/run.json)
           if [[ -n "$MODEL" ]]; then args+=(--model "$MODEL"); fi
           pnpm eval "${args[@]}"

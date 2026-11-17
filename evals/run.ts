@@ -24,6 +24,14 @@ import { parseRunArgs, selectTasks, USAGE } from "./lib/cli.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
 import { runTrial } from "./lib/runner.ts";
 import {
+  AGENT_IMAGE,
+  checkAgentImage,
+  DEFAULT_EGRESS,
+  startEgressProxy,
+  type EgressProxy,
+} from "./lib/docker-sandbox.ts";
+import { DOCS_MCP_HOST, parseAllowlist } from "./lib/egress.ts";
+import {
   childEnv,
   DIFF_FORMAT,
   REPO_ROOT,
@@ -57,6 +65,7 @@ async function runMeta(
   opts: {
     model: string | undefined;
     mcp: string;
+    sandbox: string;
     trials: number;
     timeoutMs: number;
   },
@@ -68,9 +77,12 @@ async function runMeta(
     agent: agent.name,
     model: opts.model,
     mcp: opts.mcp,
-    agentVersion: agent.command
-      ? await firstLine(agent.command, ["--version"])
-      : undefined,
+    sandbox: opts.sandbox,
+    agentVersion: !agent.command
+      ? undefined
+      : opts.sandbox === "docker"
+        ? await firstLine("docker", ["run", "--rm", "--network", "none", AGENT_IMAGE, agent.command, "--version"])
+        : await firstLine(agent.command, ["--version"]),
     gitSha: await firstLine("git", ["rev-parse", "HEAD"]),
     coreVersion: pkg.version,
     node: process.version,
@@ -98,12 +110,17 @@ async function main(): Promise<void> {
   }
 
   const agent = resolveAgent(opts.agent);
-  if (agent.live && !opts.sandboxAck) {
+  if (agent.live && opts.sandbox !== "docker" && !opts.sandboxAck) {
     throw new Error(
-      `"${agent.name}" runs a real agent with broad tool permissions. Run it only inside an isolated ` +
-        "container or VM with no secrets except the agent's own API key, then pass --sandbox-ack.",
+      `"${agent.name}" runs a real agent with broad tool permissions. Pass --sandbox docker (recommended: ` +
+        "the agent sees only its workspace), or --sandbox-ack if this whole machine is an isolated, " +
+        "secret-free VM.",
     );
   }
+  if (agent.live && opts.sandbox !== "docker")
+    process.stderr.write(
+      "warning: without --sandbox docker the agent can read this repository, including the hidden tests and reference solutions\n",
+    );
   if (tasks.length === 0) throw new Error("no tasks selected");
   if (!agent.mcpModes.includes(opts.mcp)) {
     throw new Error(
@@ -111,9 +128,38 @@ async function main(): Promise<void> {
     );
   }
 
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const out =
+    opts.out ??
+    join(
+      REPO_ROOT,
+      "evals",
+      "results",
+      `${stamp}-${agent.name.replace(/[^\w-]/g, "_")}.json`,
+    );
+  await mkdir(dirname(out), { recursive: true });
+
+  let egress: EgressProxy | undefined;
+  if (opts.sandbox === "docker") {
+    await checkAgentImage(agent.live ? agent.name : "grader");
+    if (agent.live) {
+      const allow = process.env.EGRESS_ALLOW
+        ? parseAllowlist(process.env.EGRESS_ALLOW)
+        : [
+            ...(DEFAULT_EGRESS[agent.name] ?? []),
+            ...(opts.mcp === "docs" ? [DOCS_MCP_HOST] : []),
+          ];
+      if (allow.length === 0)
+        throw new Error(`no default egress allowlist for "${agent.name}"; set EGRESS_ALLOW`);
+      egress = await startEgressProxy(allow);
+      process.stdout.write(`Egress allowlist: ${allow.join(", ")}\n`);
+    }
+  }
+
   const trials: TrialResult[] = [];
   const total = tasks.length * opts.ablations.length * opts.trials;
   let done = 0;
+  try {
   for (const task of tasks) {
     for (const ablation of opts.ablations) {
       for (let trial = 1; trial <= opts.trials; trial++) {
@@ -128,31 +174,29 @@ async function main(): Promise<void> {
           keep: opts.keep,
           ...(opts.model ? { model: opts.model } : {}),
           mcp: opts.mcp,
+          ...(opts.sandbox === "docker" ? { sandbox: "docker" as const } : {}),
         });
         trials.push(result);
         const failed = result.grades.filter((g) => !g.pass).map((g) => g.id);
         process.stdout.write(
-          `${result.pass ? "PASS" : `FAIL (${failed.join(", ")})`}` +
+          `${result.pass ? "PASS" : result.unverified ? `UNVERIFIED (${failed.join(", ")})` : `FAIL (${failed.join(", ")})`}` +
             `${result.agentRun.timedOut ? " [agent timed out]" : ""}` +
             `${result.workspace ? ` → ${result.workspace}` : ""}\n`,
         );
       }
     }
   }
+  } finally {
+    if (egress) {
+      const log = out.replace(/\.json$/, "") + "-egress.log";
+      await egress.stop(log);
+      process.stdout.write(`Egress log: ${relative(process.cwd(), log)}\n`);
+    }
+  }
 
   const summary = summarize(trials, opts.k);
   const meta = await runMeta(agent, opts);
   const markdown = renderMarkdown(summary, meta);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const out =
-    opts.out ??
-    join(
-      REPO_ROOT,
-      "evals",
-      "results",
-      `${stamp}-${agent.name.replace(/[^\w-]/g, "_")}.json`,
-    );
-  await mkdir(dirname(out), { recursive: true });
 
   // Agent traces go to their own files: reviewers read them next to the app,
   // and they would bloat the results JSON.

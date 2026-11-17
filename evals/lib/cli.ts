@@ -27,6 +27,11 @@ export interface RunOptions {
   readonly out: string | undefined;
   readonly keep: boolean;
   readonly sandboxAck: boolean;
+  /**
+   * `docker`: live agents run in a container that sees only their workspace,
+   * behind an egress allowlist, and grading runs in a no-network container.
+   */
+  readonly sandbox: "none" | "docker";
   readonly model: string | undefined;
   /** MCP servers offered to the agent; `none` unless `--mcp docs`. */
   readonly mcp: McpMode;
@@ -40,7 +45,7 @@ export const USAGE = `Usage: pnpm eval --agent <name> [options]
 Agents:
   noop | reference | alternative:<id> | unsafe:<variant>
                                         offline, for calibration
-  copilot | claude | codex | command    live; require --sandbox-ack
+  copilot | claude | codex | command    live; require --sandbox docker or --sandbox-ack
 
 Options:
   --suite <list>        guardrail,scaffold,migration (default: all)
@@ -54,7 +59,11 @@ Options:
   --out <file>          JSON results path (default: evals/results/<time>-<agent>.json)
   --fail-under <0..1>   exit 1 when the overall pass rate is below this
   --keep                keep trial workspaces for inspection
-  --sandbox-ack         confirm live agents run in an isolated, secret-free sandbox
+  --sandbox <mode>      none | docker: run the agent in a container that sees only its
+                        workspace (egress allowlist), and grade in a no-network
+                        container (build the image first: pnpm eval:image)
+  --sandbox-ack         confirm this whole machine is an isolated, secret-free sandbox
+                        (the agent can then read the hidden tests; prefer --sandbox docker)
   --list                list tasks and exit
 `;
 
@@ -92,6 +101,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
   let out: string | undefined;
   let keep = false;
   let sandboxAck = false;
+  let sandbox: "none" | "docker" = "none";
   let mcp: McpMode = "none";
   let model: string | undefined;
   let failUnder: number | undefined;
@@ -158,6 +168,13 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
       case "--keep":
         keep = true;
         break;
+      case "--sandbox": {
+        const v = next();
+        if (v !== "none" && v !== "docker")
+          throw new Error("--sandbox must be one of: none, docker");
+        sandbox = v;
+        break;
+      }
       case "--sandbox-ack":
         sandboxAck = true;
         break;
@@ -182,6 +199,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     out,
     keep,
     sandboxAck,
+    sandbox,
     model,
     mcp,
     failUnder,

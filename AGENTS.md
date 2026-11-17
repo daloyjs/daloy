@@ -28,10 +28,11 @@ docs/marketing site (`website/`).
 - `pnpm scan:staged-secrets` — scan staged changes for leaked credentials
 - `pnpm bench` / `pnpm bench:serverless` — router and serverless-cold-path benchmarks
 - `pnpm eval:calibrate` — prove every agent-eval task's graders accept its reference solution and catch its unsafe variants (needs `pnpm build`; no AI, no network)
-- `pnpm eval --agent <name>` — run AI coding agents against the eval tasks (live agents need `--sandbox-ack` and an isolated sandbox; see `evals/README.md`)
+- `pnpm eval --agent <name>` — run AI coding agents against the eval tasks (live agents need `--sandbox docker`, which keeps hidden tests and graders out of the agent's container; see `evals/README.md`)
 - `pnpm eval:compare <before.json> <after.json>` — compare two eval runs with the same agent and limits; flags regressions
 - `pnpm eval:analyze <results.json> [...]` — deterministic trace analysis of eval runs: behaviour stats, failure root causes, passes to review (no AI, no network)
-- `pnpm eval:regrade <results.json>` — regrade saved eval runs with the current graders (replays stored diffs; run inside `evals/Dockerfile`)
+- `pnpm eval:image` — build the agent image for `pnpm eval --sandbox docker` (no build context: nothing from the repo enters it)
+- `pnpm eval:regrade --sandbox docker <results.json>` — regrade saved eval runs with the current graders (replays stored diffs in a no-network container; incomplete artifacts become unverified, original grades kept as history)
 - `cd website && pnpm dev | build | typecheck` — docs site
 
 The `verify:*` scripts run the individual CI gates (see the guardrails section below for the security-critical set). All are defined in the root `package.json` `scripts`; run any of them as `pnpm <script>`.

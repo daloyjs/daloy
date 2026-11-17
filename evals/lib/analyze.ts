@@ -58,6 +58,8 @@ export interface Analysis {
   readonly usageByTask: Readonly<Record<string, UsageSummary>>;
   readonly causes: readonly FailureCause[];
   readonly flags: readonly ReviewFlag[];
+  /** Unverified trials and why (grader ids or the trial's reason). */
+  readonly unverified: readonly ReviewFlag[];
 }
 
 const TEST_CMD = /\b(?:pnpm|npm|yarn|bun)\s+(?:run\s+)?test\b|node\s+(?:[^|;&]*\s)?--test\b|\bvitest\b|\bjest\b/;
@@ -140,7 +142,8 @@ export function analyze(items: readonly AnalyzedTrial[]): Analysis {
   for (const i of items) {
     if (i.trial.pass) continue;
     for (const g of i.trial.grades) {
-      if (g.pass) continue;
+      // Missing evidence is not a failure cause; it is listed separately.
+      if (g.pass || g.unverified) continue;
       for (const check of failingChecks(g.details)) {
         const key = `${i.trial.taskId}\u0000${g.id}\u0000${check}`;
         const entry = causes.get(key) ?? {
@@ -172,7 +175,19 @@ export function analyze(items: readonly AnalyzedTrial[]): Analysis {
       flags.push({ trial: label(i), reason: "passed without the agent ever running the tests" });
   }
 
+  const unverified: ReviewFlag[] = items
+    .filter((i) => i.trial.unverified)
+    .map((i) => ({
+      trial: label(i),
+      reason:
+        (i.trial as { unverifiedReason?: string }).unverifiedReason ??
+        i.trial.grades
+          .filter((g) => g.unverified)
+          .map((g) => g.id)
+          .join(", "),
+    }));
   return {
+    unverified,
     usage: usageOf(items),
     usageByTask,
     causes: [...causes.values()]
@@ -223,6 +238,10 @@ export function renderAnalysis(a: Analysis, sources: readonly string[]): string 
       lines.push(
         `| ${c.taskId} | ${c.grader} | ${c.check.replaceAll("|", "\\|")} | ${c.count} | ${c.examples.join("<br>")} |`,
       );
+  }
+  if (a.unverified.length > 0) {
+    lines.push("", "### Unverified trials (evidence missing; not counted as failures)", "");
+    for (const u of a.unverified) lines.push(`- \`${u.trial}\`: ${u.reason}`);
   }
   lines.push("", "### Passes to review", "");
   if (a.flags.length === 0) lines.push("Nothing flagged.");

@@ -43,8 +43,11 @@ export interface CellSummary {
   readonly taskId: string;
   readonly suite: EvalSuite;
   readonly ablation: Ablation;
+  /** Verified trials (passed or failed); unverified ones are not counted. */
   readonly n: number;
   readonly passes: number;
+  /** Trials no grader failed but some grader could not decide. */
+  readonly unverified: number;
   readonly passAt1: number;
   readonly passAtK: number;
   readonly passHatK: number;
@@ -62,8 +65,10 @@ export interface CellSummary {
 /** Full summary of a run. */
 export interface RunSummary {
   readonly cells: readonly CellSummary[];
-  /** Pass rate over every trial in the run. */
+  /** Pass rate over every verified trial in the run. */
   readonly overallPassRate: number;
+  /** Trials left out of every rate because they are unverified. */
+  readonly unverified: number;
   /** Ablation → pass rate over its trials. */
   readonly byAblation: Readonly<Partial<Record<Ablation, number>>>;
   /** Suite → pass rate over its trials. */
@@ -80,6 +85,8 @@ export interface RunMeta {
   readonly model?: string;
   /** MCP servers offered to the agent (`none` when absent, for older runs). */
   readonly mcp?: string;
+  /** `docker` when the agent ran isolated (`none` when absent, for older runs). */
+  readonly sandbox?: string;
   /** `<cli> --version` output for live agents. */
   readonly agentVersion?: string;
   readonly gitSha?: string;
@@ -89,8 +96,13 @@ export interface RunMeta {
   readonly timeoutMs?: number;
 }
 
-const rate = (xs: readonly TrialResult[]): number =>
-  xs.length === 0 ? 0 : xs.filter((t) => t.pass).length / xs.length;
+const verified = (xs: readonly TrialResult[]): TrialResult[] =>
+  xs.filter((t) => !t.unverified);
+
+const rate = (xs: readonly TrialResult[]): number => {
+  const v = verified(xs);
+  return v.length === 0 ? 0 : v.filter((t) => t.pass).length / v.length;
+};
 
 function mean(values: readonly (number | undefined)[]): number | undefined {
   const defined = values.filter((v): v is number => v !== undefined);
@@ -187,28 +199,31 @@ export function summarize(
     groups.set(key, list);
   }
   const cells: CellSummary[] = [];
-  for (const list of groups.values()) {
-    const first = list[0]!;
+  for (const all of groups.values()) {
+    const first = all[0]!;
+    const list = verified(all);
     const n = list.length;
     const passing = list.filter((t) => t.pass);
     const c = passing.length;
-    const kk = Math.max(1, Math.min(k, n));
+    const kk = Math.max(1, Math.min(k, Math.max(n, 1)));
     const failures: Record<string, number> = {};
     for (const t of list)
       for (const g of t.grades)
-        if (!g.pass) failures[g.id] = (failures[g.id] ?? 0) + 1;
+        if (!g.pass && !g.unverified) failures[g.id] = (failures[g.id] ?? 0) + 1;
     cells.push({
       taskId: first.taskId,
       suite: first.suite,
       ablation: first.ablation,
       n,
       passes: c,
-      passAt1: c / n,
-      passAtK: passAtK(n, c, kk),
-      passHatK: passHatK(n, c, kk),
+      unverified: all.length - n,
+      passAt1: n === 0 ? 0 : c / n,
+      passAtK: n === 0 ? 0 : passAtK(n, c, kk),
+      passHatK: n === 0 ? 0 : passHatK(n, c, kk),
       k: kk,
       failures,
-      meanAgentMs: list.reduce((s, t) => s + t.agentRun.durationMs, 0) / n,
+      meanAgentMs:
+        n === 0 ? 0 : list.reduce((s, t) => s + t.agentRun.durationMs, 0) / n,
       effort: effortOf(passing),
       perSuccess: perSuccessOf(list),
     });
@@ -219,7 +234,13 @@ export function summarize(
   const bySuite: Partial<Record<EvalSuite, number>> = {};
   for (const s of new Set(trials.map((t) => t.suite)))
     bySuite[s] = rate(trials.filter((t) => t.suite === s));
-  return { cells, overallPassRate: rate(trials), byAblation, bySuite };
+  return {
+    cells,
+    overallPassRate: rate(trials),
+    unverified: trials.length - verified(trials).length,
+    byAblation,
+    bySuite,
+  };
 }
 
 const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
@@ -243,6 +264,7 @@ function pins(meta: RunMeta): string {
   const parts = [
     meta.agentVersion && `agent ${meta.agentVersion}`,
     meta.mcp && meta.mcp !== "none" && `MCP: ${meta.mcp}`,
+    meta.sandbox === "docker" && "Docker sandbox",
     meta.coreVersion && `@daloyjs/core ${meta.coreVersion}`,
     meta.gitSha && `commit ${meta.gitSha.slice(0, 10)}`,
     meta.node && `node ${meta.node}`,
@@ -269,21 +291,26 @@ export function renderMarkdown(summary: RunSummary, meta: RunMeta): string {
   const pinned = pins(meta);
   if (pinned) lines.push("", pinned);
   lines.push("");
-  lines.push(`Overall pass rate: **${pct(summary.overallPassRate)}**`);
+  lines.push(
+    `Overall pass rate: **${pct(summary.overallPassRate)}**` +
+      (summary.unverified > 0
+        ? ` (over verified trials; **${summary.unverified} unverified**, left out: their evidence is incomplete)`
+        : ""),
+  );
   lines.push("");
   lines.push("### Quality");
   lines.push("");
   lines.push(
-    "| Task | Suite | Ablation | Passes | pass@1 | pass@k | pass^k | Failing graders |",
+    "| Task | Suite | Ablation | Passes | pass@1 | pass@k | pass^k | Failing graders | Unverified |",
   );
-  lines.push("|---|---|---|---|---|---|---|---|");
+  lines.push("|---|---|---|---|---|---|---|---|---|");
   for (const c of summary.cells) {
     const failing = Object.entries(c.failures)
       .map(([id, n]) => `${id}×${n}`)
       .join(", ");
     lines.push(
       `| ${c.taskId} | ${c.suite} | ${c.ablation} | ${c.passes}/${c.n} | ${pct(c.passAt1)} | ` +
-        `${pct(c.passAtK)} (k=${c.k}) | ${pct(c.passHatK)} | ${failing || dash} |`,
+        `${pct(c.passAtK)} (k=${c.k}) | ${pct(c.passHatK)} | ${failing || dash} | ${c.unverified || dash} |`,
     );
   }
   lines.push("");
@@ -340,6 +367,8 @@ export interface ComparisonRow {
   readonly headEffort?: EffortSummary;
   /** Guardrail-grader failures in base and head. */
   readonly guardrailFailures: { readonly base: number; readonly head: number };
+  /** Unverified trials in base and head; nonzero makes the row unreliable. */
+  readonly unverified: { readonly base: number; readonly head: number };
 }
 
 /**
@@ -385,6 +414,7 @@ export function compareRuns(
       ...(h ? { headPassAt1: h.passAt1, headEffort: h.effort } : {}),
       status,
       guardrailFailures,
+      unverified: { base: b?.unverified ?? 0, head: h?.unverified ?? 0 },
     });
   }
   return rows;
@@ -422,9 +452,17 @@ export function renderComparison(
     "| Status | Task | Ablation | pass@1 | Guardrail failures | Time (passing) | Tokens (passing) |",
     "|---|---|---|---|---|---|---|",
   ];
+  const shaky = rows.filter((r) => r.unverified.base + r.unverified.head > 0);
+  if (shaky.length > 0)
+    lines.splice(
+      4,
+      0,
+      `**${shaky.length} row(s) include unverified trials** (marked ⚠): their pass rates cover fewer trials than the run had, so treat those comparisons as incomplete.`,
+      "",
+    );
   for (const r of sorted) {
     lines.push(
-      `| ${r.status} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)} | ` +
+      `| ${r.status}${r.unverified.base + r.unverified.head > 0 ? " ⚠" : ""} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)} | ` +
         `${r.guardrailFailures.base} → ${r.guardrailFailures.head} | ` +
         `${time(r.baseEffort)} → ${time(r.headEffort)} | ${tok(r.baseEffort)} → ${tok(r.headEffort)} |`,
     );

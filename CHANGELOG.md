@@ -121,6 +121,32 @@ For the forward-looking plan and the full thematic release log, see
   is capped at 4,000,000 characters, and output beyond any cap keeps both
   its head and its tail. `eval:regrade` and `eval:analyze` re-parse saved
   traces, so parser fixes apply to old runs.
+- **Agent evals: the agent never sees the answer key; missing evidence is
+  unverified, not failed.** From a review of the harness:
+  - `pnpm eval --sandbox docker` runs the agent in a container that sees
+    only its own workspace. The agent image (`pnpm eval:image`) is built from
+    `evals/Dockerfile` with no build context, so the tasks, hidden tests,
+    reference solutions, and graders are never in it; before, the agent ran
+    in an image holding the whole repository and could have read them.
+    Egress goes through the allowlisting proxy, the agent gets only its own
+    token, and grading runs on a copy of the workspace in a `--network none`
+    container. `evals/sandbox-run.sh` is removed. The CI live job uses the
+    same mode.
+  - Claude Code runs with `--output-format stream-json --verbose`, and its
+    trace now records file reads, edits, commands, and MCP calls (plain
+    `json` held only the final answer, which would have failed every
+    "investigated first" check).
+  - Traces record what evidence they hold. `response` and `read-files`
+    report **unverified** instead of failing when the trace has no tool
+    events or is incomplete; a trial with an unverified grade and no failed
+    grade is unverified. Reports leave unverified trials out of pass rates
+    and count them, and `eval:compare` marks those rows.
+  - `eval:regrade` writes a new revision that keeps each trial's first
+    grades as history and marks trials the saved artifacts cannot support
+    (truncated or unappliable diffs, deletions a legacy diff cannot show) as
+    unverified. It no longer carries the original grade forward as if the
+    current graders had confirmed it. This changes the 16 November report:
+    see `evals/reports/2026-11-16/README.md`.
 
 ## [1.24.2] - 2026-11-13
 

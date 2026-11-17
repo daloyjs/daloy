@@ -284,6 +284,7 @@
     "eval:analyze": "node --import tsx evals/analyze.ts",
     "eval:calibrate": "node --import tsx evals/calibrate.ts",
     "eval:compare": "node --import tsx evals/compare.ts",
+    "eval:image": "node --import tsx evals/build-image.ts",
     "eval:regrade": "node --import tsx evals/regrade.ts",
     "red-team:live": "node --import tsx red-team-live/run.ts",
     "red-team:live:mcp": "node --import tsx red-team-live/mcp-attacks.ts",

@@ -52,7 +52,8 @@
 <text x="779.3" y="212.0" font-size="14" fill="#1c1c1c" text-anchor="middle">hard</text>
 <circle cx="929.1" cy="232.0" r="9" fill="#e8b03a" stroke="#222" stroke-width="1.2"/>
 <text x="929.1" y="262.0" font-size="14" fill="#1c1c1c" text-anchor="middle">standard</text>
-<text x="130" y="776" font-size="13" fill="#6f6f6f">Filled = standard set (7 tasks x 3 attempts). Hollow = hard set (JWT scopes, signed webhooks, staging docs, multi-tenant module; 4 tasks x 5).</text>
-<text x="130" y="800" font-size="13" fill="#6f6f6f">All runs 100% with the current graders. Billing is premium requests, not tokens: 1 per attempt for Sonnet, GPT and Gemini, 15 for Opus.</text>
+<text x="130" y="758" font-size="13" fill="#6f6f6f">Filled = standard set (7 tasks x 3 attempts). Hollow = hard set (JWT scopes, signed webhooks, staging docs, multi-tenant module; 4 tasks x 5).</text>
+<text x="130" y="780" font-size="13" fill="#6f6f6f">Every verified attempt passed with the current graders: 18 of 18 per model on the standard set, 20 of 20 on the hard set. 3 Express-migration</text>
+<text x="130" y="802" font-size="13" fill="#6f6f6f">attempts per model are unverified: their stored diffs predate deleted-file capture. Billing is premium requests: 1 per attempt, 15 for Opus.</text>
 <text x="130" y="824" font-size="13" fill="#6f6f6f">Token counts are not strictly comparable across vendors (different tokenizers). GitHub Copilot CLI 1.0.112, 16 Nov 2026.</text>
 </svg>

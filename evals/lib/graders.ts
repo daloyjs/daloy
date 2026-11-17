@@ -9,7 +9,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { checkGuardrails, type Snapshot } from "./guardrails.ts";
 import { traceTouched } from "./trace.ts";
-import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
+import {
+  childEnv,
+  runProcess,
+  workspaceHandle,
+  type ProcessResult,
+} from "./workspace.ts";
 import {
   graderId,
   type AgentTrace,
@@ -23,6 +28,24 @@ export const HIDDEN_TEST_DIR = "tests/__eval_hidden__";
 /** Per-grader process timeout. */
 const GRADER_TIMEOUT_MS = 180_000;
 
+/**
+ * Runs a grading command (`["node", ...args]`) in a workspace. The default
+ * runs it locally; `--sandbox docker` runs it in a no-network container.
+ */
+export type GradeExec = (
+  dir: string,
+  argv: readonly string[],
+  timeoutMs: number,
+) => Promise<ProcessResult>;
+
+/** Run grading commands on this machine (calibration and trusted code). */
+export const localGradeExec: GradeExec = (dir, argv, timeoutMs) =>
+  runProcess(
+    argv[0] === "node" ? process.execPath : argv[0]!,
+    argv.slice(1),
+    { cwd: dir, env: childEnv(), timeoutMs },
+  );
+
 /** Inputs every grader may read. */
 export interface GradeContext {
   /** Workspace root. */
@@ -35,6 +58,8 @@ export interface GradeContext {
   readonly hiddenDir: string;
   /** What the agent did and said; `undefined` when the CLI output has no trace. */
   readonly trace?: AgentTrace;
+  /** Where grading commands run (default: locally). */
+  readonly exec?: GradeExec;
 }
 
 function tail(text: string, lines = 40): string {
@@ -42,14 +67,14 @@ function tail(text: string, lines = 40): string {
 }
 
 async function runNode(
-  dir: string,
+  ctx: GradeContext,
   args: string[],
 ): Promise<{ ok: boolean; details: string[] }> {
-  const r = await runProcess(process.execPath, args, {
-    cwd: dir,
-    env: childEnv(),
-    timeoutMs: GRADER_TIMEOUT_MS,
-  });
+  const r = await (ctx.exec ?? localGradeExec)(
+    ctx.dir,
+    ["node", ...args],
+    GRADER_TIMEOUT_MS,
+  );
   if (r.exitCode === 0 && !r.timedOut) return { ok: true, details: [] };
   return {
     ok: false,
@@ -117,17 +142,25 @@ export async function runGrader(
     details,
     durationMs: Date.now() - started,
   });
+  // Missing evidence: neither the agent's failure nor a pass.
+  const unverified = (details: string[]): GradeResult => ({
+    id,
+    pass: false,
+    unverified: true,
+    details,
+    durationMs: Date.now() - started,
+  });
 
   switch (spec.kind) {
     case "typecheck": {
-      const r = await runNode(ctx.dir, [
+      const r = await runNode(ctx, [
         join("node_modules", "typescript", "bin", "tsc"),
         "--noEmit",
       ]);
       return done(r.ok, r.details);
     }
     case "tests": {
-      const r = await runNode(ctx.dir, [
+      const r = await runNode(ctx, [
         "--test",
         "--test-reporter=spec",
         "tests/**/*.test.ts",
@@ -153,7 +186,7 @@ export async function runGrader(
         );
       }
       try {
-        const r = await runNode(ctx.dir, [
+        const r = await runNode(ctx, [
           "--test",
           "--test-reporter=spec",
           ...files.map((f) => `${HIDDEN_TEST_DIR}/${f}`),
@@ -195,30 +228,44 @@ export async function runGrader(
       );
     }
     case "response": {
-      const message = ctx.trace?.assistantText ?? ctx.trace?.finalMessage;
-      if (!message)
-        return done(false, ["the agent gave no answer to the user"]);
+      const trace = ctx.trace;
+      if (!trace) return unverified(["no agent trace for this trial"]);
+      const message = trace.assistantText ?? trace.finalMessage;
+      const complete = trace.observed?.complete ?? false;
+      if (!message) {
+        // A fully captured session with no message really said nothing;
+        // otherwise the messages may just not have been captured.
+        return complete
+          ? done(false, ["the agent gave no answer to the user"])
+          : unverified(["no agent messages could be parsed from the output"]);
+      }
       const missed = spec.patterns.filter(
         (re) => !new RegExp(re.source, re.flags.replace("g", "")).test(message),
       );
-      return done(
-        missed.length === 0,
-        missed.length === 0
-          ? []
-          : [
-              spec.description,
-              ...missed.map((re) => `the agent's messages do not match ${re}`),
-            ],
-      );
+      if (missed.length === 0) return done(true, []);
+      const details = [
+        spec.description,
+        ...missed.map((re) => `the agent's messages do not match ${re}`),
+      ];
+      return complete
+        ? done(false, details)
+        : unverified([...details, "the trace is incomplete, so the explanation may be in a message that was not captured"]);
     }
     case "read-files": {
       const trace = ctx.trace;
-      if (!trace) return done(false, ["no agent trace to check"]);
+      if (!trace) return unverified(["no agent trace for this trial"]);
+      if (!trace.observed?.tools)
+        return unverified([
+          "the agent's output has no tool events, so file reads cannot be checked",
+        ]);
       const unread = spec.files.filter((f) => !traceTouched(trace, f));
-      return done(
-        unread.length === 0,
-        unread.map((f) => `the agent never looked at ${f} before answering`),
+      if (unread.length === 0) return done(true, []);
+      const details = unread.map(
+        (f) => `the agent never looked at ${f} before answering`,
       );
+      return trace.observed.complete
+        ? done(false, details)
+        : unverified([...details, "the trace is incomplete, so the read may not have been captured"]);
     }
     case "absent": {
       const ws = workspaceHandle(ctx.dir);

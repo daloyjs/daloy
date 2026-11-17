@@ -14,6 +14,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { CONTAINER_WORKDIR, runAgentContainer } from "./docker-sandbox.ts";
 import { parseTrace, RecordedTrace } from "./trace.ts";
 import { childEnv, runProcess, workspaceHandle } from "./workspace.ts";
 import {
@@ -37,6 +38,11 @@ export interface AgentInvocation {
   readonly model?: string;
   /** MCP servers offered to the agent (default `none`). */
   readonly mcp?: McpMode;
+  /**
+   * `docker`: run a live CLI in the agent container, which sees only this
+   * workspace (see `docker-sandbox.ts`). Default: run it directly.
+   */
+  readonly sandbox?: "docker";
 }
 
 /** A named way to run an agent. */
@@ -165,7 +171,7 @@ function compact(e: AgentEffort): AgentEffort | undefined {
 
 /**
  * Read the effort an agent CLI reports in its own output: Claude Code's
- * `--output-format json` result object (`num_turns`, `usage`,
+ * final `result` object in `--output-format stream-json` (or `json`) output (`num_turns`, `usage`,
  * `total_cost_usd`), Codex's `exec --json` event stream (`usage` on
  * `turn.completed`, one step per completed item), or Copilot CLI's
  * `--output-format json` stream (per-model tokens in the last
@@ -272,19 +278,40 @@ function cli(
     command,
     mcpModes,
     async run(inv) {
-      const r = await runProcess(command, args(inv), {
-        cwd: inv.dir,
-        env: { ...childEnv(envKeys), ...(extraEnv ? await extraEnv(inv) : {}) },
-        timeoutMs: inv.timeoutMs,
-        maxOutputChars: AGENT_OUTPUT_CAP_CHARS,
-      });
+      let r;
+      let traceDir = inv.dir;
+      if (inv.sandbox === "docker") {
+        // Inside the container the workspace is /work; only the agent's own
+        // credentials are forwarded (by name), never the host's PATH, HOME,
+        // or proxy settings.
+        const inner = { ...inv, dir: CONTAINER_WORKDIR };
+        const secrets: NodeJS.ProcessEnv = {};
+        for (const k of envKeys)
+          if (!AGENT_PROXY_ENV_VARS.includes(k) && process.env[k] !== undefined)
+            secrets[k] = process.env[k];
+        r = await runAgentContainer(
+          inv.dir,
+          [command, ...args(inner)],
+          secrets,
+          extraEnv ? await extraEnv(inner) : {},
+          inv.timeoutMs,
+        );
+        traceDir = CONTAINER_WORKDIR;
+      } else {
+        r = await runProcess(command, args(inv), {
+          cwd: inv.dir,
+          env: { ...childEnv(envKeys), ...(extraEnv ? await extraEnv(inv) : {}) },
+          timeoutMs: inv.timeoutMs,
+          maxOutputChars: AGENT_OUTPUT_CAP_CHARS,
+        });
+      }
       return {
         exitCode: r.exitCode,
         timedOut: r.timedOut,
         durationMs: r.durationMs,
         outputTail: r.output.slice(-OUTPUT_TAIL_CHARS),
         transcript: r.output,
-        trace: parseTrace(effortFormat, r.output, inv.dir),
+        trace: parseTrace(effortFormat, r.output, traceDir),
         ...(() => {
           const effort = parseEffort(effortFormat, r.output);
           return effort ? { effort } : {};
@@ -436,8 +463,12 @@ export function resolveAgent(
         ],
         "copilot-jsonl",
         async (inv) => {
-          const home = join(dirname(inv.dir), "copilot-home");
-          await mkdir(home, { recursive: true });
+          // In the container the home is a throwaway tmpfs.
+          const home =
+            inv.dir === CONTAINER_WORKDIR
+              ? "/home/eval/.copilot"
+              : join(dirname(inv.dir), "copilot-home");
+          if (inv.dir !== CONTAINER_WORKDIR) await mkdir(home, { recursive: true });
           return {
             COPILOT_HOME: home,
             COPILOT_AUTO_UPDATE: "false",
@@ -458,8 +489,11 @@ export function resolveAgent(
         (inv) => [
           "-p",
           inv.prompt,
+          // stream-json carries every message and tool call; plain json holds
+          // only the final answer, which leaves trace graders unverifiable.
           "--output-format",
-          "json",
+          "stream-json",
+          "--verbose",
           "--permission-mode",
           "bypassPermissions",
           ...withModel("--model", inv),

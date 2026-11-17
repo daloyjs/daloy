@@ -11,7 +11,7 @@
 
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { WORKSPACE_APP_NAME } from "./workspace.ts";
+import { OUTPUT_ELIDED, WORKSPACE_APP_NAME } from "./workspace.ts";
 import type { EffortFormat } from "./agents.ts";
 import type { AgentTrace, TrialResult } from "./types.ts";
 
@@ -30,6 +30,9 @@ const MAX_ASSISTANT_TEXT_CHARS = 20_000;
 /** Tool-name prefix of the DaloyJS docs MCP server (`--mcp docs`). */
 export const DOCS_MCP_TOOL_PREFIX = "daloyjs-docs-";
 
+/** Claude Code's name prefix for the same server's tools (`mcp__<server>__`). */
+export const CLAUDE_DOCS_MCP_TOOL_PREFIX = "mcp__daloyjs-docs__";
+
 /** File names with a source-like extension. */
 const FILE_EXT = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|json|md|mdx|ya?ml|env\w*)$/;
 /** Bare directory names that count as paths in a command (`grep -r x src`). */
@@ -46,6 +49,7 @@ const SOURCE_DIRS = new Set(["src", "tests", "lib", "scripts", "legacy", "app", 
  */
 export function workspaceRelative(path: string, dir?: string): string {
   let p = path.trim().replaceAll("\\", "/");
+  if (dir && (p === dir || p === `${dir}/`)) return ".";
   if (dir && p.startsWith(`${dir}/`)) p = p.slice(dir.length + 1);
   const marker = `/${WORKSPACE_APP_NAME}/`;
   const at = p.indexOf(marker);
@@ -129,12 +133,31 @@ class TraceBuilder {
   readonly tools: Record<string, number> = {};
   readonly skills = new Set<string>();
   docs = 0;
+  /** The format reports tool calls (set by the format parser). */
+  toolStream = false;
+  /** The session's start was captured (set by the format parser). */
+  sawStart = false;
+  /** Output was elided in the middle (see `runProcess`). */
+  elided = false;
 
-  constructor(private readonly dir?: string) {}
+  readonly dir: string | undefined;
+
+  constructor(dir?: string) {
+    this.dir = dir;
+  }
 
   tool(name: string): void {
     this.tools[name] = (this.tools[name] ?? 0) + 1;
-    if (name.startsWith(DOCS_MCP_TOOL_PREFIX)) this.docs++;
+    if (
+      name.startsWith(DOCS_MCP_TOOL_PREFIX) ||
+      name.startsWith(CLAUDE_DOCS_MCP_TOOL_PREFIX)
+    )
+      this.docs++;
+  }
+
+  editPath(p: unknown): void {
+    if (typeof p === "string" && p.trim())
+      this.edited.add(workspaceRelative(p, this.dir));
   }
 
   readPath(p: unknown): void {
@@ -172,12 +195,20 @@ class TraceBuilder {
       toolCalls: this.tools,
       skills: [...this.skills],
       docsMcpCalls: this.docs,
+      observed: {
+        messages: this.messages.length > 0,
+        tools: this.toolStream,
+        complete: this.toolStream && this.sawStart && !this.elided,
+      },
     };
   }
 }
 
 function copilot(b: TraceBuilder, output: string): void {
   for (const ev of jsonObjects(output)) {
+    if (ev.type === "session.start") b.sawStart = true;
+    // Any session event means the CLI's event stream was captured.
+    if (typeof ev.type === "string" && ev.type.includes(".")) b.toolStream = true;
     const data = ev.data as Record<string, unknown> | undefined;
     if (!data) continue;
     if (ev.type === "assistant.message") {
@@ -189,16 +220,14 @@ function copilot(b: TraceBuilder, output: string): void {
     b.tool(name);
     const args = data.arguments;
     if (name === "apply_patch" && typeof args === "string") {
-      for (const p of pathsInPatch(args)) b.edited.add(p);
+      for (const p of pathsInPatch(args, b.dir)) b.edited.add(p);
       continue;
     }
     if (!args || typeof args !== "object") continue;
     const a = args as Record<string, unknown>;
     if (name === "view") b.readPath(a.path);
-    else if (name === "edit" || name === "create") {
-      const p = str(a.path);
-      if (p) b.edited.add(workspaceRelative(p));
-    } else if (name === "grep" || name === "rg" || name === "glob")
+    else if (name === "edit" || name === "create") b.editPath(a.path);
+    else if (name === "grep" || name === "rg" || name === "glob")
       b.readPath(a.paths ?? a.path);
     else if (name === "bash" || name === "shell") {
       const c = str(a.command);
@@ -210,14 +239,61 @@ function copilot(b: TraceBuilder, output: string): void {
   }
 }
 
+/**
+ * Claude Code, run with `--output-format stream-json --verbose`: a `system`
+ * init event, `assistant` events whose `message.content[]` holds `text` and
+ * `tool_use` items, and a final `result`. Plain `--output-format json`
+ * output (only the `result`) leaves tools unobserved, so trace graders report
+ * unverified instead of a false failure.
+ */
 function claude(b: TraceBuilder, output: string): void {
+  let resultText: string | undefined;
   for (const ev of jsonObjects(output)) {
-    if (ev.type === "result" || "total_cost_usd" in ev) b.message(str(ev.result));
+    if (ev.type === "system") b.sawStart = true;
+    if (ev.type === "result" || "total_cost_usd" in ev) {
+      resultText = str(ev.result);
+      continue;
+    }
+    if (ev.type !== "assistant") continue;
+    b.toolStream = true;
+    const message = ev.message as { content?: unknown } | undefined;
+    const content = Array.isArray(message?.content) ? message.content : [];
+    for (const raw of content) {
+      const item = raw as Record<string, unknown>;
+      if (item.type === "text") b.message(str(item.text));
+      if (item.type !== "tool_use") continue;
+      const name = str(item.name) ?? "unknown";
+      b.tool(name);
+      const input = (item.input ?? {}) as Record<string, unknown>;
+      if (name === "Read" || name === "LS") b.readPath(input.file_path ?? input.path);
+      else if (name === "Grep" || name === "Glob") b.readPath(input.path);
+      else if (name === "Edit" || name === "MultiEdit" || name === "Write")
+        b.editPath(input.file_path);
+      else if (name === "NotebookEdit") b.editPath(input.notebook_path);
+      else if (name === "Bash") {
+        const c = str(input.command);
+        if (c) b.command(c);
+      } else if (name === "Skill") {
+        const sk = str(input.skill) ?? str(input.name) ?? str(input.command);
+        if (sk) b.skills.add(sk);
+      }
+    }
   }
+  // The result repeats the last text message; add it only when it differs.
+  if (resultText && resultText.trim() !== b.finalMessage) b.message(resultText);
 }
 
+/**
+ * Codex `exec --json`. It reports shell commands and file changes; file reads
+ * happen through shell commands and are inferred from them. Its stream has no
+ * distinct start event, so the first `thread.started` (or any event) counts.
+ */
 function codex(b: TraceBuilder, output: string): void {
   for (const ev of jsonObjects(output)) {
+    if (typeof ev.type === "string") {
+      b.toolStream = true;
+      if (ev.type === "thread.started" || ev.type === "turn.started") b.sawStart = true;
+    }
     if (ev.type !== "item.completed") continue;
     const item = ev.item as Record<string, unknown> | undefined;
     if (!item) continue;
@@ -229,10 +305,7 @@ function codex(b: TraceBuilder, output: string): void {
     } else if (item.type === "file_change") {
       b.tool("edit");
       const changes = item.changes as { path?: unknown }[] | undefined;
-      for (const ch of changes ?? []) {
-        const p = str(ch.path);
-        if (p) b.edited.add(workspaceRelative(p));
-      }
+      for (const ch of changes ?? []) b.editPath(ch.path);
     }
   }
 }
@@ -251,6 +324,7 @@ export function parseTrace(
   dir?: string,
 ): AgentTrace {
   const b = new TraceBuilder(dir);
+  b.elided = output.includes(OUTPUT_ELIDED);
   if (format === "copilot-jsonl") copilot(b, output);
   else if (format === "claude-json") claude(b, output);
   else if (format === "codex-jsonl") codex(b, output);
@@ -279,6 +353,12 @@ export function traceTouched(trace: AgentTrace, file: string): boolean {
  */
 export class RecordedTrace {
   private readonly b = new TraceBuilder();
+
+  constructor() {
+    // Offline solutions record every read through the handle.
+    this.b.toolStream = true;
+    this.b.sawStart = true;
+  }
 
   /** Record a file read. */
   read(rel: string): void {

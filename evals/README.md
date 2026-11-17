@@ -27,47 +27,61 @@ bypassing the harness's environment allowlist), and
 shell and masked in output). Auth comes from a token; prefer a fine-grained
 token limited to Copilot over your full `gh auth token`:
 
-```sh
-COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox-ack --model claude-sonnet-5.5
-```
-
-Docker sandbox with an egress allowlist (recommended for live agents; the
-agent sees no host files or credentials, runs as an unprivileged user, gets
-only the variables the script passes, and can reach only allowlisted hosts):
+Run live agents with `--sandbox docker` (recommended):
 
 ```sh
-docker build -f evals/Dockerfile -t daloy-evals .
-COPILOT_GITHUB_TOKEN=$(gh auth token) evals/sandbox-run.sh \
-  --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 5
+pnpm build
+pnpm eval:image                      # once, and after a dependency or CLI version change
+COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox docker \
+  --model claude-sonnet-5.5 --trials 5
 ```
 
-`sandbox-run.sh` puts the eval container on an internal Docker network with no
-route out. Its only path to the internet is an egress proxy container
-(`egress-proxy.ts`, no dependencies) that tunnels HTTPS (`CONNECT` to port
-443) to allowlisted host names resolving to public addresses, and logs every
-decision to `evals/results/egress-<time>.log`. The default allowlist is
-`.githubcopilot.com,api.github.com`; `--mcp docs` adds `daloyjs.dev`; override
-with `EGRESS_ALLOW`. Only the agent process gets the proxy variables: graders
-and hidden tests stay offline. Copilot CLI 1.0.112 needed
-`api.business.githubcopilot.com`, `exp.` and `telemetry.business.githubcopilot.com`,
-and `api.github.com`; it also tries `cafe.github.com`, which is denied
-without affecting runs. Check the egress log after a CLI upgrade.
+`--sandbox docker` separates three stages, so the agent never sees the answer
+key:
 
-The token is still readable by processes in the container (the agent could
-send it to an allowlisted host), so use a fine-grained token limited to
-Copilot. Plain `docker run` (as before, open network) still works if you need
-it:
+- **Harness** (this process, trusted): prepares the workspaces and holds the
+  tasks, hidden tests, reference solutions, and graders.
+- **Agent**: runs in a container from the agent image that sees **only its
+  own workspace** (mounted at `/work`). `pnpm eval:image` builds that image
+  from `evals/Dockerfile` with no build context, so no repository file is in
+  it: just Node, pnpm, the agent CLI, and Linux builds of the workspace
+  dependencies under `/opt/eval-deps` (the host's `node_modules` holds native
+  binaries for the host, and TypeScript 7 is native). The container runs as
+  an unprivileged user with a read-only root, a throwaway `tmpfs` home (fresh
+  `COPILOT_HOME`), no capabilities, memory and PID limits, and only the
+  agent's own token, forwarded by name. Its only network is an internal Docker
+  network whose one way out is the egress proxy.
+- **Grade**: typecheck, the visible tests, and the hidden tests run on a
+  **copy** of the finished workspace, in a container from the same image
+  with `--network none`. Static checks (the guardrail diff, protected files,
+  patterns) run in the harness on snapshots.
 
-```sh
-docker run --rm --cap-drop=ALL --security-opt no-new-privileges \
-  -e COPILOT_GITHUB_TOKEN -v "$PWD/evals/results:/home/node/daloy/evals/results" \
-  daloy-evals --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 5
-```
+The egress proxy (`egress-proxy.ts`, no dependencies) tunnels HTTPS
+(`CONNECT` to port 443) to allowlisted host names resolving to public
+addresses, and logs every decision to `<run>-egress.log` next to the results.
+The default allowlist is per agent (`copilot`: `.githubcopilot.com`,
+`api.github.com`; `claude`: `api.anthropic.com`; `codex`: `api.openai.com`);
+`--mcp docs` adds `daloyjs.dev`; `EGRESS_ALLOW` overrides it. Copilot CLI
+1.0.112 needs `api.business.githubcopilot.com`, `exp.` and
+`telemetry.business.githubcopilot.com`, and `api.github.com`; it also tries
+`cafe.github.com`, which is denied without affecting runs. Check the egress
+log after a CLI upgrade.
+
+`pnpm eval` refuses an agent image built for a different checkout (its label
+records pnpm, the CLI, and dependency versions): rebuild with `pnpm
+eval:image`. Claude Code and Codex are added to the image only when you ask:
+`CLAUDE_CODE_VERSION=<x.y.z> CODEX_VERSION=<x.y.z> pnpm eval:image`.
+
+The agent CLI still holds its token inside its container and could send it to
+an allowed host, so use a fine-grained token limited to Copilot rather than
+your full `gh auth token`. Without `--sandbox docker`, a live agent needs
+`--sandbox-ack` (this whole machine is an isolated, secret-free VM) and can
+read this repository, hidden tests included; the harness warns.
 
 Offer the DaloyJS docs MCP (opt-in, `copilot` only):
 
 ```sh
-pnpm eval --agent copilot --sandbox-ack --mcp docs --trials 3
+pnpm eval --agent copilot --sandbox docker --mcp docs --trials 3
 ```
 
 `--mcp docs` adds only the public, read-only, keyless docs server
@@ -83,12 +97,12 @@ thing you are measuring:
 pnpm eval:compare sonnet-mcp-none.json sonnet-mcp-docs.json --allow-mismatch
 ```
 
-Other live agents (in an isolated container or VM only):
+Other live agents:
 
 ```sh
-pnpm eval --agent codex   --sandbox-ack --trials 5 --suite guardrail
-pnpm eval --agent claude  --sandbox-ack --trials 3 --ablation full,bare
-pnpm eval --agent copilot --sandbox-ack --model <id>
+pnpm eval --agent codex   --sandbox docker --trials 5 --suite guardrail
+pnpm eval --agent claude  --sandbox docker --trials 3 --ablation full,bare
+pnpm eval --agent copilot --sandbox docker --model <id>
 DALOY_EVAL_AGENT_CMD='["my-agent","--prompt","{prompt}","--cwd","{dir}"]' \
 DALOY_EVAL_AGENT_ENV=MY_AGENT_API_KEY \
   pnpm eval --agent command --sandbox-ack
@@ -96,7 +110,8 @@ DALOY_EVAL_AGENT_ENV=MY_AGENT_API_KEY \
 
 `pnpm eval --help` lists every flag. Results go to `evals/results/`
 (gitignored): one JSON file with every trial, its grades, the agent's diff and
-the pinned run metadata (agent and CLI version, model, commit, limits), a
+the pinned run metadata (agent and CLI version, model, sandbox, commit,
+limits), a
 Markdown summary, and a `<run>-traces/` directory with each trial's full agent
 output.
 
@@ -106,8 +121,10 @@ Compare two runs (fix something, rerun with the same agent and limits):
 pnpm eval:compare before.json after.json --fail-on-regression
 ```
 
-It refuses runs whose agent, agent version, model, or time limit differ unless
-`--allow-mismatch` is passed. Baseline a new model on its own first.
+It refuses runs whose agent, agent version, model, MCP mode, sandbox, or time
+limit differ unless `--allow-mismatch` is passed. Baseline a new model on its
+own first. Rows with unverified trials are marked ⚠: their pass rates cover
+fewer trials than the run had.
 
 Analyse what agents did across one or more runs (free, offline, no model):
 
@@ -126,14 +143,25 @@ not replace reading them. Older results are analysed by re-parsing their
 Regrade saved runs after a grader fix, without paying for new agent runs:
 
 ```sh
-pnpm eval:regrade evals/results/<run>.json   # writes <run>.regraded.json + .md
+pnpm eval:regrade --sandbox docker evals/results/<run>.json   # writes <run>.regraded.json + .md
 ```
 
-It replays each trial's stored diff onto a fresh scaffold and runs the current
-graders. Grading executes the agent's code, so run it in the Docker sandbox
-(`--entrypoint node daloy-evals --import tsx evals/regrade.ts ...`). Trials
-whose diff was truncated keep their original grades and are listed under
-`regrade.skipped`.
+It replays each trial's stored diff onto a fresh scaffold, re-parses its
+saved trace, and runs the current graders. Grading executes the agent's
+code, so pass `--sandbox docker` (grading then runs in the no-network
+container); without it the harness warns.
+
+A regrade writes a new grading **revision**, it does not overwrite history:
+
+- Each trial keeps its first recorded grades under `original`.
+- Each trial in the revision is `pass`, `fail`, or **unverified**. A trial is
+  unverified when the saved artifacts cannot support a current check: the
+  stored diff was truncated or no longer applies, an older diff format
+  cannot show a deletion the check depends on, or the trace is missing or
+  incomplete. The reason is recorded on the trial and the grade.
+- The old grade is never copied forward as if the current graders had
+  confirmed it. Reports leave unverified trials out of pass rates and count
+  them separately. Rerun those trials live to verify them.
 
 ## How a trial works
 
@@ -157,11 +185,18 @@ whose diff was truncated keep their original grades and are listed under
    files it edited with edit tools, shell commands, skills, and docs MCP calls.
    The trace is stored in the results JSON. Edits made through shell commands
    (a Python heredoc, `sed -i`) show up in the diff, not in `filesEdited`.
-8. Graders run: `typecheck`, `tests`, `hidden` (copied in only now),
+8. The workspace is copied, and graders run on the copy (in a no-network
+   container with `--sandbox docker`): `typecheck`, `tests`, `hidden`
+   (copied into the copy only now),
    `guardrails` (see `lib/guardrails.ts`), `protected-files`, task-specific
    `pattern` / `absent` checks, and for "don't act" tasks `response` (regexes
    what the agent told the user must match: all its messages) and `read-files` (files the agent must have
-   looked at). A trial passes only if every grader passes.
+   looked at). A trial passes only if every grader passes. Trace graders
+   report **unverified** instead of failing when the trace lacks the
+   evidence: no tool events (for example Claude Code's plain `json` output;
+   the adapter uses `stream-json`), or an incomplete trace (its start was
+   not captured, or the middle was elided). A trial with an unverified grade
+   and no failed grade is unverified, not failed.
 
 ## Task suites
 
@@ -188,8 +223,8 @@ evals/
 ├── compare.ts         pnpm eval:compare
 ├── regrade.ts         pnpm eval:regrade
 ├── egress-proxy.ts    allowlisting HTTPS proxy for the sandbox
-├── sandbox-run.sh     Docker sandbox with the egress allowlist
-├── Dockerfile         sandbox image
+├── build-image.ts     pnpm eval:image (agent image, no build context)
+├── Dockerfile         agent image: toolchain, CLI, dependencies, no repository
 ├── reports/           committed summaries and charts of notable runs (raw results stay in results/)
 ├── lib/               harness (types, workspace, agents, trace, graders, guardrails, metrics, report, analyze, egress, cli)
 └── tasks/
@@ -206,7 +241,14 @@ evals/
 - **Never loosen a grader, hidden test, or guardrail rule to raise a score.**
   If a grader rejects a legitimately good solution, fix the grader and add
   that solution shape to `tests/evals-harness.test.ts`.
-- **Prompts never mention what is graded** (enforced by the harness tests).
+- **Prompts hide the mechanics, not the goal.** They never name graders,
+  hidden tests, the eval, or the API that solves the task (`fetchGuard()`,
+  `.strict()`); the harness tests enforce the first part. They do state the
+  outcomes the user wants, including quality ones ("in real production they
+  must stay hidden", "a tenant must never see another tenant's notes").
+  Unhinted-risk tasks (`guardrail-cors-credentials`, `guardrail-ssrf-import`)
+  grade only baseline safety any competent engineer is expected to provide,
+  and say why in the task's doc comment.
 - **Pattern graders match calls, not names.** `timingSafeEqual\s*\(` and not
   `timingSafeEqual`: an import line alone must not satisfy "uses a
   constant-time compare" (calibration caught exactly that).
@@ -243,9 +285,14 @@ evals/
 - **Not a gate.** Tasks and hidden tests are public, so agents can find them
   and models may train on them. Use scores to find things to fix in DaloyJS,
   not as a release gate.
-- **Live agents run only in a sandbox** (`--sandbox-ack`). The harness strips
-  the environment to an allowlist, but an agent with shell access can still
-  read the machine's files.
+- **The agent never sees the answer key.** Run live agents with `--sandbox
+  docker`: the agent's container holds only its workspace, never the tasks,
+  hidden tests, reference solutions, or graders, and grading runs on a copy
+  in a separate container. A different folder on the same machine is not a
+  boundary. `--sandbox-ack` (no container) is only for an isolated VM, and
+  there the agent can read the hidden tests.
+- **Missing evidence is not failure.** A check without the evidence it needs
+  is unverified, reported separately, and excluded from pass rates.
 - Grow the task set from real friction (issues, PRs, docs-search misses,
   on-call reports). Each task is one bounded workflow inside a kind of app
   DaloyJS is used for.

@@ -132,12 +132,12 @@ pnpm eval:calibrate
 </Step>
 <Step title="Run a live agent in a sandbox">
 
-Live agents get broad tool permissions inside the workspace, so the runner refuses them unless you pass `--sandbox-ack`. Pass it only inside a container or VM that holds no secrets except the agent's own API key.
+Live agents get broad tool permissions, so the runner refuses them unless you pass `--sandbox docker` (recommended, see below) or `--sandbox-ack` (this whole machine is an isolated VM with no secrets except the agent's own key).
 
 ```bash
-pnpm eval --agent codex --sandbox-ack --suite guardrail --trials 5
-pnpm eval --agent claude --sandbox-ack --ablation full,bare --trials 3
-DALOY_EVAL_AGENT_CMD='["my-agent","--prompt","{prompt}"]' pnpm eval --agent command --sandbox-ack
+pnpm eval:image   # once: builds the agent image
+COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox docker --trials 5
+pnpm eval --agent claude --sandbox docker --ablation full,bare --trials 3
 ```
 
 </Step>
@@ -145,21 +145,28 @@ DALOY_EVAL_AGENT_CMD='["my-agent","--prompt","{prompt}"]' pnpm eval --agent comm
 
 Useful flags: `--task <ids>`, `--model <id>`, `--mcp docs` (offer the [DaloyJS docs MCP](/docs/mcp), Copilot CLI only), `--k <n>`, `--timeout-min <n>`, `--fail-under <0..1>` (exit 1 below that pass rate), `--keep` (keep workspaces for inspection), and `--list`. Results land in `evals/results/` as JSON (every trial, its grades, the agent's diff, and the pinned agent, model, framework commit, and limits), a Markdown summary that is also appended to the GitHub Actions job summary, and one trace file per trial with the agent's full output.
 
-<Callout type="danger">Never run a live agent with `--sandbox-ack` on your workstation with real credentials in the environment. The harness passes only an allowlist of variables to child processes, but the agent can still read files on the machine. Use the Docker image below, a VM, or the CI workflow.</Callout>
+<Callout type="danger">Never run a live agent with `--sandbox-ack` on your workstation. The agent can read every file on the machine, including the hidden tests and reference solutions in this repository. Use `--sandbox docker`.</Callout>
 
 ### Run in the Docker sandbox [#docker]
 
-`evals/Dockerfile` builds a digest-pinned image with the repository, a frozen-lockfile install, and the agent CLI at an exact version. Inside it the agent runs as an unprivileged user and sees no host home directory, SSH keys, cloud credentials, or `gh` config. Results land in the mounted `evals/results/`.
+`--sandbox docker` keeps the answer key away from the agent. A different folder on the same machine is not a boundary, so each trial uses three stages:
 
-`evals/sandbox-run.sh` runs it with an **egress allowlist**: the eval container joins an internal Docker network with no route out, and its only way to the internet is a small proxy container that tunnels HTTPS to allowlisted host names (by default Copilot's API hosts) resolving to public addresses. Every allowed and denied connection is logged to `evals/results/egress-<time>.log`. Only the agent process gets the proxy settings; graders and hidden tests stay offline.
+| Stage | Can see | Network |
+|---|---|---|
+| **Harness** (trusted) | tasks, hidden tests, reference solutions, graders | to start containers |
+| **Agent** | only its own workspace, mounted at `/work` | the model API, through the egress proxy |
+| **Grade** | a **copy** of the finished workspace plus the hidden tests | none |
+
+`pnpm eval:image` builds the agent image from `evals/Dockerfile` with **no build context**, so no repository file can end up in it: Node, pnpm, the agent CLI at an exact version, and Linux builds of the workspace dependencies. The agent runs as an unprivileged user with a read-only root, a throwaway home, no capabilities, and only its own token. Its only network is an internal Docker network whose one way out is a small proxy that tunnels HTTPS to allowlisted host names (by default the agent's API hosts) resolving to public addresses, and logs every decision to `<run>-egress.log`. Typecheck and tests then run on a copy of the workspace in a container with no network.
 
 ```bash
-docker build -f evals/Dockerfile -t daloy-evals .
-COPILOT_GITHUB_TOKEN=$(gh auth token) evals/sandbox-run.sh \
-  --agent copilot --sandbox-ack --model claude-sonnet-5.5 --trials 5
+pnpm build
+pnpm eval:image
+COPILOT_GITHUB_TOKEN=$(gh auth token) pnpm eval --agent copilot --sandbox docker \
+  --model claude-sonnet-5.5 --trials 5
 ```
 
-Set `EGRESS_ALLOW` to change the list; `--mcp docs` adds `daloyjs.dev` automatically. The agent CLI still holds its token in the same container and could send it to an allowed host, so pass a fine-grained token that can only use Copilot, not your full `gh auth token`.
+Set `EGRESS_ALLOW` to change the list; `--mcp docs` adds `daloyjs.dev` automatically. `pnpm eval` refuses an image built for different versions, so rebuild after a dependency or CLI change. The agent CLI still holds its token inside its container and could send it to an allowed host, so pass a fine-grained token that can only use Copilot, not your full `gh auth token`.
 
 ## Validate the graders [#validate-graders]
 
@@ -169,7 +176,9 @@ A grader that rejects a correct app is as harmful as one that accepts a broken a
 - **noop**: doing nothing must fail.
 - **unsafe variants**: each known shortcut must be caught by the graders it names.
 
-This already paid for itself twice. The first alternative for the strict-schema task used Zod 4's `z.strictObject()`, and the guardrail diff, which only counted `.strict()`, failed a solution that was just as strict. The rule now counts both. Then the first live run with four frontier models failed almost every guardrail trial on `protected-files`. The traces showed every model had fixed the code correctly and then **appended** an extra unhappy-path test to the shipped test file, which the template `AGENTS.md` asks for. The grader required the file to be byte-identical. It now requires only that the original lines survive, and the affected trials were regraded. When a live run fails, read the trace and the diff before blaming the agent. If the app was correct, add it as an alternative and fix the grader, then run `pnpm eval:regrade <results.json>`: it replays every stored diff through the current graders, so you do not pay for new agent runs. Run it inside the Docker sandbox, because grading executes the agent's code.
+This already paid for itself twice. The first alternative for the strict-schema task used Zod 4's `z.strictObject()`, and the guardrail diff, which only counted `.strict()`, failed a solution that was just as strict. The rule now counts both. Then the first live run with four frontier models failed almost every guardrail trial on `protected-files`. The traces showed every model had fixed the code correctly and then **appended** an extra unhappy-path test to the shipped test file, which the template `AGENTS.md` asks for. The grader required the file to be byte-identical. It now requires only that the original lines survive, and the affected trials were regraded. When a live run fails, read the trace and the diff before blaming the agent. If the app was correct, add it as an alternative and fix the grader, then run `pnpm eval:regrade --sandbox docker <results.json>`: it replays every stored diff through the current graders in the no-network grading container, so you do not pay for new agent runs.
+
+A regrade writes a new grading revision and keeps each trial's first grades as history. When the saved artifacts cannot support a current check (a truncated diff, an older diff format that cannot show a deletion, an incomplete trace), that trial is **unverified**: reported separately, left out of pass rates, never given its old grade as if the current graders had confirmed it. Trace graders work the same way: no tool events, or a trace whose start was not captured, means unverified, not a failure.
 
 ## Read the results [#results]
 
@@ -193,14 +202,14 @@ The docs MCP is a separate, opt-in axis: run once with the default `--mcp none` 
 Evals pay off when they drive a fix. When a run shows a failure pattern, inspect the app and the trace, fix the cause (the framework, the docs, the skill, or a template), then rerun the same tasks with the same agent and limits and compare:
 
 ```bash
-pnpm eval --agent codex --sandbox-ack --trials 3 --out before.json
+pnpm eval --agent codex --sandbox docker --trials 3 --out before.json
 # fix the cause, rebuild
 pnpm build
-pnpm eval --agent codex --sandbox-ack --trials 3 --out after.json
+pnpm eval --agent codex --sandbox docker --trials 3 --out after.json
 pnpm eval:compare before.json after.json --fail-on-regression
 ```
 
-`eval:compare` lists every task as regressed, improved, or unchanged. A task counts as regressed when its pass rate drops or it gains guardrail failures, and the table also shows effort before and after. It refuses to compare runs whose agent, agent version, model, or time limit differ (`--allow-mismatch` overrides), because then you cannot tell whether your change or the agent caused the difference.
+`eval:compare` lists every task as regressed, improved, or unchanged. A task counts as regressed when its pass rate drops or it gains guardrail failures, and the table also shows effort before and after. Rows with unverified trials are marked ⚠. It refuses to compare runs whose agent, agent version, model, MCP mode, sandbox, or time limit differ (`--allow-mismatch` overrides), because then you cannot tell whether your change or the agent caused the difference.
 
 To know *why* something failed, read traces. `pnpm eval:analyze <results.json> [...]` points you at the right ones, with no model involved. Per task, it reports how often agents gave a final answer, ran the tests and typecheck, added tests, loaded a skill, or used the docs MCP. It also groups failures by root cause (task, grader, failing test name) and flags passes worth a second look: no final answer, an answer that reports a problem, or tests never run.
 

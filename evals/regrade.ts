@@ -18,13 +18,16 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runGrader } from "./lib/graders.ts";
-import { reconcileLegacyGrades } from "./lib/legacy-diff.ts";
+import { markLegacyUnverified } from "./lib/legacy-diff.ts";
+import { reviseTrial } from "./lib/revision.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
-import { hiddenDirFor } from "./lib/runner.ts";
+import { checkGraderImage, IMAGE_DEPS_DIR } from "./lib/docker-sandbox.ts";
+import { dockerGradeExec, hiddenDirFor } from "./lib/runner.ts";
 import { loadTrialTrace } from "./lib/trace.ts";
 import {
   childEnv,
   disposeWorkspace,
+  openForContainer,
   prepareWorkspace,
   runProcess,
   snapshot,
@@ -50,11 +53,16 @@ interface ResultsFile {
 async function regradeTrial(
   t: TrialResult,
   trace: AgentTrace | undefined,
+  docker: boolean,
 ): Promise<{ grades: GradeResult[] } | { skip: string }> {
   const task = TASKS.find((x) => x.id === t.taskId);
   if (!task) return { skip: "task no longer exists" };
   if (t.diff.endsWith(TRUNCATED)) return { skip: "stored diff was truncated" };
-  const ws = await prepareWorkspace(task, t.ablation);
+  const ws = await prepareWorkspace(
+    task,
+    t.ablation,
+    docker ? { depsRoot: IMAGE_DEPS_DIR } : {},
+  );
   try {
     if (t.diff.trim().length > 0) {
       const patch = join(ws.root, "agent.patch");
@@ -72,6 +80,7 @@ async function regradeTrial(
         return { skip: `git apply failed: ${applied.output.slice(0, 200)}` };
     }
     const after = await snapshot(ws.dir);
+    if (docker) await openForContainer(ws.dir);
     const grades: GradeResult[] = [];
     for (const spec of task.graders) {
       grades.push(
@@ -81,6 +90,7 @@ async function regradeTrial(
           after,
           hiddenDir: hiddenDirFor(task.id),
           ...(trace ? { trace } : {}),
+          ...(docker ? { exec: dockerGradeExec } : {}),
         }),
       );
     }
@@ -90,19 +100,37 @@ async function regradeTrial(
   }
 }
 
+/** `PASS`, `FAIL`, or `UNVERIFIED` for a trial. */
+function verdict(t: TrialResult): "PASS" | "FAIL" | "UNVERIFIED" {
+  return t.pass ? "PASS" : t.unverified ? "UNVERIFIED" : "FAIL";
+}
+
 async function main(): Promise<void> {
-  const files = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const at = argv.indexOf("--sandbox");
+  const mode = at === -1 ? "none" : argv[at + 1];
+  if (mode !== "none" && mode !== "docker")
+    throw new Error("--sandbox must be none or docker");
+  const files = argv.filter((_, i) => at === -1 || (i !== at && i !== at + 1));
   if (files.length === 0)
-    throw new Error("usage: pnpm eval:regrade <results.json> [...]");
+    throw new Error(
+      "usage: pnpm eval:regrade [--sandbox docker] <results.json> [...]",
+    );
+  const docker = mode === "docker";
+  const executorName = mode;
+  if (docker) await checkGraderImage();
+  else
+    process.stderr.write(
+      "warning: grading runs the agents' code on this machine; pass --sandbox docker to run it in a no-network container\n",
+    );
   for (const path of files) {
     const data = JSON.parse(await readFile(path, "utf8")) as ResultsFile;
-    const skipped: string[] = [];
+    const unverified: string[] = [];
     // Results written before DIFF_FORMAT 2 store diffs without deleted files.
     const legacy = typeof data.diffFormat !== "number" || data.diffFormat < 2;
-    const legacyKept: string[] = [];
     if (legacy) {
       process.stdout.write(
-        `${path}: legacy diff format (no deletions); existence-based graders keep their original grade when the diff cannot show a deletion\n`,
+        `${path}: legacy diff format (no deletions); checks a missing deletion could change are marked unverified\n`,
       );
     }
     let flipped = 0;
@@ -113,47 +141,53 @@ async function main(): Promise<void> {
       // Re-parse the saved agent output so trace-parser fixes apply too.
       const trace = await loadTrialTrace(path, data.meta?.agent ?? "", t);
       if (trace) data.trials[i] = t = { ...t, agentRun: { ...t.agentRun, trace } };
-      const r = await regradeTrial(t, trace);
-      if ("skip" in r) {
-        skipped.push(`${t.taskId}#${t.trial}: ${r.skip}`);
-        process.stdout.write(`kept original (${r.skip})\n`);
-        continue;
-      }
-      let grades = r.grades;
-      if (legacy) {
+      const r = await regradeTrial(t, trace, docker);
+      let outcome: { grades: GradeResult[] } | { skip: string } = r;
+      if (!("skip" in r) && legacy) {
         const task = TASKS.find((x) => x.id === t.taskId)!;
-        const fixed = reconcileLegacyGrades(task, t, grades);
-        grades = fixed.grades;
-        if (fixed.kept.length > 0)
-          legacyKept.push(`${t.taskId}#${t.trial}: ${fixed.kept.join(", ")}`);
+        const marked = markLegacyUnverified(task, t, r.grades);
+        outcome = { grades: marked.grades };
       }
-      r.grades = grades;
-      const pass = r.grades.every((g) => g.pass);
-      if (pass !== t.pass) flipped++;
+      const revised = reviseTrial(t, outcome);
+      if (revised.unverified)
+        unverified.push(
+          `${t.taskId}#${t.trial}: ${
+            revised.unverifiedReason ??
+            revised.grades
+              .filter((g) => g.unverified)
+              .map((g) => g.id)
+              .join(", ")
+          }`,
+        );
+      const was = verdict(t);
+      const now = verdict(revised);
+      if (was !== now) flipped++;
       process.stdout.write(
-        `${t.pass ? "PASS" : "FAIL"} → ${
-          pass
-            ? "PASS"
-            : `FAIL (${r.grades
-                .filter((g) => !g.pass)
+        `${was} → ${now}${
+          now === "FAIL"
+            ? ` (${revised.grades
+                .filter((g) => !g.pass && !g.unverified)
                 .map((g) => g.id)
                 .join(", ")})`
+            : now === "UNVERIFIED"
+              ? ` (${unverified.at(-1)!.split(": ").slice(1).join(": ")})`
+              : ""
         }\n`,
       );
-      data.trials[i] = { ...t, grades: r.grades, pass };
+      data.trials[i] = revised;
     }
     const summary = summarize(data.trials, data.options.k);
     const out = path.replace(/\.json$/, ".regraded.json");
     await writeFile(
       out,
-      `${JSON.stringify({ ...data, summary, regrade: { at: new Date().toISOString(), flipped, skipped, legacyDiff: legacy, legacyKept } }, null, 2)}\n`,
+      `${JSON.stringify({ ...data, summary, regrade: { at: new Date().toISOString(), sandbox: executorName, flipped, unverified, legacyDiff: legacy } }, null, 2)}\n`,
     );
     await writeFile(
       out.replace(/\.json$/, ".md"),
       renderMarkdown(summary, data.meta ?? { agent: "unknown" }),
     );
     process.stdout.write(
-      `${path}: ${flipped} trial(s) changed, ${skipped.length} skipped; overall ${(summary.overallPassRate * 100).toFixed(0)}% → ${out}\n`,
+      `${path}: ${flipped} trial(s) changed, ${unverified.length} unverified; overall ${(summary.overallPassRate * 100).toFixed(0)}% of verified trials → ${out}\n`,
     );
   }
 }
