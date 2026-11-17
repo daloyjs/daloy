@@ -1,17 +1,22 @@
 /**
  * Allowlisting HTTPS egress proxy for the eval sandbox. Runs in its own
  * container on both the internal eval network and the normal bridge; see
- * `evals/sandbox-run.sh`. Only `CONNECT <allowlisted-name>:443` is tunnelled,
+ * `startEgressProxy` in `evals/lib/docker-sandbox.ts`. Only `CONNECT <allowlisted-name>:443` is tunnelled,
  * and only to public addresses. Plain HTTP requests and everything else get
  * 403. Every decision is logged as one JSON line on stdout.
  *
  * Environment: `EGRESS_ALLOW` (allowlist, default Copilot's hosts),
- * `EGRESS_PORT` (default 3128).
+ * `EGRESS_PORT` (default 3128), `EGRESS_BIND` (host name or address to
+ * listen on, default `0.0.0.0`; the sandbox passes the proxy's alias on the
+ * internal network so the default bridge cannot reach it).
+ *
+ * Tunnels close if the upstream does not connect within 15 s or if either
+ * side is idle for 5 minutes, so a stuck upstream cannot pin sockets.
  */
 
 import { lookup } from "node:dns/promises";
 import { createServer } from "node:http";
-import { connect } from "node:net";
+import { connect, type Socket } from "node:net";
 import {
   DEFAULT_EGRESS_ALLOW,
   hostAllowed,
@@ -22,6 +27,8 @@ import {
 
 const allow = parseAllowlist(process.env.EGRESS_ALLOW ?? DEFAULT_EGRESS_ALLOW.join(","));
 const port = Number(process.env.EGRESS_PORT ?? 3128);
+const CONNECT_TIMEOUT_MS = 15_000;
+const IDLE_TIMEOUT_MS = 5 * 60_000;
 
 function log(event: "allow" | "deny", target: string, reason?: string): void {
   process.stdout.write(
@@ -50,10 +57,22 @@ server.on("connect", (req, client, head) => {
       if (!isPublicAddress(address)) return deny(`resolves to non-public ${address}`);
       const upstream = connect(auth.port, address, () => {
         log("allow", target);
+        const close = (): void => {
+          upstream.destroy();
+          client.destroy();
+        };
+        upstream.setTimeout(IDLE_TIMEOUT_MS, close);
+        // A CONNECT request's client is always a net.Socket.
+        (client as Socket).setTimeout(IDLE_TIMEOUT_MS, close);
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head.length > 0) upstream.write(head);
         upstream.pipe(client);
         client.pipe(upstream);
+      });
+      upstream.setTimeout(CONNECT_TIMEOUT_MS, () => {
+        log("deny", target, "upstream connect timed out");
+        upstream.destroy();
+        client.destroy();
       });
       upstream.on("error", () => {
         client.destroy();
@@ -63,8 +82,11 @@ server.on("connect", (req, client, head) => {
     .catch(() => deny("DNS lookup failed"));
 });
 
-server.listen(port, "0.0.0.0", () => {
+const bind = process.env.EGRESS_BIND
+  ? (await lookup(process.env.EGRESS_BIND)).address
+  : "0.0.0.0";
+server.listen(port, bind, () => {
   process.stdout.write(
-    `${JSON.stringify({ event: "listening", port, allow })}\n`,
+    `${JSON.stringify({ event: "listening", bind, port, allow })}\n`,
   );
 });

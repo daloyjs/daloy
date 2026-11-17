@@ -163,6 +163,18 @@ For the forward-looking plan and the full thematic release log, see
     coefficients, which overflowed to `NaN` beyond a few hundred trials.
   - Trace paths that merely contain the workspace folder name
     (`packages/my-daloy-app/...`) are no longer cut.
+- **Agent evals: an agent can no longer forge a pass through
+  `node_modules`.** The grade copy took the agent's `node_modules`, which the
+  agent can write and which is outside the diff and snapshots. Replacing
+  `node_modules/typescript` with a `tsc` that always exits 0 passed the
+  typecheck grader on code with a type error (reproduced in both local and
+  Docker modes). The grade copy now skips every `node_modules` directory and
+  rebuilds the top-level one from trusted sources; regrades were not
+  affected (they rebuild the workspace from the stored diff). The egress
+  proxy now starts on the run's internal network only and binds to that
+  address, so containers on the default bridge cannot use it; it also gets a
+  PID limit and closes tunnels that do not connect within 15 s or idle for
+  5 minutes.
 
 ## [1.24.2] - 2026-11-13
 

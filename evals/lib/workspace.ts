@@ -27,7 +27,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   Ablation,
@@ -478,14 +478,31 @@ export async function disposeWorkspace(root: string): Promise<void> {
 }
 
 /**
- * Copy a workspace for grading (symlinks copied as links), so hidden tests
- * and the agent's code run on a copy and the original stays the record.
+ * Copy a workspace for grading, so hidden tests and the agent's code run on a
+ * copy and the original stays the record. No `node_modules` directory (at any
+ * depth) is copied; the top-level one is rebuilt from trusted sources,
+ * because the agent can write them and they are outside the diff and
+ * snapshots. An agent that replaced
+ * `node_modules/typescript` with its own always-passing `tsc` would
+ * otherwise forge the typecheck grade, and a fake `@daloyjs/core` could fake
+ * framework behaviour under the hidden tests.
  *
  * @param dir - Workspace root.
  * @param dest - Destination directory (must not exist).
+ * @param depsRoot - Same as {@link prepareWorkspace}'s option: where
+ *   dependencies live (the agent image path in Docker mode).
  */
-export async function copyWorkspace(dir: string, dest: string): Promise<void> {
-  await cp(dir, dest, { recursive: true, verbatimSymlinks: true });
+export async function copyWorkspace(
+  dir: string,
+  dest: string,
+  depsRoot?: string,
+): Promise<void> {
+  await cp(dir, dest, {
+    recursive: true,
+    verbatimSymlinks: true,
+    filter: (src) => basename(src) !== "node_modules",
+  });
+  await linkDependencies(dest, depsRoot);
 }
 
 /**

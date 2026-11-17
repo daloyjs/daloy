@@ -54,12 +54,17 @@ key:
   other), whose one way out is the run's egress proxy.
 - **Grade**: typecheck, the visible tests, and the hidden tests run on a
   **copy** of the finished workspace, in a container from the same image
-  with `--network none`. Static checks (the guardrail diff, protected files,
+  with `--network none`. The copy never takes the agent's `node_modules`
+  (writable by the agent and outside the diff, so a fake `tsc` there could
+  forge a pass); its dependencies are rebuilt from trusted sources. Static checks (the guardrail diff, protected files,
   patterns) run in the harness on snapshots.
 
 The egress proxy (`egress-proxy.ts`, no dependencies) tunnels HTTPS
 (`CONNECT` to port 443) to allowlisted host names resolving to public
 addresses, and logs every decision to `<run>-egress.log` next to the results.
+It listens only on the run's internal network (the bridge it uses for
+outbound traffic cannot reach it) and closes tunnels that do not connect
+within 15 s or sit idle for 5 minutes.
 The default allowlist is per agent (`copilot`: `.githubcopilot.com`,
 `api.github.com`; `claude`: `api.anthropic.com`; `codex`: `api.openai.com`);
 `--mcp docs` adds `daloyjs.dev`; `EGRESS_ALLOW` overrides it. Copilot CLI

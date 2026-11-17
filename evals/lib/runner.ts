@@ -111,7 +111,7 @@ export async function runTrial(
     // Grade a copy: hidden tests and the agent's code run there, and the
     // workspace the agent left stays untouched as the record.
     const gradeDir = join(ws.root, "graded");
-    await copyWorkspace(ws.dir, gradeDir);
+    await copyWorkspace(ws.dir, gradeDir, docker ? IMAGE_DEPS_DIR : undefined);
     if (docker) await openForContainer(gradeDir);
     const grades: GradeResult[] = [];
     for (const spec of task.graders) {

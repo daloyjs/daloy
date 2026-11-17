@@ -191,11 +191,17 @@ export async function startEgressProxy(allow: readonly string[]): Promise<Egress
   if (made.exitCode !== 0) throw new Error(`docker network create failed: ${made.output}`);
   const name = `daloy-eval-egress-${run}`;
   const evals = join(REPO_ROOT, "evals");
+  // Started on the internal network only, reached by its own unique name (a
+  // shared alias would make Docker DNS round-robin between concurrent runs'
+  // proxies). It binds to that network's address (EGRESS_BIND), so once the
+  // bridge is attached for outbound traffic, nothing on the bridge can use it.
   const started = await docker([
     "run", "-d", "--rm", "--name", name,
+    "--network", network, "--network-alias", name,
     "--cap-drop=ALL", "--security-opt", "no-new-privileges",
-    "--memory", "256m", "--read-only",
+    "--memory", "256m", "--pids-limit", "64", "--read-only",
     "-e", `EGRESS_ALLOW=${allow.join(",")}`,
+    "-e", `EGRESS_BIND=${name}`,
     "-v", `${join(evals, "egress-proxy.ts")}:/proxy/egress-proxy.ts:ro`,
     "-v", `${join(evals, "lib", "egress.ts")}:/proxy/lib/egress.ts:ro`,
     "--entrypoint", "node",
@@ -210,11 +216,9 @@ export async function startEgressProxy(allow: readonly string[]): Promise<Egress
     await docker(["network", "rm", network]);
     throw new Error(message);
   };
-  // Reached by its own unique name: a shared alias would make Docker DNS
-  // round-robin between concurrent runs' proxies, mixing allowlists and logs.
-  const connected = await docker(["network", "connect", "--alias", name, network, name]);
+  const connected = await docker(["network", "connect", "bridge", name]);
   if (connected.exitCode !== 0)
-    await fail(`egress proxy failed to join ${network}: ${connected.output}`);
+    await fail(`egress proxy failed to join the bridge: ${connected.output}`);
   // Start agents only once the proxy is listening.
   for (let i = 0; ; i++) {
     const logs = await docker(["logs", name]);

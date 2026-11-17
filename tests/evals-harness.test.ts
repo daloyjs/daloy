@@ -61,6 +61,7 @@ import {
 } from "../evals/lib/types.ts";
 import {
   childEnv,
+  copyWorkspace,
   OUTPUT_ELIDED,
   parseNumstat,
   runProcess,
@@ -1338,6 +1339,35 @@ describe("agent traces and don't-act graders", () => {
       "/work",
     );
     assert.deepEqual(t.filesRead, []);
+  });
+
+  test("the grade copy rebuilds node_modules, so an agent cannot swap in its own tsc", async () => {
+    const { existsSync } = await import("node:fs");
+    const { lstat, readlink, readFile: rf, mkdir: mk, writeFile: wf } = await import("node:fs/promises");
+    if (!existsSync(join(process.cwd(), "dist", "index.js"))) return; // needs `pnpm build`
+    const dir = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const ws = join(dir, "ws");
+      await mk(join(ws, "src"), { recursive: true });
+      await wf(join(ws, "src", "app.ts"), "export const x = 1;\n");
+      // The agent replaced typescript with a fake that always passes.
+      await mk(join(ws, "node_modules", "typescript", "bin"), { recursive: true });
+      await wf(join(ws, "node_modules", "typescript", "bin", "tsc"), "process.exit(0)\n");
+      await wf(join(ws, "node_modules", "evil.js"), "x\n");
+      await mk(join(ws, "tests", "node_modules", "zod"), { recursive: true });
+      await wf(join(ws, "tests", "node_modules", "zod", "index.js"), "x\n");
+      const dest = join(dir, "graded");
+      await copyWorkspace(ws, dest, "/opt/eval-deps/node_modules");
+      assert.equal(await rf(join(dest, "src", "app.ts"), "utf8"), "export const x = 1;\n");
+      const ts = join(dest, "node_modules", "typescript");
+      assert.ok((await lstat(ts)).isSymbolicLink(), "typescript is the trusted link again");
+      assert.equal(await readlink(ts), "/opt/eval-deps/node_modules/typescript");
+      assert.equal(existsSync(join(dest, "node_modules", "evil.js")), false);
+      assert.equal(existsSync(join(dest, "tests", "node_modules")), false);
+      assert.ok(existsSync(join(dest, "node_modules", "@daloyjs", "core", "package.json")));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("regrade re-parses saved traces relative to the root the agent saw", async () => {
