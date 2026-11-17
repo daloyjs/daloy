@@ -139,7 +139,7 @@ async function main(): Promise<void> {
         `[${i + 1}/${data.trials.length}] ${t.taskId} · trial ${t.trial} ... `,
       );
       // Re-parse the saved agent output so trace-parser fixes apply too.
-      const trace = await loadTrialTrace(path, data.meta?.agent ?? "", t);
+      const trace = await loadTrialTrace(path, data.meta?.agent ?? "", t, data.meta?.sandbox);
       if (trace) data.trials[i] = t = { ...t, agentRun: { ...t.agentRun, trace } };
       const r = await regradeTrial(t, trace, docker);
       let outcome: { grades: GradeResult[] } | { skip: string } = r;

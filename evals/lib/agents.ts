@@ -43,8 +43,8 @@ export interface AgentInvocation {
    * workspace (see `docker-sandbox.ts`). Default: run it directly.
    */
   readonly sandbox?: "docker";
-  /** This run's egress proxy URL; required with `sandbox: "docker"`. */
-  readonly egressProxy?: string;
+  /** This run's egress proxy; required with `sandbox: "docker"`. */
+  readonly egressProxy?: { readonly url: string; readonly network: string };
 }
 
 /** A named way to run an agent. */
@@ -317,6 +317,7 @@ function cli(
         outputTail: r.output.slice(-OUTPUT_TAIL_CHARS),
         transcript: r.output,
         trace: parseTrace(effortFormat, r.output, traceDir),
+        traceRoot: traceDir,
         ...(() => {
           const effort = parseEffort(effortFormat, r.output);
           return effort ? { effort } : {};

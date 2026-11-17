@@ -6,7 +6,8 @@
  * - **Harness** (trusted, this process on the host): prepares workspaces,
  *   holds the tasks, hidden tests, reference solutions, and graders.
  * - **Agent** (untrusted): runs in a container from the agent image that
- *   sees **only** its workspace, mounted at `/work`. The image is built from
+ *   sees **only** its workspace, mounted at `/work`, on the run's own
+ *   internal network. The image is built from
  *   an empty context (`pnpm eval:image`), so no repository file, hidden test,
  *   or grader is in it. Its only network is an internal Docker network whose
  *   one way out is the allowlisting egress proxy (`egress-proxy.ts`).
@@ -35,8 +36,12 @@ export const AGENT_IMAGE =
 /** Where the image installs the workspace dependencies. */
 export const IMAGE_DEPS_DIR = "/opt/eval-deps/node_modules";
 
-/** Internal Docker network the agent and the egress proxy share. */
-export const EVAL_NETWORK = "daloy-eval-internal";
+/**
+ * Name prefix of the internal Docker networks. Each run gets its own network
+ * (`<prefix>-<run>`) shared only by its agent containers and its proxy, so
+ * concurrent runs cannot reach each other's containers or proxy.
+ */
+export const EVAL_NETWORK_PREFIX = "daloy-eval-net";
 
 /** Workspace mount point inside agent and grader containers. */
 export const CONTAINER_WORKDIR = "/work";
@@ -162,15 +167,17 @@ export async function checkGraderImage(): Promise<void> {
 /** A running egress proxy. */
 export interface EgressProxy {
   readonly name: string;
-  /** Proxy URL for agents on {@link EVAL_NETWORK} (unique per run). */
+  /** Proxy URL for agents on {@link network} (unique per run). */
   readonly url: string;
+  /** This run's internal network (no route out except the proxy). */
+  readonly network: string;
   readonly allow: readonly string[];
   /** Save the proxy's decision log to `logPath` and stop it. */
   stop(logPath: string): Promise<void>;
 }
 
 /**
- * Create the internal network (if needed) and start the egress proxy on it.
+ * Create this run's internal network and start the egress proxy on it.
  * The proxy container gets only the two proxy source files, read-only.
  *
  * @param allow - Host-name allowlist.
@@ -178,13 +185,11 @@ export interface EgressProxy {
  * @throws Error when Docker fails.
  */
 export async function startEgressProxy(allow: readonly string[]): Promise<EgressProxy> {
-  if ((await docker(["network", "inspect", EVAL_NETWORK])).exitCode !== 0) {
-    const made = await docker(["network", "create", "--internal", EVAL_NETWORK]);
-    // A concurrent run may have created it first; that is fine.
-    if (made.exitCode !== 0 && (await docker(["network", "inspect", EVAL_NETWORK])).exitCode !== 0)
-      throw new Error(`docker network create failed: ${made.output}`);
-  }
-  const name = `daloy-eval-egress-${process.pid}-${Date.now()}`;
+  const run = `${process.pid}-${Date.now()}`;
+  const network = `${EVAL_NETWORK_PREFIX}-${run}`;
+  const made = await docker(["network", "create", "--internal", network]);
+  if (made.exitCode !== 0) throw new Error(`docker network create failed: ${made.output}`);
+  const name = `daloy-eval-egress-${run}`;
   const evals = join(REPO_ROOT, "evals");
   const started = await docker([
     "run", "-d", "--rm", "--name", name,
@@ -196,33 +201,38 @@ export async function startEgressProxy(allow: readonly string[]): Promise<Egress
     "--entrypoint", "node",
     AGENT_IMAGE, "/proxy/egress-proxy.ts",
   ]);
-  if (started.exitCode !== 0) throw new Error(`egress proxy failed to start: ${started.output}`);
+  if (started.exitCode !== 0) {
+    await docker(["network", "rm", network]);
+    throw new Error(`egress proxy failed to start: ${started.output}`);
+  }
+  const fail = async (message: string): Promise<never> => {
+    await docker(["rm", "-f", name]);
+    await docker(["network", "rm", network]);
+    throw new Error(message);
+  };
   // Reached by its own unique name: a shared alias would make Docker DNS
   // round-robin between concurrent runs' proxies, mixing allowlists and logs.
-  const connected = await docker(["network", "connect", "--alias", name, EVAL_NETWORK, name]);
-  if (connected.exitCode !== 0) {
-    await docker(["rm", "-f", name]);
-    throw new Error(`egress proxy failed to join ${EVAL_NETWORK}: ${connected.output}`);
-  }
+  const connected = await docker(["network", "connect", "--alias", name, network, name]);
+  if (connected.exitCode !== 0)
+    await fail(`egress proxy failed to join ${network}: ${connected.output}`);
   // Start agents only once the proxy is listening.
   for (let i = 0; ; i++) {
     const logs = await docker(["logs", name]);
     if (logs.output.includes('"event":"listening"')) break;
-    if (i >= 50) {
-      await docker(["rm", "-f", name]);
-      throw new Error(`egress proxy did not start:\n${logs.output.slice(-1000)}`);
-    }
+    if (i >= 50) await fail(`egress proxy did not start:\n${logs.output.slice(-1000)}`);
     await new Promise((r) => setTimeout(r, 200));
   }
   return {
     name,
     url: `http://${name}:3128`,
+    network,
     allow,
     async stop(logPath) {
       const logs = await docker(["logs", name]);
       const { writeFile } = await import("node:fs/promises");
       await writeFile(logPath, logs.output);
       await docker(["rm", "-f", name]);
+      await docker(["network", "rm", network]);
     },
   };
 }
@@ -264,7 +274,7 @@ async function runContainer(name: string, args: string[], env: NodeJS.ProcessEnv
  *   the docker command line), with their values.
  * @param plainEnv - Non-secret variables, set explicitly.
  * @param timeoutMs - Wall-clock limit; the container is removed on timeout.
- * @param proxy - This run's egress proxy URL ({@link EgressProxy.url}).
+ * @param proxy - This run's egress proxy (its URL and network).
  * @returns The CLI's exit code and output.
  */
 export async function runAgentContainer(
@@ -273,19 +283,19 @@ export async function runAgentContainer(
   secretEnv: NodeJS.ProcessEnv,
   plainEnv: Readonly<Record<string, string>>,
   timeoutMs: number,
-  proxy: string,
+  proxy: Pick<EgressProxy, "url" | "network">,
 ): Promise<ProcessResult> {
   const name = `daloy-eval-agent-${process.pid}-${Date.now()}`;
   const args = [
     ...lockedDown(name, hostDir),
-    "--network", EVAL_NETWORK,
+    "--network", proxy.network,
     ...Object.keys(secretEnv).flatMap((k) => ["-e", k]),
     ...Object.entries({
       ...plainEnv,
-      HTTPS_PROXY: proxy,
-      HTTP_PROXY: proxy,
-      https_proxy: proxy,
-      http_proxy: proxy,
+      HTTPS_PROXY: proxy.url,
+      HTTP_PROXY: proxy.url,
+      https_proxy: proxy.url,
+      http_proxy: proxy.url,
       NO_PROXY: "localhost,127.0.0.1,::1",
       NODE_USE_ENV_PROXY: "1",
     }).flatMap(([k, v]) => ["-e", `${k}=${v}`]),

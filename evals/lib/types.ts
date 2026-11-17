@@ -280,6 +280,11 @@ export interface AgentRunResult {
   readonly transcript?: string;
   /** Parsed actions and final answer, kept in the results JSON. */
   readonly trace?: AgentTrace;
+  /**
+   * The workspace root as the agent saw it (`/work` in the Docker sandbox),
+   * so a saved trace re-parses with the same paths.
+   */
+  readonly traceRoot?: string;
 }
 
 /** How much the agent changed, from `git diff --numstat` against the baseline. */

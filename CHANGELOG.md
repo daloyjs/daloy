@@ -147,13 +147,22 @@ For the forward-looking plan and the full thematic release log, see
     unverified. It no longer carries the original grade forward as if the
     current graders had confirmed it. This changes the 16 November report:
     see `evals/reports/2026-11-16/README.md`.
-- **Agent evals: concurrent `--sandbox docker` runs no longer share a
-  proxy.** Each run's egress proxy is reached by its own unique name instead
-  of a shared `egress` alias, which made Docker DNS mix two runs' proxies
-  (allowlists and logs). Agents start only once the proxy is listening, and a
-  concurrent network-creation race is tolerated. Trace paths that merely
-  contain the workspace folder name (`packages/my-daloy-app/...`) are no
-  longer cut.
+- **Agent evals: isolation and grading-evidence fixes from review.**
+  - Each `--sandbox docker` run gets its own internal network and its own
+    egress proxy, reached by a unique name. Before, runs shared one network
+    and an `egress` alias, so concurrent runs could reach each other's
+    containers and Docker DNS could mix their proxies. Agents start only once
+    the proxy is listening.
+  - Regrading a `--sandbox docker` run re-parses its traces relative to
+    `/work` (now stored per trial as `traceRoot`); before, a read of
+    `/work/src/users.ts` no longer matched `src/users.ts` on regrade and
+    could flip an investigation check to a failure.
+  - A path named by `echo`, `printf`, `mkdir` and similar commands no longer
+    counts as reading the file.
+  - `passAtK` / `passHatK` use a product of ratios instead of binomial
+    coefficients, which overflowed to `NaN` beyond a few hundred trials.
+  - Trace paths that merely contain the workspace folder name
+    (`packages/my-daloy-app/...`) are no longer cut.
 
 ## [1.24.2] - 2026-11-13
 

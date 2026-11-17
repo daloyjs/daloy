@@ -176,7 +176,7 @@ async function main(): Promise<void> {
           ...(opts.model ? { model: opts.model } : {}),
           mcp: opts.mcp,
           ...(opts.sandbox === "docker" ? { sandbox: "docker" as const } : {}),
-          ...(egress ? { egressProxy: egress.url } : {}),
+          ...(egress ? { egressProxy: { url: egress.url, network: egress.network } } : {}),
         });
         trials.push(result);
         const failed = result.grades.filter((g) => !g.pass).map((g) => g.id);

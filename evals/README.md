@@ -50,7 +50,8 @@ key:
   an unprivileged user with a read-only root, a throwaway `tmpfs` home (fresh
   `COPILOT_HOME`), no capabilities, memory and PID limits, and only the
   agent's own token, forwarded by name. Its only network is an internal Docker
-  network whose one way out is the egress proxy.
+  network created for this run alone (concurrent runs cannot reach each
+  other), whose one way out is the run's egress proxy.
 - **Grade**: typecheck, the visible tests, and the hidden tests run on a
   **copy** of the finished workspace, in a container from the same image
   with `--network none`. Static checks (the guardrail diff, protected files,
@@ -183,8 +184,12 @@ A regrade writes a new grading **revision**, it does not overwrite history:
 7. The agent's output is parsed into a trace (`lib/trace.ts`): its final
    answer and all its messages to the user, files it looked at (viewed, searched, or named in a shell command),
    files it edited with edit tools, shell commands, skills, and docs MCP calls.
-   The trace is stored in the results JSON. Edits made through shell commands
-   (a Python heredoc, `sed -i`) show up in the diff, not in `filesEdited`.
+   The trace is stored in the results JSON, with the workspace root the agent
+   saw (`traceRoot`, `/work` in Docker) so regrades re-parse it identically.
+   Edits made through shell commands (a Python heredoc, `sed -i`) show up in
+   the diff, not in `filesEdited`. Reads inferred from shell commands skip
+   commands that only name a path (`echo`, `mkdir`); they remain an
+   inference, so read the trace when an investigation check decides a task.
 8. The workspace is copied, and graders run on the copy (in a no-network
    container with `--sandbox docker`): `typecheck`, `tests`, `hidden`
    (copied into the copy only now),

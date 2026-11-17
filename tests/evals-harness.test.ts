@@ -28,6 +28,7 @@ import {
 } from "../evals/lib/egress.ts";
 import {
   clip,
+  loadTrialTrace,
   workspaceRelative,
   parseTrace,
   pathsInCommand,
@@ -341,6 +342,12 @@ describe("pass@k / pass^k", () => {
     assert.ok(Math.abs(passHatK(5, 4, 3) - 0.4) < 1e-12);
     assert.equal(passHatK(5, 2, 3), 0);
     assert.equal(passHatK(3, 3, 3), 1);
+  });
+
+  test("stay finite for large trial counts (no NaN from huge coefficients)", () => {
+    assert.ok(Math.abs(passAtK(2000, 1, 1000) - 0.5) < 1e-9);
+    assert.equal(passHatK(2000, 2000, 1000), 1);
+    assert.ok(Math.abs(passHatK(2000, 1999, 1000) - 0.5) < 1e-9);
   });
 
   test("reject inconsistent counts", () => {
@@ -1315,6 +1322,45 @@ describe("agent traces and don't-act graders", () => {
     const plain = parseTrace("claude-json", L({ type: "result", result: "I won't." }));
     assert.equal(plain.finalMessage, "I won't.");
     assert.deepEqual(plain.observed, { messages: true, tools: false, complete: false });
+  });
+
+  test("naming a path in echo or mkdir is not reading it", () => {
+    assert.deepEqual(pathsInCommand("echo src/users.ts"), []);
+    assert.deepEqual(pathsInCommand("printf x > src/a.ts"), []);
+    assert.deepEqual(pathsInCommand("mkdir -p src/notes && cat src/build-app.ts"), ["src/build-app.ts"]);
+    assert.deepEqual(pathsInCommand("FOO=1 node --test tests/a.test.ts"), ["tests/a.test.ts"]);
+    const t = parseTrace(
+      "copilot-jsonl",
+      [
+        JSON.stringify({ type: "session.start", data: {} }),
+        JSON.stringify({ type: "tool.execution_start", data: { toolName: "bash", arguments: { command: "echo src/users.ts" } } }),
+      ].join("\n"),
+      "/work",
+    );
+    assert.deepEqual(t.filesRead, []);
+  });
+
+  test("regrade re-parses saved traces relative to the root the agent saw", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const { mkdir: mk, writeFile: wf } = await import("node:fs/promises");
+      await mk(join(dir, "run-traces"));
+      await wf(
+        join(dir, "run-traces", "t__full__1.log"),
+        [
+          JSON.stringify({ type: "session.start", data: {} }),
+          JSON.stringify({ type: "tool.execution_start", data: { toolName: "view", arguments: { path: "/work/src/users.ts" } } }),
+        ].join("\n"),
+      );
+      const base = trial("t", "full", true);
+      const stored = { ...base, agentRun: { ...base.agentRun, traceRoot: "/work" } };
+      assert.deepEqual((await loadTrialTrace(join(dir, "run.json"), "copilot", stored))?.filesRead, ["src/users.ts"]);
+      // Runs from before traceRoot was stored: the docker sandbox implies /work.
+      assert.deepEqual((await loadTrialTrace(join(dir, "run.json"), "copilot", base, "docker"))?.filesRead, ["src/users.ts"]);
+      assert.deepEqual((await loadTrialTrace(join(dir, "run.json"), "copilot", base))?.filesRead, ["/work/src/users.ts"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("workspaceRelative cuts at the workspace folder name only for absolute paths outside the root", () => {

@@ -64,15 +64,16 @@ export function workspaceRelative(path: string, dir?: string): string {
 }
 
 /**
- * Path-like tokens in a shell command, workspace-relative.
- *
- * @param command - The command line.
- * @param dir - Workspace root, when known.
- * @returns Unique paths, in order of appearance.
+ * Commands that name a path without reading it (`echo src/a.ts`,
+ * `mkdir src/x`). Their arguments are not counted as reads.
  */
-export function pathsInCommand(command: string, dir?: string): string[] {
-  const out = new Set<string>();
-  for (const raw of command.split(/[\s;|&()<>,=]+/)) {
+const NON_READING = new Set([
+  "echo", "printf", "touch", "mkdir", "rm", "rmdir", "cd", "pushd", "popd",
+  "export", "unset", "true", "false", ":", "sleep", "chmod", "chown",
+]);
+
+function pathTokens(segment: string, dir: string | undefined, out: Set<string>): void {
+  for (const raw of segment.split(/[\s;|&()<>,=]+/)) {
     const token = raw.replace(/^['"`]+|['"`:]+$/g, "");
     if (!token || token.startsWith("-") || /[*?$\\{}[\]]|:\/\//.test(token)) continue;
     const isPath =
@@ -84,6 +85,32 @@ export function pathsInCommand(command: string, dir?: string): string[] {
     // An absolute path ending at the workspace root is the whole project.
     if (rel && !rel.endsWith(`/${WORKSPACE_APP_NAME}`) && rel !== WORKSPACE_APP_NAME)
       out.add(rel);
+  }
+}
+
+
+/**
+ * Paths a shell command reads, workspace-relative. The command is split into
+ * simple commands (on newlines, `;`, `&&`, `||`, `|`); those whose program is
+ * in {@link NON_READING} are skipped, so `echo src/a.ts` does not count as
+ * reading `src/a.ts`. Script bodies (a Python heredoc) count. This is an
+ * inference from the command text, not proof the read succeeded; `read-files`
+ * graders accept it because agents read files through the shell constantly.
+ *
+ * @param command - The command line.
+ * @param dir - Workspace root, when known.
+ * @returns Unique paths, in order of appearance.
+ */
+export function pathsInCommand(command: string, dir?: string): string[] {
+  const out = new Set<string>();
+  for (const segment of command.split(/\n|;|&&|\|\||\|/)) {
+    // Skip leading VAR=value assignments to find the program.
+    const words = segment.trim().split(/\s+/).filter(Boolean);
+    let w = 0;
+    while (w < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[w]!)) w++;
+    const program = (words[w] ?? "").replace(/^.*\//, "");
+    if (NON_READING.has(program)) continue;
+    pathTokens(segment, dir, out);
   }
   return [...out];
 }
@@ -404,6 +431,8 @@ export function traceFormatFor(agent: string): EffortFormat {
  * (`<run>-traces/<task>__<ablation>__<trial>.log` next to the results file;
  * a `.regraded` copy reuses the original run's directory), so parser fixes
  * apply to old runs. Falls back to the trace stored in the results JSON.
+ * Paths are made relative to the trial's `traceRoot` (or `/work` for a
+ * `docker`-sandbox run recorded before it was stored).
  *
  * @param resultsPath - Path of the results JSON.
  * @param agent - Adapter name from the run metadata.
@@ -414,14 +443,24 @@ export async function loadTrialTrace(
   resultsPath: string,
   agent: string,
   trial: TrialResult,
+  sandbox?: string,
 ): Promise<AgentTrace | undefined> {
+  // Re-parse with the root the agent saw, or file reads under it would not
+  // match the workspace-relative paths graders check. Runs recorded before
+  // traceRoot existed fall back to the sandbox's mount point.
+  const root =
+    trial.agentRun.traceRoot ?? (sandbox === "docker" ? "/work" : undefined);
   const format = traceFormatFor(agent);
   if (format !== "none") {
     const name = basename(resultsPath).replace(/\.json$/, "");
     const file = `${trial.taskId}__${trial.ablation}__${trial.trial}.log`;
     for (const d of [`${name}-traces`, `${name.replace(/\.regraded$/, "")}-traces`]) {
       try {
-        return parseTrace(format, await readFile(join(dirname(resultsPath), d, file), "utf8"));
+        return parseTrace(
+          format,
+          await readFile(join(dirname(resultsPath), d, file), "utf8"),
+          root,
+        );
       } catch {
         // Not in this directory.
       }

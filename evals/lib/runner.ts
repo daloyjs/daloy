@@ -49,8 +49,8 @@ export interface TrialOptions {
    * on this machine (offline adapters, or an already isolated VM).
    */
   readonly sandbox?: "docker";
-  /** Egress proxy URL for a sandboxed live agent. */
-  readonly egressProxy?: string;
+  /** Egress proxy (URL and network) for a sandboxed live agent. */
+  readonly egressProxy?: { readonly url: string; readonly network: string };
 }
 
 /**

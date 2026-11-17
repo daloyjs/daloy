@@ -16,11 +16,15 @@
  * @module
  */
 
-/** Binomial coefficient C(n, k) as a float; 0 when k > n. */
-function choose(n: number, k: number): number {
-  if (k < 0 || k > n) return 0;
+/**
+ * C(a, k) / C(b, k) for a ≤ b, as a product of ratios each in [0, 1]. Never
+ * forms the coefficients themselves, which overflow to Infinity (and give
+ * NaN) beyond a few hundred trials.
+ */
+function chooseRatio(a: number, b: number, k: number): number {
+  if (k > a) return 0;
   let r = 1;
-  for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i;
+  for (let i = 0; i < k; i++) r *= (a - i) / (b - i);
   return r;
 }
 
@@ -46,7 +50,7 @@ function assertCounts(n: number, c: number, k: number): void {
  */
 export function passAtK(n: number, c: number, k: number): number {
   assertCounts(n, c, k);
-  return 1 - choose(n - c, k) / choose(n, k);
+  return 1 - chooseRatio(n - c, n, k);
 }
 
 /**
@@ -60,5 +64,5 @@ export function passAtK(n: number, c: number, k: number): number {
  */
 export function passHatK(n: number, c: number, k: number): number {
   assertCounts(n, c, k);
-  return choose(c, k) / choose(n, k);
+  return chooseRatio(c, n, k);
 }

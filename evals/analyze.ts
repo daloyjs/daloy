@@ -17,7 +17,7 @@ import { loadTrialTrace } from "./lib/trace.ts";
 import type { TrialResult } from "./lib/types.ts";
 
 interface ResultsFile {
-  readonly meta?: { readonly agent?: string };
+  readonly meta?: { readonly agent?: string; readonly sandbox?: string };
   readonly trials: readonly TrialResult[];
 }
 
@@ -26,7 +26,7 @@ async function load(path: string): Promise<AnalyzedTrial[]> {
   const source = basename(path).replace(/\.json$/, "");
   const out: AnalyzedTrial[] = [];
   for (const trial of data.trials) {
-    const trace = await loadTrialTrace(path, data.meta?.agent ?? "", trial);
+    const trace = await loadTrialTrace(path, data.meta?.agent ?? "", trial, data.meta?.sandbox);
     out.push({ source, trial, ...(trace ? { trace } : {}) });
   }
   return out;
