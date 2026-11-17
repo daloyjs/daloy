@@ -178,16 +178,23 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    and `zod`, `typescript`, `@types/node` are symlinked from the root install.
    `pnpm test` / `pnpm typecheck` work because child processes get
    `pnpm_config_verify_deps_before_run=false`.
-4. The task's `setup` builds the scenario; a git baseline is committed.
+4. The task's `setup` builds the scenario; a git baseline is committed twice:
+   in the workspace's own `.git` (the realistic repo the agent sees) and in a
+   harness-only git directory outside the mount (`harness.git`). The diff is
+   computed from the second, so the harness never runs git inside the
+   agent's `.git` (where `diff.external` or `core.fsmonitor` in `.git/config`
+   would run the agent's command on the host) and an agent that commits its
+   work cannot empty the diff.
 5. The agent runs with the prompt (an environment preamble plus the task prompt)
    and a minimal, allowlisted environment.
-6. The diff footprint (`git diff --numstat`) and any effort the CLI reports
+6. The diff footprint (`git diff --numstat`, from the harness's git
+   directory) and any effort the CLI reports
    (Claude Code: turns, tokens, cost; Codex: completed items, tokens) are
    recorded. Effort is reported over passing trials only: quality first.
    The report also shows **cost per success**: what every trial spent, failed
    ones included, divided by the passes (the price of one working result).
 7. The agent's output is parsed into a trace (`lib/trace.ts`): its final
-   answer and all its messages to the user, files it looked at (viewed, searched, or named in a shell command),
+   answer and all its messages to the user, files it looked at (viewed, searched, or named in a content-reading shell command; listings such as `glob`, `ls`, `tree`, `stat` do not count),
    files it edited with edit tools, shell commands, skills, and docs MCP calls.
    The trace is stored in the results JSON, with the workspace root the agent
    saw (`traceRoot`, `/work` in Docker) so regrades re-parse it identically.
@@ -197,7 +204,9 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    inference, so read the trace when an investigation check decides a task.
 8. The workspace is copied, and graders run on the copy (in a no-network
    container with `--sandbox docker`): `typecheck`, `tests`, `hidden`
-   (copied into the copy only now),
+   (copied into the copy only now; `tests` and `hidden` preload a guard so a
+   `process.exit(0)` planted in app code cannot make `node --test` report a
+   pass without running a test),
    `guardrails` (see `lib/guardrails.ts`), `protected-files`, task-specific
    `pattern` / `absent` checks, and for "don't act" tasks `response` (regexes
    what the agent told the user must match: all its messages) and `read-files` (files the agent must have
@@ -206,7 +215,7 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    evidence: no tool events (for example Claude Code's plain `json` output;
    the adapter uses `stream-json`), an incomplete trace (its start or its end
    event, Copilot's and Claude's `result` or Codex's `turn.completed`, was not
-   captured, or the middle was elided), or assistant text clipped past 20,000
+   captured, the middle was elided, or a tool call never got its result), or assistant text clipped past 20,000
    characters (head and tail kept) that misses a pattern. A view, search, or
    edit counts only when the CLI reports the call succeeded: a `view` of a
    path that does not exist read nothing. A trial with an unverified grade

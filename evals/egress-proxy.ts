@@ -52,7 +52,9 @@ server.on("connect", (req, client, head) => {
   if (!auth) return deny("malformed target");
   if (auth.port !== 443) return deny("only port 443 is allowed");
   if (!hostAllowed(auth.host, allow)) return deny("host not on the allowlist");
-  lookup(auth.host)
+  // IPv4 first: the Docker bridge the proxy leaves through is IPv4-only, so a
+  // host whose first answer is an AAAA record would otherwise fail to connect.
+  lookup(auth.host, { order: "ipv4first" })
     .then(({ address }) => {
       if (!isPublicAddress(address)) return deny(`resolves to non-public ${address}`);
       const upstream = connect(auth.port, address, () => {
@@ -61,6 +63,10 @@ server.on("connect", (req, client, head) => {
           upstream.destroy();
           client.destroy();
         };
+        // setTimeout(ms, cb) adds cb as a listener and keeps earlier ones:
+        // drop the connect-timeout handler or an idle close would also log
+        // a spurious "connect timed out" deny.
+        upstream.removeAllListeners("timeout");
         upstream.setTimeout(IDLE_TIMEOUT_MS, close);
         // A CONNECT request's client is always a net.Socket.
         (client as Socket).setTimeout(IDLE_TIMEOUT_MS, close);

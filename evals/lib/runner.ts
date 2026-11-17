@@ -106,8 +106,8 @@ export async function runTrial(
       };
     }
     const after = await snapshot(ws.dir);
-    const diff = await workspaceDiff(ws.dir);
-    const footprint = await workspaceFootprint(ws.dir);
+    const diff = await workspaceDiff(ws);
+    const footprint = await workspaceFootprint(ws);
     // Grade a copy: hidden tests and the agent's code run there, and the
     // workspace the agent left stays untouched as the record.
     const gradeDir = join(ws.root, "graded");

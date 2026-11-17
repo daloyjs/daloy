@@ -308,12 +308,45 @@ async function linkDependencies(dir: string, depsRoot?: string): Promise<void> {
   await symlink("../@daloyjs/core/bin/daloy.mjs", join(nm, ".bin", "daloy"));
 }
 
-async function git(dir: string, args: string[]): Promise<ProcessResult> {
-  return runProcess("git", args, {
-    cwd: dir,
-    env: childEnv(),
-    timeoutMs: 60_000,
-  });
+/**
+ * Run git with no user or system config. With `gitDir`, the repository is that
+ * directory and `dir` is only its work tree, so the `.git` inside `dir` (the
+ * agent's, which it can fill with `diff.external`, `core.fsmonitor`, hooks)
+ * is never read: the harness must not execute anything the agent wrote.
+ */
+async function git(dir: string, args: string[], gitDir?: string): Promise<ProcessResult> {
+  return runProcess(
+    "git",
+    gitDir ? ["--git-dir", gitDir, "--work-tree", dir, ...args] : args,
+    {
+      cwd: dir,
+      env: { ...childEnv(), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" },
+      timeoutMs: 60_000,
+    },
+  );
+}
+
+/** The baseline commit, in the agent's repo and in the harness's. */
+async function commitBaseline(dir: string, gitDir?: string): Promise<void> {
+  await git(dir, ["init", "--quiet", "--initial-branch=main"], gitDir);
+  await git(dir, ["add", "-A"], gitDir);
+  await git(
+    dir,
+    [
+      "-c",
+      "user.name=Developer",
+      "-c",
+      "user.email=dev@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "--no-verify",
+      "-m",
+      "Initial commit",
+    ],
+    gitDir,
+  );
 }
 
 /** A prepared trial workspace. */
@@ -322,6 +355,13 @@ export interface PreparedWorkspace {
   readonly dir: string;
   /** Temp parent directory to delete when the trial ends. */
   readonly root: string;
+  /**
+   * The harness's own git directory for this workspace, outside the agent's
+   * mount. Diffs are computed from it, never from the agent's `.git`: the
+   * agent can neither rewrite the baseline (by committing) nor plant config
+   * that runs commands on the host.
+   */
+  readonly gitDir: string;
   /** Snapshot taken after setup, before the agent runs. */
   readonly before: Map<string, string>;
 }
@@ -375,51 +415,48 @@ export async function prepareWorkspace(
   await linkDependencies(dir, opts.depsRoot);
   if (task.setup) await task.setup(ws);
 
-  await git(dir, ["init", "--quiet", "--initial-branch=main"]);
-  await git(dir, ["add", "-A"]);
-  await git(dir, [
-    "-c",
-    "user.name=Developer",
-    "-c",
-    "user.email=dev@example.invalid",
-    "-c",
-    "commit.gpgsign=false",
-    "commit",
-    "--quiet",
-    "--no-verify",
-    "-m",
-    "Initial commit",
-  ]);
+  // The agent's repo (a realistic project with one neutral commit), and the
+  // harness's record of the same baseline where the agent cannot reach.
+  await commitBaseline(dir);
+  const gitDir = join(root, "harness.git");
+  await commitBaseline(dir, gitDir);
 
-  return { dir, root, before: await snapshot(dir) };
+  return { dir, root, gitDir, before: await snapshot(dir) };
 }
 
 /**
  * The agent's changes since the baseline commit, including new and deleted
- * files.
+ * files. Computed in the harness's git directory ({@link PreparedWorkspace.gitDir}),
+ * so an agent that committed its work still shows every change, and nothing
+ * in the agent's `.git` is read or run.
  *
- * @param dir - Workspace root.
+ * @param ws - The workspace (`dir` and `gitDir`).
  * @param maxChars - Truncation limit for the report.
  * @returns A unified diff (possibly truncated).
  */
 export async function workspaceDiff(
-  dir: string,
+  ws: Pick<PreparedWorkspace, "dir" | "gitDir">,
   maxChars = 60_000,
 ): Promise<string> {
   // Stage everything and diff the index against the baseline commit, so new,
   // modified, AND deleted files all appear. (The earlier `add -A -N` + plain
   // `git diff` staged deletions and so dropped them from the diff.)
-  await git(dir, ["add", "-A"]);
-  const diff = await git(dir, [
-    "--no-pager",
-    "diff",
-    "--cached",
-    "--no-color",
-    "HEAD",
-    "--",
-    ".",
-    ":(exclude)node_modules",
-  ]);
+  await git(ws.dir, ["add", "-A"], ws.gitDir);
+  const diff = await git(
+    ws.dir,
+    [
+      "--no-pager",
+      "diff",
+      "--cached",
+      "--no-color",
+      "--no-ext-diff",
+      "HEAD",
+      "--",
+      ".",
+      ":(exclude)node_modules",
+    ],
+    ws.gitDir,
+  );
   return diff.output.length > maxChars
     ? `${diff.output.slice(0, maxChars)}\n[diff truncated]`
     : diff.output;
@@ -448,23 +485,30 @@ export function parseNumstat(numstat: string): DiffFootprint {
 
 /**
  * Size of the agent's changes since the baseline, new and deleted files
- * included.
+ * included (same source as {@link workspaceDiff}).
  *
- * @param dir - Workspace root.
+ * @param ws - The workspace (`dir` and `gitDir`).
  * @returns Files changed and lines added / removed.
  */
-export async function workspaceFootprint(dir: string): Promise<DiffFootprint> {
-  await git(dir, ["add", "-A"]);
-  const r = await git(dir, [
-    "--no-pager",
-    "diff",
-    "--cached",
-    "--numstat",
-    "HEAD",
-    "--",
-    ".",
-    ":(exclude)node_modules",
-  ]);
+export async function workspaceFootprint(
+  ws: Pick<PreparedWorkspace, "dir" | "gitDir">,
+): Promise<DiffFootprint> {
+  await git(ws.dir, ["add", "-A"], ws.gitDir);
+  const r = await git(
+    ws.dir,
+    [
+      "--no-pager",
+      "diff",
+      "--cached",
+      "--numstat",
+      "--no-ext-diff",
+      "HEAD",
+      "--",
+      ".",
+      ":(exclude)node_modules",
+    ],
+    ws.gitDir,
+  );
   return parseNumstat(r.output);
 }
 

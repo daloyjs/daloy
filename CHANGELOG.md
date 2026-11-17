@@ -190,6 +190,33 @@ For the forward-looking plan and the full thematic release log, see
     investigation check.
   - Re-parsing every saved trace with the new parser changes none of the 168
     stored trace grades.
+- **Agent evals: the trusted side no longer reads or runs anything the agent
+  controls.**
+  - The harness ran `git add -A && git diff --cached HEAD` inside the agent's
+    workspace, on the host. The agent can write `.git/config` there:
+    `diff.external` or `core.fsmonitor` set by the agent executed on the host
+    (reproduced), outside every container; and an agent that committed its
+    work made the diff empty, hiding its changes from the guardrail and
+    protected-file checks while the hidden tests ran the changed code
+    (reproduced). The baseline is now also committed to a harness-only git
+    directory outside the mount, and all diffs come from it with no user or
+    system git config.
+  - `node --test` reports a test file whose process exits 0 as one passed
+    test even when nothing in it ran, so a `process.exit(0)` planted at
+    module scope in app code that a hidden test imports forged a pass
+    (reproduced on Node 24 and 26). The `tests` and `hidden` graders now
+    preload a guard that turns any `process.exit` during a test run into a
+    failure.
+  - A directory listing (`ls src`, `tree src`, `stat`, `glob`, Claude's
+    `LS`/`Glob`) counted as reading every file under it and could satisfy an
+    investigation check without reading anything. Only content reads count.
+  - A tool call whose result never arrived was dropped while the trace
+    stayed "complete", turning a possibly-read file into a hard failure; the
+    trace is now incomplete and the check unverified.
+  - The egress proxy logged a spurious "connect timed out" deny when a
+    tunnel closed for idleness (the connect-timeout listener was never
+    removed), and now resolves IPv4 first since the bridge it leaves through
+    is IPv4-only.
 
 ## [1.24.2] - 2026-11-13
 

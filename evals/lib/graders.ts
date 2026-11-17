@@ -28,6 +28,52 @@ export const HIDDEN_TEST_DIR = "tests/__eval_hidden__";
 /** Per-grader process timeout. */
 const GRADER_TIMEOUT_MS = 180_000;
 
+/** Where the test graders write {@link PROCESS_GUARD} in the grade copy. */
+export const PROCESS_GUARD_PATH = `${HIDDEN_TEST_DIR}/process-guard.mjs`;
+
+/**
+ * Preloaded (`--import`) into every `node --test` process the test graders
+ * start. `node --test` reports a test file whose process exits 0 as one
+ * passed test, even if no test ran: a `process.exit(0)` planted at module
+ * scope in the app code that a hidden test imports forges a pass. The guard
+ * turns any `process.exit` during a test run into exit code 70 and says so.
+ * The runner's parent process never calls `process.exit` on success, so
+ * honest runs are unaffected.
+ */
+export const PROCESS_GUARD = `const realExit = process.reallyExit.bind(process);
+const trap = (code) => {
+  process.stderr.write(\`[eval] process.exit(\${code}) was called while tests were running\\n\`);
+  realExit(70);
+};
+process.exit = (code) => trap(code ?? process.exitCode ?? 0);
+process.reallyExit = (code) => trap(code);
+`;
+
+/**
+ * Run `node --test` on `files` with {@link PROCESS_GUARD} preloaded; the guard
+ * is written for the run and removed with its directory afterwards only when
+ * `cleanup` is set (the hidden grader removes the whole directory itself).
+ */
+async function runTests(
+  ctx: GradeContext,
+  files: readonly string[],
+  cleanup: boolean,
+): Promise<{ ok: boolean; details: string[] }> {
+  const ws = workspaceHandle(ctx.dir);
+  await ws.write(PROCESS_GUARD_PATH, PROCESS_GUARD);
+  try {
+    return await runNode(ctx, [
+      "--import",
+      `./${PROCESS_GUARD_PATH}`,
+      "--test",
+      "--test-reporter=spec",
+      ...files,
+    ]);
+  } finally {
+    if (cleanup) await ws.remove(HIDDEN_TEST_DIR);
+  }
+}
+
 /**
  * Runs a grading command (`["node", ...args]`) in a workspace. The default
  * runs it locally; `--sandbox docker` runs it in a no-network container.
@@ -160,11 +206,7 @@ export async function runGrader(
       return done(r.ok, r.details);
     }
     case "tests": {
-      const r = await runNode(ctx, [
-        "--test",
-        "--test-reporter=spec",
-        "tests/**/*.test.ts",
-      ]);
+      const r = await runTests(ctx, ["tests/**/*.test.ts"], true);
       return done(r.ok, r.details);
     }
     case "hidden": {
@@ -186,11 +228,11 @@ export async function runGrader(
         );
       }
       try {
-        const r = await runNode(ctx, [
-          "--test",
-          "--test-reporter=spec",
-          ...files.map((f) => `${HIDDEN_TEST_DIR}/${f}`),
-        ]);
+        const r = await runTests(
+          ctx,
+          files.map((f) => `${HIDDEN_TEST_DIR}/${f}`),
+          false,
+        );
         return done(r.ok, r.details);
       } finally {
         await ws.remove(HIDDEN_TEST_DIR);

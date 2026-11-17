@@ -243,8 +243,9 @@ export interface AgentTrace {
    */
   readonly assistantTextClipped?: boolean;
   /**
-   * Files the agent viewed, searched, or named in a shell command. A view or
-   * search counts only when the CLI reports that call succeeded.
+   * Files the agent viewed, searched, or named in a content-reading shell
+   * command. A view or search counts only when the CLI reports that call
+   * succeeded; listings (`glob`, `ls`, `tree`, `stat`) never count.
    */
   readonly filesRead: readonly string[];
   /** Files the agent created or edited through its edit tools. */

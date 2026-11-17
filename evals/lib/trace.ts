@@ -69,12 +69,17 @@ export function workspaceRelative(path: string, dir?: string): string {
 }
 
 /**
- * Commands that name a path without reading it (`echo src/a.ts`,
- * `mkdir src/x`). Their arguments are not counted as reads.
+ * Commands that name a path without reading its content: writers and
+ * movers (`echo src/a.ts`, `mkdir src/x`) and listers (`ls src`, `tree src`,
+ * `stat`, `wc`). Their arguments are not counted as reads: `ls src` shows
+ * names, not what `src/auth/passwords.ts` does, and an investigation check
+ * must not be satisfied by a directory listing.
  */
 const NON_READING = new Set([
   "echo", "printf", "touch", "mkdir", "rm", "rmdir", "cd", "pushd", "popd",
   "export", "unset", "true", "false", ":", "sleep", "chmod", "chown",
+  "ls", "tree", "find", "du", "df", "stat", "file", "wc", "test", "[",
+  "dirname", "basename", "realpath", "readlink", "which", "type", "exa", "eza", "lsd",
 ]);
 
 function pathTokens(segment: string, dir: string | undefined, out: Set<string>): void {
@@ -265,7 +270,10 @@ class TraceBuilder {
       observed: {
         messages: this.messages.length > 0,
         tools: this.toolStream,
-        complete: this.toolStream && this.sawStart && this.sawEnd && !this.elided,
+        // A tool call with no result (a lost line, a renamed event) may have
+        // read what the grader looks for: the trace cannot prove it did not.
+        complete:
+          this.toolStream && this.sawStart && this.sawEnd && !this.elided && this.pending.size === 0,
       },
     };
   }
@@ -304,8 +312,9 @@ function copilot(b: TraceBuilder, output: string): void {
     if (name === "view") b.onSuccess(id, () => b.readPath(a.path));
     else if (name === "edit" || name === "create")
       b.onSuccess(id, () => b.editPath(a.path));
-    else if (name === "grep" || name === "rg" || name === "glob")
+    else if (name === "grep" || name === "rg")
       b.onSuccess(id, () => b.readPath(a.paths ?? a.path));
+    // `glob` lists names; it reads nothing.
     else if (name === "bash" || name === "shell") {
       const c = str(a.command);
       if (c) b.command(c);
@@ -353,9 +362,9 @@ function claude(b: TraceBuilder, output: string): void {
       b.tool(name);
       const input = (item.input ?? {}) as Record<string, unknown>;
       const id = str(item.id);
-      if (name === "Read" || name === "LS")
-        b.onSuccess(id, () => b.readPath(input.file_path ?? input.path));
-      else if (name === "Grep" || name === "Glob") b.onSuccess(id, () => b.readPath(input.path));
+      // `LS` and `Glob` list names; they read nothing.
+      if (name === "Read") b.onSuccess(id, () => b.readPath(input.file_path ?? input.path));
+      else if (name === "Grep") b.onSuccess(id, () => b.readPath(input.path));
       else if (name === "Edit" || name === "MultiEdit" || name === "Write")
         b.onSuccess(id, () => b.editPath(input.file_path));
       else if (name === "NotebookEdit") b.onSuccess(id, () => b.editPath(input.notebook_path));

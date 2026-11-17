@@ -1,9 +1,10 @@
+import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import {
   buildPrompt,
@@ -514,10 +515,23 @@ describe("stored diffs and regrading", () => {
       g("init", "--quiet");
       g("add", "-A");
       g("commit", "--quiet", "-m", "base");
+      const gitDir = join(dir, "..", `${basename(dir)}-harness.git`);
+      g("--git-dir", gitDir, "--work-tree", dir, "init", "--quiet");
+      g("--git-dir", gitDir, "--work-tree", dir, "add", "-A");
+      g("--git-dir", gitDir, "--work-tree", dir, "commit", "--quiet", "-m", "base");
       await ws.remove("legacy");
       await ws.write("src/app.ts", "one\ntwo\n");
       await ws.write("src/new.ts", "x\n");
-      const diff = await workspaceDiff(dir);
+      // A hostile agent: config that would run commands on the host, and a
+      // commit that would hide its changes from a diff against HEAD.
+      const marker = join(dir, "..", `${basename(dir)}-PWNED`);
+      g("config", "diff.external", `sh -c 'touch ${marker}; exit 0'`);
+      g("config", "core.fsmonitor", `sh -c 'touch ${marker}; exit 0'`);
+      g("add", "-A");
+      g("commit", "--quiet", "-m", "wip");
+      const diff = await workspaceDiff({ dir, gitDir });
+      assert.equal(existsSync(marker), false, "the agent's git config ran on the host");
+      assert.match(diff, /^\+two$/m, "the agent's commit hid its changes");
       assert.match(
         diff,
         /^deleted file mode/m,
@@ -525,11 +539,38 @@ describe("stored diffs and regrading", () => {
       );
       assert.match(diff, /^diff --git a\/legacy\/server\.js/m);
       assert.match(diff, /^diff --git a\/src\/new\.ts/m);
-      assert.deepEqual(await workspaceFootprint(dir), {
+      assert.deepEqual(await workspaceFootprint({ dir, gitDir }), {
         filesChanged: 3,
         linesAdded: 2,
         linesRemoved: 3,
       });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+      await rm(join(dir, "..", `${basename(dir)}-harness.git`), { recursive: true, force: true });
+      await rm(join(dir, "..", `${basename(dir)}-PWNED`), { force: true });
+    }
+  });
+
+  test("a process.exit(0) planted in app code cannot forge a test pass", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const ws = workspaceHandle(dir);
+      await ws.write("src/app.ts", "export const add = (a: number, b: number) => a - b;\nprocess.exit(0);\n");
+      await ws.write(
+        "hidden/math.test.ts",
+        'import { test } from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../../src/app.ts";\ntest("adds", () => assert.equal(add(1, 2), 3));\n',
+      );
+      const ctx = { dir, before: new Map(), after: new Map(), hiddenDir: join(dir, "hidden") };
+      const forged = await runGrader({ kind: "hidden" }, ctx);
+      assert.equal(forged.pass, false);
+      assert.match(forged.details.join("\n"), /process\.exit\(0\) was called while tests were running/);
+      assert.equal(existsSync(join(dir, "tests", "__eval_hidden__")), false, "hidden dir and guard removed");
+      // Honest code still passes with the guard preloaded.
+      await ws.write("src/app.ts", "export const add = (a: number, b: number) => a + b;\n");
+      assert.equal((await runGrader({ kind: "hidden" }, ctx)).pass, true);
+      // And a real failure still fails.
+      await ws.write("src/app.ts", "export const add = (a: number, b: number) => a * b;\n");
+      assert.equal((await runGrader({ kind: "hidden" }, ctx)).pass, false);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -1210,7 +1251,10 @@ describe("agent traces and don't-act graders", () => {
       pathsInCommand(`cd /tmp/proj-x/${WORKSPACE_APP_NAME} && grep -n -i "password\\|users" -r src | head -30`),
       ["src"],
     );
-    assert.deepEqual(pathsInCommand("cat src/build-app.ts | head -150; ls tests"), ["src/build-app.ts", "tests"]);
+    assert.deepEqual(pathsInCommand("cat src/build-app.ts | head -150; ls tests"), ["src/build-app.ts"]);
+    // Listings show names, not content: none of these counts as a read.
+    for (const listing of ["ls src", "tree src", "du -sh tests", "stat src/auth/passwords.ts", "wc -l src/a.ts", "find src -name '*.ts'"])
+      assert.deepEqual(pathsInCommand(listing), [], listing);
     assert.deepEqual(pathsInCommand("python3 - <<'E'\np='src/build-app.ts'"), ["src/build-app.ts"]);
     for (const none of [`cd /tmp/p/${WORKSPACE_APP_NAME} && pnpm test`, "curl https://example.com/a.json", "echo hello"])
       assert.deepEqual(pathsInCommand(none), [], none);
@@ -1445,9 +1489,14 @@ describe("agent traces and don't-act graders", () => {
     const trace = parseTrace("copilot-jsonl", out, "/work");
     assert.deepEqual(trace.filesRead, ["README.md"]);
     assert.deepEqual(trace.filesEdited, []);
-    assert.equal(trace.observed?.complete, true);
+    // Call "d" never got a result, so the trace cannot prove what it read.
+    assert.equal(trace.observed?.complete, false);
     const ctx = { dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none", trace };
-    const r = await runGrader({ kind: "read-files", id: "r", files: ["src/users.ts"] }, ctx);
+    const unsettled = await runGrader({ kind: "read-files", id: "r", files: ["src/users.ts"] }, ctx);
+    assert.equal(unsettled.unverified, true, "an unsettled call makes a missing read unverified, not a failure");
+    const settled = parseTrace("copilot-jsonl", out.replace(/\n[^\n]*never-finished[^\n]*/, ""), "/work");
+    assert.equal(settled.observed?.complete, true);
+    const r = await runGrader({ kind: "read-files", id: "r", files: ["src/users.ts"] }, { ...ctx, trace: settled });
     assert.equal(r.pass, false);
     assert.equal(r.unverified, undefined, "a complete trace with only a failed read is a real failure");
   });
