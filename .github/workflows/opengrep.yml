@@ -92,7 +92,7 @@ jobs:
 
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
         with:
           egress-policy: audit
           disable-sudo: true
@@ -110,7 +110,7 @@ jobs:
         # binary the upstream Opengrep `install.sh --verify-signatures`
         # path expects. v4.1.2 installs Cosign v3 by default; the
         # `verify-blob` invocation below is compatible.
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Download Opengrep release binary + signature
         # We download the binary and its sigstore cert/sig directly from
@@ -213,7 +213,7 @@ jobs:
         # SARIF — even with findings — we still want the upload to
         # proceed, hence `always()` combined with the file check.
         if: ${{ always() && hashFiles('opengrep.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: opengrep.sarif
           category: opengrep
