@@ -306,7 +306,34 @@ export async function runAgentContainer(
     AGENT_IMAGE,
     ...argv,
   ];
-  return runContainer(name, args, secretEnv, timeoutMs);
+  const result = await runContainer(name, args, secretEnv, timeoutMs);
+  await releaseToHost(hostDir);
+  return result;
+}
+
+/**
+ * Give the host user back a directory a container wrote into.
+ *
+ * Files a container creates belong to the image's user. On a Linux host
+ * whose user has another uid, the harness then cannot delete them, or read
+ * them if their modes are tight (Docker Desktop hides this by mapping
+ * ownership). This opens them up again, as the image's user, in a
+ * container with no network. Git records only the executable bit, which
+ * `a+rwX` does not change, so the stored diff is not affected.
+ *
+ * @param hostDir - A directory the container user can enter (see
+ *   `openForContainer`).
+ * @returns Nothing; failures are ignored (the caller's own access fails
+ *   and reports instead).
+ */
+export async function releaseToHost(hostDir: string): Promise<void> {
+  const name = `daloy-eval-release-${process.pid}-${Date.now()}`;
+  await runContainer(
+    name,
+    [...lockedDown(name, hostDir), "--network", "none", AGENT_IMAGE, "sh", "-c", `chmod -R a+rwX ${CONTAINER_WORKDIR}`],
+    {},
+    60_000,
+  ).catch(() => undefined);
 }
 
 /**

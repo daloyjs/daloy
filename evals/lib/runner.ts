@@ -6,7 +6,7 @@
 
 import { join } from "node:path";
 import { buildPrompt, type AgentAdapter } from "./agents.ts";
-import { IMAGE_DEPS_DIR, runGraderContainer } from "./docker-sandbox.ts";
+import { IMAGE_DEPS_DIR, releaseToHost, runGraderContainer } from "./docker-sandbox.ts";
 import { runGrader, type GradeExec } from "./graders.ts";
 import {
   copyWorkspace,
@@ -141,6 +141,6 @@ export async function runTrial(
       workspace: opts.keep ? ws.dir : null,
     };
   } finally {
-    if (!opts.keep) await disposeWorkspace(ws.root);
+    if (!opts.keep) await disposeWorkspace(ws.root, docker ? releaseToHost : undefined);
   }
 }

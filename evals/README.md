@@ -56,8 +56,31 @@ key:
   **copy** of the finished workspace, in a container from the same image
   with `--network none`. The copy never takes the agent's `node_modules`
   (writable by the agent and outside the diff, so a fake `tsc` there could
-  forge a pass); its dependencies are rebuilt from trusted sources. Static checks (the guardrail diff, protected files,
-  patterns) run in the harness on snapshots.
+  forge a pass); its dependencies are rebuilt from trusted sources. It also
+  drops symlinks, anything inside a `.git`, and `dist`, `generated`, and
+  `coverage`: the stored diff does not show those, so nothing in them may be
+  graded. Static checks (the guardrail diff, protected files, patterns) run
+  in the harness on snapshots.
+- **File ownership on Linux**: what a container creates belongs to its user
+  (uid 1000), which a Linux host user with another uid cannot delete, or
+  read if the modes are tight (Docker Desktop hides this). After the agent
+  stage the harness opens the workspace up again from a container
+  (`releaseToHost`), and does the same before deleting a trial directory
+  when the first attempt fails. A directory that still cannot be removed is
+  a warning, never a lost result.
+
+**Known limit.** The hidden tests import the app, so they run in the same
+process as the agent's code. The preload guard stops the cheap forgeries
+(`process.exit(0)`, a neutered `assert`, a reset exit code), but code
+written to attack the test process can still forge a pass:
+`process.execve("/usr/bin/true")` and a WASI `proc_exit(0)` each reported
+every hidden test as passed with no implementation (reproduced, guard
+loaded). No guard inside that process closes this. The fix is to run the
+app in one container and the hidden tests in another that never loads the
+agent's code; this harness does not do that yet. Until then:
+`pnpm eval:analyze` flags any trial whose diff reaches for the test process
+or the hidden tests, read every flagged trial and every surprising pass,
+and do not use a score as a release gate.
 
 The egress proxy (`egress-proxy.ts`, no dependencies) tunnels HTTPS
 (`CONNECT` to port 443) to allowlisted host names resolving to public
@@ -186,9 +209,12 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    computed from the second, so the harness never runs git inside the
    agent's `.git` (where `diff.external` or `core.fsmonitor` in `.git/config`
    would run the agent's command on the host) and an agent that commits its
-   work cannot empty the diff. It is staged from a clean copy (no nested
-   `.git`, the baseline's `.gitignore` and `.gitattributes`), so the agent's
-   own rule files cannot hide a change from it.
+   work cannot empty the diff. It is staged from a clean copy with no
+   nested `.git` and no ignore or attribute rules at all (every file is
+   force-added), so no rule file, the agent's or the template's, can hide a
+   change, and the harness never writes at a path the agent chose. The diff
+   leaves out only `node_modules`, `dist`, `generated`, `coverage`, and
+   anything inside a `.git`; the grade copy deletes exactly those.
 5. The agent runs with the prompt (an environment preamble plus the task prompt)
    and a minimal, allowlisted environment.
 6. The diff footprint (`git diff --numstat`, from the harness's git

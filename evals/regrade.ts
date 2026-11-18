@@ -21,7 +21,7 @@ import { runGrader } from "./lib/graders.ts";
 import { markLegacyUnverified } from "./lib/legacy-diff.ts";
 import { reviseTrial } from "./lib/revision.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
-import { checkGraderImage, IMAGE_DEPS_DIR } from "./lib/docker-sandbox.ts";
+import { checkGraderImage, IMAGE_DEPS_DIR, releaseToHost } from "./lib/docker-sandbox.ts";
 import { dockerGradeExec, hiddenDirFor } from "./lib/runner.ts";
 import { loadTrialTrace } from "./lib/trace.ts";
 import {
@@ -99,7 +99,7 @@ async function regradeTrial(
     }
     return { grades };
   } finally {
-    await disposeWorkspace(ws.root);
+    await disposeWorkspace(ws.root, docker ? releaseToHost : undefined);
   }
 }
 

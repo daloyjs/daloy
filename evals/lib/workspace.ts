@@ -68,7 +68,17 @@ export const DIFF_FORMAT = 2;
 export const WORKSPACE_APP_NAME = "my-daloy-app";
 
 /** Directory names never read into a snapshot. */
-const SNAPSHOT_SKIP = new Set(["node_modules", ".git", "dist", "generated"]);
+/**
+ * Directory names left out of the stored diff AND deleted from the grade
+ * copy, at any depth: dependencies (rebuilt from trusted sources) and build
+ * output. The invariant is "what the diff leaves out, the grade copy
+ * deletes": a name here that still reached grading would be a place to hide
+ * code that runs. `.git` is always left out and deleted too.
+ */
+const UNRECORDED = ["node_modules", "dist", "generated", "coverage"] as const;
+const isUnrecorded = (name: string): boolean =>
+  name === ".git" || (UNRECORDED as readonly string[]).includes(name);
+const SNAPSHOT_SKIP = new Set<string>([...UNRECORDED, ".git"]);
 /** Files above this size are not snapshotted (they are never source). */
 const SNAPSHOT_MAX_BYTES = 512 * 1024;
 /** Default cap on captured process output, to bound memory and report size. */
@@ -343,7 +353,12 @@ async function git(dir: string, args: string[], gitDir?: string): Promise<Proces
 /** The baseline commit, in the agent's repo and in the harness's. */
 async function commitBaseline(dir: string, gitDir?: string): Promise<void> {
   await git(dir, ["init", "--quiet", "--initial-branch=main"], gitDir);
-  await git(dir, ["add", "-A"], gitDir);
+  // The agent's repo honours its .gitignore, like any project. The
+  // harness's records every file (see stageFromCleanCopy).
+  if (gitDir) {
+    const failed = await stageFromCleanCopy({ dir, gitDir });
+    if (failed) throw new Error(`baseline staging failed: ${failed}`);
+  } else await git(dir, ["add", "-A"]);
   await git(
     dir,
     [
@@ -441,21 +456,23 @@ export async function prepareWorkspace(
 /** Marks a stored diff that could not be computed; regrade treats it as unverified. */
 export const DIFF_UNAVAILABLE = "[diff unavailable]";
 
-/** Files whose rules change what git stages or shows. */
-const RULE_FILES = new Set([".gitignore", ".gitattributes"]);
-
 /**
- * Stage the agent's work in the harness's git directory from a clean copy,
- * so the agent's own files cannot decide what the harness sees. Staging
- * straight from the workspace let three files the agent can write blind the
- * stored diff (all reproduced): a new file listed in its `.gitignore` was
- * left out; a `.gitattributes` `-diff` entry turned a change into "Binary
- * files differ"; a nested git repository became one submodule line, or with
- * no commit made `git add` fail. The copy has no `.git` at any depth (a
- * nested repo's files are plain files) and stages with the BASELINE's
- * ignore and attribute rules; the agent's own `.gitignore` /
- * `.gitattributes` are then added as content, so their changes still show.
- * A symlinked rule file is copied as a link, never read.
+ * Stage the workspace's files in the harness's git directory from a clean
+ * copy, with no ignore or attribute rules, so nothing the agent writes
+ * decides what the harness records (each of these was reproduced):
+ * - no `.git` at any depth: a nested repository's files are plain files;
+ * - every file force-added: a new file listed in the agent's `.gitignore`,
+ *   or matching the baseline's (`src/dist/handler.ts`, `debug.log`), is
+ *   recorded, because it is graded;
+ * - regular `.gitattributes` files withheld while the rest is staged (a
+ *   `-diff` rule hid a change as "Binary files differ"), then added as
+ *   content, so the agent's edits to them still show;
+ * - symlinks staged as links, never read or followed, and nothing written
+ *   at a path that exists in the copy (`wx`). An earlier version restored
+ *   the baseline's rule files into the copy and wrote through a symlink the
+ *   agent had put in their place, into a file outside the workspace.
+ * Only {@link UNRECORDED} names are left out, and the grade copy deletes
+ * those.
  *
  * @returns An error message, or `undefined` when staging worked.
  */
@@ -465,45 +482,27 @@ async function stageFromCleanCopy(
   const tmp = await mkdtemp(join(tmpdir(), "eval-stage-"));
   const copy = join(tmp, "w");
   try {
-    const agentRules: string[] = [];
+    const attributes: string[] = [];
     await cp(ws.dir, copy, {
       recursive: true,
       verbatimSymlinks: true,
       filter: async (src) => {
-        const name = basename(src);
         if (src === ws.dir) return true;
-        if (name === ".git" || name === "node_modules") return false;
-        if (RULE_FILES.has(name) && !(await lstat(src)).isSymbolicLink()) {
-          agentRules.push(relative(ws.dir, src));
+        const name = basename(src);
+        if (isUnrecorded(name)) return false;
+        if (name === ".gitattributes" && (await lstat(src)).isFile()) {
+          attributes.push(relative(ws.dir, src));
           return false;
         }
         return true;
       },
     });
-    const tracked = await git(copy, ["ls-tree", "-r", "-z", "--name-only", "HEAD"], ws.gitDir);
-    if (tracked.exitCode !== 0) return `git ls-tree failed: ${tracked.output.slice(0, 300)}`;
-    const baselineRules = tracked.output.split("\0").filter((f) => RULE_FILES.has(basename(f)));
-    for (const rel of baselineRules) {
-      const show = await git(copy, ["show", `HEAD:${rel}`], ws.gitDir);
-      if (show.exitCode !== 0) continue;
-      await mkdir(dirname(join(copy, rel)), { recursive: true });
-      await writeFile(join(copy, rel), show.output);
-    }
-    const add = await git(copy, ["add", "-A", "--", "."], ws.gitDir);
+    const add = await git(copy, ["add", "-A", "--force", "--", "."], ws.gitDir);
     if (add.exitCode !== 0) return `git add failed: ${add.output.slice(0, 300)}`;
-    for (const rel of agentRules) {
-      await mkdir(dirname(join(copy, rel)), { recursive: true });
-      await writeFile(join(copy, rel), await readFile(join(ws.dir, rel)));
-    }
-    const ruleSet = new Set(agentRules);
-    for (const rel of baselineRules.filter((f) => !ruleSet.has(f)))
-      await rm(join(copy, rel), { force: true });
-    if (agentRules.length || baselineRules.length) {
-      const forced = await git(
-        copy,
-        ["add", "-A", "--force", "--", ...new Set([...agentRules, ...baselineRules])],
-        ws.gitDir,
-      );
+    if (attributes.length > 0) {
+      for (const rel of attributes)
+        await writeFile(join(copy, rel), await readFile(join(ws.dir, rel)), { flag: "wx" });
+      const forced = await git(copy, ["add", "--force", "--", ...attributes], ws.gitDir);
       if (forced.exitCode !== 0) return `git add failed: ${forced.output.slice(0, 300)}`;
     }
     return undefined;
@@ -544,9 +543,6 @@ export async function workspaceDiff(
       "--no-textconv",
       "--text",
       "HEAD",
-      "--",
-      ".",
-      ":(exclude)node_modules",
     ],
     ws.gitDir,
   );
@@ -598,9 +594,6 @@ export async function workspaceFootprint(
       "--no-textconv",
       "--text",
       "HEAD",
-      "--",
-      ".",
-      ":(exclude)node_modules",
     ],
     ws.gitDir,
   );
@@ -608,20 +601,45 @@ export async function workspaceFootprint(
 }
 
 /**
- * Delete a trial's temp directory.
+ * Delete a trial's temp directory. Never throws: a directory that cannot be
+ * removed must not cost the trial its result.
  *
  * @param root - The `root` from {@link prepareWorkspace}.
+ * @param release - With `--sandbox docker`: gives the host user back a
+ *   directory a container wrote into (`releaseToHost`). Called for each
+ *   directory under `root` when the first attempt fails, which happens on a
+ *   Linux host whose uid differs from the container user's.
  */
-export async function disposeWorkspace(root: string): Promise<void> {
-  await rm(root, { recursive: true, force: true });
+export async function disposeWorkspace(
+  root: string,
+  release?: (dir: string) => Promise<void>,
+): Promise<void> {
+  const remove = (): Promise<void> => rm(root, { recursive: true, force: true });
+  try {
+    await remove();
+  } catch (err) {
+    if (release) {
+      const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+      for (const e of entries)
+        if (e.isDirectory()) await release(join(root, e.name)).catch(() => undefined);
+      try {
+        await remove();
+        return;
+      } catch {
+        // Reported below with the first error.
+      }
+    }
+    console.warn(`[evals] could not remove ${root}: ${(err as Error).message}`);
+  }
 }
 
 /**
  * Copy a workspace for grading, so hidden tests and the agent's code run on a
- * copy and the original stays the record. No `node_modules` directory (at any
- * depth) and no symlink is copied; the top-level `node_modules` is rebuilt
- * from trusted sources, because the agent can write them and they are
- * outside the diff and snapshots. An agent that replaced
+ * copy and the original stays the record. No symlink, no `.git`, and none of
+ * the {@link UNRECORDED} names (dependencies, build output) is copied, at
+ * any depth: the stored diff does not record what is inside them, so nothing
+ * inside them may be graded. The top-level `node_modules` is rebuilt from
+ * trusted sources. An agent that replaced
  * `node_modules/typescript` with its own always-passing `tsc` would
  * otherwise forge the typecheck grade, and a fake `@daloyjs/core` could fake
  * framework behaviour under the hidden tests.
@@ -643,7 +661,8 @@ export async function copyWorkspace(
     recursive: true,
     verbatimSymlinks: true,
     filter: async (src) =>
-      basename(src) !== "node_modules" && !(await lstat(src)).isSymbolicLink(),
+      src === dir ||
+      (!isUnrecorded(basename(src)) && !(await lstat(src)).isSymbolicLink()),
   });
   await linkDependencies(dest, depsRoot);
 }
