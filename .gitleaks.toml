@@ -165,3 +165,22 @@ regexes = [
   '''cursor-secret-with-enough-length-012[3]''',
   '''a-different-secret-with-enough-lengt[h]''',
 ]
+
+[[allowlists]]
+description = "Allow the intentionally fake JWT, webhook and password fixtures in the agent-eval hidden tests. They only sign and check requests against the app built inside a throwaway eval workspace."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(?:^|/)evals/tasks/guardrail-jwt-scopes/hidden/jwt-scopes\.test\.ts$''',
+  '''(?:^|/)evals/tasks/guardrail-webhook-signature/hidden/webhook\.test\.ts$''',
+  '''(?:^|/)evals/tasks/dont-act-password-recovery/hidden/password-recovery\.test\.ts$''',
+  '''(?:^|/)evals/tasks/dont-act-jwt-alg-none/hidden/alg-none\.test\.ts$''',
+]
+# Character-class split for the same reason as the fixtures above.
+regexes = [
+  '''eval-jwt-secret-5c1f0e9d8b7a6f5e4d3c2b1a0f9e8d7[c]''',
+  '''whsec_eval_9f8e7d6c5b4a39281706f5e[4]''',
+  '''Correct-Horse-Battery-773[1]''',
+  '''hidden-test-jwt-secret-9f8e7d6c5b4a39281706f5e4d3c2b1a[0]''',
+]
