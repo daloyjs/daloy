@@ -522,13 +522,17 @@ describe("stored diffs and regrading", () => {
       await ws.remove("legacy");
       await ws.write("src/app.ts", "one\ntwo\n");
       await ws.write("src/new.ts", "x\n");
-      // A hostile agent: config that would run commands on the host, and a
-      // commit that would hide its changes from a diff against HEAD.
+      // A hostile agent: a commit that would hide its changes from a diff
+      // against HEAD, then config that would run commands on the host. The
+      // config goes in after this test's own git calls: Linux git runs a
+      // core.fsmonitor hook on `add`/`commit`, which would trip the marker
+      // here, before the harness is ever asked for a diff.
       const marker = join(dir, "..", `${basename(dir)}-PWNED`);
-      g("config", "diff.external", `sh -c 'touch ${marker}; exit 0'`);
-      g("config", "core.fsmonitor", `sh -c 'touch ${marker}; exit 0'`);
       g("add", "-A");
       g("commit", "--quiet", "-m", "wip");
+      g("config", "diff.external", `sh -c 'touch ${marker}; exit 0'`);
+      g("config", "core.fsmonitor", `sh -c 'touch ${marker}; exit 0'`);
+      assert.equal(existsSync(marker), false, "the test's own setup ran the hostile config");
       const diff = await workspaceDiff({ dir, gitDir });
       assert.equal(existsSync(marker), false, "the agent's git config ran on the host");
       assert.match(diff, /^\+two$/m, "the agent's commit hid its changes");
