@@ -16,6 +16,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   cp,
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -229,11 +230,24 @@ export function workspaceHandle(dir: string): WorkspaceHandle {
       throw new Error(`path escapes workspace: ${rel}`);
     return p;
   };
+  // The lexical check above does not see symlinks. The agent can make
+  // `tests` a link to anywhere on the host; a harness write of
+  // `tests/__eval_hidden__/x.test.ts` would then land there. Resolve the
+  // parent and require it to be inside the (resolved) root.
+  const insideAfterSymlinks = async (p: string): Promise<void> => {
+    // Resolve the nearest ancestor that exists, before anything is created.
+    let ancestor = dirname(p);
+    while (!existsSync(ancestor)) ancestor = dirname(ancestor);
+    const [root, real] = await Promise.all([realpath(dir), realpath(ancestor)]);
+    if (real !== root && !real.startsWith(root + sep))
+      throw new Error(`path resolves outside the workspace through a symlink: ${relative(dir, p)}`);
+  };
   return {
     dir,
     read: async (rel) => readFile(abs(rel), "utf8"),
     async write(rel, content) {
       const p = abs(rel);
+      await insideAfterSymlinks(p);
       await mkdir(dirname(p), { recursive: true });
       await writeFile(p, content);
     },
@@ -524,9 +538,9 @@ export async function disposeWorkspace(root: string): Promise<void> {
 /**
  * Copy a workspace for grading, so hidden tests and the agent's code run on a
  * copy and the original stays the record. No `node_modules` directory (at any
- * depth) is copied; the top-level one is rebuilt from trusted sources,
- * because the agent can write them and they are outside the diff and
- * snapshots. An agent that replaced
+ * depth) and no symlink is copied; the top-level `node_modules` is rebuilt
+ * from trusted sources, because the agent can write them and they are
+ * outside the diff and snapshots. An agent that replaced
  * `node_modules/typescript` with its own always-passing `tsc` would
  * otherwise forge the typecheck grade, and a fake `@daloyjs/core` could fake
  * framework behaviour under the hidden tests.
@@ -541,10 +555,14 @@ export async function copyWorkspace(
   dest: string,
   depsRoot?: string,
 ): Promise<void> {
+  // Symlinks are not copied either: on the host they resolve against the
+  // host filesystem, so a link the agent made (`tests` -> somewhere) would
+  // redirect the harness's own writes, chmods, and removals in the copy.
   await cp(dir, dest, {
     recursive: true,
     verbatimSymlinks: true,
-    filter: (src) => basename(src) !== "node_modules",
+    filter: async (src) =>
+      basename(src) !== "node_modules" && !(await lstat(src)).isSymbolicLink(),
   });
   await linkDependencies(dest, depsRoot);
 }

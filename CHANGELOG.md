@@ -217,6 +217,21 @@ For the forward-looking plan and the full thematic release log, see
     tunnel closed for idleness (the connect-timeout listener was never
     removed), and now resolves IPv4 first since the bridge it leaves through
     is IPv4-only.
+- **Agent evals: symlinks and failed shell reads.**
+  - The grade copy kept the agent's symlinks, and the harness wrote hidden
+    tests into the copy on the host through them: a `tests` link the agent
+    pointed at a host directory received the hidden test files (reproduced).
+    Symlinks are no longer copied, and the workspace handle refuses any
+    write whose real parent lies outside the workspace, before creating a
+    directory.
+  - A path named by a shell command that exited non-zero counted as read.
+    `cat missing.ts` (exit 1) satisfied an investigation check; yet `cat
+    a.ts; ls missing` also exits 1 after reading `a.ts`, so the exit code
+    cannot settle it either way. Such paths are recorded as
+    `filesAttempted`, and a `read-files` check that depends on one is
+    unverified. Copilot keeps `success: true` for bash and reports the code
+    in `shellExecution.exitCode`; Claude sets `is_error`; Codex has
+    `exit_code`. Re-parsing every saved trace changes no stored grade.
 
 ## [1.24.2] - 2026-11-13
 

@@ -1501,6 +1501,41 @@ describe("agent traces and don't-act graders", () => {
     assert.equal(r.unverified, undefined, "a complete trace with only a failed read is a real failure");
   });
 
+  test("a shell read from a command that exited non-zero is attempted, not read", async () => {
+    const L = JSON.stringify;
+    const ctx = (trace: AgentTrace) => ({ dir: "/nonexistent", before: new Map(), after: new Map(), hiddenDir: "/none", trace });
+    const spec = { kind: "read-files", id: "r", files: ["src/settings.ts"] } as const;
+    // Codex reports the exit code inline.
+    const codex = parseTrace("codex-jsonl", [
+      L({ type: "turn.started" }),
+      L({ type: "item.completed", item: { type: "command_execution", command: "cat src/settings.ts", exit_code: 1 } }),
+      L({ type: "turn.completed" }),
+    ].join("\n"));
+    assert.deepEqual(codex.filesRead, []);
+    assert.deepEqual(codex.filesAttempted, ["src/settings.ts"]);
+    const r = await runGrader(spec, ctx(codex));
+    assert.equal(r.unverified, true, "a failed cat is neither a read nor proof of no read");
+    assert.match(r.details[0] ?? "", /exited non-zero/);
+    // Copilot keeps success=true for bash; the exit code is in shellExecution.
+    const cop = (code: number) => parseTrace("copilot-jsonl", [
+      L({ type: "session.start", data: {} }),
+      L({ type: "tool.execution_start", data: { toolCallId: "a", toolName: "bash", arguments: { command: "cat src/settings.ts" } } }),
+      L({ type: "tool.execution_complete", data: { toolCallId: "a", success: true, shellExecution: { exitCode: code } } }),
+      L({ type: "result" }),
+    ].join("\n"), "/work");
+    assert.equal((await runGrader(spec, ctx(cop(1)))).unverified, true);
+    assert.equal((await runGrader(spec, ctx(cop(0)))).pass, true);
+    assert.equal(cop(0).filesAttempted, undefined);
+    // Claude marks a failed Bash with is_error on the tool_result.
+    const claude = parseTrace("claude-json", [
+      L({ type: "system" }),
+      L({ type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "Bash", input: { command: "cat src/settings.ts" } }] } }),
+      L({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t", is_error: true }] } }),
+      L({ type: "result", result: "No." }),
+    ].join("\n"), "/work");
+    assert.deepEqual(claude.filesAttempted, ["src/settings.ts"]);
+  });
+
   test("long assistant text keeps its head and tail; a miss there is unverified", async () => {
     const L = JSON.stringify;
     const out = [

@@ -304,6 +304,15 @@ export async function runGrader(
         ]);
       const unread = spec.files.filter((f) => !traceTouched(trace, f));
       if (unread.length === 0) return done(true, []);
+      const attempted = unread.filter((f) =>
+        traceTouched({ ...trace, filesRead: trace.filesAttempted ?? [], filesEdited: [] }, f),
+      );
+      if (attempted.length > 0)
+        return unverified(
+          attempted.map(
+            (f) => `the only read of ${f} was a shell command that exited non-zero, so it may not have been read`,
+          ),
+        );
       const details = unread.map(
         (f) => `the agent never looked at ${f} before answering`,
       );

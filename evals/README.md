@@ -194,7 +194,7 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    The report also shows **cost per success**: what every trial spent, failed
    ones included, divided by the passes (the price of one working result).
 7. The agent's output is parsed into a trace (`lib/trace.ts`): its final
-   answer and all its messages to the user, files it looked at (viewed, searched, or named in a content-reading shell command; listings such as `glob`, `ls`, `tree`, `stat` do not count),
+   answer and all its messages to the user, files it looked at (viewed, searched, or named in a content-reading shell command; listings such as `glob`, `ls`, `tree`, `stat` do not count, and a path from a shell command that exited non-zero is only *attempted*, so a check that depends on it is unverified),
    files it edited with edit tools, shell commands, skills, and docs MCP calls.
    The trace is stored in the results JSON, with the workspace root the agent
    saw (`traceRoot`, `/work` in Docker) so regrades re-parse it identically.

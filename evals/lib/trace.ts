@@ -184,17 +184,20 @@ class TraceBuilder {
   /** The session's end event was captured (set by the format parser). */
   sawEnd = false;
   /** Reads and edits waiting for their tool call's result, by call id. */
-  private readonly pending = new Map<string, (() => void)[]>();
+  private readonly pending = new Map<string, { ok: () => void; failed?: () => void }[]>();
+  /** Paths named only by shell commands that exited non-zero. */
+  readonly attempted = new Set<string>();
 
   /**
    * Record a read or edit once its tool call succeeds. A call that failed
    * ("path does not exist") read nothing. Without a call id (older CLI
-   * output), it is recorded at once.
+   * output), it is recorded at once. `failed` runs instead when the call
+   * did not succeed.
    */
-  onSuccess(id: string | undefined, record: () => void): void {
-    if (!id) return record();
+  onSuccess(id: string | undefined, ok: () => void, failed?: () => void): void {
+    if (!id) return ok();
     const list = this.pending.get(id) ?? [];
-    list.push(record);
+    list.push({ ok, failed });
     this.pending.set(id, list);
   }
 
@@ -203,7 +206,7 @@ class TraceBuilder {
     if (!id) return;
     const list = this.pending.get(id);
     this.pending.delete(id);
-    if (ok) for (const record of list ?? []) record();
+    for (const entry of list ?? []) (ok ? entry.ok : entry.failed)?.();
   }
 
   readonly dir: string | undefined;
@@ -232,10 +235,25 @@ class TraceBuilder {
       this.read.add(workspaceRelative(p, this.dir));
   }
 
-  command(cmd: string): void {
+  /**
+   * Record a shell command. Its paths count as read when the command
+   * succeeds. When it exits non-zero they are only *attempted*: `cat a.ts;
+   * ls missing` did read `a.ts`, while `cat missing.ts` read nothing, and
+   * the exit code cannot tell the two apart. `id` is the tool call to wait
+   * for; `ok` settles at once when the format reports the exit code inline.
+   */
+  command(cmd: string, id?: string, ok?: boolean): void {
     if (this.commands.length < MAX_COMMANDS)
       this.commands.push(clip(cmd));
-    for (const p of pathsInCommand(cmd, this.dir)) this.read.add(p);
+    const paths = pathsInCommand(cmd, this.dir);
+    const record = (): void => {
+      for (const p of paths) this.read.add(p);
+    };
+    const attempt = (): void => {
+      for (const p of paths) this.attempted.add(p);
+    };
+    if (ok !== undefined) return ok ? record() : attempt();
+    this.onSuccess(id, record, attempt);
   }
 
   readonly messages: string[] = [];
@@ -262,6 +280,9 @@ class TraceBuilder {
           }
         : {}),
       filesRead: [...this.read],
+      ...(this.attempted.size > 0
+        ? { filesAttempted: [...this.attempted].filter((p) => !this.read.has(p)) }
+        : {}),
       filesEdited: [...this.edited],
       shellCommands: this.commands,
       toolCalls: this.tools,
@@ -292,7 +313,11 @@ function copilot(b: TraceBuilder, output: string): void {
       continue;
     }
     if (ev.type === "tool.execution_complete") {
-      b.settle(str(data.toolCallId), data.success !== false);
+      // `success` stays true for a bash call whose command failed; the exit
+      // code is in `shellExecution.exitCode`.
+      const shell = data.shellExecution as { exitCode?: unknown } | undefined;
+      const exitOk = typeof shell?.exitCode === "number" ? shell.exitCode === 0 : true;
+      b.settle(str(data.toolCallId), data.success !== false && exitOk);
       continue;
     }
     if (ev.type !== "tool.execution_start") continue;
@@ -317,7 +342,7 @@ function copilot(b: TraceBuilder, output: string): void {
     // `glob` lists names; it reads nothing.
     else if (name === "bash" || name === "shell") {
       const c = str(a.command);
-      if (c) b.command(c);
+      if (c) b.command(c, id);
     } else if (name === "skill") {
       const s = str(a.skill);
       if (s) b.skills.add(s);
@@ -370,7 +395,7 @@ function claude(b: TraceBuilder, output: string): void {
       else if (name === "NotebookEdit") b.onSuccess(id, () => b.editPath(input.notebook_path));
       else if (name === "Bash") {
         const c = str(input.command);
-        if (c) b.command(c);
+        if (c) b.command(c, id);
       } else if (name === "Skill") {
         const sk = str(input.skill) ?? str(input.name) ?? str(input.command);
         if (sk) b.skills.add(sk);
@@ -400,7 +425,8 @@ function codex(b: TraceBuilder, output: string): void {
     else if (item.type === "command_execution") {
       b.tool("shell");
       const c = str(item.command);
-      if (c) b.command(c);
+      const code = item.exit_code;
+      if (c) b.command(c, undefined, typeof code === "number" ? code === 0 : undefined);
     } else if (item.type === "file_change") {
       b.tool("edit");
       const changes = item.changes as { path?: unknown }[] | undefined;

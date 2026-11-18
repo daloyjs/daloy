@@ -248,6 +248,13 @@ export interface AgentTrace {
    * succeeded; listings (`glob`, `ls`, `tree`, `stat`) never count.
    */
   readonly filesRead: readonly string[];
+  /**
+   * Paths named in shell commands that exited non-zero and were not read
+   * elsewhere. `cat a.ts; ls missing` read `a.ts` yet exits 1, `cat
+   * missing.ts` read nothing: a check that depends on one of these is
+   * unverified, not passed and not failed.
+   */
+  readonly filesAttempted?: readonly string[];
   /** Files the agent created or edited through its edit tools. */
   readonly filesEdited: readonly string[];
   /** Shell commands, each truncated. */
