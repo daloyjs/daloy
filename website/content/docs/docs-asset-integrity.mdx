@@ -53,7 +53,7 @@ DaloyJS ships version-exact default assets with matching **Subresource Integrity
 
 ## Secure defaults
 
-SRI only works against a **version-pinned, byte-stable** URL. DaloyJS therefore pins the default Scalar, Swagger UI, Redoc, and AsyncAPI versions together with their SHA-384 digests. The default `/docs` and `/asyncapi` pages are protected without configuration. Framework releases update each URL and hash as one reviewed pair.
+SRI only works against a **version-pinned, byte-stable** URL. DaloyJS therefore pins the default Scalar, Swagger UI, Redoc, and AsyncAPI versions together with their SHA-384 digests. Each default URL names an exact file in the published package, so the CDN serves the published bytes unchanged. The default `/docs` and `/asyncapi` pages are protected without configuration. Framework releases update each URL and hash as one reviewed pair.
 
 ## Override the default assets
 
@@ -65,9 +65,9 @@ import { App } from "@daloyjs/core";
 const app = new App({
   docs: {
     assets: {
-      // Override with the exact version you verified...
+      // Override with the exact version and file you verified...
       scalarScriptUrl:
-        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
+        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js",
       // ...and the SRI hash of that exact file.
       scalarScriptIntegrity: "sha384-<base64-digest>",
     },
@@ -113,11 +113,13 @@ const app = new App({
 Download the exact pinned file and hash it. The output is exactly what goes into the `*Integrity` field:
 
 ```sh
-curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0 \
+curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js \
   | openssl dgst -sha384 -binary \
   | openssl base64 -A \
   | sed 's/^/sha384-/'
 ```
+
+<Callout type="warning">Pin a URL that names an exact file. A bare package URL such as `https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0` returns a copy that jsDelivr minifies on the fly. Those bytes differ from the published file and are not guaranteed to stay the same, so a hash of them does not hold and the browser blocks the asset, leaving `/docs` blank. jsDelivr marks these responses with a "Do NOT use SRI with dynamically generated files" comment at the top of the file.</Callout>
 
 jsDelivr also surfaces a copy-paste SRI snippet on each file's page, which is a convenient cross-check. Re-run this whenever you bump the pinned version.
 
@@ -147,7 +149,7 @@ scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js",
     scalarScriptIntegrity: "md5-nope",
   },
 });
@@ -167,7 +169,7 @@ const html = scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js",
     scalarScriptIntegrity:
       "sha384-<primary> sha512-<fallback>",
     crossOrigin: "anonymous",

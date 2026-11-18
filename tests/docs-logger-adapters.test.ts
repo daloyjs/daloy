@@ -6,6 +6,7 @@ import {
   scalarHtml,
   swaggerUiHtml,
   redocHtml,
+  asyncapiHtml,
   htmlResponse,
   docsContentSecurityPolicy,
 } from "../src/docs.js";
@@ -258,6 +259,37 @@ test("docs helpers pin default CDN assets with SRI", () => {
   });
   assert.doesNotMatch(custom, /integrity=/);
   assert.doesNotMatch(custom, /crossorigin=/);
+});
+
+test("default docs assets name an exact CDN file so the pinned SRI hash can match", () => {
+  // Regression: the Scalar default was a bare package URL. jsDelivr minifies
+  // those on the fly, the bytes missed the pinned hash, and /docs was blank.
+  const scalar = scalarHtml({ specUrl: "/openapi.json" });
+  assert.ok(
+    scalar.includes(
+      '<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js" ' +
+        'integrity="sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4" ' +
+        'crossorigin="anonymous"'
+    )
+  );
+
+  const pages = [
+    scalar,
+    swaggerUiHtml({ specUrl: "/openapi.json" }),
+    redocHtml({ specUrl: "/openapi.json" }),
+    asyncapiHtml({ specUrl: "/asyncapi.json" }),
+  ];
+  const tags = pages.flatMap((html) =>
+    [...html.matchAll(/<(?:script|link)\b[^>]*https:\/\/cdn\.jsdelivr\.net[^>]*>/g)].map(
+      (m) => m[0]
+    )
+  );
+  assert.equal(tags.length, 6);
+  for (const tag of tags) {
+    const url = /(?:src|href)="([^"]+)"/.exec(tag)?.[1] ?? "";
+    assert.match(url, /@\d+\.\d+\.\d+\/.+\.(?:js|css)$/, `bare or unpinned CDN URL: ${url}`);
+    assert.match(tag, /integrity="sha384-[A-Za-z0-9+/]+=*"/, `no SRI hash on: ${url}`);
+  }
 });
 
 test("docs helpers support multiple space-separated SRI digests", () => {

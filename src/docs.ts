@@ -244,6 +244,10 @@ export interface RedocConfiguration {
  * URL without a custom `*Integrity` value intentionally omits SRI; pair URL
  * overrides with hashes whose exact bytes you control or have verified.
  *
+ * Pin a URL that names an exact file. jsDelivr minifies a bare package URL
+ * (`/npm/<pkg>@<version>` with no file path) on the fly, so its bytes do not
+ * match a hash of the published file and the browser blocks the asset.
+ *
  * @since 0.37.0
  */
 export interface DocsAssetOptions {
@@ -485,7 +489,9 @@ export interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
 }
 
 const JSDELIVR_ORIGIN = "https://cdn.jsdelivr.net";
-const DEFAULT_SCALAR_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference@1.77.0`;
+// Names the exact published file. jsDelivr minifies a bare package URL (no
+// file path) on the fly, so those bytes can never match a pinned SRI hash.
+const DEFAULT_SCALAR_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js`;
 const DEFAULT_SCALAR_SCRIPT_INTEGRITY =
   "sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4";
 const DEFAULT_SWAGGER_CSS_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.34.1/swagger-ui.css`;

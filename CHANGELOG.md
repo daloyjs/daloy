@@ -253,6 +253,22 @@ For the forward-looking plan and the full thematic release log, see
     the searched paths again (a regression from treating `find` as a
     listing).
 
+### Fixed
+
+- **The default Scalar `/docs` page was blank.** The built-in docs UI loaded
+  Scalar from the bare package URL
+  (`cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0`). jsDelivr minifies a
+  bare package URL on the fly, so the bytes did not match the pinned SRI hash
+  and browsers blocked the script, in development and in production. The
+  default URL now names the exact published file
+  (`…@1.77.0/dist/browser/standalone.js`), whose bytes match the existing
+  hash, so the hash, the Scalar version, the `integrity` check, and the docs
+  Content-Security-Policy are unchanged. Swagger UI, Redoc, and AsyncAPI
+  already named exact files and were not affected. If you set
+  `docs.assets.scalarScriptUrl` yourself, pin a URL that names a file; the
+  [docs asset integrity](https://daloyjs.dev/docs/docs-asset-integrity) page
+  and its hash recipe are corrected to match.
+
 ## [1.24.2] - 2026-11-13
 
 ### Security
