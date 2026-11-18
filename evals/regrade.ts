@@ -26,6 +26,7 @@ import { dockerGradeExec, hiddenDirFor } from "./lib/runner.ts";
 import { loadTrialTrace } from "./lib/trace.ts";
 import {
   childEnv,
+  DIFF_UNAVAILABLE,
   disposeWorkspace,
   openForContainer,
   prepareWorkspace,
@@ -58,6 +59,7 @@ async function regradeTrial(
   const task = TASKS.find((x) => x.id === t.taskId);
   if (!task) return { skip: "task no longer exists" };
   if (t.diff.endsWith(TRUNCATED)) return { skip: "stored diff was truncated" };
+  if (t.diff.startsWith(DIFF_UNAVAILABLE)) return { skip: `stored diff is unavailable: ${t.diff.slice(DIFF_UNAVAILABLE.length).trim()}` };
   const ws = await prepareWorkspace(
     task,
     t.ablation,
@@ -89,6 +91,7 @@ async function regradeTrial(
           before: ws.before,
           after,
           hiddenDir: hiddenDirFor(task.id),
+          protectedFiles: task.graders.flatMap((g) => (g.kind === "protected-files" ? g.files : [])),
           ...(trace ? { trace } : {}),
           ...(docker ? { exec: dockerGradeExec } : {}),
         }),

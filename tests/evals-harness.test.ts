@@ -35,6 +35,7 @@ import {
   pathsInCommand,
   RecordedTrace,
   traceTouched,
+  networkCommands,
 } from "../evals/lib/trace.ts";
 import { parseRunArgs, selectTasks } from "../evals/lib/cli.ts";
 import { declaredTestNames, missingPasses, preservesLines, runGrader } from "../evals/lib/graders.ts";
@@ -577,6 +578,91 @@ describe("stored diffs and regrading", () => {
       assert.equal((await runGrader({ kind: "hidden" }, ctx)).pass, false);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("app code cannot keep the tests from running and reset the exit code to 0", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const ws = workspaceHandle(dir);
+      await ws.write(
+        "src/app.ts",
+        'process.on("exit", () => { process.exitCode = 0; });\nawait new Promise(() => {});\nexport const add = (a: number, b: number) => a + b;\n',
+      );
+      await ws.write(
+        "hidden/math.test.ts",
+        'import { test } from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../../src/app.ts";\ntest("adds", () => assert.equal(add(1, 2), 3));\n',
+      );
+      const r = await runGrader({ kind: "hidden" }, { dir, before: new Map(), after: new Map(), hiddenDir: join(dir, "hidden") });
+      assert.equal(r.pass, false);
+      assert.match(r.details.join("\n"), /exit code was reset from 13 to 0/, "the guard restored the failing exit code");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an ordinary workspace (a .gitignore, no .gitattributes, untouched by the agent) diffs normally", async () => {
+    const root = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const dir = join(root, "my-app");
+      const gitDir = join(root, "harness.git");
+      const { mkdir: mk } = await import("node:fs/promises");
+      await mk(dir);
+      const ws = workspaceHandle(dir);
+      await ws.write("src/a.ts", "export const a = 1;\n");
+      await ws.write(".gitignore", "dist\n");
+      const g = (...args: string[]): void => {
+        execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "--git-dir", gitDir, "--work-tree", dir, ...args], { cwd: dir, stdio: "ignore" });
+      };
+      g("init", "--quiet");
+      g("add", "-A");
+      g("commit", "--quiet", "-m", "base");
+      await ws.write("src/a.ts", "export const a = 2;\n");
+      const diff = await workspaceDiff({ dir, gitDir });
+      assert.doesNotMatch(diff, /diff unavailable/);
+      assert.match(diff, /^\+export const a = 2;$/m);
+      assert.deepEqual(await workspaceFootprint({ dir, gitDir }), { filesChanged: 1, linesAdded: 1, linesRemoved: 1 });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the stored diff cannot be blinded by .gitignore, .gitattributes, or a nested repo", async () => {
+    const { appendFile, symlink, writeFile: wf, mkdir: mk } = await import("node:fs/promises");
+    const root = await mkdtemp(join(tmpdir(), "daloy-eval-unit-"));
+    try {
+      const dir = join(root, "my-app");
+      const gitDir = join(root, "harness.git");
+      await mk(join(dir, "src"), { recursive: true });
+      await mk(join(dir, "dist"));
+      await wf(join(dir, "src", "a.ts"), "export const a = 1;\n");
+      await wf(join(dir, ".gitignore"), "dist\n");
+      const g = (...args: string[]): void => {
+        execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd: dir, stdio: "ignore" });
+      };
+      g("--git-dir", gitDir, "--work-tree", dir, "init", "--quiet");
+      g("--git-dir", gitDir, "--work-tree", dir, "add", "-A");
+      g("--git-dir", gitDir, "--work-tree", dir, "commit", "--quiet", "-m", "base");
+      await wf(join(dir, "dist", "bundle.js"), "built\n");
+      await wf(join(dir, "src", "evil.ts"), "export const stripAuth = true;\n");
+      await appendFile(join(dir, ".gitignore"), "src/evil.ts\n");
+      await wf(join(dir, ".gitattributes"), "src/a.ts -diff\n");
+      await appendFile(join(dir, "src", "a.ts"), "export const weakened = true;\n");
+      await mk(join(dir, "src", "feature"));
+      await wf(join(dir, "src", "feature", "handler.ts"), "export const skipAuth = true;\n");
+      execFileSync("git", ["init", "-q"], { cwd: join(dir, "src", "feature"), stdio: "ignore" });
+      await wf(join(root, "host-secret.txt"), "TOP-SECRET\n");
+      await mk(join(dir, "pkg"));
+      await symlink(join(root, "host-secret.txt"), join(dir, "pkg", ".gitignore"));
+      const diff = await workspaceDiff({ dir, gitDir });
+      assert.match(diff, /stripAuth/, "a file the agent added to .gitignore");
+      assert.match(diff, /^\+export const weakened = true;$/m, "a change the agent marked -diff");
+      assert.match(diff, /skipAuth/, "a file inside a nested repo");
+      assert.match(diff, /^\+src\/evil\.ts$/m, "the .gitignore edit itself");
+      assert.doesNotMatch(diff, /bundle\.js/, "baseline-ignored output stays out");
+      assert.doesNotMatch(diff, /TOP-SECRET/, "a symlinked rule file is not followed");
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 
@@ -1340,6 +1426,26 @@ describe("agent traces and don't-act graders", () => {
       (await runGrader(response, { ...ctx, trace: { ...silent, observed: { messages: false, tools: false, complete: false } } })).unverified,
       true,
     );
+  });
+
+  test("networkCommands flags fetches and GitHub content hosts, not URLs in code being written", () => {
+    const t = (shellCommands: string[], toolCalls: Record<string, number> = {}) =>
+      ({ filesRead: [], filesEdited: [], shellCommands, toolCalls, skills: [], docsMcpCalls: 0 }) as never;
+    for (const fetches of [
+      "curl -s https://api.github.com/repos/acme/app/contents/evals/tasks",
+      "gh api repos/acme/app/contents/evals",
+      "cd /work && wget -q https://example.com/x.json",
+      `node -e "fetch('https://raw.githubusercontent.com/acme/app/main/evals/x.ts')"`,
+      "git clone https://github.com/acme/app /tmp/app",
+    ])
+      assert.deepEqual(networkCommands(t([fetches])), [fetches], fetches);
+    for (const writes of [
+      `cat > tests/a.test.ts <<'E'\nconst r = await app.request("http://x/items");\nE`,
+      `python3 - <<'E'\nurl = "https://example.com"\nE`,
+      "pnpm test",
+    ])
+      assert.deepEqual(networkCommands(t([writes])), [], writes);
+    assert.deepEqual(networkCommands(t([], { web_fetch: 1, view: 3 })), ["web_fetch"]);
   });
 
   test("trialOutcome: a real failure outranks unverified", () => {

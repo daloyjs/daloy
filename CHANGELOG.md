@@ -17,6 +17,36 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agent evals: four more ways to forge or hide a result, closed.**
+  - In `--sandbox docker`, app code could keep the hidden test files' tests
+    from registering (a top-level `await` that never settles), reset
+    `process.exitCode` to 0 in an exit handler, and write fake `ok` lines
+    into the runner's stdout through `/proc/<ppid>/fd/1`: the `hidden`
+    grader passed with no implementation (reproduced). The preload guard now
+    restores a failing exit code, so the runner, which never runs app code,
+    exits non-zero.
+  - The stored diff could be blinded by files the agent writes: a new file
+    listed in its `.gitignore` was left out, a `.gitattributes` `-diff`
+    entry hid a change as "Binary files differ", and a nested git repository
+    hid its files (all reproduced; the guardrail checks use snapshots and
+    were not affected, regrade replay and diff review were). The harness now
+    stages from a clean copy with no nested `.git` and the baseline's ignore
+    and attribute rules, adds the agent's own rule files as content, and
+    diffs with `--text`. A diff that cannot be computed is stored as
+    `[diff unavailable]` and regrades as unverified.
+  - Commenting a protected test out and re-declaring an empty one with the
+    same name kept every original line and every test name, so both
+    `protected-files` and `tests` passed. The `tests` grader now runs
+    protected files as they were before the agent; `protected-files` still
+    reports the attempt. New unsafe variant on `guardrail-body-limit`.
+  - The Copilot egress allowlist must include `api.github.com`, which serves
+    this public repository's hidden tests to anyone. `pnpm eval:analyze` now
+    flags every trial whose trace reached for the network (network-client
+    commands, GitHub content hosts, fetch-like tools). None of the 329 saved
+    trials did.
+
 ## [1.24.3] - 2026-11-18
 
 ### Added

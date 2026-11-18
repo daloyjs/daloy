@@ -9,6 +9,7 @@
  * @module
  */
 
+import { networkCommands } from "./trace.ts";
 import type { AgentTrace, TrialResult } from "./types.ts";
 
 /** A trial plus where it came from, ready to analyse. */
@@ -173,6 +174,14 @@ export function analyze(items: readonly AnalyzedTrial[]): Analysis {
       !t.shellCommands.some((c) => TEST_CMD.test(c))
     )
       flags.push({ trial: label(i), reason: "passed without the agent ever running the tests" });
+  }
+
+  // Any trial, passed or not: a network fetch may be the agent reading the
+  // answer key (the hidden tests are in a public repository).
+  for (const i of items) {
+    const net = i.trace ? networkCommands(i.trace) : [];
+    if (net.length > 0)
+      flags.push({ trial: label(i), reason: `reached for the network from the agent: ${net.slice(0, 2).map((c) => `\`${c.slice(0, 80)}\``).join(", ")}` });
   }
 
   const unverified: ReviewFlag[] = items

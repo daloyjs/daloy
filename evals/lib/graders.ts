@@ -39,6 +39,12 @@ export const PROCESS_GUARD_PATH = `${HIDDEN_TEST_DIR}/process-guard.mjs`;
  *   test, even if no test ran, so a `process.exit(0)` at module scope forged
  *   a pass. The guard turns any `process.exit` during a test run into exit
  *   code 70 and says so.
+ * - App code that kept a test file's tests from registering (a top-level
+ *   await that never settles exits with 13) and reset `process.exitCode` to
+ *   0 in an 'exit' handler made the runner count the file as passing; in
+ *   Docker mode it could also write fake `ok` lines into the runner's stdout
+ *   through /proc/<ppid>/fd/1 (a forged `hidden` pass, reproduced). The guard
+ *   restores a failing exit code, so the runner's own exit code holds.
  * - `assert.equal = () => {}` from app code made every assertion a no-op
  *   (a full pass with no implementation). The guard freezes `node:assert`,
  *   `node:assert/strict`, and `node:test`, so that assignment throws.
@@ -58,6 +64,25 @@ const trap = (code) => {
 };
 process.exit = (code) => trap(code ?? process.exitCode ?? 0);
 process.reallyExit = (code) => trap(code);
+{
+  const emit = process.emit;
+  Object.defineProperty(process, "emit", {
+    configurable: false,
+    writable: false,
+    value: function (event, ...args) {
+      if (event !== "exit") return emit.call(this, event, ...args);
+      const failing = process.exitCode;
+      try {
+        return emit.call(this, event, ...args);
+      } finally {
+        if (failing && !process.exitCode) {
+          process.stderr.write(\`[eval] the exit code was reset from \${failing} to 0 during exit\\n\`);
+          process.exitCode = failing;
+        }
+      }
+    },
+  });
+}
 `;
 
 /**
@@ -168,6 +193,14 @@ export interface GradeContext {
   readonly trace?: AgentTrace;
   /** Where grading commands run (default: locally). */
   readonly exec?: GradeExec;
+  /**
+   * Files the task protects (its `protected-files` graders). The `tests`
+   * grader runs them as they were BEFORE the agent: commenting a test out
+   * and re-declaring an empty one with the same name kept every original
+   * line (so the text check passed) and every expected name (so the name
+   * check passed). Restored in `dir`, which is the grading copy.
+   */
+  readonly protectedFiles?: readonly string[];
 }
 
 function tail(text: string, lines = 40): string {
@@ -270,6 +303,11 @@ export async function runGrader(
       return done(r.ok, r.details);
     }
     case "tests": {
+      const ws = workspaceHandle(ctx.dir);
+      for (const f of ctx.protectedFiles ?? []) {
+        const original = ctx.before.get(f);
+        if (original !== undefined) await ws.write(f, original);
+      }
       // The tests that existed before the agent must still run and pass:
       // commenting one out or deleting it is not a fix.
       const expected = [...ctx.before]

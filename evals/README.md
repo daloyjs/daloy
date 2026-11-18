@@ -142,7 +142,9 @@ It reports, per task: how many trials gave a final answer, ran the tests and
 typecheck, added tests, loaded a skill, used the docs MCP, and how many files
 the agent looked at. It groups failures by root cause (task, grader, failing
 check) and flags passes worth a second look (no final answer, an answer that
-reports a problem, tests never run). It points you at traces to read; it does
+reports a problem, tests never run), plus any trial whose trace reached for
+the network: Copilot needs `api.github.com`, which also serves this public
+repository's hidden tests, and the egress proxy cannot tell the two apart. It points you at traces to read; it does
 not replace reading them. Older results are analysed by re-parsing their
 `<run>-traces/` files.
 
@@ -184,7 +186,9 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    computed from the second, so the harness never runs git inside the
    agent's `.git` (where `diff.external` or `core.fsmonitor` in `.git/config`
    would run the agent's command on the host) and an agent that commits its
-   work cannot empty the diff.
+   work cannot empty the diff. It is staged from a clean copy (no nested
+   `.git`, the baseline's `.gitignore` and `.gitattributes`), so the agent's
+   own rule files cannot hide a change from it.
 5. The agent runs with the prompt (an environment preamble plus the task prompt)
    and a minimal, allowlisted environment.
 6. The diff footprint (`git diff --numstat`, from the harness's git
@@ -205,10 +209,12 @@ A regrade writes a new grading **revision**, it does not overwrite history:
 8. The workspace is copied, and graders run on the copy (in a no-network
    container with `--sandbox docker`): `typecheck`, `tests`, `hidden`
    (copied into the copy only now; `tests` and `hidden` preload a guard that
-   traps `process.exit` and freezes `node:assert` and `node:test`, run with
-   the TAP reporter, and pass only when every expected test reports `ok` by
-   name: the hidden tests, and the visible tests as they were before the
-   agent ran),
+   traps `process.exit`, keeps a failing exit code from being reset to 0,
+   and freezes `node:assert` and `node:test`; they run with the TAP reporter
+   and pass only when the runner exits 0 and every expected test reports
+   `ok` by name: the hidden tests, and the visible tests as they were before
+   the agent ran; `tests` runs protected files as they were before the
+   agent),
    `guardrails` (see `lib/guardrails.ts`), `protected-files`, task-specific
    `pattern` / `absent` checks, and for "don't act" tasks `response` (regexes
    what the agent told the user must match: all its messages) and `read-files` (files the agent must have

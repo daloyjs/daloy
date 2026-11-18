@@ -438,6 +438,82 @@ export async function prepareWorkspace(
   return { dir, root, gitDir, before: await snapshot(dir) };
 }
 
+/** Marks a stored diff that could not be computed; regrade treats it as unverified. */
+export const DIFF_UNAVAILABLE = "[diff unavailable]";
+
+/** Files whose rules change what git stages or shows. */
+const RULE_FILES = new Set([".gitignore", ".gitattributes"]);
+
+/**
+ * Stage the agent's work in the harness's git directory from a clean copy,
+ * so the agent's own files cannot decide what the harness sees. Staging
+ * straight from the workspace let three files the agent can write blind the
+ * stored diff (all reproduced): a new file listed in its `.gitignore` was
+ * left out; a `.gitattributes` `-diff` entry turned a change into "Binary
+ * files differ"; a nested git repository became one submodule line, or with
+ * no commit made `git add` fail. The copy has no `.git` at any depth (a
+ * nested repo's files are plain files) and stages with the BASELINE's
+ * ignore and attribute rules; the agent's own `.gitignore` /
+ * `.gitattributes` are then added as content, so their changes still show.
+ * A symlinked rule file is copied as a link, never read.
+ *
+ * @returns An error message, or `undefined` when staging worked.
+ */
+async function stageFromCleanCopy(
+  ws: Pick<PreparedWorkspace, "dir" | "gitDir">,
+): Promise<string | undefined> {
+  const tmp = await mkdtemp(join(tmpdir(), "eval-stage-"));
+  const copy = join(tmp, "w");
+  try {
+    const agentRules: string[] = [];
+    await cp(ws.dir, copy, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: async (src) => {
+        const name = basename(src);
+        if (src === ws.dir) return true;
+        if (name === ".git" || name === "node_modules") return false;
+        if (RULE_FILES.has(name) && !(await lstat(src)).isSymbolicLink()) {
+          agentRules.push(relative(ws.dir, src));
+          return false;
+        }
+        return true;
+      },
+    });
+    const tracked = await git(copy, ["ls-tree", "-r", "-z", "--name-only", "HEAD"], ws.gitDir);
+    if (tracked.exitCode !== 0) return `git ls-tree failed: ${tracked.output.slice(0, 300)}`;
+    const baselineRules = tracked.output.split("\0").filter((f) => RULE_FILES.has(basename(f)));
+    for (const rel of baselineRules) {
+      const show = await git(copy, ["show", `HEAD:${rel}`], ws.gitDir);
+      if (show.exitCode !== 0) continue;
+      await mkdir(dirname(join(copy, rel)), { recursive: true });
+      await writeFile(join(copy, rel), show.output);
+    }
+    const add = await git(copy, ["add", "-A", "--", "."], ws.gitDir);
+    if (add.exitCode !== 0) return `git add failed: ${add.output.slice(0, 300)}`;
+    for (const rel of agentRules) {
+      await mkdir(dirname(join(copy, rel)), { recursive: true });
+      await writeFile(join(copy, rel), await readFile(join(ws.dir, rel)));
+    }
+    const ruleSet = new Set(agentRules);
+    for (const rel of baselineRules.filter((f) => !ruleSet.has(f)))
+      await rm(join(copy, rel), { force: true });
+    if (agentRules.length || baselineRules.length) {
+      const forced = await git(
+        copy,
+        ["add", "-A", "--force", "--", ...new Set([...agentRules, ...baselineRules])],
+        ws.gitDir,
+      );
+      if (forced.exitCode !== 0) return `git add failed: ${forced.output.slice(0, 300)}`;
+    }
+    return undefined;
+  } catch (err) {
+    return (err as Error).message;
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+}
+
 /**
  * The agent's changes since the baseline commit, including new and deleted
  * files. Computed in the harness's git directory ({@link PreparedWorkspace.gitDir}),
@@ -455,7 +531,8 @@ export async function workspaceDiff(
   // Stage everything and diff the index against the baseline commit, so new,
   // modified, AND deleted files all appear. (The earlier `add -A -N` + plain
   // `git diff` staged deletions and so dropped them from the diff.)
-  await git(ws.dir, ["add", "-A"], ws.gitDir);
+  const staged = await stageFromCleanCopy(ws);
+  if (staged) return `${DIFF_UNAVAILABLE} ${staged}\n`;
   const diff = await git(
     ws.dir,
     [
@@ -464,6 +541,8 @@ export async function workspaceDiff(
       "--cached",
       "--no-color",
       "--no-ext-diff",
+      "--no-textconv",
+      "--text",
       "HEAD",
       "--",
       ".",
@@ -507,7 +586,7 @@ export function parseNumstat(numstat: string): DiffFootprint {
 export async function workspaceFootprint(
   ws: Pick<PreparedWorkspace, "dir" | "gitDir">,
 ): Promise<DiffFootprint> {
-  await git(ws.dir, ["add", "-A"], ws.gitDir);
+  await stageFromCleanCopy(ws);
   const r = await git(
     ws.dir,
     [
@@ -516,6 +595,8 @@ export async function workspaceFootprint(
       "--cached",
       "--numstat",
       "--no-ext-diff",
+      "--no-textconv",
+      "--text",
       "HEAD",
       "--",
       ".",

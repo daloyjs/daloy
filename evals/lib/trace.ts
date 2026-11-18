@@ -485,6 +485,33 @@ export function parseTrace(
   return b.build();
 }
 
+/** Programs whose job is to make network requests. */
+const NETWORK_PROGRAMS = new Set([
+  "curl", "wget", "http", "https", "httpie", "xh", "aria2c", "Invoke-WebRequest", "Invoke-RestMethod", "iwr", "irm",
+]);
+/** GitHub hosts that serve repository files, the answer key for a public repo. */
+const GITHUB_CONTENT = /\b(?:api\.github\.com|raw\.githubusercontent\.com|codeload\.github\.com|github\.com\/[\w.-]+\/[\w.-]+)/;
+
+export function networkCommands(trace: AgentTrace): string[] {
+  const reaches = (cmd: string): boolean => {
+    if (GITHUB_CONTENT.test(cmd)) return true;
+    // Only the program decides: a URL inside code the agent is writing
+    // (a heredoc, a test that calls app.request("http://...")) is not a fetch.
+    return cmd.split(/\n|;|&&|\|\||\|/).some((segment) => {
+      const words = segment.trim().split(/\s+/).filter(Boolean);
+      let w = 0;
+      while (w < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[w]!) || words[w] === "sudo" || words[w] === "env")) w++;
+      const program = (words[w] ?? "").replace(/^.*\//, "");
+      if (NETWORK_PROGRAMS.has(program)) return true;
+      return program === "gh" && /^(?:api|repo|search|release|gist|browse)$/.test(words[w + 1] ?? "");
+    });
+  };
+  return [
+    ...trace.shellCommands.filter(reaches),
+    ...Object.keys(trace.toolCalls).filter((t) => /(?:^|[-_])(?:web_?fetch|fetch|http|browse|curl)(?:$|[-_])/i.test(t)),
+  ];
+}
+
 /**
  * Whether the trace shows the agent looked at `file`: viewed, searched,
  * edited, or named in a shell command. A search scoped to a parent directory

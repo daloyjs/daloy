@@ -121,6 +121,7 @@ export async function runTrial(
           before: ws.before,
           after,
           hiddenDir: hiddenDirFor(task.id),
+          protectedFiles: task.graders.flatMap((g) => (g.kind === "protected-files" ? g.files : [])),
           ...(agentRun.trace ? { trace: agentRun.trace } : {}),
           ...(docker ? { exec: dockerGradeExec } : {}),
         }),
