@@ -340,8 +340,8 @@ export interface TrialResult {
  * `unverified` when none failed but at least one could not decide, otherwise
  * `fail`. A run that hit its time limit is never unverified: a timeout cuts
  * the trace short, which would otherwise make trace checks unverified and
- * drop the trial from every rate. Not finishing within the budget is the
- * agent's failure; a timed-out run whose graded work all passes still passes.
+ * drop the trial from every rate. So a timed-out run fails unless every
+ * grader passes on the work it saved; the time limit itself is not a grader.
  *
  * @param grades - The trial's grades.
  * @param agentRun - The agent run, when known (`timedOut`).

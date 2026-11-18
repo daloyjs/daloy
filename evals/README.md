@@ -222,7 +222,9 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    edit counts only when the CLI reports the call succeeded: a `view` of a
    path that does not exist read nothing. A trial with an unverified grade
    and no failed grade is unverified, not failed, unless the agent timed out:
-   a timeout is always a failure. Reports show the worst-case pass rate
+   a timed-out trial is never unverified. It fails unless every grader
+   passes on the work it saved; the time limit itself is not a grader.
+   Reports show the worst-case pass rate
    (unverified counted as failures) next to the verified one.
 
 ## Task suites

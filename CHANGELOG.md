@@ -248,8 +248,9 @@ For the forward-looking plan and the full thematic release log, see
     App output reaches the report only as `# ` comments, so it cannot add a
     result. No agent in 291 saved trials removed or renamed a visible test.
     Both forgeries are now unsafe variants of `guardrail-body-limit`.
-  - A timed-out run is a failure, never unverified: its cut-off trace no
-    longer drops it from the denominator. Reports also show the worst-case
+  - A timed-out run is never unverified: its cut-off trace no longer drops
+    it from the denominator. It fails unless every grader passes on the
+    work it saved. Reports also show the worst-case
     pass rate when trials are unverified. No saved trial timed out.
   - `find src … | xargs cat` and `find … -exec cat {} +` count as reading
     the searched paths again (a regression from treating `find` as a
