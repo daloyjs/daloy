@@ -19,6 +19,7 @@ import {
   workspaceFootprint,
 } from "./workspace.ts";
 import {
+  noAgentSession,
   trialOutcome,
   type Ablation,
   type EvalTask,
@@ -108,6 +109,23 @@ export async function runTrial(
     const after = await snapshot(ws.dir);
     const diff = await workspaceDiff(ws);
     const footprint = await workspaceFootprint(ws);
+    const noSession = noAgentSession(agentRun, diff);
+    if (noSession)
+      return {
+        taskId: task.id,
+        suite: task.suite,
+        ablation: opts.ablation,
+        trial: opts.trial,
+        agent: agent.name,
+        pass: false,
+        unverified: true,
+        unverifiedReason: noSession,
+        agentRun,
+        grades: [],
+        diff,
+        footprint,
+        workspace: opts.keep ? ws.dir : null,
+      };
     // Grade a copy: hidden tests and the agent's code run there, and the
     // workspace the agent left stays untouched as the record.
     const gradeDir = join(ws.root, "graded");

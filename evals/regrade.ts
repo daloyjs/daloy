@@ -34,7 +34,7 @@ import {
   snapshot,
 } from "./lib/workspace.ts";
 import { TASKS } from "./tasks/index.ts";
-import type { AgentTrace, GradeResult, TrialResult } from "./lib/types.ts";
+import { noAgentSession, type AgentTrace, type GradeResult, type TrialResult } from "./lib/types.ts";
 
 /** Marker `workspaceDiff()` appends when it truncates a diff. */
 const TRUNCATED = "\n[diff truncated]";
@@ -60,6 +60,9 @@ async function regradeTrial(
   if (!task) return { skip: "task no longer exists" };
   if (t.diff.endsWith(TRUNCATED)) return { skip: "stored diff was truncated" };
   if (t.diff.startsWith(DIFF_UNAVAILABLE)) return { skip: `stored diff is unavailable: ${t.diff.slice(DIFF_UNAVAILABLE.length).trim()}` };
+  // An empty diff from an agent that never started is not work to grade.
+  const noSession = noAgentSession(t.agentRun, t.diff);
+  if (noSession) return { skip: noSession };
   const ws = await prepareWorkspace(
     task,
     t.ablation,

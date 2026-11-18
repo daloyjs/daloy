@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -14,6 +14,7 @@ import {
   parseEffort,
   recordingHandle,
   resolveAgent,
+  type AgentAdapter,
 } from "../evals/lib/agents.ts";
 import {
   analyze,
@@ -54,11 +55,13 @@ import {
   summarize,
 } from "../evals/lib/report.ts";
 import { pinMismatches } from "../evals/compare.ts";
-import { hiddenDirFor } from "../evals/lib/runner.ts";
+import { hiddenDirFor, runTrial } from "../evals/lib/runner.ts";
 import {
   graderId,
+  noAgentSession,
   trialOutcome,
   type AgentEffort,
+  type AgentRunResult,
   type AgentTrace,
   type TrialResult,
 } from "../evals/lib/types.ts";
@@ -1471,6 +1474,53 @@ describe("agent traces and don't-act graders", () => {
     // A timeout cuts the trace short; that must not turn into "unverified".
     assert.deepEqual(trialOutcome([g(true), g(false, true)], { timedOut: true }), { pass: false });
     assert.deepEqual(trialOutcome([g(true)], { timedOut: true }), { pass: true }, "finished work still passes");
+  });
+
+  test("noAgentSession: an agent that never started is unverified, an agent that worked is graded", () => {
+    const run = (o: Partial<AgentRunResult> = {}): AgentRunResult => ({ exitCode: 1, timedOut: false, durationMs: 5, outputTail: "", ...o });
+    const silent = { observed: { messages: false, tools: false, complete: false } } as AgentTrace;
+    // An expired token, a dead proxy, a missing image: no session at all.
+    assert.match(noAgentSession(run({ outputTail: "starting\nError: not authenticated" }), "")!, /exited 1 without a session: Error: not authenticated$/);
+    assert.match(noAgentSession(run({ exitCode: null, outputTail: "[adapter error] spawn ENOENT" }), "")!, /without an exit code without a session: \[adapter error\]/);
+    assert.match(noAgentSession(run({ trace: silent }), " \n")!, /no output$/);
+    // Everything else is an attempt and is graded.
+    assert.equal(noAgentSession(run({ exitCode: 0 }), ""), undefined, "a zero exit (offline adapters, a finished agent)");
+    assert.equal(noAgentSession(run({ timedOut: true }), ""), undefined, "a timeout: the work it left is graded");
+    assert.equal(noAgentSession(run(), "diff --git a/x b/x\n+x\n"), undefined, "it changed files");
+    const said = { observed: { messages: true, tools: false, complete: false } } as AgentTrace;
+    const acted = { observed: { messages: false, tools: true, complete: false } } as AgentTrace;
+    assert.equal(noAgentSession(run({ trace: said }), ""), undefined, "it answered (a don't-act task expects no edits)");
+    assert.equal(noAgentSession(run({ trace: acted }), ""), undefined, "it used tools");
+  });
+
+  test("a live agent that never starts is recorded as unverified, not as a failed attempt", async () => {
+    if (!existsSync(join(process.cwd(), "dist", "index.js"))) return; // needs `pnpm build`
+    const task = TASKS.find((t) => t.id === "guardrail-body-limit")!;
+    const opts = { ablation: "full" as const, trial: 1, timeoutMs: 60_000, keep: false };
+    const broken: AgentAdapter = {
+      name: "broken-live",
+      live: true,
+      mcpModes: ["none"],
+      run: async () => ({ exitCode: 1, timedOut: false, durationMs: 3, outputTail: "Error: No authentication information found" }),
+    };
+    const r = await runTrial(task, broken, opts);
+    assert.equal(r.pass, false);
+    assert.equal(r.unverified, true, "kept out of the pass rate");
+    assert.match(r.unverifiedReason ?? "", /exited 1 without a session: Error: No authentication/);
+    assert.deepEqual(r.grades, [], "the untouched workspace is not graded as the agent's work");
+    // The same adapter after it did something: graded, and the empty
+    // workspace fails like any attempt.
+    const tried: AgentAdapter = { ...broken, run: async (inv) => {
+      await writeFile(join(inv.dir, "notes.txt"), "tried\n");
+      return { exitCode: 1, timedOut: false, durationMs: 3, outputTail: "crashed" };
+    } };
+    const graded = await runTrial(task, tried, opts);
+    assert.equal(graded.unverified, undefined);
+    assert.equal(graded.pass, false);
+    assert.ok(graded.grades.some((g) => !g.pass && !g.unverified), "a real failure");
+    // A regrade cannot turn the session failure into a failure by grading its empty diff.
+    const revised = reviseTrial(r, { skip: noAgentSession(r.agentRun, r.diff)! });
+    assert.equal(revised.unverified, true);
   });
 
   test("test graders require each expected test to report ok by name", () => {

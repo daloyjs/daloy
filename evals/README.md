@@ -256,6 +256,13 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    and no failed grade is unverified, not failed, unless the agent timed out:
    a timed-out trial is never unverified. It fails unless every grader
    passes on the work it saved; the time limit itself is not a grader.
+   A live agent that **never had a session** (its CLI exited non-zero, or
+   the adapter failed, with no message, no tool call, and no change to the
+   workspace: an expired token, the egress proxy, the image) is not graded
+   at all: the trial is unverified with that reason, because grading the
+   untouched workspace would count the harness's failure as the agent's.
+   `pnpm eval:regrade` keeps it unverified. An agent that answered or used a
+   tool is graded as usual, even with no edits.
    Reports show the worst-case pass rate
    (unverified counted as failures) next to the verified one.
 

@@ -325,6 +325,8 @@ export interface TrialResult {
    * out of pass rates.
    */
   readonly unverified?: true;
+  /** Why the trial as a whole is unverified, when no grader ran (see {@link noAgentSession}). */
+  readonly unverifiedReason?: string;
   readonly agentRun: AgentRunResult;
   readonly grades: readonly GradeResult[];
   /** `git diff` of the agent's changes against the post-setup baseline (truncated). */
@@ -333,6 +335,32 @@ export interface TrialResult {
   readonly footprint: DiffFootprint;
   /** Workspace path when `--keep` was passed, otherwise `null`. */
   readonly workspace: string | null;
+}
+
+/**
+ * Whether a live agent never had a session: its CLI exited non-zero (or the
+ * adapter failed) before saying or doing anything, and the workspace is
+ * unchanged. That is the harness's problem (an expired token, the egress
+ * proxy, the image), not an attempt, so the trial is unverified instead of a
+ * failure. Grading the untouched workspace would otherwise count every such
+ * trial as the agent failing the task.
+ *
+ * Not a session failure: a timeout (the work it left is graded), a zero
+ * exit (offline adapters, and an agent that finished), or any message or
+ * tool call (an agent that worked and declined to edit, as a don't-act task
+ * expects, is graded).
+ *
+ * @param agentRun - The agent run.
+ * @param diff - The stored diff of the agent's changes.
+ * @returns The reason, or `undefined` when the agent had a session.
+ */
+export function noAgentSession(agentRun: AgentRunResult, diff: string): string | undefined {
+  if (agentRun.exitCode === 0 || agentRun.timedOut) return undefined;
+  if (diff.trim().length > 0) return undefined;
+  const seen = agentRun.trace?.observed;
+  if (seen?.messages || seen?.tools) return undefined;
+  const last = agentRun.outputTail.trim().split("\n").pop()?.slice(0, 200) || "no output";
+  return `the agent stage exited ${agentRun.exitCode ?? "without an exit code"} without a session: ${last}`;
 }
 
 /**
