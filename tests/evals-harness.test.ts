@@ -37,7 +37,7 @@ import {
   traceTouched,
 } from "../evals/lib/trace.ts";
 import { parseRunArgs, selectTasks } from "../evals/lib/cli.ts";
-import { preservesLines, runGrader } from "../evals/lib/graders.ts";
+import { declaredTestNames, missingPasses, preservesLines, runGrader } from "../evals/lib/graders.ts";
 import {
   checkGuardrails,
   evalNumericLiteral,
@@ -1253,8 +1253,11 @@ describe("agent traces and don't-act graders", () => {
     );
     assert.deepEqual(pathsInCommand("cat src/build-app.ts | head -150; ls tests"), ["src/build-app.ts"]);
     // Listings show names, not content: none of these counts as a read.
-    for (const listing of ["ls src", "tree src", "du -sh tests", "stat src/auth/passwords.ts", "wc -l src/a.ts", "find src -name '*.ts'"])
+    for (const listing of ["ls src", "tree src", "du -sh tests", "stat src/auth/passwords.ts", "wc -l src/a.ts", "find src -name '*.ts'", "ls src | xargs -n1 echo"])
       assert.deepEqual(pathsInCommand(listing), [], listing);
+    // ...unless find hands the files it found to a reader.
+    for (const reads of [`find src -name "*.ts" | xargs cat`, "find src -type f -exec cat {} +", "find src -name '*.ts' -print0 | xargs -0 grep -n hash"])
+      assert.deepEqual(pathsInCommand(reads), ["src"], reads);
     assert.deepEqual(pathsInCommand("python3 - <<'E'\np='src/build-app.ts'"), ["src/build-app.ts"]);
     for (const none of [`cd /tmp/p/${WORKSPACE_APP_NAME} && pnpm test`, "curl https://example.com/a.json", "echo hello"])
       assert.deepEqual(pathsInCommand(none), [], none);
@@ -1340,6 +1343,18 @@ describe("agent traces and don't-act graders", () => {
     assert.deepEqual(trialOutcome([g(true)]), { pass: true });
     assert.deepEqual(trialOutcome([g(true), g(false, true)]), { pass: false, unverified: true });
     assert.deepEqual(trialOutcome([g(false), g(false, true)]), { pass: false });
+    // A timeout cuts the trace short; that must not turn into "unverified".
+    assert.deepEqual(trialOutcome([g(true), g(false, true)], { timedOut: true }), { pass: false });
+    assert.deepEqual(trialOutcome([g(true)], { timedOut: true }), { pass: true }, "finished work still passes");
+  });
+
+  test("test graders require each expected test to report ok by name", () => {
+    assert.deepEqual(
+      declaredTestNames(`test("a b", () => {});\nit('c', f);\n/x/.test("not a test");\ntest(\`t \${n}\`, f);\ndescribe("suite", f);`),
+      ["a b", "c"],
+    );
+    const tap = ["# ok 1 - injected by app output", "ok 1 - a b", "    ok 2 - c", "ok 3 - s # SKIP", "not ok 4 - d"].join("\n");
+    assert.deepEqual(missingPasses(tap, ["a b", "c", "s", "d", "injected by app output"]), ["s", "d", "injected by app output"]);
   });
 
   test("Claude Code stream-json traces record tool use; plain json leaves tools unobserved", () => {
@@ -1569,6 +1584,8 @@ describe("agent traces and don't-act graders", () => {
     assert.equal(s.unverified, 1);
     const md = renderMarkdown(s, { agent: "x" });
     assert.match(md, /1 unverified/);
+    assert.equal(s.worstCasePassRate, 1 / 3);
+    assert.match(md, /\*\*33%\*\* if they all failed/);
     assert.match(md, /\| guardrails×1 \| 1 \|/);
     const allUnv = summarize([unv], 1);
     assert.equal(allUnv.cells[0]!.n, 0);

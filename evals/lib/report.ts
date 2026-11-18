@@ -69,6 +69,12 @@ export interface RunSummary {
   readonly overallPassRate: number;
   /** Trials left out of every rate because they are unverified. */
   readonly unverified: number;
+  /**
+   * Pass rate if every unverified trial had failed: passes over all trials.
+   * The lower bound to quote next to {@link overallPassRate} when trials
+   * are unverified, since leaving them out can only raise the rate.
+   */
+  readonly worstCasePassRate: number;
   /** Ablation → pass rate over its trials. */
   readonly byAblation: Readonly<Partial<Record<Ablation, number>>>;
   /** Suite → pass rate over its trials. */
@@ -238,6 +244,8 @@ export function summarize(
     cells,
     overallPassRate: rate(trials),
     unverified: trials.length - verified(trials).length,
+    worstCasePassRate:
+      trials.length === 0 ? 0 : trials.filter((t) => t.pass).length / trials.length,
     byAblation,
     bySuite,
   };
@@ -294,7 +302,7 @@ export function renderMarkdown(summary: RunSummary, meta: RunMeta): string {
   lines.push(
     `Overall pass rate: **${pct(summary.overallPassRate)}**` +
       (summary.unverified > 0
-        ? ` (over verified trials; **${summary.unverified} unverified**, left out: their evidence is incomplete)`
+        ? ` (over verified trials; **${summary.unverified} unverified**, left out: their evidence is incomplete; **${pct(summary.worstCasePassRate)}** if they all failed)`
         : ""),
   );
   lines.push("");

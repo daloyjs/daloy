@@ -33,14 +33,25 @@ export const PROCESS_GUARD_PATH = `${HIDDEN_TEST_DIR}/process-guard.mjs`;
 
 /**
  * Preloaded (`--import`) into every `node --test` process the test graders
- * start. `node --test` reports a test file whose process exits 0 as one
- * passed test, even if no test ran: a `process.exit(0)` planted at module
- * scope in the app code that a hidden test imports forges a pass. The guard
- * turns any `process.exit` during a test run into exit code 70 and says so.
- * The runner's parent process never calls `process.exit` on success, so
- * honest runs are unaffected.
+ * start, before any app code loads. App code runs in the same process as the
+ * tests, so it can reach what they rely on:
+ * - `node --test` reports a test file whose process exits 0 as one passed
+ *   test, even if no test ran, so a `process.exit(0)` at module scope forged
+ *   a pass. The guard turns any `process.exit` during a test run into exit
+ *   code 70 and says so.
+ * - `assert.equal = () => {}` from app code made every assertion a no-op
+ *   (a full pass with no implementation). The guard freezes `node:assert`,
+ *   `node:assert/strict`, and `node:test`, so that assignment throws.
+ * Honest runs are unaffected. The test graders also require every expected
+ * test to report `ok` by name ({@link missingPasses}), which catches what the
+ * guard cannot (a test that never ran).
  */
-export const PROCESS_GUARD = `const realExit = process.reallyExit.bind(process);
+export const PROCESS_GUARD = `import assert from "node:assert";
+import strict from "node:assert/strict";
+import * as nodeTest from "node:test";
+for (const o of [assert, strict, nodeTest.default, nodeTest.test, nodeTest.it, nodeTest.describe, nodeTest.suite])
+  if (o) Object.freeze(o);
+const realExit = process.reallyExit.bind(process);
 const trap = (code) => {
   process.stderr.write(\`[eval] process.exit(\${code}) was called while tests were running\\n\`);
   realExit(70);
@@ -50,25 +61,76 @@ process.reallyExit = (code) => trap(code);
 `;
 
 /**
- * Run `node --test` on `files` with {@link PROCESS_GUARD} preloaded; the guard
- * is written for the run and removed with its directory afterwards only when
- * `cleanup` is set (the hidden grader removes the whole directory itself).
+ * Names of the tests a trusted test file declares: the string-literal first
+ * argument of each `test(...)` / `it(...)` call. Template literals with
+ * placeholders are skipped (their names are only known at run time).
+ *
+ * @param source - Test file source.
+ * @returns Declared test names, in order.
+ */
+export function declaredTestNames(source: string): string[] {
+  const out: string[] = [];
+  const call = /(?<![\w$.])(?:test|it)(?:\.only)?\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;
+  for (const m of source.matchAll(call)) {
+    if (m[1] === "`" && m[2]!.includes("${")) continue;
+    out.push(m[2]!.replace(/\\(.)/g, "$1"));
+  }
+  return out;
+}
+
+/**
+ * Expected tests that do not appear as passed (`ok`, not SKIP or TODO) in a
+ * `node --test --test-reporter=tap` report. The runner prints whatever the
+ * tests and the app write as `# ` comment lines, so app code cannot add an
+ * `ok` line. A test that was commented out, never registered, skipped, or
+ * cut short by an exit is missing.
+ *
+ * @param tap - The runner's output.
+ * @param expected - Test names that must have passed.
+ * @returns The missing names.
+ */
+export function missingPasses(tap: string, expected: readonly string[]): string[] {
+  const passed = new Set<string>();
+  for (const line of tap.split("\n")) {
+    const m = /^\s*ok \d+ - (.*?)(?:\s+#\s+(?:SKIP|TODO)\b.*)?$/.exec(line);
+    if (m && !/\s#\s+(?:SKIP|TODO)\b/.test(line))
+      passed.add(m[1]!.replace(/\\#/g, "#").replace(/\\\\/g, "\\"));
+  }
+  return [...new Set(expected)].filter((n) => !passed.has(n));
+}
+
+/**
+ * Run `node --test` on `files` with {@link PROCESS_GUARD} preloaded and the
+ * TAP reporter; passes only when the run exits 0 **and** every `expected`
+ * test reports `ok` by name. The guard is removed with its directory
+ * afterwards when `cleanup` is set (the hidden grader removes it itself).
  */
 async function runTests(
   ctx: GradeContext,
   files: readonly string[],
+  expected: readonly string[],
   cleanup: boolean,
 ): Promise<{ ok: boolean; details: string[] }> {
   const ws = workspaceHandle(ctx.dir);
   await ws.write(PROCESS_GUARD_PATH, PROCESS_GUARD);
   try {
-    return await runNode(ctx, [
+    const r = await runNode(ctx, [
       "--import",
       `./${PROCESS_GUARD_PATH}`,
       "--test",
-      "--test-reporter=spec",
+      "--test-reporter=tap",
       ...files,
     ]);
+    const missing = missingPasses(r.output, expected);
+    if (missing.length === 0) return r;
+    const shown = missing.slice(0, 10).map((n) => `  - ${n}`);
+    return {
+      ok: false,
+      details: [
+        `${missing.length} expected test(s) did not run and pass:\n${shown.join("\n")}`,
+        ...(r.ok ? [] : r.details),
+      ],
+    };
   } finally {
     if (cleanup) await ws.remove(HIDDEN_TEST_DIR);
   }
@@ -115,15 +177,17 @@ function tail(text: string, lines = 40): string {
 async function runNode(
   ctx: GradeContext,
   args: string[],
-): Promise<{ ok: boolean; details: string[] }> {
+): Promise<{ ok: boolean; details: string[]; output: string }> {
   const r = await (ctx.exec ?? localGradeExec)(
     ctx.dir,
     ["node", ...args],
     GRADER_TIMEOUT_MS,
   );
-  if (r.exitCode === 0 && !r.timedOut) return { ok: true, details: [] };
+  if (r.exitCode === 0 && !r.timedOut)
+    return { ok: true, details: [], output: r.output };
   return {
     ok: false,
+    output: r.output,
     details: [
       r.timedOut
         ? `timed out after ${GRADER_TIMEOUT_MS} ms`
@@ -206,7 +270,12 @@ export async function runGrader(
       return done(r.ok, r.details);
     }
     case "tests": {
-      const r = await runTests(ctx, ["tests/**/*.test.ts"], true);
+      // The tests that existed before the agent must still run and pass:
+      // commenting one out or deleting it is not a fix.
+      const expected = [...ctx.before]
+        .filter(([rel]) => /^tests\/.*\.test\.ts$/.test(rel))
+        .flatMap(([, text]) => declaredTestNames(text));
+      const r = await runTests(ctx, ["tests/**/*.test.ts"], expected, true);
       return done(r.ok, r.details);
     }
     case "hidden": {
@@ -221,16 +290,17 @@ export async function runGrader(
       if (files.length === 0)
         return done(false, [`no hidden tests found at ${ctx.hiddenDir}`]);
       const ws = workspaceHandle(ctx.dir);
+      const expected: string[] = [];
       for (const f of files) {
-        await ws.write(
-          `${HIDDEN_TEST_DIR}/${f}`,
-          await readFile(join(ctx.hiddenDir, f), "utf8"),
-        );
+        const text = await readFile(join(ctx.hiddenDir, f), "utf8");
+        expected.push(...declaredTestNames(text));
+        await ws.write(`${HIDDEN_TEST_DIR}/${f}`, text);
       }
       try {
         const r = await runTests(
           ctx,
           files.map((f) => `${HIDDEN_TEST_DIR}/${f}`),
+          expected,
           false,
         );
         return done(r.ok, r.details);

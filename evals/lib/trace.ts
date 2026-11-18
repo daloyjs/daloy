@@ -113,17 +113,46 @@ function pathTokens(segment: string, dir: string | undefined, out: Set<string>):
  */
 export function pathsInCommand(command: string, dir?: string): string[] {
   const out = new Set<string>();
-  for (const segment of command.split(/\n|;|&&|\|\||\|/)) {
-    // Skip leading VAR=value assignments to find the program.
-    const words = segment.trim().split(/\s+/).filter(Boolean);
-    let w = 0;
-    while (w < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[w]!)) w++;
-    const program = (words[w] ?? "").replace(/^.*\//, "");
-    if (NON_READING.has(program)) continue;
-    pathTokens(segment, dir, out);
+  for (const pipeline of command.split(/\n|;|&&|\|\|/)) {
+    const stages = pipeline.split("|").map(words);
+    stages.forEach((stage, i) => {
+      const program = programOf(stage);
+      if (!NON_READING.has(program)) return pathTokens(stage.join(" "), dir, out);
+      // `find` lists, but hands its files to a reader through `-exec cat {}`
+      // or `| xargs grep ...`; then the paths it searched were read.
+      if (program !== "find" && program !== "fd") return;
+      const exec = stage.findIndex((x) => x === "-exec" || x === "-execdir");
+      const handsOff =
+        (exec >= 0 && isReader(stage[exec + 1])) ||
+        stages.slice(i + 1).some((next) => programOf(next) === "xargs" && isReader(xargsProgram(next)));
+      if (handsOff) pathTokens(stage.join(" "), dir, out);
+    });
   }
   return [...out];
 }
+
+const words = (segment: string): string[] => segment.trim().split(/\s+/).filter(Boolean);
+
+/** The program of a simple command, skipping leading `VAR=value` assignments. */
+function programOf(stage: readonly string[]): string {
+  let w = 0;
+  while (w < stage.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(stage[w]!)) w++;
+  return (stage[w] ?? "").replace(/^.*\//, "");
+}
+
+/** The program `xargs` runs: the first word after its own options. */
+function xargsProgram(stage: readonly string[]): string | undefined {
+  const at = stage.findIndex((x) => x.replace(/^.*\//, "") === "xargs");
+  for (let i = at + 1; i < stage.length; i++) {
+    const x = stage[i]!;
+    if (x === "-I" || x === "-n" || x === "-P" || x === "-d" || x === "-L" || x === "-s") i++;
+    else if (!x.startsWith("-")) return x.replace(/^.*\//, "");
+  }
+  return undefined;
+}
+
+const isReader = (program: string | undefined): boolean =>
+  !!program && !NON_READING.has(program.replace(/^.*\//, "")) && program !== "xargs";
 
 /** Files named in an `apply_patch` body (`*** Update File: path`). */
 function pathsInPatch(patch: string, dir?: string): string[] {

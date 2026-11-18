@@ -338,16 +338,22 @@ export interface TrialResult {
 /**
  * A trial's outcome from its grades: `pass` when every grader passed,
  * `unverified` when none failed but at least one could not decide, otherwise
- * `fail`.
+ * `fail`. A run that hit its time limit is never unverified: a timeout cuts
+ * the trace short, which would otherwise make trace checks unverified and
+ * drop the trial from every rate. Not finishing within the budget is the
+ * agent's failure; a timed-out run whose graded work all passes still passes.
  *
  * @param grades - The trial's grades.
+ * @param agentRun - The agent run, when known (`timedOut`).
  * @returns The fields to spread into a {@link TrialResult}.
  */
 export function trialOutcome(
   grades: readonly GradeResult[],
+  agentRun?: { readonly timedOut?: boolean },
 ): { pass: boolean; unverified?: true } {
   if (grades.every((g) => g.pass)) return { pass: true };
   if (grades.some((g) => !g.pass && !g.unverified)) return { pass: false };
+  if (agentRun?.timedOut) return { pass: false };
   return { pass: false, unverified: true };
 }
 

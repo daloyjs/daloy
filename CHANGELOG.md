@@ -232,6 +232,26 @@ For the forward-looking plan and the full thematic release log, see
     unverified. Copilot keeps `success: true` for bash and reports the code
     in `shellExecution.exitCode`; Claude sets `is_error`; Codex has
     `exit_code`. Re-parsing every saved trace changes no stored grade.
+- **Agent evals: test graders read the report, not the exit code.**
+  - Overwriting `node:assert` from app code (`assert.equal = () => {}`)
+    made every assertion a no-op: `guardrail-body-limit` passed every
+    grader with no implementation at all (reproduced). The preload guard now
+    freezes `node:assert`, `node:assert/strict`, and `node:test` before app
+    code loads.
+  - Wrapping a visible test in a block comment kept every original line,
+    so `protected-files` passed, and `node --test` reported the now-empty
+    file as passing. The `tests` and `hidden` graders now run with the TAP
+    reporter and require every expected test to report `ok` by name: the
+    hidden tests, and the visible tests as they were before the agent ran.
+    App output reaches the report only as `# ` comments, so it cannot add a
+    result. No agent in 291 saved trials removed or renamed a visible test.
+    Both forgeries are now unsafe variants of `guardrail-body-limit`.
+  - A timed-out run is a failure, never unverified: its cut-off trace no
+    longer drops it from the denominator. Reports also show the worst-case
+    pass rate when trials are unverified. No saved trial timed out.
+  - `find src … | xargs cat` and `find … -exec cat {} +` count as reading
+    the searched paths again (a regression from treating `find` as a
+    listing).
 
 ## [1.24.2] - 2026-11-13
 

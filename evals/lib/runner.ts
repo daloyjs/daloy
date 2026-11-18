@@ -132,7 +132,7 @@ export async function runTrial(
       ablation: opts.ablation,
       trial: opts.trial,
       agent: agent.name,
-      ...trialOutcome(grades),
+      ...trialOutcome(grades, agentRun),
       agentRun,
       grades,
       diff,

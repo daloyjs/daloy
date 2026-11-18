@@ -79,7 +79,7 @@ export function reviseTrial(
   return {
     ...rest,
     grades: [...outcome.grades],
-    ...trialOutcome(outcome.grades),
+    ...trialOutcome(outcome.grades, rest.agentRun),
     original,
   };
 }
