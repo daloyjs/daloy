@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.24.3] - 2026-11-18
+
 ### Added
 
 - **Agent evals.** A new `evals/` harness measures how reliably AI coding
