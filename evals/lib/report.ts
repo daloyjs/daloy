@@ -12,7 +12,7 @@
  * @module
  */
 
-import { passAtK, passHatK } from "./metrics.ts";
+import { passAtK, passHatK, wilsonInterval } from "./metrics.ts";
 import type { Ablation, EvalSuite, TrialResult } from "./types.ts";
 
 /** Mean effort over a cell's passing trials. A field is absent when no trial reported it. */
@@ -49,6 +49,11 @@ export interface CellSummary {
   /** Trials no grader failed but some grader could not decide. */
   readonly unverified: number;
   readonly passAt1: number;
+  /**
+   * 95% Wilson interval of pass@1 over the verified trials; absent when
+   * there are none, and in results files written before it existed.
+   */
+  readonly passAt1Interval?: readonly [number, number];
   readonly passAtK: number;
   readonly passHatK: number;
   readonly k: number;
@@ -224,6 +229,7 @@ export function summarize(
       passes: c,
       unverified: all.length - n,
       passAt1: n === 0 ? 0 : c / n,
+      ...(n > 0 ? { passAt1Interval: wilsonInterval(n, c) } : {}),
       passAtK: n === 0 ? 0 : passAtK(n, c, kk),
       passHatK: n === 0 ? 0 : passHatK(n, c, kk),
       k: kk,
@@ -305,11 +311,19 @@ export function renderMarkdown(summary: RunSummary, meta: RunMeta): string {
         ? ` (over verified trials; **${summary.unverified} unverified**, left out: their evidence is incomplete; **${pct(summary.worstCasePassRate)}** if they all failed)`
         : ""),
   );
+  const graded = summary.cells.filter((c) => c.n > 0);
+  if (graded.length > 0)
+    lines.push(
+      "",
+      // An average hides the task that fails one attempt in three.
+      `Every attempt passed on **${graded.filter((c) => c.passes === c.n).length} of ${graded.length}** task/ablation cells. ` +
+        "The interval next to each pass@1 is where the true rate plausibly lies; with few trials it is wide.",
+    );
   lines.push("");
   lines.push("### Quality");
   lines.push("");
   lines.push(
-    "| Task | Suite | Ablation | Passes | pass@1 | pass@k | pass^k | Failing graders | Unverified |",
+    "| Task | Suite | Ablation | Passes | pass@1 (95% interval) | pass@k | pass^k | Failing graders | Unverified |",
   );
   lines.push("|---|---|---|---|---|---|---|---|---|");
   for (const c of summary.cells) {
@@ -317,7 +331,9 @@ export function renderMarkdown(summary: RunSummary, meta: RunMeta): string {
       .map(([id, n]) => `${id}×${n}`)
       .join(", ");
     lines.push(
-      `| ${c.taskId} | ${c.suite} | ${c.ablation} | ${c.passes}/${c.n} | ${pct(c.passAt1)} | ` +
+      `| ${c.taskId} | ${c.suite} | ${c.ablation} | ${c.passes}/${c.n} | ${pct(c.passAt1)}${
+        c.passAt1Interval ? ` (${pct(c.passAt1Interval[0])}–${pct(c.passAt1Interval[1])})` : ""
+      } | ` +
         `${pct(c.passAtK)} (k=${c.k}) | ${pct(c.passHatK)} | ${failing || dash} | ${c.unverified || dash} |`,
     );
   }
@@ -370,7 +386,12 @@ export interface ComparisonRow {
   readonly ablation: Ablation;
   readonly basePassAt1?: number;
   readonly headPassAt1?: number;
-  readonly status: "regressed" | "improved" | "same" | "added" | "removed";
+  /**
+   * `regressed` / `improved`: pass@1 moved and the two 95% intervals do not
+   * overlap, or (regressed) the guardrail-failure rate rose. `uncertain`:
+   * pass@1 moved, but the intervals overlap, so the change could be chance.
+   */
+  readonly status: "regressed" | "improved" | "uncertain" | "same" | "added" | "removed";
   readonly baseEffort?: EffortSummary;
   readonly headEffort?: EffortSummary;
   /** Guardrail-grader failures in base and head. */
@@ -380,10 +401,22 @@ export interface ComparisonRow {
 }
 
 /**
- * Compare two runs cell by cell (same task and ablation). A cell regresses
- * when its pass@1 drops or when it gains guardrail failures, even if the pass
- * rate held. With a handful of trials per cell a one-trial swing is noise, so
- * treat a regression as a reason to inspect traces, not as a verdict.
+ * Compare two runs cell by cell (same task and ablation).
+ *
+ * A pass@1 change is called `regressed` or `improved` only when the two 95%
+ * Wilson intervals do not overlap; otherwise it is `uncertain`: with a
+ * handful of trials per cell, 3/3 against 2/3 is well within chance, and
+ * calling it a regression misleads. To settle an `uncertain` row, rerun that
+ * task 20 to 30 times with and without the change into a separate results
+ * folder (never into the main run's totals).
+ *
+ * A rise in the guardrail-failure rate is always `regressed`, whatever the
+ * sample size: it is a security control seen being weakened in a trace, a
+ * fact to read, not a rate to estimate. Either way a regression is a reason
+ * to read traces, not a verdict.
+ *
+ * Intervals are computed from the stored counts, so results files written
+ * before {@link CellSummary.passAt1Interval} existed compare the same way.
  *
  * @param base - Summary of the earlier run (last release, previous model).
  * @param head - Summary of the run under test.
@@ -408,13 +441,17 @@ export function compareRuns(
     let status: ComparisonRow["status"];
     if (!b) status = "added";
     else if (!h) status = "removed";
-    else if (
-      h.passAt1 < b.passAt1 ||
-      guardrailFailures.head / h.n > guardrailFailures.base / b.n
-    )
+    else if (h.n > 0 && b.n > 0 && guardrailFailures.head / h.n > guardrailFailures.base / b.n)
       status = "regressed";
-    else if (h.passAt1 > b.passAt1) status = "improved";
-    else status = "same";
+    else if (h.n === 0 || b.n === 0) status = h.n === b.n ? "same" : "uncertain";
+    else if (h.passAt1 === b.passAt1) status = "same";
+    else {
+      const [bLo, bHi] = wilsonInterval(b.n, b.passes);
+      const [hLo, hHi] = wilsonInterval(h.n, h.passes);
+      if (hHi < bLo) status = "regressed";
+      else if (hLo > bHi) status = "improved";
+      else status = "uncertain";
+    }
     rows.push({
       taskId: any.taskId,
       ablation: any.ablation,
@@ -439,7 +476,7 @@ export function renderComparison(
   rows: readonly ComparisonRow[],
   labels: { base: string; head: string },
 ): string {
-  const order = { regressed: 0, removed: 1, added: 2, improved: 3, same: 4 };
+  const order = { regressed: 0, removed: 1, added: 2, uncertain: 3, improved: 4, same: 5 };
   const sorted = [...rows].sort(
     (a, b) =>
       order[a.status] - order[b.status] || a.taskId.localeCompare(b.taskId),
@@ -455,7 +492,12 @@ export function renderComparison(
     "",
     `Regressed: **${rows.filter((r) => r.status === "regressed").length}** · ` +
       `improved: ${rows.filter((r) => r.status === "improved").length} · ` +
+      `could be chance: ${rows.filter((r) => r.status === "uncertain").length} · ` +
       `unchanged: ${rows.filter((r) => r.status === "same").length}`,
+    "",
+    "A pass@1 change counts as regressed or improved only when the 95% intervals do not overlap; " +
+      "a rise in guardrail failures always counts. **Could be chance**: rerun that task 20 to 30 times " +
+      "with and without the change, in a separate results folder, before believing it.",
     "",
     "| Status | Task | Ablation | pass@1 | Guardrail failures | Time (passing) | Tokens (passing) |",
     "|---|---|---|---|---|---|---|",
@@ -470,7 +512,7 @@ export function renderComparison(
     );
   for (const r of sorted) {
     lines.push(
-      `| ${r.status}${r.unverified.base + r.unverified.head > 0 ? " ⚠" : ""} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)} | ` +
+      `| ${r.status === "uncertain" ? "could be chance" : r.status}${r.unverified.base + r.unverified.head > 0 ? " ⚠" : ""} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)} | ` +
         `${r.guardrailFailures.base} → ${r.guardrailFailures.head} | ` +
         `${time(r.baseEffort)} → ${time(r.headEffort)} | ${tok(r.baseEffort)} → ${tok(r.headEffort)} |`,
     );

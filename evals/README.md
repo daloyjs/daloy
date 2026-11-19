@@ -155,6 +155,18 @@ limit differ unless `--allow-mismatch` is passed. Baseline a new model on its
 own first. Rows with unverified trials are marked ⚠: their pass rates cover
 fewer trials than the run had.
 
+Each row says `regressed` or `improved` only when the two runs' 95% Wilson
+intervals for pass@1 do not overlap; a smaller move is **could be chance**
+(3/3 against 2/3 is well within it). A rise in guardrail failures is always
+`regressed`, however few trials: it is a security control seen being
+weakened, a fact to read in the trace. `--fail-on-regression` exits 1 only on
+`regressed` rows. To settle a "could be chance" row, rerun just that task 20
+to 30 times with and without the change, into a separate results folder, and
+compare those; never add them into the main run's totals (the other tasks
+would weigh less). The run summary shows each cell's interval next to its
+pass@1, and on how many cells every attempt passed, so an average cannot
+hide a task that fails one attempt in three.
+
 Analyse what agents did across one or more runs (free, offline, no model):
 
 ```sh

@@ -47,7 +47,7 @@ import {
   evalNumericLiteral,
   stripComments,
 } from "../evals/lib/guardrails.ts";
-import { passAtK, passHatK } from "../evals/lib/metrics.ts";
+import { passAtK, passHatK, wilsonInterval } from "../evals/lib/metrics.ts";
 import {
   compareRuns,
   perSuccessOf,
@@ -1234,7 +1234,7 @@ describe("agent effort, diff footprint, and run comparison", () => {
     });
   });
 
-  test("compareRuns flags pass-rate drops and new guardrail failures as regressions", () => {
+  test("compareRuns flags new guardrail failures as regressions; a one-trial swing could be chance", () => {
     const base = summarize(
       [
         trial("a", "full", true),
@@ -1258,9 +1258,9 @@ describe("agent effort, diff footprint, and run comparison", () => {
       compareRuns(base, head).map((r) => [r.taskId, r.status]),
     );
     assert.deepEqual(status, {
-      a: "regressed",
+      a: "regressed", // its failure is a guardrail failure
       b: "same",
-      c: "improved",
+      c: "uncertain", // 0/1 -> 1/1: the intervals overlap
       d: "added",
     });
     const md = renderComparison(compareRuns(base, head), {
@@ -1269,9 +1269,60 @@ describe("agent effort, diff footprint, and run comparison", () => {
     });
     assert.match(md, /Regressed: \*\*1\*\*/);
     assert.ok(
-      md.indexOf("| regressed |") < md.indexOf("| improved |"),
+      md.indexOf("| regressed |") < md.indexOf("| could be chance |"),
       "regressions are listed first",
     );
+  });
+
+  test("wilsonInterval gives the 95% range of a pass rate and stays in [0, 1]", () => {
+    const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.005, `${a} vs ${b}`);
+    const [lo35, hi35] = wilsonInterval(5, 3);
+    near(lo35, 0.231);
+    near(hi35, 0.882);
+    const [lo55, hi55] = wilsonInterval(5, 5);
+    near(lo55, 0.566);
+    assert.equal(hi55, 1);
+    const [lo05, hi05] = wilsonInterval(5, 0);
+    assert.equal(lo05, 0);
+    near(hi05, 0.434);
+    const [lo, hi] = wilsonInterval(1000, 500);
+    assert.ok(hi - lo < 0.07, "narrows with many trials");
+    assert.throws(() => wilsonInterval(0, 0), RangeError);
+    assert.throws(() => wilsonInterval(3, 4), RangeError);
+  });
+
+  test("compareRuns names a pass-rate change only when the intervals separate; guardrail failures always count", () => {
+    // Trials that fail a non-guardrail grader, so only the pass rate moves.
+    const t = (id: string, pass: boolean): TrialResult => ({
+      ...trial(id, "full", pass),
+      grades: [{ id: "hidden", pass, details: [], durationMs: 1 }],
+    });
+    const many = (id: string, passes: number, n: number) =>
+      Array.from({ length: n }, (_, i) => t(id, i < passes));
+    const base = summarize([...many("small", 3, 3), ...many("drop", 30, 30), ...many("rise", 5, 30), ...many("flat", 2, 3)], 1);
+    const head = summarize([...many("small", 2, 3), ...many("drop", 10, 30), ...many("rise", 25, 30), ...many("flat", 2, 3)], 1);
+    const status = Object.fromEntries(compareRuns(base, head).map((r) => [r.taskId, r.status]));
+    assert.deepEqual(status, { small: "uncertain", drop: "regressed", rise: "improved", flat: "same" });
+
+    // One new guardrail failure is a regression even with three trials.
+    const g = summarize([trial("g", "full", true), trial("g", "full", true), trial("g", "full", true)], 1);
+    const gHead = summarize([trial("g", "full", true), trial("g", "full", true), trial("g", "full", false)], 1);
+    assert.equal(compareRuns(g, gHead)[0]!.status, "regressed");
+
+    // Results files written before the interval existed compare the same way.
+    const legacy = (s: typeof base) => ({ ...s, cells: s.cells.map(({ passAt1Interval: _i, ...c }) => c) });
+    assert.deepEqual(compareRuns(legacy(base), legacy(head)).map((r) => r.status), compareRuns(base, head).map((r) => r.status));
+
+    const md = renderComparison(compareRuns(base, head), { base: "a", head: "b" });
+    assert.match(md, /Regressed: \*\*1\*\* · improved: 1 · could be chance: 1 · unchanged: 1/);
+    assert.match(md, /\| could be chance \| small \|/);
+    assert.match(md, /rerun that task 20 to 30 times/);
+    assert.ok(md.indexOf("| regressed |") < md.indexOf("| could be chance |"), "regressions first");
+
+    // The run report shows each interval and how many cells never failed.
+    const report = renderMarkdown(base, { agent: "x" });
+    assert.match(report, /\| small \| guardrail \| full \| 3\/3 \| 100% \(44%–100%\) \|/);
+    assert.match(report, /Every attempt passed on \*\*2 of 4\*\* task\/ablation cells/);
   });
 
   test("runs are only comparable with the same agent, version, model, and limit", () => {

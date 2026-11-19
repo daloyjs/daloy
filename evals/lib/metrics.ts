@@ -11,7 +11,9 @@
  *   strips `secureHeaders()` one run in five is not safe.
  *
  * Both use the standard unbiased estimators over `n` samples with `c` passes
- * (Chen et al., 2021 for pass@k; the τ-bench pass^k form).
+ * (Chen et al., 2021 for pass@k; the τ-bench pass^k form). pass@1 also gets
+ * a Wilson score interval ({@link wilsonInterval}), because with a handful
+ * of trials the rate alone overstates what was measured.
  *
  * @module
  */
@@ -65,4 +67,28 @@ export function passAtK(n: number, c: number, k: number): number {
 export function passHatK(n: number, c: number, k: number): number {
   assertCounts(n, c, k);
   return chooseRatio(c, n, k);
+}
+
+/**
+ * Wilson score interval for **pass@1** (a binomial proportion): the range
+ * the true pass rate plausibly lies in, given `c` passes in `n` verified
+ * trials. Not for pass@k or pass^k, which are derived from the same `n`
+ * trials rather than from independent observations. Unlike
+ * `c/n ± z·sqrt(...)` it stays inside [0, 1] and is not zero-width at 0 or
+ * `n` passes: 5 of 5 gives roughly 57% to 100%, 3 of 5 roughly 23% to 88%.
+ *
+ * @param n - Verified trials (unverified ones excluded), at least 1.
+ * @param c - Trials that passed.
+ * @param z - Normal quantile; 1.96 for a 95% interval.
+ * @returns `[low, high]`, both in [0, 1].
+ * @throws RangeError when the counts are inconsistent.
+ */
+export function wilsonInterval(n: number, c: number, z = 1.96): [number, number] {
+  if (!Number.isInteger(n) || !Number.isInteger(c) || n < 1 || c < 0 || c > n)
+    throw new RangeError(`invalid counts: n=${n}, c=${c} (need 0<=c<=n, n>=1)`);
+  const p = c / n;
+  const z2 = z * z;
+  const centre = (p + z2 / (2 * n)) / (1 + z2 / n);
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+  return [Math.max(0, centre - half), Math.min(1, centre + half)];
 }
