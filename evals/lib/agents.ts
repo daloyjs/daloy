@@ -411,6 +411,21 @@ export const AGENT_PROXY_ENV_VARS: readonly string[] = [
  * @returns The adapter.
  * @throws Error for an unknown name or a bad `command` template.
  */
+/**
+ * Whether an agent name is one of the offline adapters, whose work is the
+ * task's own known code (`noop`, `reference`, `alternative:<id>`,
+ * `unsafe:<id>`). Everything else, including an unknown or missing name,
+ * counts as a live agent whose code must not run on this machine: the rule
+ * fails safe.
+ *
+ * @param name - Agent name, as recorded in a results file's `meta.agent`.
+ * @returns `true` only for the offline adapters.
+ */
+export function isOfflineAgent(name: string | undefined): boolean {
+  if (!name) return false;
+  return name === "noop" || name === "reference" || name.startsWith("alternative:") || name.startsWith("unsafe:");
+}
+
 export function resolveAgent(
   name: string,
   env: NodeJS.ProcessEnv = process.env,

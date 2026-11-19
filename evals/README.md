@@ -179,8 +179,13 @@ pnpm eval:regrade --sandbox docker evals/results/<run>.json   # writes <run>.reg
 
 It replays each trial's stored diff onto a fresh scaffold, re-parses its
 saved trace, and runs the current graders. Grading executes the agent's
-code, so pass `--sandbox docker` (grading then runs in the no-network
-container); without it the harness warns.
+code, so a live agent's run needs the same sandbox as the run itself:
+`--sandbox docker` (grading then runs in the no-network container), or
+`--sandbox-ack` on a machine that is itself an isolated, secret-free
+sandbox. Without either it refuses; a results file without an agent name
+counts as live. Runs of the offline adapters (`reference`, `noop`,
+`alternative:<id>`, `unsafe:<id>`) are the tasks' own code and can be
+regraded locally.
 
 A regrade writes a new grading **revision**, it does not overwrite history:
 

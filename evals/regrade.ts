@@ -6,12 +6,16 @@
  * did (task setup and ablation), applies the agent's stored diff with
  * `git apply`, and runs the task's current graders. The agent's trace is
  * re-parsed from the saved agent output (so trace-parser fixes apply too);
- * the rest of its run data (time, effort, trace path) is kept. Trials whose stored diff was truncated
- * or no longer applies keep their original grades and are listed in
- * `regrade.skipped`.
+ * the rest of its run data (time, effort, trace path) is kept. A trial whose
+ * stored diff was truncated, is unavailable, or no longer applies, and a
+ * trial whose agent never had a session, becomes unverified with the reason;
+ * its first grades stay as history (`original`), never as current results.
  *
- * Grading runs the agent's code (its tests, typecheck, and the hidden tests),
- * so run this inside the same sandbox as the agents (see evals/Dockerfile).
+ * Grading runs the agent's code (its tests, typecheck, and the hidden tests).
+ * For a live agent's run that needs the same sandbox as the run itself:
+ * `--sandbox docker`, or `--sandbox-ack` on a machine that is itself an
+ * isolated, secret-free sandbox. Without either it refuses. Runs of the
+ * offline adapters (`reference`, `noop`, ...) can be regraded locally.
  * Writes `<name>.regraded.json` and `.md` next to each input.
  */
 
@@ -21,6 +25,7 @@ import { runGrader } from "./lib/graders.ts";
 import { markLegacyUnverified } from "./lib/legacy-diff.ts";
 import { reviseTrial } from "./lib/revision.ts";
 import { renderMarkdown, summarize, type RunMeta } from "./lib/report.ts";
+import { isOfflineAgent } from "./lib/agents.ts";
 import { checkGraderImage, IMAGE_DEPS_DIR, releaseToHost } from "./lib/docker-sandbox.ts";
 import { dockerGradeExec, hiddenDirFor } from "./lib/runner.ts";
 import { loadTrialTrace } from "./lib/trace.ts";
@@ -117,20 +122,28 @@ async function main(): Promise<void> {
   const mode = at === -1 ? "none" : argv[at + 1];
   if (mode !== "none" && mode !== "docker")
     throw new Error("--sandbox must be none or docker");
-  const files = argv.filter((_, i) => at === -1 || (i !== at && i !== at + 1));
+  const sandboxAck = argv.includes("--sandbox-ack");
+  const files = argv.filter((a, i) => a !== "--sandbox-ack" && (at === -1 || (i !== at && i !== at + 1)));
   if (files.length === 0)
     throw new Error(
-      "usage: pnpm eval:regrade [--sandbox docker] <results.json> [...]",
+      "usage: pnpm eval:regrade [--sandbox docker | --sandbox-ack] <results.json> [...]",
     );
   const docker = mode === "docker";
   const executorName = mode;
   if (docker) await checkGraderImage();
-  else
-    process.stderr.write(
-      "warning: grading runs the agents' code on this machine; pass --sandbox docker to run it in a no-network container\n",
-    );
   for (const path of files) {
     const data = JSON.parse(await readFile(path, "utf8")) as ResultsFile;
+    // Regrading runs the agent's code, the same as grading it did. A live
+    // agent's code needs the same sandbox as the live run (`pnpm eval`):
+    // never this machine, unless it is itself a throwaway sandbox.
+    if (!docker && !isOfflineAgent(data.meta?.agent)) {
+      if (!sandboxAck)
+        throw new Error(
+          `${path} holds the work of a live agent ("${data.meta?.agent ?? "unknown"}"), and regrading runs its code. ` +
+            "Pass --sandbox docker (a no-network container), or --sandbox-ack if this whole machine is an isolated, secret-free sandbox.",
+        );
+      process.stderr.write(`warning: grading the work of "${data.meta?.agent ?? "unknown"}" on this machine (--sandbox-ack)\n`);
+    }
     const unverified: string[] = [];
     // Results written before DIFF_FORMAT 2 store diffs without deleted files.
     const legacy = typeof data.diffFormat !== "number" || data.diffFormat < 2;

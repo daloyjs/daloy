@@ -15,6 +15,7 @@ import {
   recordingHandle,
   resolveAgent,
   type AgentAdapter,
+  isOfflineAgent,
 } from "../evals/lib/agents.ts";
 import {
   analyze,
@@ -1474,6 +1475,43 @@ describe("agent traces and don't-act graders", () => {
     // A timeout cuts the trace short; that must not turn into "unverified".
     assert.deepEqual(trialOutcome([g(true), g(false, true)], { timedOut: true }), { pass: false });
     assert.deepEqual(trialOutcome([g(true)], { timedOut: true }), { pass: true }, "finished work still passes");
+  });
+
+  test("regrade refuses to run a live agent's code on this machine without a sandbox", async () => {
+    assert.equal(isOfflineAgent("reference"), true);
+    assert.equal(isOfflineAgent("noop"), true);
+    assert.equal(isOfflineAgent("unsafe:raise-limit"), true);
+    assert.equal(isOfflineAgent("alternative:x"), true);
+    for (const live of ["copilot", "claude", "codex", "command", "something-new", "", undefined])
+      assert.equal(isOfflineAgent(live), false, `${live}: unknown counts as live`);
+
+    const dir = await mkdtemp(join(tmpdir(), "eval-regrade-gate-"));
+    try {
+      const file = join(dir, "run.json");
+      const regrade = (args: string[]) =>
+        runProcess(process.execPath, ["--import", "tsx", join(process.cwd(), "evals", "regrade.ts"), ...args], {
+          cwd: process.cwd(),
+          env: childEnv(),
+          timeoutMs: 60_000,
+        });
+      await writeFile(file, JSON.stringify({ meta: { agent: "copilot" }, options: { k: 1 }, trials: [] }));
+      const refused = await regrade([file]);
+      assert.notEqual(refused.exitCode, 0);
+      assert.match(refused.output, /live agent \("copilot"\), and regrading runs its code\. Pass --sandbox docker/);
+      assert.equal(existsSync(join(dir, "run.regraded.json")), false, "nothing graded, nothing written");
+      // A machine that is itself the sandbox may say so.
+      const acked = await regrade(["--sandbox-ack", file]);
+      assert.equal(acked.exitCode, 0, acked.output);
+      assert.match(acked.output, /warning: grading the work of "copilot" on this machine/);
+      // A results file without an agent name is treated as live.
+      await writeFile(file, JSON.stringify({ options: { k: 1 }, trials: [] }));
+      assert.match((await regrade([file])).output, /live agent \("unknown"\)/);
+      // The offline adapters' own code is the task's: local is fine.
+      await writeFile(file, JSON.stringify({ meta: { agent: "reference" }, options: { k: 1 }, trials: [] }));
+      assert.equal((await regrade([file])).exitCode, 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("noAgentSession: an agent that never started is unverified, an agent that worked is graded", () => {

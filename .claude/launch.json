@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daloy-bookstore",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--import", "tsx", "examples/dast-server.ts"],
+      "port": 3000
+    }
+  ]
+}
