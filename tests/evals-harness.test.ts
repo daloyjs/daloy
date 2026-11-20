@@ -80,7 +80,7 @@ import {
 } from "../evals/lib/workspace.ts";
 import { markLegacyUnverified } from "../evals/lib/legacy-diff.ts";
 import { originalOf, reviseTrial } from "../evals/lib/revision.ts";
-import { DEFAULT_EGRESS, specLabel } from "../evals/lib/docker-sandbox.ts";
+import { AGENT_IMAGE, DEFAULT_EGRESS, runAgentContainer, specLabel } from "../evals/lib/docker-sandbox.ts";
 import { TASKS } from "../evals/tasks/index.ts";
 
 // Unit tests for the agent-eval harness (`evals/`). The end-to-end proof that
@@ -1562,6 +1562,44 @@ describe("agent traces and don't-act graders", () => {
       assert.equal((await regrade([file])).exitCode, 0);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("evals/README.md ends with the rules for changing the evals", async () => {
+    // Whoever is asked later to fix a grader may never load a skill, but
+    // reads this README: the rules have to be in it, last.
+    const readme = await readFile(join(process.cwd(), "evals", "README.md"), "utf8");
+    const at = readme.lastIndexOf("\n## Changing these evals\n");
+    assert.ok(at > 0, "the section exists");
+    const section = readme.slice(at);
+    assert.doesNotMatch(section.slice(1), /\n## /, "it is the last section");
+    for (const rule of [/A correct attempt failed\?[\s\S]*`alternatives`/, /Never loosen a grader/, /Wrong work passed\?[\s\S]*`unsafe`[\s\S]*`expectFail`/, /pnpm eval:calibrate/, /pnpm eval:regrade --sandbox docker/, /not in `CHANGELOG\.md`/])
+      assert.match(section, rule);
+  });
+
+  test("git works for the agent in a workspace another user owns (Linux hosts)", async (t) => {
+    const docker = (args: string[]) => runProcess("docker", args, { cwd: process.cwd(), env: childEnv(["DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT"]), timeoutMs: 120_000 });
+    if ((await docker(["image", "inspect", AGENT_IMAGE])).exitCode !== 0) return t.skip(`needs the ${AGENT_IMAGE} image (pnpm eval:image)`);
+    // A named volume stands in for a Linux host directory: owned by uid 1001
+    // (the GitHub Actions runner), as Docker Desktop's mapping never shows.
+    const volume = `daloy-eval-test-git-${process.pid}-${Date.now()}`;
+    try {
+      const made = await docker([
+        "run", "--rm", "--user", "0", "--network", "none", "-v", `${volume}:/v`, AGENT_IMAGE, "sh", "-c",
+        "cd /v && git init -q && echo x > a.txt && git -c user.name=a -c user.email=a@a add -A && " +
+          "git -c user.name=a -c user.email=a@a commit -qm base && chown -R 1001:1001 /v && chmod -R a+rwX /v",
+      ]);
+      assert.equal(made.exitCode, 0, made.output);
+      // Without the fix, the agent's user cannot use the repository at all.
+      const plain = await docker(["run", "--rm", "--network", "none", "-v", `${volume}:/work`, "-w", "/work", AGENT_IMAGE, "git", "status"]);
+      assert.notEqual(plain.exitCode, 0);
+      assert.match(plain.output, /dubious ownership/, "the setup reproduces the Linux failure");
+      // The agent container, as the harness starts it: git works.
+      const r = await runAgentContainer(volume, ["sh", "-c", "git status --porcelain && git log --oneline"], {}, {}, 120_000, { url: "http://127.0.0.1:9", network: "none" });
+      assert.equal(r.exitCode, 0, r.output);
+      assert.match(r.output, /base/);
+    } finally {
+      await docker(["volume", "rm", "-f", volume]);
     }
   });
 

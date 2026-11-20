@@ -325,7 +325,7 @@ evals/
 - **Graders are deterministic.** No LLM judge decides pass/fail.
 - **Never loosen a grader, hidden test, or guardrail rule to raise a score.**
   If a grader rejects a legitimately good solution, fix the grader and add
-  that solution shape to `tests/evals-harness.test.ts`.
+  that solution to the task's `alternatives` (see "Changing these evals").
 - **Prompts hide the mechanics, not the goal.** They never name graders,
   hidden tests, the eval, or the API that solves the task (`fetchGuard()`,
   `.strict()`); the harness tests enforce the first part. They do state the
@@ -386,3 +386,28 @@ The "validate the grader with valid alternatives", "quality first, then
 effort", and "fix, rerun, compare with pinned versions" practices follow the
 approach the Next.js team described for its agent evals
 ([nextjs.org/evals](https://nextjs.org/evals)).
+
+## Changing these evals
+
+For anyone, person or agent, who edits a task, a grader, a hidden test, or
+the harness:
+
+- **A correct attempt failed?** Read its diff and its trace first
+  (`evals/results/<run>-traces/`). If the work is right, the grader is
+  wrong: fix the grader or the hidden test, **and add that attempt to the
+  task's `alternatives`** in `evals/tasks/<id>/task.ts`, so calibration keeps
+  accepting it.
+- **Never loosen a grader, hidden test, or guardrail rule to raise a
+  score.** Check what the prompt asks for, no less: do not delete a failing
+  test, and do not accept more than the prompt and DaloyJS's secure defaults
+  allow.
+- **Wrong work passed?** Add it to the task's `unsafe` variants with
+  `expectFail` naming the grader that must catch it, then strengthen that
+  grader until calibration says it does.
+- **Calibrate after every change** (free, offline, no model):
+  `pnpm build && pnpm eval:calibrate`. Then regrade saved runs instead of
+  paying for new ones: `pnpm eval:regrade --sandbox docker evals/results/<run>.json`.
+- **Harness changes** (`evals/lib/`) get a test in
+  `tests/evals-harness.test.ts` that fails without the change.
+- **Record what changed and why in this file**, not in `CHANGELOG.md`: the
+  changelog covers `@daloyjs/core` and `create-daloy` only.

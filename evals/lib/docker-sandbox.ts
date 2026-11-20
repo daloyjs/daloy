@@ -241,6 +241,28 @@ export async function startEgressProxy(allow: readonly string[]): Promise<Egress
   };
 }
 
+/**
+ * Declares the workspace safe for git inside the agent container only.
+ *
+ * The workspace belongs to the host's user and the agent runs as `node`
+ * (uid 1000). On a Linux host whose user has another uid (the GitHub
+ * Actions runner is 1001), git refuses a repository another user owns, so
+ * every `git status`, `git diff`, or `git log` the agent runs fails with
+ * "detected dubious ownership" and the agent spends the trial working
+ * around the harness (reproduced in this image). Docker Desktop hides it by
+ * mapping ownership.
+ *
+ * Set through the environment, so no git config file is written in the
+ * workspace or the image. Only `/work` is trusted. The harness's own git
+ * never runs in the agent's repository (see `workspaceDiff`), so this
+ * cannot make the host run the agent's git config.
+ */
+export const SAFE_WORKDIR_ENV: Readonly<Record<string, string>> = {
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "safe.directory",
+  GIT_CONFIG_VALUE_0: CONTAINER_WORKDIR,
+};
+
 /** Restrictions every agent and grader container gets. */
 function lockedDown(name: string, hostDir: string): string[] {
   return [
@@ -296,6 +318,7 @@ export async function runAgentContainer(
     ...Object.keys(secretEnv).flatMap((k) => ["-e", k]),
     ...Object.entries({
       ...plainEnv,
+      ...SAFE_WORKDIR_ENV,
       HTTPS_PROXY: proxy.url,
       HTTP_PROXY: proxy.url,
       https_proxy: proxy.url,
