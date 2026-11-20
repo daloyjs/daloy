@@ -16,7 +16,9 @@ import { join } from "node:path";
 import { AGENT_IMAGE, imageSpec, specLabel } from "./lib/docker-sandbox.ts";
 import { childEnv, REPO_ROOT, runProcess } from "./lib/workspace.ts";
 
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/;
+// Pre-release identifiers may contain hyphens (`0.0.0-next-20260930190945`);
+// nothing here can end a build argument or start a shell word.
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 async function main(): Promise<void> {
   const spec = await imageSpec();
@@ -39,6 +41,7 @@ async function main(): Promise<void> {
     "--build-arg", `ZOD_VERSION=${spec.deps.zod}`,
     "--build-arg", `TYPESCRIPT_VERSION=${spec.deps.typescript}`,
     "--build-arg", `TYPES_NODE_VERSION=${spec.deps["@types/node"]}`,
+    "--build-arg", `OPENAPI_TS_VERSION=${spec.deps["@hey-api/openapi-ts"]}`,
     "--build-arg", `SPEC_LABEL=${specLabel(spec)}`,
     "-",
   ];

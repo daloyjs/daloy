@@ -17,6 +17,7 @@ ARG CODEX_VERSION=
 ARG ZOD_VERSION
 ARG TYPESCRIPT_VERSION
 ARG TYPES_NODE_VERSION
+ARG OPENAPI_TS_VERSION
 ARG SPEC_LABEL
 LABEL dev.daloyjs.eval.spec=$SPEC_LABEL
 
@@ -28,7 +29,8 @@ RUN set -eu; \
   npm install --global --ignore-scripts $clis; \
   mkdir -p /opt/eval-deps; \
   npm install --prefix /opt/eval-deps --ignore-scripts --no-save --no-package-lock \
-    "zod@${ZOD_VERSION}" "typescript@${TYPESCRIPT_VERSION}" "@types/node@${TYPES_NODE_VERSION}"; \
+    "zod@${ZOD_VERSION}" "typescript@${TYPESCRIPT_VERSION}" "@types/node@${TYPES_NODE_VERSION}" \
+    "@hey-api/openapi-ts@${OPENAPI_TS_VERSION}"; \
   npm cache clean --force
 
 ENV npm_config_ignore_scripts=true CI=true COPILOT_AUTO_UPDATE=false

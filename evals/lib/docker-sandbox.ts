@@ -27,7 +27,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { childEnv, REPO_ROOT, runProcess, type ProcessResult } from "./workspace.ts";
+import { childEnv, REPO_ROOT, runProcess, WORKSPACE_DEPS, type ProcessResult } from "./workspace.ts";
 
 /** Agent image name (override with `DALOY_EVAL_AGENT_IMAGE`). */
 export const AGENT_IMAGE =
@@ -49,8 +49,8 @@ export const CONTAINER_WORKDIR = "/work";
 /** Image label recording what the image was built with. */
 export const IMAGE_LABEL = "dev.daloyjs.eval.spec";
 
-/** Dependencies linked into every workspace (and installed in the image). */
-export const WORKSPACE_DEPS = ["zod", "typescript", "@types/node"] as const;
+/** Dependencies linked into every workspace (and installed in the image); defined in `workspace.ts`. */
+export { WORKSPACE_DEPS };
 
 /** Default egress allowlist per live agent. */
 export const DEFAULT_EGRESS: Readonly<Record<string, readonly string[]>> = {

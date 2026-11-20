@@ -67,7 +67,11 @@ key:
   stage the harness opens the workspace up again from a container
   (`releaseToHost`), and does the same before deleting a trial directory
   when the first attempt fails. A directory that still cannot be removed is
-  a warning, never a lost result.
+  a warning, never a lost result. The same uid difference made git refuse
+  the workspace inside the agent container ("detected dubious ownership"),
+  so every `git status` the agent ran failed on a Linux host; the agent
+  container declares `/work` safe for git through the environment
+  (`SAFE_WORKDIR_ENV`), without writing a git config.
 
 **Known limit.** The hidden tests import the app, so they run in the same
 process as the agent's code. The preload guard stops the cheap forgeries
@@ -217,9 +221,14 @@ A regrade writes a new grading **revision**, it does not overwrite history:
    with `--no-install --no-git --no-ci`.
 2. The ablation removes `AGENTS.md` and/or `.agents/`.
 3. Dependencies are wired offline: `@daloyjs/core` is **copied** from `dist/`,
-   and `zod`, `typescript`, `@types/node` are symlinked from the root install.
-   `pnpm test` / `pnpm typecheck` work because child processes get
-   `pnpm_config_verify_deps_before_run=false`.
+   and `zod`, `typescript`, `@types/node`, and `@hey-api/openapi-ts` are
+   symlinked from the root install (`WORKSPACE_DEPS` in `lib/workspace.ts`;
+   with `--sandbox docker`, from the image, which installs the same list).
+   `pnpm test`, `pnpm typecheck`, and `pnpm gen` work because child
+   processes get `pnpm_config_verify_deps_before_run=false`. Until 20 Nov
+   2026 `openapi-ts` was missing, so `pnpm gen` (which the template's
+   `AGENTS.md` asks for) failed in 16 of 45 live trials; runs from before
+   then show agents reporting that failure in passing answers.
 4. The task's `setup` builds the scenario; a git baseline is committed twice:
    in the workspace's own `.git` (the realistic repo the agent sees) and in a
    harness-only git directory outside the mount (`harness.git`). The diff is
@@ -341,7 +350,7 @@ evals/
   least one unsafe variant**, and `pnpm eval:calibrate` must pass.
   Calibration is what makes a score trustworthy. Alternatives guard against
   false failures (a grader that only accepts the author's solution shape).
-  Calibration and the live runs have caught eleven grader bugs so far: hidden
+  Calibration and the live runs have caught twelve grader bugs so far: hidden
   tests that expected 400 where DaloyJS answers 422; a guardrail rule that
   ignored Zod 4's `z.strictObject()`; a `protected-files` rule that failed
   agents for appending a good extra test; a constant-time-compare pattern that
@@ -354,7 +363,9 @@ evals/
   `grep -r … src` as reading the code; an answer check that missed correct
   wording and read only the last message; and a module check that required
   the text `/notes` inside `src/notes/`, failing a plugin mounted with
-  `app.register(..., { prefix: "/notes" })`. Every one was found by reading
+  `app.register(..., { prefix: "/notes" })`; and (20 Nov 2026) the
+  password-recovery answer check, which missed "stored only as scrypt
+  hashes, so there is no plaintext to return". Every one was found by reading
   the trace of a "failed" run that was actually correct.
 - **Traces must be complete.** Agent output used to be capped at its last
   200,000 characters, and most Copilot sessions were longer, so traces lost

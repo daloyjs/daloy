@@ -305,6 +305,22 @@ export async function snapshot(dir: string): Promise<Map<string, string>> {
  * `depsRoot`, to that absolute path as seen inside the agent container (the
  * links dangle on the host, which never runs them in Docker mode).
  */
+/**
+ * Dependencies linked into every workspace, from the root install or (with
+ * `--sandbox docker`) from the agent image, which installs exactly these.
+ * `@hey-api/openapi-ts` is what the template's `pnpm gen` runs to build the
+ * typed client: without it `pnpm gen` failed in 16 of 45 live trials (20 Nov
+ * 2026), and agents spent the trial explaining a harness gap.
+ */
+export const WORKSPACE_DEPS = ["zod", "typescript", "@types/node", "@hey-api/openapi-ts"] as const;
+
+/** Commands the template's scripts call, linked into `node_modules/.bin` (target relative to it). */
+const WORKSPACE_BINS: Readonly<Record<string, string>> = {
+  tsc: "../typescript/bin/tsc",
+  "openapi-ts": "../@hey-api/openapi-ts/bin/run.js",
+  daloy: "../@daloyjs/core/bin/daloy.mjs",
+};
+
 async function linkDependencies(dir: string, depsRoot?: string): Promise<void> {
   const distEntry = join(REPO_ROOT, "dist", "index.js");
   try {
@@ -320,7 +336,7 @@ async function linkDependencies(dir: string, depsRoot?: string): Promise<void> {
   for (const entry of ["package.json", "dist", "bin"]) {
     await cp(join(REPO_ROOT, entry), join(core, entry), { recursive: true });
   }
-  for (const name of ["zod", "typescript", "@types/node"]) {
+  for (const name of WORKSPACE_DEPS) {
     const target = depsRoot
       ? `${depsRoot}/${name}`
       : await realpath(join(REPO_ROOT, "node_modules", name));
@@ -328,8 +344,8 @@ async function linkDependencies(dir: string, depsRoot?: string): Promise<void> {
     await symlink(target, join(nm, name), "dir");
   }
   await mkdir(join(nm, ".bin"), { recursive: true });
-  await symlink("../typescript/bin/tsc", join(nm, ".bin", "tsc"));
-  await symlink("../@daloyjs/core/bin/daloy.mjs", join(nm, ".bin", "daloy"));
+  for (const [bin, target] of Object.entries(WORKSPACE_BINS))
+    await symlink(target, join(nm, ".bin", bin));
 }
 
 /**

@@ -72,8 +72,10 @@ import {
   disposeWorkspace,
   OUTPUT_ELIDED,
   parseNumstat,
+  prepareWorkspace,
   runProcess,
   WORKSPACE_APP_NAME,
+  WORKSPACE_DEPS,
   workspaceDiff,
   workspaceFootprint,
   workspaceHandle,
@@ -1562,6 +1564,29 @@ describe("agent traces and don't-act graders", () => {
       assert.equal((await regrade([file])).exitCode, 0);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the template's own scripts run in a trial workspace: pnpm gen builds the typed client", async () => {
+    if (!existsSync(join(process.cwd(), "dist", "index.js"))) return; // needs `pnpm build`
+    // AGENTS.md tells agents to run `pnpm gen`. Without openapi-ts in the
+    // workspace it failed in 16 of 45 live trials, and agents spent the
+    // trial explaining a gap in the harness.
+    const template = JSON.parse(await readFile(join(process.cwd(), "packages", "create-daloy", "templates", "node-basic", "package.json"), "utf8")) as {
+      devDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    };
+    const declared = { ...template.dependencies, ...template.devDependencies };
+    for (const name of WORKSPACE_DEPS) assert.ok(name in declared, `${name} is a template dependency`);
+    const ws = await prepareWorkspace(TASKS.find((t) => t.id === "scaffold-books-list")!, "full");
+    try {
+      for (const name of WORKSPACE_DEPS) assert.ok(existsSync(join(ws.dir, "node_modules", name, "package.json")), `${name} is linked`);
+      const gen = await runProcess("pnpm", ["gen"], { cwd: ws.dir, env: { ...childEnv(), pnpm_config_verify_deps_before_run: "false" }, timeoutMs: 120_000 });
+      assert.equal(gen.exitCode, 0, gen.output);
+      assert.ok(existsSync(join(ws.dir, "generated", "openapi.json")));
+      assert.ok(existsSync(join(ws.dir, "generated", "client", "index.ts")), "the typed client was generated");
+    } finally {
+      await disposeWorkspace(ws.root);
     }
   });
 
