@@ -92,3 +92,39 @@ export function wilsonInterval(n: number, c: number, z = 1.96): [number, number]
   const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
   return [Math.max(0, centre - half), Math.min(1, centre + half)];
 }
+
+/**
+ * Fisher's exact test, two-sided: the chance of a split at least this uneven
+ * between two runs if the change made no difference (`a` passes of `n1`
+ * before, `b` of `n2` after). Exact at any sample size, which is what a
+ * before/after comparison of a few trials needs; checking whether two
+ * {@link wilsonInterval}s overlap is only a rule of thumb, and too cautious:
+ * 20/20 against 14/20 overlaps, but p is 0.02.
+ *
+ * Works in log space, so large trial counts do not overflow.
+ *
+ * @param a - Passes in the first run.
+ * @param n1 - Verified trials in the first run, at least 1.
+ * @param b - Passes in the second run.
+ * @param n2 - Verified trials in the second run, at least 1.
+ * @returns The two-sided p-value, in [0, 1].
+ * @throws RangeError when the counts are inconsistent.
+ */
+export function fisherExact(a: number, n1: number, b: number, n2: number): number {
+  for (const [c, n] of [[a, n1], [b, n2]] as const)
+    if (!Number.isInteger(c) || !Number.isInteger(n) || n < 1 || c < 0 || c > n)
+      throw new RangeError(`invalid counts: ${c} of ${n}`);
+  const logFactorial = (n: number): number => {
+    let sum = 0;
+    for (let i = 2; i <= n; i++) sum += Math.log(i);
+    return sum;
+  };
+  const logChoose = (n: number, k: number): number => logFactorial(n) - logFactorial(k) - logFactorial(n - k);
+  const total = a + b;
+  const p = (x: number): number => Math.exp(logChoose(n1, x) + logChoose(n2, total - x) - logChoose(n1 + n2, total));
+  const observed = p(a);
+  let sum = 0;
+  // Tables as or less likely than the observed one; the tolerance absorbs rounding.
+  for (let x = Math.max(0, total - n2); x <= Math.min(n1, total); x++) if (p(x) <= observed * (1 + 1e-9)) sum += p(x);
+  return Math.min(1, sum);
+}

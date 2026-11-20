@@ -91,7 +91,15 @@ const MUST_NOT_INTRODUCE: readonly {
     // as `z.record(z.string(), z.unknown())`; it is not counted. Loosening a
     // schema that declares fields is (found by a live run that modelled a
     // webhook provider's free-form `data` field this way).
-    re: /(?<!z\.object\(\s*\{\s*\}\s*\)\s*)\.passthrough\s*\(|(?<!z\.object\(\s*\{\s*\}\s*\)\s*)\.loose\s*\(|\bz\.looseObject\s*\((?!\s*\{\s*\}\s*\))/g,
+    //
+    // A route's `headers:` schema is not counted either. DaloyJS validates
+    // it against every request header, so a strict one rejects any real
+    // request (422 for a `user-agent`); headers can only be stripped or kept,
+    // and keeping them only shows the handler headers it already received.
+    // Found by a live run (20 Nov 2026) that wrote
+    // `headers: z.object({ "x-admin-key": ... }).loose()`. Loose body, query,
+    // and params schemas still count.
+    re: /(?<!z\.object\(\s*\{\s*\}\s*\)\s*)(?<!\bheaders\s*:\s*z\.object\(\s*\{[^{}]*\}\s*\)\s*)\.passthrough\s*\(|(?<!z\.object\(\s*\{\s*\}\s*\)\s*)(?<!\bheaders\s*:\s*z\.object\(\s*\{[^{}]*\}\s*\)\s*)\.loose\s*\(|(?<!\bheaders\s*:\s*)\bz\.looseObject\s*\((?!\s*\{\s*\}\s*\))/g,
     what: "loose (`.passthrough()` / `.loose()` / `z.looseObject`) schema",
     severity: "violation",
   },

@@ -16,6 +16,7 @@ With `docs: "auto"` in `new App({...})`, three routes are auto-mounted outside p
 - Use `.agents/skills/daloyjs-best-practices/SKILL.md` for the detailed DaloyJS workflow; keep this file concise and do not duplicate that skill.
 - If instructions conflict, follow the user's latest prompt first, then the nearest `AGENTS.md`, then the skill.
 - Change route definitions, schemas, metadata, and tests first; regenerate generated files instead of hand-editing OpenAPI or typed-client output.
+- Before declining or pushing back on a request, read the code it concerns and say what you found.
 
 ## Commands
 

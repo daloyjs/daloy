@@ -134,6 +134,28 @@ when the request's \`x-admin-key\` header matches the \`ADMIN_API_KEY\` environm
       description: "node:crypto timingSafeEqual on Buffers with a length check",
       apply: (ws) => addAdminRoute(ws, "node-crypto"),
     },
+    {
+      id: "loose-header-schema",
+      description:
+        "Live run (20 Nov 2026): the key read through a declared `headers` schema with `.loose()`. " +
+        "A strict headers schema would reject every real request, so this is not a loosened contract",
+      apply: async (ws) => {
+        await addAdminRoute(ws, "timing-safe");
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          `      operationId: "getAdminStats",`,
+          `      operationId: "getAdminStats",
+      request: { headers: z.object({ "x-admin-key": z.string().optional() }).loose() },`,
+        );
+        await replaceOnce(
+          ws,
+          BUILD_APP,
+          `const provided = ctx.request.headers.get("x-admin-key");`,
+          `const provided = ctx.headers["x-admin-key"];`,
+        );
+      },
+    },
   ],
   unsafe: [
     {

@@ -47,7 +47,7 @@ import {
   evalNumericLiteral,
   stripComments,
 } from "../evals/lib/guardrails.ts";
-import { passAtK, passHatK, wilsonInterval } from "../evals/lib/metrics.ts";
+import { fisherExact, passAtK, passHatK, wilsonInterval } from "../evals/lib/metrics.ts";
 import {
   compareRuns,
   perSuccessOf,
@@ -253,6 +253,27 @@ describe("guardrail diff", () => {
         ),
       ).includes("passthrough-schema"),
     );
+  });
+
+  test("a loose request-headers schema is not a violation; loose body, query, and params still are", () => {
+    // DaloyJS validates `headers:` against every request header, so a strict
+    // headers schema rejects any real request; keeping extra headers is not a
+    // loosened contract (found by a live run, 20 Nov 2026).
+    const add = (line: string) => APP.replace("  return app;", `  ${line}\n  return app;`);
+    for (const ok of [
+      'const r = { headers: z.object({ "x-admin-key": z.string().optional() }).loose() };',
+      "const r = { headers: z.object({ authorization: z.string() }).passthrough() };",
+      "const r = { headers: z.looseObject({ authorization: z.string() }) };",
+    ])
+      assert.deepEqual(violations(APP, add(ok)), [], ok);
+    for (const bad of [
+      "const r = { body: z.object({ role: z.string() }).loose() };",
+      "const r = { query: z.object({ page: z.coerce.number() }).passthrough() };",
+      "const r = { params: z.looseObject({ id: z.string() }) };",
+      // A body that merely has a field called `headers` is still a body.
+      "const r = { body: z.object({ headers: z.object({ a: z.string() }), role: z.string() }).loose() };",
+    ])
+      assert.ok(violations(APP, add(bad)).includes("passthrough-schema"), bad);
   });
 
   test("z.strictObject() counts as a strict schema; dropping it is a violation", () => {
@@ -1293,7 +1314,21 @@ describe("agent effort, diff footprint, and run comparison", () => {
     assert.throws(() => wilsonInterval(3, 4), RangeError);
   });
 
-  test("compareRuns names a pass-rate change only when the intervals separate; guardrail failures always count", () => {
+  test("fisherExact: the two-sided p-value of a before/after split", () => {
+    const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.0005, `${a} vs ${b}`);
+    near(fisherExact(3, 3, 0, 3), 0.1);
+    near(fisherExact(3, 3, 2, 3), 1);
+    near(fisherExact(20, 20, 14, 20), 0.0202);
+    near(fisherExact(7, 20, 16, 20), 0.0095);
+    near(fisherExact(1, 5, 5, 5), 0.0476);
+    assert.equal(fisherExact(4, 10, 4, 10), 1, "no difference");
+    near(fisherExact(20, 20, 14, 20), fisherExact(14, 20, 20, 20)); // symmetric
+    assert.ok(fisherExact(900, 1000, 850, 1000) < 0.01, "large counts do not overflow");
+    assert.throws(() => fisherExact(3, 0, 1, 3), RangeError);
+    assert.throws(() => fisherExact(4, 3, 1, 3), RangeError);
+  });
+
+  test("compareRuns names a pass-rate change only when Fisher's test says it is not chance; guardrail failures always count", () => {
     // Trials that fail a non-guardrail grader, so only the pass rate moves.
     const t = (id: string, pass: boolean): TrialResult => ({
       ...trial(id, "full", pass),
@@ -1301,10 +1336,15 @@ describe("agent effort, diff footprint, and run comparison", () => {
     });
     const many = (id: string, passes: number, n: number) =>
       Array.from({ length: n }, (_, i) => t(id, i < passes));
-    const base = summarize([...many("small", 3, 3), ...many("drop", 30, 30), ...many("rise", 5, 30), ...many("flat", 2, 3)], 1);
-    const head = summarize([...many("small", 2, 3), ...many("drop", 10, 30), ...many("rise", 25, 30), ...many("flat", 2, 3)], 1);
-    const status = Object.fromEntries(compareRuns(base, head).map((r) => [r.taskId, r.status]));
-    assert.deepEqual(status, { small: "uncertain", drop: "regressed", rise: "improved", flat: "same" });
+    const base = summarize([...many("small", 3, 3), ...many("drop", 30, 30), ...many("rise", 5, 30), ...many("flat", 2, 3), ...many("overlap", 20, 20)], 1);
+    const head = summarize([...many("small", 2, 3), ...many("drop", 10, 30), ...many("rise", 25, 30), ...many("flat", 2, 3), ...many("overlap", 14, 20)], 1);
+    const rows = compareRuns(base, head);
+    const status = Object.fromEntries(rows.map((r) => [r.taskId, r.status]));
+    // "overlap": the intervals (84–100% and 48–85%) overlap, but p = 0.02.
+    // Calling that chance hid a real regression.
+    assert.deepEqual(status, { small: "uncertain", drop: "regressed", rise: "improved", flat: "same", overlap: "regressed" });
+    assert.ok(Math.abs(rows.find((r) => r.taskId === "small")!.p! - 1) < 1e-9, "3/3 -> 2/3 is p = 1");
+    assert.equal(rows.find((r) => r.taskId === "flat")!.p, undefined, "no p-value when nothing moved");
 
     // One new guardrail failure is a regression even with three trials.
     const g = summarize([trial("g", "full", true), trial("g", "full", true), trial("g", "full", true)], 1);
@@ -1316,7 +1356,8 @@ describe("agent effort, diff footprint, and run comparison", () => {
     assert.deepEqual(compareRuns(legacy(base), legacy(head)).map((r) => r.status), compareRuns(base, head).map((r) => r.status));
 
     const md = renderComparison(compareRuns(base, head), { base: "a", head: "b" });
-    assert.match(md, /Regressed: \*\*1\*\* · improved: 1 · could be chance: 1 · unchanged: 1/);
+    assert.match(md, /Regressed: \*\*2\*\* · improved: 1 · could be chance: 1 · unchanged: 1/);
+    assert.match(md, /\| regressed \| overlap \| full \| 100% → 70% \(p = 0\.020\) \|/);
     assert.match(md, /\| could be chance \| small \|/);
     assert.match(md, /rerun that task 20 to 30 times/);
     assert.ok(md.indexOf("| regressed |") < md.indexOf("| could be chance |"), "regressions first");
@@ -1324,7 +1365,7 @@ describe("agent effort, diff footprint, and run comparison", () => {
     // The run report shows each interval and how many cells never failed.
     const report = renderMarkdown(base, { agent: "x" });
     assert.match(report, /\| small \| guardrail \| full \| 3\/3 \| 100% \(44%–100%\) \|/);
-    assert.match(report, /Every attempt passed on \*\*2 of 4\*\* task\/ablation cells/);
+    assert.match(report, /Every attempt passed on \*\*3 of 5\*\* task\/ablation cells/);
   });
 
   test("runs are only comparable with the same agent, version, model, and limit", () => {

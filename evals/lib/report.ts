@@ -12,7 +12,7 @@
  * @module
  */
 
-import { passAtK, passHatK, wilsonInterval } from "./metrics.ts";
+import { fisherExact, passAtK, passHatK, wilsonInterval } from "./metrics.ts";
 import type { Ablation, EvalSuite, TrialResult } from "./types.ts";
 
 /** Mean effort over a cell's passing trials. A field is absent when no trial reported it. */
@@ -387,11 +387,13 @@ export interface ComparisonRow {
   readonly basePassAt1?: number;
   readonly headPassAt1?: number;
   /**
-   * `regressed` / `improved`: pass@1 moved and the two 95% intervals do not
-   * overlap, or (regressed) the guardrail-failure rate rose. `uncertain`:
-   * pass@1 moved, but the intervals overlap, so the change could be chance.
+   * `regressed` / `improved`: pass@1 moved and Fisher's exact test gives
+   * p < 0.05, or (regressed) the guardrail-failure rate rose. `uncertain`:
+   * pass@1 moved, but p ≥ 0.05, so the change could be chance.
    */
   readonly status: "regressed" | "improved" | "uncertain" | "same" | "added" | "removed";
+  /** Fisher's exact p-value for the pass@1 change, when both runs have verified trials and pass@1 moved. */
+  readonly p?: number;
   readonly baseEffort?: EffortSummary;
   readonly headEffort?: EffortSummary;
   /** Guardrail-grader failures in base and head. */
@@ -403,12 +405,14 @@ export interface ComparisonRow {
 /**
  * Compare two runs cell by cell (same task and ablation).
  *
- * A pass@1 change is called `regressed` or `improved` only when the two 95%
- * Wilson intervals do not overlap; otherwise it is `uncertain`: with a
- * handful of trials per cell, 3/3 against 2/3 is well within chance, and
- * calling it a regression misleads. To settle an `uncertain` row, rerun that
- * task 20 to 30 times with and without the change into a separate results
- * folder (never into the main run's totals).
+ * A pass@1 change is called `regressed` or `improved` only when Fisher's
+ * exact test ({@link fisherExact}) gives p < 0.05; otherwise it is
+ * `uncertain`: with a handful of trials per cell, 3/3 against 2/3 is well
+ * within chance (p = 1), and calling it a regression misleads. Fisher, not
+ * whether the two intervals overlap: that rule of thumb is too cautious and
+ * called 20/20 against 14/20 (p = 0.02) chance. To settle an `uncertain`
+ * row, rerun that task 20 to 30 times with and without the change into a
+ * separate results folder (never into the main run's totals).
  *
  * A rise in the guardrail-failure rate is always `regressed`, whatever the
  * sample size: it is a security control seen being weakened in a trace, a
@@ -439,6 +443,7 @@ export function compareRuns(
       head: h?.failures.guardrails ?? 0,
     };
     let status: ComparisonRow["status"];
+    let p: number | undefined;
     if (!b) status = "added";
     else if (!h) status = "removed";
     else if (h.n > 0 && b.n > 0 && guardrailFailures.head / h.n > guardrailFailures.base / b.n)
@@ -446,11 +451,8 @@ export function compareRuns(
     else if (h.n === 0 || b.n === 0) status = h.n === b.n ? "same" : "uncertain";
     else if (h.passAt1 === b.passAt1) status = "same";
     else {
-      const [bLo, bHi] = wilsonInterval(b.n, b.passes);
-      const [hLo, hHi] = wilsonInterval(h.n, h.passes);
-      if (hHi < bLo) status = "regressed";
-      else if (hLo > bHi) status = "improved";
-      else status = "uncertain";
+      p = fisherExact(b.passes, b.n, h.passes, h.n);
+      status = p >= 0.05 ? "uncertain" : h.passAt1 < b.passAt1 ? "regressed" : "improved";
     }
     rows.push({
       taskId: any.taskId,
@@ -458,6 +460,7 @@ export function compareRuns(
       ...(b ? { basePassAt1: b.passAt1, baseEffort: b.effort } : {}),
       ...(h ? { headPassAt1: h.passAt1, headEffort: h.effort } : {}),
       status,
+      ...(p !== undefined ? { p } : {}),
       guardrailFailures,
       unverified: { base: b?.unverified ?? 0, head: h?.unverified ?? 0 },
     });
@@ -495,7 +498,7 @@ export function renderComparison(
       `could be chance: ${rows.filter((r) => r.status === "uncertain").length} · ` +
       `unchanged: ${rows.filter((r) => r.status === "same").length}`,
     "",
-    "A pass@1 change counts as regressed or improved only when the 95% intervals do not overlap; " +
+    "A pass@1 change counts as regressed or improved only when Fisher's exact test gives p < 0.05 (shown as p); " +
       "a rise in guardrail failures always counts. **Could be chance**: rerun that task 20 to 30 times " +
       "with and without the change, in a separate results folder, before believing it.",
     "",
@@ -512,7 +515,9 @@ export function renderComparison(
     );
   for (const r of sorted) {
     lines.push(
-      `| ${r.status === "uncertain" ? "could be chance" : r.status}${r.unverified.base + r.unverified.head > 0 ? " ⚠" : ""} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)} | ` +
+      `| ${r.status === "uncertain" ? "could be chance" : r.status}${r.unverified.base + r.unverified.head > 0 ? " ⚠" : ""} | ${r.taskId} | ${r.ablation} | ${p(r.basePassAt1)} → ${p(r.headPassAt1)}${
+        r.p === undefined ? "" : ` (p ${r.p < 0.001 ? "< 0.001" : `= ${r.p.toFixed(3)}`})`
+      } | ` +
         `${r.guardrailFailures.base} → ${r.guardrailFailures.head} | ` +
         `${time(r.baseEffort)} → ${time(r.headEffort)} | ${tok(r.baseEffort)} → ${tok(r.headEffort)} |`,
     );
