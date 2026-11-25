@@ -1,0 +1,8 @@
+{
+  "name": "daloy-eval-reporter",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "deepeval": "0.9.26"
+  }
+}

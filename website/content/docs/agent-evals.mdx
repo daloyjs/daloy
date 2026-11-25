@@ -197,6 +197,18 @@ Run the same tasks under `--ablation full,no-agents-md,no-skill,bare` to measure
 
 The docs MCP is a separate, opt-in axis: run once with the default `--mcp none` and once with `--mcp docs`, then compare. `--mcp docs` offers only the public, read-only docs server; GitHub's built-in MCP servers stay off in every mode, because they can search the repository that holds the hidden tests. Templates configure the docs server in `.vscode/mcp.json`, which editors read but headless agent CLIs do not, so without `--mcp docs` an eval agent never sees it.
 
+### Replay the books pilot with DeepEval
+
+The pilot renders one case per trial with separate metrics for typecheck, visible tests, hidden tests, guardrails, and route tests. It runs in a network-disabled Docker container using deterministic grades. Install the private reporter, prepare the eval image, and replay the saved controls from the repository root:
+
+```sh
+pnpm --dir evals/pilot install --frozen-lockfile --ignore-scripts
+pnpm eval:image
+pnpm --silent eval:pilot evals/pilot/fixtures/reference.json evals/pilot/fixtures/noop.json > controls.md
+```
+
+The report gives the success-rate denominator and lists unverified trials separately. Each input must contain books-task trials from the same grader revision for a like-for-like comparison.
+
 ## Iterate: fix, rerun, compare [#iterate]
 
 Evals pay off when they drive a fix. When a run shows a failure pattern, inspect the app and the trace, fix the cause (the framework, the docs, the skill, or a template), then rerun the same tasks with the same agent and limits and compare:

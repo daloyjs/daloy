@@ -1,0 +1,90 @@
+{
+  "meta": {
+    "agent": "copilot",
+    "model": "gpt-6-sol",
+    "mcp": "none",
+    "sandbox": "docker",
+    "agentVersion": "GitHub Copilot CLI 1.0.112.",
+    "gitSha": "232692a5ea82ea636196685bab5c2854fbec511c",
+    "coreVersion": "1.24.3",
+    "node": "v26.12.1",
+    "trials": 1,
+    "timeoutMs": 360000
+  },
+  "trials": [
+    {
+      "taskId": "scaffold-books-list",
+      "ablation": "no-skill",
+      "trial": 1,
+      "pass": true,
+      "agentRun": {
+        "timedOut": false,
+        "durationMs": 38028
+      },
+      "grades": [
+        {
+          "id": "typecheck",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "tests",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "hidden",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "guardrails",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "route-tests",
+          "pass": true,
+          "details": []
+        }
+      ]
+    },
+    {
+      "taskId": "scaffold-books-list",
+      "ablation": "full",
+      "trial": 1,
+      "pass": true,
+      "agentRun": {
+        "timedOut": false,
+        "durationMs": 35537
+      },
+      "grades": [
+        {
+          "id": "typecheck",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "tests",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "hidden",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "guardrails",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "route-tests",
+          "pass": true,
+          "details": []
+        }
+      ]
+    }
+  ]
+}

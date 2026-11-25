@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
+<rect width="1600" height="1100" fill="#f6f4ef"/>
+<rect x="6" y="6" width="1588" height="1088" fill="none" stroke="#3a3a3a" stroke-width="2"/>
+<text x="56" y="74" font-size="32" font-weight="700" fill="#1c1c1c">What do agents use to learn DaloyJS?</text>
+<text x="1544" y="74" font-size="21" fill="#6b6b6b" text-anchor="end">DaloyJS agent evals · 16 Nov 2026</text>
+<text x="56" y="112" font-size="20" fill="#6b6b6b">Same 4 hard tasks in a fresh create-daloy node-basic project, Sonnet 5.5 via Copilot CLI 1.0.112, Docker sandbox, 12 attempts per box.</text>
+<text x="721" y="162" font-size="20" font-weight="700" fill="#1c1c1c" text-anchor="middle">DaloyJS docs MCP (daloyjs.dev/mcp)</text>
+<text x="505" y="194" font-size="18" fill="#6b6b6b" text-anchor="middle">not offered</text>
+<text x="937" y="194" font-size="18" fill="#6b6b6b" text-anchor="middle">offered</text>
+<text x="70" y="521" font-size="20" font-weight="700" fill="#1c1c1c" text-anchor="middle" transform="rotate(-90 70 521)">Agent instructions in the project</text>
+<text x="276" y="354" font-size="18" font-weight="600" fill="#1c1c1c" text-anchor="end">AGENTS.md + skill</text>
+<text x="276" y="378" font-size="16" fill="#6b6b6b" text-anchor="end">(as create-daloy ships)</text>
+<rect x="300" y="210" width="410" height="300" rx="14" fill="#ffffff" stroke="#dedbd3" stroke-width="2"/>
+<rect x="300" y="210" width="8" height="300" rx="4" fill="#2e9e72"/>
+<text x="332" y="280" font-size="50" font-weight="700" fill="#1c1c1c">100%</text>
+<text x="332" y="308" font-size="16" fill="#6b6b6b">attempts fully correct (12/12)</text>
+<text x="332" y="350" font-size="16" font-weight="600" fill="#1c1c1c">Test code written: 54 lines / task</text>
+<rect x="332" y="360" width="340" height="14" rx="7" fill="#dedbd3"/>
+<rect x="332" y="360" width="308" height="14" rx="7" fill="#2e9e72"/>
+<text x="332" y="398" font-size="15" fill="#6b6b6b">every attempt shipped tests</text>
+<text x="332" y="438" font-size="16" fill="#1c1c1c">docs MCP: not available</text>
+<text x="332" y="472" font-size="15" fill="#6b6b6b">39s and 294k tokens per attempt</text>
+<rect x="732" y="210" width="410" height="300" rx="14" fill="#ffffff" stroke="#dedbd3" stroke-width="2"/>
+<rect x="732" y="210" width="8" height="300" rx="4" fill="#2e9e72"/>
+<text x="764" y="280" font-size="50" font-weight="700" fill="#1c1c1c">100%</text>
+<text x="764" y="308" font-size="16" fill="#6b6b6b">attempts fully correct (12/12)</text>
+<text x="764" y="350" font-size="16" font-weight="600" fill="#1c1c1c">Test code written: 51 lines / task</text>
+<rect x="764" y="360" width="340" height="14" rx="7" fill="#dedbd3"/>
+<rect x="764" y="360" width="290" height="14" rx="7" fill="#2e9e72"/>
+<text x="764" y="398" font-size="15" fill="#6b6b6b">every attempt shipped tests</text>
+<text x="764" y="438" font-size="16" fill="#1c1c1c">docs MCP used in 3 of 12 attempts</text>
+<text x="764" y="472" font-size="15" fill="#6b6b6b">37s and 296k tokens per attempt</text>
+<text x="276" y="676" font-size="18" font-weight="600" fill="#1c1c1c" text-anchor="end">No AGENTS.md,</text>
+<text x="276" y="700" font-size="16" fill="#6b6b6b" text-anchor="end">no skill</text>
+<rect x="300" y="532" width="410" height="300" rx="14" fill="#ffffff" stroke="#dedbd3" stroke-width="2"/>
+<rect x="300" y="532" width="8" height="300" rx="4" fill="#e06c3c"/>
+<text x="332" y="602" font-size="50" font-weight="700" fill="#1c1c1c">100%</text>
+<text x="332" y="630" font-size="16" fill="#6b6b6b">attempts fully correct (12/12)</text>
+<text x="332" y="672" font-size="16" font-weight="600" fill="#1c1c1c">Test code written: 30 lines / task</text>
+<rect x="332" y="682" width="340" height="14" rx="7" fill="#dedbd3"/>
+<rect x="332" y="682" width="171" height="14" rx="7" fill="#e06c3c"/>
+<text x="332" y="720" font-size="15" fill="#e06c3c">3 of 12 attempts shipped no tests</text>
+<text x="332" y="760" font-size="16" fill="#1c1c1c">docs MCP: not available</text>
+<text x="332" y="794" font-size="15" fill="#6b6b6b">31s and 239k tokens per attempt</text>
+<rect x="732" y="532" width="410" height="300" rx="14" fill="#ffffff" stroke="#dedbd3" stroke-width="2"/>
+<rect x="732" y="532" width="8" height="300" rx="4" fill="#e06c3c"/>
+<text x="764" y="602" font-size="50" font-weight="700" fill="#1c1c1c">92%</text>
+<text x="764" y="630" font-size="16" fill="#6b6b6b">attempts fully correct (11/12)</text>
+<text x="764" y="672" font-size="16" font-weight="600" fill="#1c1c1c">Test code written: 27 lines / task</text>
+<rect x="764" y="682" width="340" height="14" rx="7" fill="#dedbd3"/>
+<rect x="764" y="682" width="153" height="14" rx="7" fill="#e06c3c"/>
+<text x="764" y="720" font-size="15" fill="#e06c3c">4 of 12 attempts shipped no tests</text>
+<text x="764" y="760" font-size="16" fill="#1c1c1c">docs MCP used in 7 of 12 attempts</text>
+<text x="764" y="794" font-size="15" fill="#6b6b6b">35s and 287k tokens per attempt</text>
+<text x="1200" y="194" font-size="20" font-weight="700" fill="#1c1c1c">What the agents opened</text>
+<text x="1200" y="222" font-size="15" fill="#6b6b6b">share of attempts where it was available</text>
+<text x="1200" y="260" font-size="18" font-weight="700" fill="#1c1c1c">AGENTS.md</text>
+<text x="1200" y="282" font-size="14" fill="#6b6b6b">auto-loaded by the CLI</text>
+<rect x="1200" y="294" width="250" height="22" rx="6" fill="#dedbd3"/>
+<rect x="1200" y="294" width="250" height="22" rx="6" fill="#2e9e72"/>
+<text x="1462" y="311" font-size="16" font-weight="700" fill="#1c1c1c">always</text>
+<text x="1200" y="378" font-size="18" font-weight="700" fill="#1c1c1c">Agent skill</text>
+<text x="1200" y="400" font-size="14" fill="#6b6b6b">daloyjs-best-practices</text>
+<rect x="1200" y="412" width="250" height="22" rx="6" fill="#dedbd3"/>
+<rect x="1200" y="412" width="0" height="22" rx="6" fill="#e8b03a"/>
+<text x="1462" y="429" font-size="16" font-weight="700" fill="#1c1c1c">0 of 24</text>
+<text x="1200" y="496" font-size="18" font-weight="700" fill="#1c1c1c">Docs MCP</text>
+<text x="1200" y="518" font-size="14" fill="#6b6b6b">daloyjs.dev/mcp</text>
+<rect x="1200" y="530" width="250" height="22" rx="6" fill="#dedbd3"/>
+<rect x="1200" y="530" width="104" height="22" rx="6" fill="#5f5f5f"/>
+<text x="1462" y="547" font-size="16" font-weight="700" fill="#1c1c1c">10 of 24</text>
+<text x="1200" y="614" font-size="18" font-weight="700" fill="#1c1c1c">Installed library</text>
+<text x="1200" y="636" font-size="14" fill="#6b6b6b">node_modules/@daloyjs/core</text>
+<rect x="1200" y="648" width="250" height="22" rx="6" fill="#dedbd3"/>
+<rect x="1200" y="648" width="198" height="22" rx="6" fill="#7d6bd6"/>
+<text x="1462" y="665" font-size="16" font-weight="700" fill="#1c1c1c">38 of 48</text>
+<line x1="56" y1="848" x2="1544" y2="848" stroke="#dedbd3" stroke-width="2"/>
+<text x="56" y="880" font-size="22" font-weight="700" fill="#1c1c1c">What this means</text>
+<circle cx="68" cy="916" r="5" fill="#1c1c1c"/>
+<text x="84" y="922" font-size="18" fill="#1c1c1c">AGENTS.md is what changes behaviour: with it, every attempt shipped tests (about 80% more test code). Without it, 7 of 24 shipped none.</text>
+<circle cx="68" cy="956" r="5" fill="#1c1c1c"/>
+<text x="84" y="962" font-size="18" fill="#1c1c1c">Without AGENTS.md, Sonnet reached for the docs MCP in 7 of 12 attempts (3 of 12 with it). It never opened the skill; GPT-6.1 Sol did in 20 of 20 runs.</text>
+<circle cx="68" cy="996" r="5" fill="#1c1c1c"/>
+<text x="84" y="1002" font-size="18" fill="#1c1c1c">No attempt removed a security control in any box. Keep the security rules in AGENTS.md, the one surface every agent reads.</text>
+<circle cx="68" cy="1036" r="5" fill="#1c1c1c"/>
+<text x="84" y="1042" font-size="18" fill="#1c1c1c">12 attempts per box is small: 92% vs 100% is a single attempt (it skipped the route test) and is within noise.</text>
+</svg>

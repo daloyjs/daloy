@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "agent": "noop",
+    "mcp": "none",
+    "sandbox": "docker",
+    "gitSha": "232692a5ea82ea636196685bab5c2854fbec511c",
+    "coreVersion": "1.24.3",
+    "node": "v26.12.1",
+    "trials": 1,
+    "timeoutMs": 1200000
+  },
+  "trials": [
+    {
+      "taskId": "scaffold-books-list",
+      "ablation": "full",
+      "trial": 1,
+      "pass": false,
+      "agentRun": {
+        "timedOut": false,
+        "durationMs": 0
+      },
+      "grades": [
+        {
+          "id": "typecheck",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "tests",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "hidden",
+          "pass": false,
+          "details": [
+            "3 expected test(s) did not run and pass:\n  - lists every seeded book by default\n  - limit caps the number of items\n  - out-of-range or non-integer limits are rejected (400 or 422)",
+            "exit 1",
+            "  expected: 1\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///work/tests/__eval_hidden__/list-books.test.ts:24:10)\n    async Test.run (node:internal/test_runner/test:1409:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)\n  ...\n# Subtest: out-of-range or non-integer limits are rejected (400 or 422)\nnot ok 3 - out-of-range or non-integer limits are rejected (400 or 422)\n  ---\n  duration_ms: 0.897458\n  type: 'test'\n  location: '/work/tests/__eval_hidden__/list-books.test.ts:28:1'\n  failureType: 'testCodeFailure'\n  error: 'expected 400/422 for ?limit=0, got 404'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n  stack: |-\n    TestContext.<anonymous> (file:///work/tests/__eval_hidden__/list-books.test.ts:37:12)\n    async Test.run (node:internal/test_runner/test:1409:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)\n  ...\n# Subtest: the existing GET /books/:id route still works\nok 4 - the existing GET /books/:id route still works\n  ---\n  duration_ms: 1.901667\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 1\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 134.926625"
+          ]
+        },
+        {
+          "id": "guardrails",
+          "pass": true,
+          "details": []
+        },
+        {
+          "id": "route-tests",
+          "pass": false,
+          "details": [
+            "The new route must ship with a test that exercises limit (AGENTS.md core rule 7)"
+          ]
+        }
+      ]
+    }
+  ]
+}
