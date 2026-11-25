@@ -2,3 +2,10 @@ packages: []
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 strictDepBuilds: true
+
+# DeepEval 0.9.26 uses uuid's CommonJS API. Keep the patched dual-module release.
+# Older telemetry exporters also pin vulnerable protobuf and telemetry core versions.
+overrides:
+  'deepeval@0.9.26>uuid': '11.1.1'
+  '@opentelemetry/otlp-transformer@0.211.0>protobufjs': '8.8.1'
+  '@opentelemetry/core@<2.8.0': '2.12.1'
