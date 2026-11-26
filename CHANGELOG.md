@@ -17,6 +17,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.24.4] - 2026-11-26
+
 ### Fixed
 
 - **A guard that "rejects" with a non-`Response` value could still pass inside
