@@ -61,6 +61,9 @@ const FORBIDDEN_HOOKS = [
 const CHECKED_MANIFESTS: readonly string[] = [
   "../package.json",
   "../packages/create-daloy/package.json",
+  // A nested project a maintainer installs by hand (`pnpm --dir evals/pilot
+  // install`): an install hook there would run on their machine.
+  "../evals/pilot/package.json",
 ];
 
 interface PackageJsonLike {

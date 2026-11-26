@@ -10,6 +10,17 @@
  * This walks the whole file once as a small state machine (code, the three
  * string kinds with `${}` nesting, regex literals, `//` and block comments)
  * so "is this character code?" is decided by syntax, not by a per-line guess.
+ *
+ * Two places where it used to disagree with the language, each of which hid
+ * live code from every gate:
+ *
+ * - JavaScript ends a `//` comment at a lone CR, U+2028 or U+2029 as well as
+ *   at LF. `// note<CR>eval(x)` is live code; it is now kept (on the same
+ *   output line, so line numbers still match `source.split(/\r?\n/)`).
+ * - A `/` after the `)` that closes an `if` / `while` / `for` / `with` head,
+ *   or after `else` / `do`, starts a regex literal, not a division. Read as a
+ *   division, the `/*` in `if (s) /[/*]/.test(s)` opened a block comment that
+ *   swallowed the rest of the file.
  */
 
 /** Per-line views of a source file, index-aligned with `source.split(/\r?\n/)`. */
@@ -26,7 +37,15 @@ export interface StrippedSource {
 
 /** Characters after which a `/` starts a regex literal rather than a division. */
 const REGEX_PRECEDERS = new Set("(,=:[!&|?{};+-*%<>~^".split(""));
-const REGEX_KEYWORDS = /(?:^|[^\w$])(?:return|typeof|case|in|of|delete|void|throw|new|yield|await)$/;
+const REGEX_KEYWORDS =
+  /(?:^|[^\w$.])(?:return|typeof|case|in|of|delete|void|throw|new|yield|await|else|do)$/;
+/** A `(` after one of these opens a statement head; the `/` after its `)` starts a regex. */
+const CONTROL_HEAD = /(?:^|[^\w$.])(?:if|while|for|with|for\s+await)\s*$/;
+
+/** Line terminators other than LF (and CRLF) that end a `//` comment in JavaScript. */
+function isBareLineTerminator(c: string, next: string | undefined): boolean {
+  return (c === "\r" && next !== "\n") || c === "\u2028" || c === "\u2029";
+}
 
 /**
  * Split `source` into lines with comments removed, in two flavours.
@@ -51,6 +70,10 @@ export function stripSource(source: string): StrippedSource {
   /** Brace depth inside each open `${...}`; one entry per nested template. */
   const templateDepths: number[] = [];
   let regexInClass = false;
+  /** One entry per open `(` in code: whether it opened a statement head. */
+  const parenIsControlHead: boolean[] = [];
+  /** True while the last code token is the `)` that closed a statement head. */
+  let afterControlHead = false;
   const n = source.length;
 
   for (let i = 0; i < n; i++) {
@@ -64,8 +87,24 @@ export function stripSource(source: string): StrippedSource {
       flush();
       continue;
     }
+    if (isBareLineTerminator(c, next)) {
+      // Not a line for `split(/\r?\n/)`, so no flush, but the language ends a
+      // `//` comment (and an unterminated quote or regex) here: what follows
+      // is code and must stay visible to the gates.
+      if (mode === "line" || mode === "single" || mode === "double" || mode === "regex")
+        mode = "code";
+      if (mode === "code") {
+        keep += " ";
+        bare += " ";
+      } else if (mode === "template") keep += c;
+      continue;
+    }
     switch (mode) {
       case "code": {
+        const wasAfterControlHead = afterControlHead;
+        if (c !== " " && c !== "\t") afterControlHead = false;
+        if (c === "(") parenIsControlHead.push(CONTROL_HEAD.test(bare));
+        else if (c === ")") afterControlHead = parenIsControlHead.pop() === true;
         if (c === "/" && next === "/") {
           mode = "line";
           i++;
@@ -76,7 +115,7 @@ export function stripSource(source: string): StrippedSource {
           mode = c === "'" ? "single" : c === '"' ? "double" : "template";
           keep += c;
           bare += c;
-        } else if (c === "/" && startsRegex(bare)) {
+        } else if (c === "/" && (wasAfterControlHead || startsRegex(bare))) {
           mode = "regex";
           regexInClass = false;
           keep += c;

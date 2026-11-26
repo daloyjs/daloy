@@ -800,6 +800,56 @@ needs a deliberate author rather than an accident: a banned call built from
 concatenated strings or a variable module specifier, and an encoded blob
 split into two shorter halves.
 
+### Scoped audit (2026-11-26)
+
+A scoped pass over the code changed since the third-pass audit confirmed three
+framework findings, all fixed with regression tests in
+`tests/audit-2026-11-26-src.test.ts`:
+
+- **Rejection-shaped guard results inside combinators.** The earlier fix that
+  refuses a hook result that is neither nothing nor a `Response` (a guard
+  written as `return { status: 401 }`) missed two sites: `every()` wrapped by
+  `except()`, `some()` or `markAuthHook()`, and the `preBody` of a `some()`
+  branch that also has a `beforeHandle`. Both now refuse the value, and
+  `markAuthHook()` records an authentication pass only when the hook returned
+  nothing.
+- **WebSocket `beforeUpgrade`.** The Node and Bun adapters accepted the
+  upgrade for any decision that was not a `Response`, including `false` and
+  `{ status: 401 }`. Such a decision now refuses the upgrade with a `500`.
+- **Upload file names.** `fileField()` accepted a colon, so `D:evil.png`
+  (drive-relative on Windows) and `a.php::$DATA` (an NTFS stream) passed, as
+  did device names spelled `CON .txt`, `CONIN$` or `COM0`. All are refused by
+  default now. The Windows file-system behaviour was not exercised on a
+  Windows host.
+
+The same pass confirmed four gaps in the CI gates, also fixed
+(`tests/audit-2026-11-26-gates.test.ts`):
+
+- **Comment stripper and lexer disagreement.** The stripper shared by six
+  source gates ended a `//` comment only at LF, while JavaScript also ends it
+  at a lone CR, U+2028 and U+2029, and it read a regex literal after an
+  `if (...)` head as a division, so the `/*` inside `/[/*]/` opened a comment.
+  Either way the code that followed was hidden from every gate. Both are now
+  read the way the language reads them.
+- **Unscanned extensions.** The gates walked `.ts`, `.mts`, `.js` and `.mjs`
+  only, while `tsc` also compiles `.cts` and `.tsx` under `src/`. One shared
+  predicate (`scripts/lib/source-files.ts`) now covers every extension the
+  compiler accepts, and a test fails if `src/` gains a file no gate reads.
+- **`verify:secret-comparisons`.** A secret compared through a call
+  (`String(apiKey) === expected`), an optional chain, or a wrap that starts
+  with the operator was not reported. Comparisons are now judged on the whole
+  operand expression.
+- **`evals/pilot`.** Its manifest, lockfile and workspace file were on no
+  dependency gate's list. They are now, with a pilot-only allowlist, and a
+  test fails when `git ls-files` finds a lockfile, workspace file or manifest
+  that no gate reads. An override keyed `parent>child` is also judged on the
+  child it replaces; it used to be judged on the parent.
+
+Still not caught, in addition to the list above: a banned call spelled with a
+unicode escape in the identifier, `Function(body)` with a non-literal
+argument, and a secret held in a variable with a generic name (`token`,
+`key`, `digest`).
+
 ### Repeatable local audits with the Cloudflare skill
 
 The audit above used the upstream

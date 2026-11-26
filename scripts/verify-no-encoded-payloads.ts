@@ -60,6 +60,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isSourceFile } from "./lib/source-files.js";
 
 const SCAN_ROOTS: readonly URL[] = [
   new URL("../src/", import.meta.url),
@@ -178,7 +179,7 @@ async function* walk(dir: URL): AsyncGenerator<string> {
     const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
     if (entry.isDirectory()) {
       yield* walk(child);
-    } else if (entry.isFile() && /\.(?:m?ts|m?js|cjs|mjs)$/.test(entry.name)) {
+    } else if (entry.isFile() && isSourceFile(entry.name)) {
       yield fileURLToPath(child);
     }
   }

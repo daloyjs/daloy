@@ -459,16 +459,23 @@ export function looksLikePnpmLockfile(lockfile: string): boolean {
   return /^lockfileVersion:/m.test(lockfile) && /^(?:importers|packages):/m.test(lockfile);
 }
 
+/**
+ * Every committed pnpm lockfile, relative to the repo root. A nested project
+ * (`evals/pilot`) that is missing here installs from a lockfile no gate has
+ * read; `tests/audit-2026-11-26-gates.test.ts` fails when `git ls-files`
+ * finds a lockfile that is not on this list.
+ */
+export const SCANNED_LOCKFILES: readonly string[] = [
+  "pnpm-lock.yaml",
+  "website/pnpm-lock.yaml",
+  "bench/cross-framework/pnpm-lock.yaml",
+  "evals/pilot/pnpm-lock.yaml",
+];
+
 async function main(): Promise<void> {
-  const lockfiles = [
-    "../pnpm-lock.yaml",
-    "../website/pnpm-lock.yaml",
-    "../bench/cross-framework/pnpm-lock.yaml",
-  ] as const;
   let total = 0;
-  for (const rel of lockfiles) {
-    const lockfile = await readFile(new URL(rel, import.meta.url), "utf8");
-    const name = rel.replace(/^\.\.\//, "");
+  for (const name of SCANNED_LOCKFILES) {
+    const lockfile = await readFile(new URL(`../${name}`, import.meta.url), "utf8");
     if (!looksLikePnpmLockfile(lockfile)) {
       console.error(`${name} is empty or not a pnpm lockfile; refusing to treat it as clean`);
       total++;

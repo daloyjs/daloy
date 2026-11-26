@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import {
   ALLOWED_DEP_NAMES,
   SCANNED_PACKAGE_JSONS,
+  allowedDepNamesFor,
   findAliasedDependencySpecifiers,
   findGitOrUrlDependencySpecifiers,
   findUnknownDependencyNames,
@@ -23,11 +24,8 @@ test("every scanned package.json has zero unknown top-level dep names", async ()
   for (const rel of SCANNED_PACKAGE_JSONS) {
     const text = await readFile(new URL(rel, REPO_ROOT), "utf8");
     const pkg = JSON.parse(text);
-    // The benchmark manifest may also name the frameworks it compares against.
-    const allowlist = rel.startsWith("bench/")
-      ? new Set([...ALLOWED_DEP_NAMES, ...BENCH_ONLY_DEP_NAMES])
-      : ALLOWED_DEP_NAMES;
-    const offending = findUnknownDependencyNames(rel, pkg, allowlist);
+    // The benchmark and eval-pilot manifests may also name their own tools.
+    const offending = findUnknownDependencyNames(rel, pkg, allowedDepNamesFor(rel));
     assert.deepEqual(
       offending,
       [],

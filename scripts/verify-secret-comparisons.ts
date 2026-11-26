@@ -41,6 +41,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { stripSource } from "./lib/strip-source.js";
+import { isSourceFile } from "./lib/source-files.js";
 
 /**
  * Root audited by this gate: every TypeScript file under `src/`. It used to
@@ -98,6 +99,76 @@ const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`
 const DIRECT_HEADER_READ_RE =
   /\.get\(\s*["'](?:(?:proxy-)?authorization|cookie|x-api-key|x-[^"']*(?:signature|secret|token)[^"']*)["']\s*\)\s*(?:\?\?\s*""\s*\)?\s*)?(?:===|!==|==|!=)/i;
 
+const EQUALITY_RE = /===|!==|(?<![=!<>])==(?!=)|(?<![=!<>])!=(?!=)/g;
+const OPERAND_CHAR_RE = /[\w$.?!]/;
+
+/**
+ * The expression directly left of position `end` in `text`: an identifier or
+ * member chain, with any call or index it ends in (`String(apiKey)`,
+ * `cookie?.value`, `headers["x"]`).
+ */
+function operandBefore(text: string, end: number): string {
+  let i = end;
+  while (i > 0 && /\s/.test(text[i - 1]!)) i--;
+  const stop = i;
+  while (i > 0) {
+    const ch = text[i - 1]!;
+    if (ch === ")" || ch === "]") {
+      const open = ch === ")" ? "(" : "[";
+      let depth = 0;
+      let j = i - 1;
+      for (; j >= 0; j--) {
+        if (text[j] === ch) depth++;
+        else if (text[j] === open && --depth === 0) break;
+      }
+      if (j < 0) break;
+      i = j;
+    } else if (OPERAND_CHAR_RE.test(ch)) i--;
+    else break;
+  }
+  return text.slice(i, stop);
+}
+
+/** The expression directly right of position `start` in `text`; see {@link operandBefore}. */
+function operandAfter(text: string, start: number): string {
+  let i = start;
+  while (i < text.length && /\s/.test(text[i]!)) i++;
+  const from = i;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === "(" || ch === "[") {
+      const close = ch === "(" ? ")" : "]";
+      let depth = 0;
+      let j = i;
+      for (; j < text.length; j++) {
+        if (text[j] === ch) depth++;
+        else if (text[j] === close && --depth === 0) break;
+      }
+      if (j >= text.length) break;
+      i = j + 1;
+    } else if (OPERAND_CHAR_RE.test(ch)) i++;
+    else break;
+  }
+  return text.slice(from, i);
+}
+
+/**
+ * Whether an equality operator in `cleaned` has a secret-named operand. The
+ * operand is the whole expression next to the operator, so a secret wrapped
+ * in a call (`String(apiKey) === expected`, `sha256(providedSecret) !== x`)
+ * or read through an optional chain (`cookie?.value === expected`) counts.
+ * Splitting the line into text segments put those operands and their
+ * operator in different segments, and the comparison went unreported.
+ */
+function hasSecretOperand(cleaned: string): boolean {
+  for (const m of cleaned.matchAll(EQUALITY_RE)) {
+    const left = operandBefore(cleaned, m.index);
+    const right = operandAfter(cleaned, m.index + m[0].length);
+    if (HEADER_DERIVED_TOKENS.some((re) => re.test(left) || re.test(right))) return true;
+  }
+  return false;
+}
+
 export interface ForbiddenComparison {
   readonly file: string;
   readonly line: number;
@@ -118,10 +189,14 @@ export function findForbiddenSecretComparisons(
     const raw = lines[i]!;
     const noComments = views.noComments[i]!;
     if (noComments.trim().length === 0) continue;
-    // A comparison whose operands wrap onto the next line is judged as one.
-    const joined = /(?:===|!==|==|!=)\s*$/.test(noComments.trimEnd())
+    // A comparison whose operands wrap onto the next line is judged as one,
+    // whether the operator ends this line or starts it.
+    const wrapped = /(?:===|!==|==|!=)\s*$/.test(noComments.trimEnd())
       ? `${noComments} ${views.noComments[i + 1] ?? ""}`
       : noComments;
+    const joined = /^\s*(?:===|!==|==|!=)/.test(noComments)
+      ? `${views.noComments[i - 1] ?? ""} ${wrapped}`
+      : wrapped;
     // Length checks compare sizes, not bytes; literal comparisons are not secrets.
     const cleaned = joined
       // `typeof x === "string"` and comparisons with the empty string are
@@ -134,7 +209,7 @@ export function findForbiddenSecretComparisons(
     const secretSegment = cleaned
       .split(SEGMENT_SPLIT_RE)
       .some((part) => COMPARISON_RE.test(part) && HEADER_DERIVED_TOKENS.some((re) => re.test(part)));
-    if (!secretSegment && !DIRECT_HEADER_READ_RE.test(joined)) continue;
+    if (!secretSegment && !hasSecretOperand(cleaned) && !DIRECT_HEADER_READ_RE.test(joined)) continue;
     if (ALLOW_MARKER_RE.test(raw)) continue;
     out.push({ file, line: i + 1, text: raw.trim() });
   }
@@ -145,7 +220,7 @@ async function* walk(dir: URL, rel: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       yield* walk(new URL(`${entry.name}/`, dir), `${rel}${entry.name}/`);
-    } else if (entry.isFile() && /\.(?:m?ts|m?js)$/.test(entry.name)) {
+    } else if (entry.isFile() && isSourceFile(entry.name)) {
       yield `${rel}${entry.name}`;
     }
   }

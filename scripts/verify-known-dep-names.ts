@@ -158,7 +158,28 @@ export const SCANNED_PACKAGE_JSONS: readonly string[] = [
   "bench/cross-framework/package.json",
   "compat/typescript-6/package.json",
   ".clusterfuzzlite/package.json",
+  "evals/pilot/package.json",
 ];
+
+/**
+ * Extra names allowed only in `evals/pilot/package.json`: the reporter the
+ * eval pilot renders with. It runs in a no-network, read-only container and
+ * is never part of the framework, the scaffolder, a template or the website.
+ */
+export const PILOT_ONLY_DEP_NAMES: ReadonlySet<string> = new Set(["deepeval"]);
+
+/**
+ * The dependency allowlist for one scanned manifest: the shared list, plus
+ * the names that are acceptable only in that manifest's own project.
+ *
+ * @param rel - Manifest path relative to the repo root.
+ * @returns The names that manifest may depend on.
+ */
+export function allowedDepNamesFor(rel: string): ReadonlySet<string> {
+  if (rel.startsWith("bench/")) return new Set([...ALLOWED_DEP_NAMES, ...BENCH_ONLY_DEP_NAMES]);
+  if (rel.startsWith("evals/pilot/")) return new Set([...ALLOWED_DEP_NAMES, ...PILOT_ONLY_DEP_NAMES]);
+  return ALLOWED_DEP_NAMES;
+}
 
 /**
  * Extra names allowed only in `bench/cross-framework/package.json`: the other
@@ -217,6 +238,7 @@ export const SCANNED_WORKSPACE_FILES: readonly string[] = [
   "packages/create-daloy/templates/cloudflare-worker/pnpm-workspace.yaml",
   "packages/create-daloy/templates/node-basic/pnpm-workspace.yaml",
   "packages/create-daloy/templates/vercel/pnpm-workspace.yaml",
+  "evals/pilot/pnpm-workspace.yaml",
 ];
 
 /** Transitive packages this repository pins through `overrides:`. */
@@ -228,6 +250,29 @@ export const ALLOWED_OVERRIDE_NAMES: ReadonlySet<string> = new Set([
   "js-yaml",
   "source-map-js",
 ]);
+
+/**
+ * Override names allowed only in `evals/pilot/pnpm-workspace.yaml`: the
+ * reporter's own transitive pins (patched `uuid`, `protobufjs` and
+ * OpenTelemetry core).
+ */
+export const PILOT_ONLY_OVERRIDE_NAMES: ReadonlySet<string> = new Set([
+  "@opentelemetry/core",
+  "protobufjs",
+  "uuid",
+]);
+
+/**
+ * The override allowlist for one scanned workspace file.
+ *
+ * @param rel - Workspace file path relative to the repo root.
+ * @returns The package names that file may override.
+ */
+export function allowedOverrideNamesFor(rel: string): ReadonlySet<string> {
+  if (rel.startsWith("evals/pilot/"))
+    return new Set([...ALLOWED_OVERRIDE_NAMES, ...PILOT_ONLY_OVERRIDE_NAMES]);
+  return ALLOWED_OVERRIDE_NAMES;
+}
 
 /** An `overrides:` entry that is unknown or resolves outside the registry. */
 export interface SuspiciousOverride {
@@ -268,7 +313,11 @@ export function findSuspiciousOverrides(
     // The range may itself contain `>` (`name@>=5.0.0 <5.0.12`), so read
     // the name from the front of the last `parent>child` segment instead of
     // splitting on `>`.
-    const named = /(?:^|[a-z0-9._-]>)(@?[a-z0-9._-]+(?:\/[a-z0-9._-]+)?)(?:@.*)?$/i.exec(key);
+    // `parent@1.2.3>child` is tried first: read from the start, it named the
+    // parent, so the package actually being replaced was never checked.
+    const NAME = "(@?[a-z0-9._-]+(?:\\/[a-z0-9._-]+)?)(?:@.*)?$";
+    const named =
+      new RegExp(`[a-z0-9._-]>${NAME}`, "i").exec(key) ?? new RegExp(`^${NAME}`, "i").exec(key);
     const name = named?.[1] ?? key;
     if (!allowed.has(name)) out.push({ source, name, specifier, reason: "unknown name" });
     else if (!/^[\^~<>=*\d]/.test(specifier) && specifier !== "-") {
@@ -506,10 +555,7 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const allowlist = rel.startsWith("bench/")
-      ? new Set([...ALLOWED_DEP_NAMES, ...BENCH_ONLY_DEP_NAMES])
-      : ALLOWED_DEP_NAMES;
-    offending.push(...findUnknownDependencyNames(rel, pkg, allowlist));
+    offending.push(...findUnknownDependencyNames(rel, pkg, allowedDepNamesFor(rel)));
     aliased.push(...findAliasedDependencySpecifiers(rel, pkg));
     nonRegistry.push(...findGitOrUrlDependencySpecifiers(rel, pkg));
   }
@@ -523,7 +569,7 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    overrides.push(...findSuspiciousOverrides(rel, yaml));
+    overrides.push(...findSuspiciousOverrides(rel, yaml, allowedOverrideNamesFor(rel)));
   }
   if (overrides.length > 0) {
     console.error(`verify-known-dep-names: ${overrides.length} suspicious pnpm override(s):`);
