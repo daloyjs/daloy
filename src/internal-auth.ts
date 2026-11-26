@@ -40,8 +40,13 @@ const PRE_BODY_HANDLES_OWN_EARLY_REJECTIONS = Symbol.for(
 
 type HookFn = (ctx: { state: Record<PropertyKey, unknown> }, ...rest: unknown[]) => unknown;
 
+/**
+ * Record an auth pass only when the hook returned nothing. A `Response` is a
+ * rejection, and any other value (`false`, `{ status: 401 }`) is a
+ * rejection-shaped mistake the pipeline refuses; neither authenticates.
+ */
 function recordPass(ctx: { state: Record<PropertyKey, unknown> }, result: unknown): unknown {
-  if (!(result instanceof Response)) ctx.state[AUTH_RAN] = true;
+  if (result === undefined || result === null) ctx.state[AUTH_RAN] = true;
   return result;
 }
 

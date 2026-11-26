@@ -142,9 +142,12 @@ export function some(...layers: Hooks[]): Hooks {
       return [
         async (ctx: BaseContext<any, any>) => {
           const early = await hooks.preBody!(ctx);
-          return early instanceof Response
-            ? early
-            : hooks.beforeHandle!(ctx);
+          if (early instanceof Response) return early;
+          // Hand a rejection-shaped preBody result (`{ status: 401 }`,
+          // `false`) to the candidate loop, which fails the branch for it.
+          // Dropping it here would let the branch's beforeHandle decide alone.
+          if (early !== undefined && early !== null) return early;
+          return hooks.beforeHandle!(ctx);
         },
       ];
     }
@@ -567,6 +570,16 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
       for (const fn of beforeHandle) {
         const r = await fn(ctx);
         if (r instanceof Response) return r;
+        // A wrapper (except(), some(), markAuthHook()) calls this merged
+        // function directly and only sees what it returns, so a layer's
+        // rejection-shaped result (`{ status: 401 }`, `false`) must be
+        // refused here, not turned into `undefined` (a pass).
+        if (r !== undefined && r !== null) {
+          throw new InternalError(
+            "A beforeHandle hook inside every() returned a value that is not a Response. To reject a " +
+              "request, throw a typed error (for example UnauthorizedError) or return a Response.",
+          );
+        }
       }
       return undefined;
     };

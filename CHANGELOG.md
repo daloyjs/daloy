@@ -17,6 +17,27 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Fixed
+
+- **A guard that "rejects" with a non-`Response` value could still pass inside
+  a combinator.** A hook that returns `{ status: 401 }` or `false` instead of
+  throwing or returning a `Response` is refused with a `500` since 1.24.2,
+  but two composition sites still let the request through: `every()` wrapped
+  by `except()`, `some()` or `markAuthHook()`, and the `preBody` of a `some()`
+  branch that also has a `beforeHandle`. Both now refuse the value, and
+  `markAuthHook()` records an authentication pass only when the hook returned
+  nothing.
+- **WebSocket `beforeUpgrade` accepted any decision that was not a
+  `Response`.** A hook returning `false`, `true` or `{ status: 401 }`
+  connected every caller on the Node and Bun adapters. Such a decision now
+  refuses the upgrade with a `500` and logs an error. Returning a `Response`,
+  a subprotocol string, or nothing is unchanged.
+- **`fileField()` accepted a colon in a file name.** `D:evil.png` is a
+  drive-relative path on Windows and `a.php::$DATA` is an NTFS stream; both
+  passed the default file-name check, as did device names spelled `CON .txt`,
+  `CONIN$` or `COM0`. They now fail validation with a `422`. Pass
+  `allowUnsafeFilenames: true` when the name is never used as a path.
+
 ## [1.24.3] - 2026-11-18
 
 ### Fixed

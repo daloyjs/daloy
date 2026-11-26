@@ -365,6 +365,8 @@ export interface WebSocketHandler<
    * Auth/decision hook run before the 101 response is sent (after the
    * {@link WebSocketHandler.allowedOrigins} check). Return a `Response` to
    * reject, a string to select that subprotocol, or `undefined` to accept.
+   * Any other value (`false`, `true`, `{ status: 401 }`) is not a decision:
+   * the upgrade is refused with a `500` rather than let through.
    */
   beforeUpgrade?(
     request: Request,
@@ -917,6 +919,32 @@ export function parseSubprotocols(header: string | null | undefined): string[] {
 }
 
 const WS_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/**
+ * Whether a `beforeUpgrade` decision must refuse the upgrade. A `Response`
+ * rejects, a string selects a subprotocol and `undefined` / `null` accepts;
+ * anything else (`false`, `true`, `{ status: 401 }`) is neither a rejection
+ * nor an acceptance. `beforeUpgrade` is the only gate on the upgrade path, so
+ * an adapter answers such a value with a `500` instead of the `101`, the
+ * same way the HTTP pipeline refuses a non-`Response` hook result.
+ *
+ * @param decision - What `beforeUpgrade` returned (already checked not to be
+ *   a `Response` or a string).
+ * @returns `true` when the upgrade must be refused.
+ * @internal Adapter plumbing shared by the Node and Bun adapters.
+ */
+export function isRefusedUpgradeDecision(decision: unknown): boolean {
+  return decision !== undefined && decision !== null;
+}
+
+/**
+ * Log message for an upgrade refused by {@link isRefusedUpgradeDecision}.
+ *
+ * @internal Adapter plumbing shared by the Node and Bun adapters.
+ */
+export const REFUSED_UPGRADE_DECISION_MESSAGE =
+  "WebSocket beforeUpgrade returned a value that is not a Response, a string or undefined. To reject " +
+  "an upgrade, return a Response or throw; the upgrade is refused instead of being let through.";
 
 /**
  * Validate a server-selected subprotocol before it is written to the 101

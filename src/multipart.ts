@@ -72,11 +72,20 @@ const MAX_FILENAME_LENGTH = 255;
 // APIs, `/` and `\` escape the target directory on POSIX / Windows.
 // eslint-disable-next-line no-control-regex
 const UNSAFE_FILENAME_RE = /[\u0000-\u001f\u007f/\\]/;
+// On Windows a colon selects a drive (`D:evil.png` is drive-relative, so
+// `path.resolve(uploadDir, name)` leaves the upload directory) or an NTFS
+// stream (`a.php::$DATA` is `a.php`).
+const WINDOWS_DRIVE_OR_STREAM_RE = /:/;
 
 /** Bidi controls and zero-width / invisible format characters. */
 const INVISIBLE_FILENAME_RE = /[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff]/;
-/** Windows device names, with or without an extension. */
-const WINDOWS_DEVICE_NAME_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+/**
+ * Windows device names, with or without an extension. The device is the stem
+ * before the first dot with trailing spaces ignored (`CON .txt`), and the
+ * list includes the console aliases and the digit `0` / superscript forms.
+ */
+const WINDOWS_DEVICE_NAME_RE =
+  /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])\x20*(?:\..*)?$/i;
 
 /**
  * Why an upload's file name is unsafe to use as a path component, or
@@ -89,6 +98,9 @@ function unsafeFilenameReason(name: string): string | undefined {
   if (name === "." || name === "..") return "File name is a relative directory reference";
   if (UNSAFE_FILENAME_RE.test(name)) {
     return "File name contains a path separator or control character";
+  }
+  if (WINDOWS_DRIVE_OR_STREAM_RE.test(name)) {
+    return "File name contains a colon (a drive or stream separator on Windows)";
   }
   // Bidi overrides and zero-width characters make a name display as
   // something else (`evil\u202Egnp.exe` shows as `evilexe.png`).

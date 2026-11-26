@@ -138,7 +138,7 @@ The `WebSocketConnection` passed to your handlers mirrors the WHATWG `WebSocket`
 
 The adapter handles the upgrade before the HTTP pipeline, so **app-level hooks and middleware do not run on WebSocket upgrades**: `app.use()`, `rateLimit()`, auth hooks, WAF, IP restriction, and bot guards configured for your REST routes never see the handshake. Put auth and throttling in `beforeUpgrade` (and use [`wsRateLimit()`](#upgrade-rate-limiting) to share an HTTP rate-limit bucket). In production under secure defaults, `app.ws()` refuses a route with no `beforeUpgrade` unless you pass `acknowledgeUnauthenticated: true`.
 
-Optional `beforeUpgrade(req, ctx)` runs after the path match and Origin policy, but before the 101 response. Return a `Response` to reject (handy for auth or rate-limiting), or return a `string` to pick a subprotocol from `Sec-WebSocket-Protocol`:
+Optional `beforeUpgrade(req, ctx)` runs after the path match and Origin policy, but before the 101 response. Return a `Response` to reject (handy for auth or rate-limiting), or return a `string` to pick a subprotocol from `Sec-WebSocket-Protocol`. Return nothing to accept. Any other value, such as `false`, `true` or `{ status: 401 }`, is not a decision: the adapter refuses the upgrade with a `500` and logs an error instead of connecting the caller, so a check written as `return isValid(req)` fails on first use rather than letting everyone in:
 
 <SequenceDiagram title="Upgrade, message, close" participants={["Client", "DaloyJS adapter", "Your handler"]} steps={[
           {

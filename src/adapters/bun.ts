@@ -20,6 +20,8 @@ import {
   parseSubprotocols,
   validateSelectedSubprotocol,
   checkWebSocketOrigin,
+  isRefusedUpgradeDecision,
+  REFUSED_UPGRADE_DECISION_MESSAGE,
   WebSocketProtocolError,
   type NormalizedWebSocketOptions,
   type WebSocketConnection,
@@ -300,6 +302,10 @@ async function tryBunUpgrade(
     if (decision instanceof Response) return decision;
     if (typeof decision === "string")
       chosenProtocol = validateSelectedSubprotocol(decision, ctx.protocols);
+    else if (isRefusedUpgradeDecision(decision)) {
+      app.log.error({}, REFUSED_UPGRADE_DECISION_MESSAGE);
+      return new Response("Internal Server Error", { status: 500 });
+    }
   } catch (err) {
     if (err instanceof WebSocketProtocolError) {
       return new Response(err.message, { status: 400 });

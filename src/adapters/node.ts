@@ -40,6 +40,8 @@ import {
   WS_MAX_CONTROL_PAYLOAD,
   WebSocketProtocolError,
   WebSocketPayloadTooLargeError,
+  isRefusedUpgradeDecision,
+  REFUSED_UPGRADE_DECISION_MESSAGE,
   type NormalizedWebSocketOptions,
   type WebSocketConnection,
   type WebSocketContext,
@@ -1372,6 +1374,11 @@ async function handleUpgrade(
     }
     if (typeof decision === "string")
       chosenProtocol = validateSelectedSubprotocol(decision, result.protocols);
+    else if (isRefusedUpgradeDecision(decision)) {
+      app.log.error({}, REFUSED_UPGRADE_DECISION_MESSAGE);
+      writeUpgradeError(socket, 500, "Internal Server Error");
+      return;
+    }
   } catch (err) {
     if (err instanceof WebSocketProtocolError) {
       writeUpgradeError(socket, 400, err.message);
