@@ -225,6 +225,21 @@ async function main(): Promise<void> {
   process.stdout.write(
     `\n${markdown}\nResults: ${relative(process.cwd(), out)}\n`,
   );
+  // A credential in agent output was redacted before it was stored, but an
+  // agent that printed it once may have sent or transformed it too. Fail the
+  // run so it is not missed.
+  const leaks = trials.filter((t) => (t.agentRun.secretLeak?.length ?? 0) > 0);
+  if (leaks.length > 0) {
+    const names = [...new Set(leaks.flatMap((t) => t.agentRun.secretLeak ?? []))].sort().join(", ");
+    const warning =
+      `SECRET LEAK: the agent printed ${names} in ${leaks.length} trial(s) ` +
+      `(${leaks.map((t) => `${t.taskId}/${t.ablation}/${t.trial}`).join(", ")}). ` +
+      "The value was redacted from the stored output. Rotate the credential.";
+    process.stderr.write(`${warning}\n`);
+    if (process.env.GITHUB_STEP_SUMMARY)
+      await appendFile(process.env.GITHUB_STEP_SUMMARY, `\n> [!CAUTION]\n> ${warning}\n`);
+    process.exitCode = 1;
+  }
   if (
     opts.failUnder !== undefined &&
     summary.overallPassRate < opts.failUnder

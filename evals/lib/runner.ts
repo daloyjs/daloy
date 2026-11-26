@@ -5,7 +5,12 @@
  */
 
 import { join } from "node:path";
-import { buildPrompt, type AgentAdapter } from "./agents.ts";
+import {
+  buildPrompt,
+  forwardedCredentials,
+  redactSecrets,
+  type AgentAdapter,
+} from "./agents.ts";
 import { IMAGE_DEPS_DIR, releaseToHost, runGraderContainer } from "./docker-sandbox.ts";
 import { runGrader, type GradeExec } from "./graders.ts";
 import {
@@ -17,6 +22,7 @@ import {
   snapshot,
   workspaceDiff,
   workspaceFootprint,
+  DIFF_UNAVAILABLE,
 } from "./workspace.ts";
 import {
   noAgentSession,
@@ -107,9 +113,25 @@ export async function runTrial(
       };
     }
     const after = await snapshot(ws.dir);
-    const diff = await workspaceDiff(ws);
+    // The diff is stored and uploaded like the transcript, and an agent can
+    // write its credential into a file as easily as print it.
+    const redacted = redactSecrets(
+      await workspaceDiff(ws),
+      forwardedCredentials(agent.credentialVars ?? []),
+    );
+    const diff = redacted.text;
+    if (redacted.leaked.length > 0)
+      agentRun = {
+        ...agentRun,
+        secretLeak: [...new Set([...(agentRun.secretLeak ?? []), ...redacted.leaked])].sort(),
+      };
     const footprint = await workspaceFootprint(ws);
-    const noSession = noAgentSession(agentRun, diff);
+    // No record of what would be graded: do not grade it. The stored diff is
+    // what reviewers and `eval:analyze` read; a pass without one could hide
+    // code written to forge the grade.
+    const noSession = diff.startsWith(DIFF_UNAVAILABLE)
+      ? `the agent's changes could not be recorded, so they were not graded: ${diff.slice(DIFF_UNAVAILABLE.length).trim().slice(0, 200)}`
+      : noAgentSession(agentRun, diff);
     if (noSession)
       return {
         taskId: task.id,

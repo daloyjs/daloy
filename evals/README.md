@@ -88,6 +88,30 @@ agent's code; this harness does not do that yet. Until then:
 or the hidden tests, read every flagged trial and every surprising pass,
 and do not use a score as a release gate.
 
+Three related gaps were closed on 26 Nov 2026 and are worth knowing when you
+read older results:
+
+- The guard watched the exit code only at the `exit` event. An app that
+  reset it from a `beforeExit` listener, wrote forged "test passed" events
+  to the test child's stdout (that stream is how a test file reports to the
+  runner) and muted the real results passed with no implementation. The
+  guard now remembers a failing exit code from the first process event that
+  shows one, and `eval:analyze` flags code that touches the exit code,
+  rewrites `process.stdout.write`, uses the `node:v8` serializer, or
+  inspects `process.argv`. Forged events alone no longer pass, because the
+  failing exit code holds; the same-process limit above is unchanged.
+- A trial whose changes could not be recorded was still graded. A directory
+  named `git~1` makes git refuse the path, so the stored diff read
+  `[diff unavailable]` while the graders ran the code. Such a trial is now
+  **unverified** and not graded. A `.GIT` directory (a repository, on a
+  case-insensitive filesystem) made git record its parent as a submodule
+  link, hiding the files beside it; `.git` is now left out in any letter
+  case, and a submodule link in the staged index makes the diff unavailable.
+- `eval:analyze` wrote agent text (a shell command, an added diff line, a
+  test name) into its Markdown as written. A command containing a backtick,
+  a newline and `<!--` hid every later flag when the report was rendered.
+  Agent text is now a single-line code span.
+
 The egress proxy (`egress-proxy.ts`, no dependencies) tunnels HTTPS
 (`CONNECT` to port 443) to allowlisted host names resolving to public
 addresses, and logs every decision to `<run>-egress.log` next to the results.
@@ -109,7 +133,15 @@ eval:image`. Claude Code and Codex are added to the image only when you ask:
 
 The agent CLI still holds its token inside its container and could send it to
 an allowed host, so use a fine-grained token limited to Copilot rather than
-your full `gh auth token`. Without `--sandbox docker`, a live agent needs
+your full `gh auth token`. It can also print it: one `env` from the agent's
+shell puts the key in its output. The harness therefore removes every
+credential it handed to the CLI (as written, and base64, base64url, hex and
+URL-encoded) from the agent's output and from the stored diff before
+anything is parsed, saved, or uploaded, replacing it with
+`[REDACTED:<NAME>]`. A trial where that happened records `secretLeak` in its
+`agentRun`, and `pnpm eval` prints a `SECRET LEAK` warning and exits
+non-zero. Rotate the credential when you see it: redaction is a net, not a
+guarantee, and an agent that reversed or split the value is not caught. Without `--sandbox docker`, a live agent needs
 `--sandbox-ack` (this whole machine is an isolated, secret-free VM) and can
 read this repository, hidden tests included; the harness warns.
 
@@ -198,7 +230,12 @@ pnpm eval:regrade --sandbox docker evals/results/<run>.json   # writes <run>.reg
 ```
 
 It replays each trial's stored diff onto a fresh scaffold, re-parses its
-saved trace, and runs the current graders. Grading executes the agent's
+saved trace, and runs the current graders on a copy of the result. The copy
+is the same one the live run grades: it holds no symlinks, because a stored
+diff can record a link the agent made (`tests/keep.test.ts` -> a file on
+your machine) and the graders write into the directory they grade. Harness
+writes also replace a link at their target instead of following it.
+Grading executes the agent's
 code, so a live agent's run needs the same sandbox as the run itself:
 `--sandbox docker` (grading then runs in the no-network container), or
 `--sandbox-ack` on a machine that is itself an isolated, secret-free

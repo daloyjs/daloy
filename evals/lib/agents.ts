@@ -56,6 +56,12 @@ export interface AgentAdapter {
   readonly command?: string;
   /** MCP modes this adapter can provide. Offline adapters ignore MCP. */
   readonly mcpModes: readonly McpMode[];
+  /**
+   * Names of the credential variables this adapter hands to its CLI. The
+   * runner redacts their values from the stored diff, as the adapter does
+   * for the agent's output.
+   */
+  readonly credentialVars?: readonly string[];
   run(inv: AgentInvocation): Promise<AgentRunResult>;
 }
 
@@ -265,6 +271,75 @@ export function parseEffort(
   return undefined;
 }
 
+/** Shortest credential value worth redacting; anything shorter would match ordinary text. */
+const MIN_REDACTED_SECRET_CHARS = 8;
+
+/** Whether an allowlisted variable name holds a credential (not a path or a proxy URL). */
+const isCredentialVar = (name: string): boolean => /(?:KEY|TOKEN|SECRET|PASSWORD)$/i.test(name);
+
+/**
+ * The credential values an adapter hands to its agent CLI, read from this
+ * process's environment by name.
+ *
+ * @param envKeys - The adapter's allowlisted variable names.
+ * @returns Name-to-value map of the credentials that are set.
+ */
+export function forwardedCredentials(envKeys: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of envKeys) {
+    const v = process.env[k];
+    if (isCredentialVar(k) && v !== undefined && v.length >= MIN_REDACTED_SECRET_CHARS) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Remove credential values from captured agent output before it is parsed
+ * or stored.
+ *
+ * The agent CLI holds its credential as an environment variable, and the
+ * agent runs shell commands of its own choosing, so one `env` puts the key
+ * in the transcript, the results JSON, and the uploaded CI artifact. Each
+ * value is replaced, as written and in its base64, base64url, hex and
+ * URL-encoded forms, with `[REDACTED:<NAME>]`.
+ *
+ * This is a net, not a guarantee: an agent that transforms the value some
+ * other way (reversed, split across lines) is not caught. Treat any reported
+ * leak as a reason to rotate the credential.
+ *
+ * @param output - Captured agent output.
+ * @param secrets - Credential values by variable name. Values shorter than
+ *   eight characters are ignored.
+ * @returns The redacted text and the names of the variables that were found.
+ */
+export function redactSecrets(
+  output: string,
+  secrets: Readonly<Record<string, string | undefined>>,
+): { text: string; leaked: string[] } {
+  let text = output;
+  const leaked = new Set<string>();
+  for (const [name, value] of Object.entries(secrets)) {
+    if (value === undefined || value.length < MIN_REDACTED_SECRET_CHARS) continue;
+    const bytes = Buffer.from(value, "utf8");
+    const base64 = bytes.toString("base64");
+    const forms = new Set([
+      value,
+      base64,
+      base64.replace(/=+$/, ""),
+      bytes.toString("base64url"),
+      bytes.toString("hex"),
+      bytes.toString("hex").toUpperCase(),
+      encodeURIComponent(value),
+    ]);
+    for (const form of forms) {
+      if (!text.includes(form)) continue;
+      leaked.add(name);
+      text = text.split(form).join(`[REDACTED:${name}]`);
+    }
+  }
+  return { text, leaked: [...leaked].sort() };
+}
+
 function cli(
   name: string,
   command: string,
@@ -279,6 +354,7 @@ function cli(
     live: true,
     command,
     mcpModes,
+    credentialVars: envKeys.filter(isCredentialVar),
     async run(inv) {
       let r;
       let traceDir = inv.dir;
@@ -310,16 +386,20 @@ function cli(
           maxOutputChars: AGENT_OUTPUT_CAP_CHARS,
         });
       }
+      // Redact before anything is parsed or kept: the output goes to a
+      // trace file, the results JSON, and (in CI) an uploaded artifact.
+      const { text: output, leaked } = redactSecrets(r.output, forwardedCredentials(envKeys));
       return {
         exitCode: r.exitCode,
         timedOut: r.timedOut,
         durationMs: r.durationMs,
-        outputTail: r.output.slice(-OUTPUT_TAIL_CHARS),
-        transcript: r.output,
-        trace: parseTrace(effortFormat, r.output, traceDir),
+        outputTail: output.slice(-OUTPUT_TAIL_CHARS),
+        transcript: output,
+        trace: parseTrace(effortFormat, output, traceDir),
         traceRoot: traceDir,
+        ...(leaked.length > 0 ? { secretLeak: leaked } : {}),
         ...(() => {
-          const effort = parseEffort(effortFormat, r.output);
+          const effort = parseEffort(effortFormat, output);
           return effort ? { effort } : {};
         })(),
       };

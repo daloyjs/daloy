@@ -44,7 +44,10 @@ export const PROCESS_GUARD_PATH = `${HIDDEN_TEST_DIR}/process-guard.mjs`;
  *   0 in an 'exit' handler made the runner count the file as passing; in
  *   Docker mode it could also write fake `ok` lines into the runner's stdout
  *   through /proc/<ppid>/fd/1 (a forged `hidden` pass, reproduced). The guard
- *   restores a failing exit code, so the runner's own exit code holds.
+ *   restores a failing exit code, so the runner's own exit code holds. It
+ *   remembers a failing code from the first process event that shows one:
+ *   watching only 'exit' missed a reset done from a `beforeExit` listener,
+ *   which, with forged test-pass frames on stdout, passed an empty app.
  * - `assert.equal = () => {}` from app code made every assertion a no-op
  *   (a full pass with no implementation). The guard freezes `node:assert`,
  *   `node:assert/strict`, and `node:test`, so that assignment throws.
@@ -66,17 +69,24 @@ process.exit = (code) => trap(code ?? process.exitCode ?? 0);
 process.reallyExit = (code) => trap(code);
 {
   const emit = process.emit;
+  // A failing exit code is remembered from the moment it is first seen, at
+  // every process event (beforeExit included), not only at 'exit'.
+  let failing = 0;
+  const note = () => {
+    const code = process.exitCode;
+    if (code && !failing) failing = typeof code === "number" ? code : 1;
+  };
   Object.defineProperty(process, "emit", {
     configurable: false,
     writable: false,
     value: function (event, ...args) {
-      if (event !== "exit") return emit.call(this, event, ...args);
-      const failing = process.exitCode;
+      note();
       try {
         return emit.call(this, event, ...args);
       } finally {
-        if (failing && !process.exitCode) {
-          process.stderr.write(\`[eval] the exit code was reset from \${failing} to 0 during exit\\n\`);
+        note();
+        if (event === "exit" && failing && !process.exitCode) {
+          process.stderr.write(\`[eval] the exit code was reset from \${failing} to 0 before the process ended\\n\`);
           process.exitCode = failing;
         }
       }
@@ -105,10 +115,14 @@ export function declaredTestNames(source: string): string[] {
 
 /**
  * Expected tests that do not appear as passed (`ok`, not SKIP or TODO) in a
- * `node --test --test-reporter=tap` report. The runner prints whatever the
- * tests and the app write as `# ` comment lines, so app code cannot add an
- * `ok` line. A test that was commented out, never registered, skipped, or
- * cut short by an exit is missing.
+ * `node --test --test-reporter=tap` report. A test that was commented out,
+ * never registered, skipped, or cut short by an exit is missing.
+ *
+ * This is not proof on its own. The runner prints ordinary app output as
+ * `# ` comment lines, but each test file runs in a child process that reports
+ * to the runner over its stdout, and app code in that child can write
+ * well-formed "test passed" events there. The exit code is the second half
+ * of the check: {@link PROCESS_GUARD} keeps a failing child failing.
  *
  * @param tap - The runner's output.
  * @param expected - Test names that must have passed.

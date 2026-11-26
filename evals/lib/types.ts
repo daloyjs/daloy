@@ -303,6 +303,12 @@ export interface AgentRunResult {
    * so a saved trace re-parses with the same paths.
    */
   readonly traceRoot?: string;
+  /**
+   * Names of the credential variables whose value appeared in the agent's
+   * output. The value was replaced with `[REDACTED:<NAME>]` before anything
+   * was stored; the credential should still be rotated.
+   */
+  readonly secretLeak?: readonly string[];
 }
 
 /** How much the agent changed, from `git diff --numstat` against the baseline. */

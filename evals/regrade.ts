@@ -4,7 +4,8 @@
  *
  * For each trial it scaffolds a fresh workspace exactly as the original run
  * did (task setup and ablation), applies the agent's stored diff with
- * `git apply`, and runs the task's current graders. The agent's trace is
+ * `git apply`, copies the result without symlinks (as the live run does),
+ * and runs the task's current graders on that copy. The agent's trace is
  * re-parsed from the saved agent output (so trace-parser fixes apply too);
  * the rest of its run data (time, effort, trace path) is kept. A trial whose
  * stored diff was truncated, is unavailable, or no longer applies, and a
@@ -31,6 +32,7 @@ import { dockerGradeExec, hiddenDirFor } from "./lib/runner.ts";
 import { loadTrialTrace } from "./lib/trace.ts";
 import {
   childEnv,
+  copyWorkspace,
   DIFF_UNAVAILABLE,
   disposeWorkspace,
   openForContainer,
@@ -90,12 +92,19 @@ async function regradeTrial(
         return { skip: `git apply failed: ${applied.output.slice(0, 200)}` };
     }
     const after = await snapshot(ws.dir);
-    if (docker) await openForContainer(ws.dir);
+    // Grade a copy, exactly as the live run does. `git apply` re-creates any
+    // symlink the stored diff recorded (mode 120000), and the graders write
+    // into the directory they grade (the process guard, protected files,
+    // hidden tests). `copyWorkspace` drops links, so none is ever present
+    // where the harness writes.
+    const gradeDir = join(ws.root, "graded");
+    await copyWorkspace(ws.dir, gradeDir, docker ? IMAGE_DEPS_DIR : undefined);
+    if (docker) await openForContainer(gradeDir);
     const grades: GradeResult[] = [];
     for (const spec of task.graders) {
       grades.push(
         await runGrader(spec, {
-          dir: ws.dir,
+          dir: gradeDir,
           before: ws.before,
           after,
           hiddenDir: hiddenDirFor(task.id),

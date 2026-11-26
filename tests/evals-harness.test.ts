@@ -2163,7 +2163,7 @@ describe("cost per success and trace analysis", () => {
     );
     const md = renderAnalysis(a, ["run.json"]);
     assert.match(md, /Failure causes/);
-    assert.match(md, /refuses 0\.0\.0\.0 \| 2 \|/);
+    assert.match(md, /`refuses 0\.0\.0\.0` \| 2 \|/);
     assert.match(renderAnalysis(analyze([]), []), /No failing trials\.[\s\S]*Nothing flagged\./);
   });
 });

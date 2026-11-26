@@ -13,12 +13,13 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { constants, existsSync } from "node:fs";
 import {
   cp,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   readFile,
   realpath,
@@ -73,11 +74,14 @@ export const WORKSPACE_APP_NAME = "my-daloy-app";
  * copy, at any depth: dependencies (rebuilt from trusted sources) and build
  * output. The invariant is "what the diff leaves out, the grade copy
  * deletes": a name here that still reached grading would be a place to hide
- * code that runs. `.git` is always left out and deleted too.
+ * code that runs. `.git` is always left out and deleted too, in any letter
+ * case: on a case-insensitive filesystem (macOS, Windows) git treats a
+ * `.GIT` directory as a repository and stages its parent as a submodule
+ * link, so the files next to it were graded but absent from the diff.
  */
 const UNRECORDED = ["node_modules", "dist", "generated", "coverage"] as const;
 const isUnrecorded = (name: string): boolean =>
-  name === ".git" || (UNRECORDED as readonly string[]).includes(name);
+  name.toLowerCase() === ".git" || (UNRECORDED as readonly string[]).includes(name);
 const SNAPSHOT_SKIP = new Set<string>([...UNRECORDED, ".git"]);
 /** Files above this size are not snapshotted (they are never source). */
 const SNAPSHOT_MAX_BYTES = 512 * 1024;
@@ -227,11 +231,15 @@ export function runProcess(
 
 /**
  * A {@link WorkspaceHandle} rooted at `dir`. Paths are resolved relative to
- * the root and rejected if they escape it.
+ * the root and rejected if they escape it, lexically or through a symlinked
+ * parent. `write` never writes through a symlink at the target path: it
+ * replaces the link with a regular file, so a link the agent planted cannot
+ * redirect a harness write to a host file.
  *
  * @param dir - Absolute workspace root.
  * @returns The handle.
- * @throws Error from any method when a path escapes the root.
+ * @throws Error from any method when a path escapes the root, and from
+ *   `write` when the target exists and is neither a regular file nor a link.
  */
 export function workspaceHandle(dir: string): WorkspaceHandle {
   const abs = (rel: string): string => {
@@ -259,9 +267,33 @@ export function workspaceHandle(dir: string): WorkspaceHandle {
       const p = abs(rel);
       await insideAfterSymlinks(p);
       await mkdir(dirname(p), { recursive: true });
-      await writeFile(p, content);
+      // The parent is inside the workspace, but the target itself can still
+      // be a link the agent left (`tests/keep.test.ts` -> a host file), and
+      // a plain write follows it. Drop a link, refuse anything else that is
+      // not a regular file, and open without following links.
+      const existing = await lstat(p).catch(() => undefined);
+      if (existing?.isSymbolicLink()) await rm(p, { force: true });
+      else if (existing && !existing.isFile())
+        throw new Error(`refusing to write over something that is not a regular file: ${rel}`);
+      const fh = await open(
+        p,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+        0o666,
+      );
+      try {
+        await fh.writeFile(content);
+      } finally {
+        await fh.close();
+      }
     },
-    remove: async (rel) => rm(abs(rel), { recursive: true, force: true }),
+    async remove(rel) {
+      const p = abs(rel);
+      // Same parent check as `write`: a linked parent would aim the removal
+      // at a directory outside the workspace. `rm` never follows a link at
+      // the target itself.
+      await insideAfterSymlinks(p);
+      await rm(p, { recursive: true, force: true });
+    },
     async exists(rel) {
       try {
         await stat(abs(rel));
@@ -488,7 +520,9 @@ export const DIFF_UNAVAILABLE = "[diff unavailable]";
  *   the baseline's rule files into the copy and wrote through a symlink the
  *   agent had put in their place, into a file outside the workspace.
  * Only {@link UNRECORDED} names are left out, and the grade copy deletes
- * those.
+ * those. Staging fails, and the trial is not graded, when git refuses a
+ * path (`git~1`) or records a directory as a submodule link: in both cases
+ * the diff would not show files the graders would run.
  *
  * @returns An error message, or `undefined` when staging worked.
  */
@@ -521,6 +555,12 @@ async function stageFromCleanCopy(
       const forced = await git(copy, ["add", "--force", "--", ...attributes], ws.gitDir);
       if (forced.exitCode !== 0) return `git add failed: ${forced.output.slice(0, 300)}`;
     }
+    // A submodule link (mode 160000) records a commit id, not files: whatever
+    // sits in that directory would be graded without appearing in the diff.
+    const index = await git(copy, ["ls-files", "--stage"], ws.gitDir);
+    if (index.exitCode !== 0) return `git ls-files failed: ${index.output.slice(0, 300)}`;
+    const gitlink = /^160000 \S+ \d+\t(.*)$/m.exec(index.output);
+    if (gitlink) return `a nested repository was staged as a link, not as files: ${gitlink[1]}`;
     return undefined;
   } catch (err) {
     return (err as Error).message;
